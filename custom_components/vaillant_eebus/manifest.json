@@ -1,0 +1,17 @@
+{
+  "domain": "vaillant_eebus",
+  "name": "Vaillant EEBUS",
+  "codeowners": ["@MarkBovee"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/MarkBovee/vaillant-eebus",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/MarkBovee/vaillant-eebus/issues",
+  "requirements": [
+    "cryptography>=41.0.0",
+    "websockets>=12.0",
+    "zeroconf>=0.120.0"
+  ],
+  "version": "0.1.0"
+}
