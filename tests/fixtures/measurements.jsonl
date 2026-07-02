@@ -1,0 +1,6 @@
+{"type":"measurement","object_id":"acpowertotal_e3_1_f11_id9","value":10.0,"unit":"W","scopeType":"acPowerTotal","measurementId":9,"source":{"entity":[3,1],"feature":11},"ts":1782993830.168016}
+{"type":"measurement","object_id":"dhwtemperature_e4_f11_id0","value":58.0,"unit":"°C","scopeType":"dhwTemperature","measurementId":0,"source":{"entity":[4],"feature":11},"ts":1782993830.1686988}
+{"type":"measurement","object_id":"roomairtemperature_e5_1_1_f11_id0","value":22.5,"unit":"°C","scopeType":"roomAirTemperature","measurementId":0,"source":{"entity":[5,1,1],"feature":11},"ts":1782993830.2010183}
+{"type":"measurement","object_id":"outsideairtemperature_e6_f11_id0","value":21.0,"unit":"°C","scopeType":"outsideAirTemperature","measurementId":0,"source":{"entity":[6],"feature":11},"ts":1782993830.206124}
+{"type":"measurement","object_id":"dhwtemperature_e4_f11_id0","value":59.0,"unit":"°C","scopeType":"dhwTemperature","measurementId":0,"source":{"entity":[4],"feature":11},"ts":1782993891.9034815}
+{"type":"measurement","object_id":"outsideairtemperature_e6_f11_id0","value":21.0,"unit":"°C","scopeType":"outsideAirTemperature","measurementId":0,"source":{"entity":[6],"feature":11},"ts":1782993891.9112399}

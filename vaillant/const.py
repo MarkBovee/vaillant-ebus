@@ -1,0 +1,63 @@
+"""SPI definitions, entity type constants, EEBUS-specific constants."""
+
+# POC line 26-44 (excerpted constants)
+# SHIP message types
+SHIP_MSG_CONTROL = 0x01
+SHIP_MSG_DATA = 0x02
+
+# mDNS
+SHIP_SERVICE_TYPE = "_ship._tcp.local."
+
+# Protocol
+PROTOCOL_ID = "ee1.0"
+PROTOCOL_FORMAT = "JSON-UTF8"
+SPECIFICATION_VERSION = "1.3.0"
+
+# Entity types
+ENTITY_TYPE_DEVICE_INFORMATION = "DeviceInformation"
+ENTITY_TYPE_CEM = "CEM"
+ENTITY_TYPE_HEAT_PUMP_APPLIANCE = "HeatPumpAppliance"
+
+# Feature types
+FEATURE_TYPE_NODE_MANAGEMENT = "NodeManagement"
+FEATURE_TYPE_DEVICE_CLASSIFICATION = "DeviceClassification"
+FEATURE_TYPE_MEASUREMENT = "Measurement"
+FEATURE_TYPE_SENSING = "Sensing"
+
+# Roles
+ROLE_SPECIAL = "special"
+ROLE_SERVER = "server"
+ROLE_CLIENT = "client"
+
+# cmdClassifier values
+CMD_CLASSIFIER_READ = "read"
+CMD_CLASSIFIER_CALL = "call"
+CMD_CLASSIFIER_REPLY = "reply"
+CMD_CLASSIFIER_RESULT = "result"
+CMD_CLASSIFIER_NOTIFY = "notify"
+
+# PIN
+PIN_STATE_NONE = "none"
+
+# Hello phases
+HELLO_PHASE_READY = "ready"
+HELLO_PHASE_PENDING = "pending"
+HELLO_PHASE_ABORTED = "aborted"
+
+# Device info defaults
+DEVICE_TYPE = "EnergyManagementSystem"
+FEATURE_SET = "smart"
+BRAND_NAME = "Python"
+DEVICE_MODEL = "SHIP-Layer1"
+DEVICE_CODE = "python-ship"
+
+# TLS
+TLS_MINIMUM_VERSION = "TLSv1_2"
+TLS_CIPHERS = "HIGH:!aNULL:!eNULL:!MD5@SECLEVEL=1"
+
+# Timeouts
+MDNS_DISCOVERY_TIMEOUT = 30
+WS_OPEN_TIMEOUT = 20
+WS_RECV_TIMEOUT = 60
+HELLO_KEEPALIVE_INTERVAL = 5.0
+HELLO_WAITING_MS = 60000
