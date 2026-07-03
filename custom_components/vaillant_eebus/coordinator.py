@@ -93,6 +93,19 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         raise UpdateFailed("No measurements yet")
 
     @property
+    def measurement_scopes(self) -> dict[str, dict[str, str]]:
+        """Return all known measurement scope types with unit, from client descriptions."""
+        scopes: dict[str, dict[str, str]] = {}
+        for desc in self.client.measurement_descriptions:
+            scope = str(desc.get("scopeType") or "unknown")
+            if scope not in scopes:
+                scopes[scope] = {
+                    "scopeType": scope,
+                    "unit": str(desc.get("unit") or ""),
+                }
+        return scopes
+
+    @property
     def device_info(self) -> DeviceInfo:
         """Return device info."""
         return DeviceInfo(

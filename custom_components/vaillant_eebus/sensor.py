@@ -119,9 +119,18 @@ async def async_setup_entry(
     """Set up sensors."""
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities: list[VaillantSensor] = []
+    seen: set[str] = set()
 
     for object_id, data in coordinator.data.items():
-        entities.append(VaillantSensor(coordinator, object_id, data, entry))
+        scope = data.get("scopeType", "unknown")
+        if scope not in seen:
+            entities.append(VaillantSensor(coordinator, scope, data, entry))
+            seen.add(scope)
+
+    for scope, meta in coordinator.measurement_scopes.items():
+        if scope not in seen:
+            entities.append(VaillantSensor(coordinator, scope, meta, entry))
+            seen.add(scope)
 
     async_add_entities(entities)
 
@@ -132,20 +141,19 @@ class VaillantSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
     def __init__(
         self,
         coordinator: VaillantCoordinator,
-        object_id: str,
+        scope_type: str,
         data: dict[str, Any],
         entry: ConfigEntry,
     ) -> None:
         """Initialize sensor."""
         super().__init__(coordinator)
-        self._object_id = object_id
-        self._scope_type = data.get("scopeType", "unknown")
-        self._attr_unique_id = f"{entry.entry_id}_{object_id}"
-        self._attr_name = _friendly_name(self._scope_type)
+        self._scope_type = scope_type
+        self._attr_unique_id = f"{entry.entry_id}_{scope_type}"
+        self._attr_name = _friendly_name(scope_type)
         self._attr_has_entity_name = True
         self._attr_device_info = coordinator.device_info
 
-        metadata = _guess_metadata(self._scope_type, str(data.get("unit", "")))
+        metadata = _guess_metadata(scope_type, str(data.get("unit", "")))
         self._attr_device_class = metadata["device_class"]
         self._attr_state_class = metadata["state_class"]
         self._attr_native_unit_of_measurement = data.get("unit")
@@ -153,10 +161,10 @@ class VaillantSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
     @property
     def native_value(self) -> float | int | None:
         """Return the sensor value."""
-        data = self.coordinator.data.get(self._object_id)
-        if data is None:
-            return None
-        return data.get("value")
+        for _object_id, entry_data in self.coordinator.data.items():
+            if entry_data.get("scopeType") == self._scope_type:
+                return entry_data.get("value")
+        return None
 
     @property
     def available(self) -> bool:
