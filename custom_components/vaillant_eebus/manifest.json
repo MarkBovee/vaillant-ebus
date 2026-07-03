@@ -4,6 +4,7 @@
   "codeowners": ["@MarkBovee"],
   "config_flow": true,
   "dependencies": [],
+  "zeroconf": ["_ship._tcp.local."],
   "documentation": "https://github.com/MarkBovee/vaillant-eebus",
   "integration_type": "hub",
   "iot_class": "local_polling",
@@ -13,5 +14,5 @@
     "websockets>=12.0",
     "zeroconf>=0.120.0"
   ],
-  "version": "0.1.0"
+  "version": "0.3.0"
 }

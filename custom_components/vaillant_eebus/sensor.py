@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -11,7 +10,6 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -19,9 +17,27 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
-_LOGGER = logging.getLogger(__name__)
-
 SCOPE_TYPE_MAP: dict[str, dict[str, str]] = {
+    "acCurrent": {
+        "device_class": SensorDeviceClass.CURRENT,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "acEnergyConsumed": {
+        "device_class": SensorDeviceClass.ENERGY,
+        "state_class": SensorStateClass.TOTAL_INCREASING,
+    },
+    "acEnergyProduced": {
+        "device_class": SensorDeviceClass.ENERGY,
+        "state_class": SensorStateClass.TOTAL_INCREASING,
+    },
+    "acFrequency": {
+        "device_class": SensorDeviceClass.FREQUENCY,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "acPower": {
+        "device_class": SensorDeviceClass.POWER,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
     "outsideAirTemperature": {
         "device_class": SensorDeviceClass.TEMPERATURE,
         "state_class": SensorStateClass.MEASUREMENT,
@@ -38,6 +54,10 @@ SCOPE_TYPE_MAP: dict[str, dict[str, str]] = {
         "device_class": SensorDeviceClass.POWER,
         "state_class": SensorStateClass.MEASUREMENT,
     },
+    "acVoltage": {
+        "device_class": SensorDeviceClass.VOLTAGE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
     "compressorFrequency": {
         "device_class": SensorDeviceClass.FREQUENCY,
         "state_class": SensorStateClass.MEASUREMENT,
@@ -49,10 +69,16 @@ SCOPE_TYPE_MAP: dict[str, dict[str, str]] = {
 }
 
 SCOPE_TYPE_NAMES: dict[str, str] = {
+    "acCurrent": "AC Current",
+    "acEnergyConsumed": "AC Energy Consumed",
+    "acEnergyProduced": "AC Energy Produced",
+    "acFrequency": "AC Frequency",
+    "acPower": "AC Power",
     "outsideAirTemperature": "Outside Temperature",
     "dhwTemperature": "DHW Temperature",
     "roomAirTemperature": "Room Temperature",
     "acPowerTotal": "Compressor Power",
+    "acVoltage": "AC Voltage",
     "compressorFrequency": "Compressor Frequency",
     "waterPressure": "Water Pressure",
 }
@@ -61,6 +87,10 @@ SCOPE_TYPE_NAMES: dict[str, str] = {
 def _guess_metadata(scope_type: str, unit: str) -> dict[str, str]:
     """Guess HA metadata from scope type."""
     s = (scope_type or "").lower()
+    if "current" in s:
+        return {"device_class": SensorDeviceClass.CURRENT, "state_class": SensorStateClass.MEASUREMENT}
+    if "voltage" in s:
+        return {"device_class": SensorDeviceClass.VOLTAGE, "state_class": SensorStateClass.MEASUREMENT}
     if "temperature" in s:
         return {"device_class": SensorDeviceClass.TEMPERATURE, "state_class": SensorStateClass.MEASUREMENT}
     if "power" in s:

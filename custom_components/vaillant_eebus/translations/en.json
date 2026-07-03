@@ -12,6 +12,10 @@
     "error": {
       "cannot_connect": "Failed to connect",
       "unknown": "Unexpected error"
+    },
+    "abort": {
+      "cannot_connect": "Cannot connect to Vaillant VR921",
+      "unknown": "Unexpected error"
     }
   }
 }

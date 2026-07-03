@@ -5,11 +5,11 @@ import logging
 import os
 
 from cryptography import x509
-
-_LOGGER = logging.getLogger(__name__)
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
+
+_LOGGER = logging.getLogger(__name__)
 
 
 # POC line 485

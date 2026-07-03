@@ -5,9 +5,9 @@ import logging
 from typing import Any, cast
 
 from .ship import MsgCounter
+from .spine import _spine_addr, send_spine_call, send_spine_read
 
 _LOGGER = logging.getLogger(__name__)
-from .spine import _spine_addr, send_spine_call, send_spine_read
 
 
 # POC line 1099
@@ -49,6 +49,48 @@ async def request_remote_measurement_once(
 
 
 # POC line 1136
+async def subscribe_remote_feature(
+    ws,
+    *,
+    local_device_address: str,
+    remote_device_address: str,
+    feature: dict[str, Any],
+    feature_type: str,
+    msg_counter: MsgCounter,
+):
+    entity_list = feature.get("entity")
+    feature_id = feature.get("feature")
+    if not isinstance(entity_list, list) or not entity_list or not all(isinstance(x, int) for x in entity_list):
+        return
+    if not isinstance(feature_id, int):
+        return
+
+    src_nm = _spine_addr(device=local_device_address, entity=0, feature=0)
+    dst_nm = _spine_addr(device=remote_device_address, entity=0, feature=0)
+    local_client = _spine_addr(device=local_device_address, entity=1, feature=1)
+    remote_server = {
+        "device": remote_device_address,
+        "entity": [int(x) for x in entity_list],
+        "feature": int(feature_id),
+    }
+
+    sub_call = {
+        "subscriptionRequest": {
+            "clientAddress": local_client,
+            "serverAddress": remote_server,
+            "serverFeatureType": feature_type,
+        }
+    }
+    await send_spine_call(
+        ws,
+        address_source=src_nm,
+        address_destination=dst_nm,
+        cmd={"nodeManagementSubscriptionRequestCall": sub_call},
+        msg_counter=msg_counter,
+        ack_request=True,
+    )
+
+
 async def subscribe_remote_measurement(
     ws,
     *,
@@ -137,6 +179,10 @@ def parse_measurement_description(cmd: dict[str, Any]) -> dict[int, dict[str, An
             "measurementType": entry.get("measurementType"),
         }
 
+    if desc_map:
+        scope_summary = {mid: meta["scopeType"] for mid, meta in sorted(desc_map.items())}
+        _LOGGER.debug("📋 Measurement descriptions (%d): %s", len(desc_map), scope_summary)
+
     return desc_map
 
 
@@ -192,6 +238,8 @@ def parse_measurement_list(
 
     updates: list[dict[str, Any]] = []
     any_printed = False
+    skipped_ids: list[int] = []
+    parsed_ids: list[int] = []
 
     src_entity: list[int] | None = None
     src_feature: int | None = None
@@ -220,8 +268,15 @@ def parse_measurement_list(
         if val is None:
             val = _scaled_number_to_float(entry.get("value"))
         if val is None:
+            skipped_ids.append(mid)
+            if len(skipped_ids) <= 3:
+                try:
+                    _LOGGER.info("📋 Skipped measurement ID %s raw: %s", mid, json.dumps(entry, ensure_ascii=False))
+                except Exception:
+                    pass
             continue
 
+        parsed_ids.append(mid)
         meta = desc_map.get(mid, {})
         scope = meta.get("scopeType") or "unknown"
         unit = meta.get("unit") or ""
@@ -262,11 +317,22 @@ def parse_measurement_list(
             _LOGGER.info("📊 Measurement: %s %s (scope=%s, ID %s)", val, unit_str, scope_str, mid)
             any_printed = True
 
+    if skipped_ids:
+        _LOGGER.info(
+            "📋 MeasurementList: parsed IDs=%s, skipped(no-value) IDs=%s",
+            parsed_ids, skipped_ids,
+        )
+        if not parsed_ids:
+            try:
+                sample = json.dumps(ml_list[:5], indent=2, ensure_ascii=False)
+                _LOGGER.warning("⚠️  [MEASUREMENT] No parsable values; sample raw entries:\n%s", sample)
+            except Exception:
+                pass
+
     if not any_printed:
-        # If we got here, list existed but no usable values were found.
         try:
             sample = json.dumps(ml_list[:3], indent=2, ensure_ascii=False)
-            _LOGGER.warning("⚠️  [MEASUREMENT] No values parsed; sample entries:\n%s", sample)
+            _LOGGER.warning("⚠️  [MEASUREMENT] No values printed; sample entries:\n%s", sample)
         except Exception:
             pass
 

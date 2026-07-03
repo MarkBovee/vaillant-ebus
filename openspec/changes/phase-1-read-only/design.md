@@ -100,6 +100,27 @@ Device (VR921 Gateway)
 4. Receive periodic `notify` datagrams with `measurementListData`
 5. Optionally poll via `measurementDescriptionListData` + `measurementListData`
 
+### Proven scope inventory (current capture state)
+
+Live values observed:
+- `acPowerTotal`
+- `dhwTemperature`
+- `roomAirTemperature`
+- `outsideAirTemperature`
+
+Described by VR921, but not yet observed with live value in current capture:
+- `acCurrent`
+- `acEnergyConsumed`
+- `acEnergyProduced`
+- `acFrequency`
+- `acPower`
+- `acVoltage`
+
+Implication:
+- The protocol path for discovery, descriptions, and subscriptions is working.
+- Remaining work is mainly in poll fallback and broader HA entity mapping, not basic connectivity.
+- The next meaningful validation step is a real Home Assistant installation against the live VR921.
+
 ## 3. HA Integration Pattern
 
 ### Config Flow
@@ -130,6 +151,7 @@ Device (VR921 Gateway)
   - `/descriptions`
   - `/scopes`
 - Lets wrappers and future UI/debug tools restart without reconnecting VR921 every edit
+- Serves as the preferred local development target while the HA integration is still evolving
 
 ### Entities
 - All entities use `CoordinatorEntity` pattern
@@ -148,7 +170,7 @@ Device (VR921 Gateway)
 | Scenario | Behavior |
 |----------|----------|
 | Gateway offline | Coordinator marks entities unavailable, retry with backoff |
-| Connection reset | Auto-reconnect with exponential backoff (1s, 2s, 4s, … max 5min) |
+| Connection reset | Auto-reconnect with exponential backoff (1s, 2s, 4s, … max 5min); daemon should preserve cached state during reconnect |
 | Malformed packet | Log at DEBUG, discard, continue |
 | Protocol version mismatch | Log error, raise ConfigEntryNotReady |
 | Authentication failure | Re-pairing required, raise exception with repair suggestion |
@@ -174,6 +196,12 @@ Device (VR921 Gateway)
 - Unit: 95%+ for certificate, parsing, mapping
 - Integration: full discovery → subscribe → read cycle
 - No E2E in CI (requires physical hardware)
+
+### Immediate implementation priorities
+1. Real Home Assistant install validation
+2. Fix runtime issues found during HA setup/config-entry flow
+3. Tests for JSONL replay and coordinator behavior
+4. Decide release scope for described-but-not-live measurements
 
 ## 6. Security
 - All communication over TLS (wss://)

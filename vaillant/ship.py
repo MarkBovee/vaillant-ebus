@@ -234,8 +234,6 @@ async def perform_ship_handshake(ws, local_ship_id: str):
     # We deliberately do not "jump ahead" while the peer is still pending (waiting
     # for the user to press Trust in the myVAILLANT app).
     state = "WAITING_HELLO"
-    protocol_handshake_received = False
-    pin_state_received = False
     last_pending_hello_sent = 0.0
 
     while True:
@@ -278,12 +276,15 @@ async def perform_ship_handshake(ws, local_ship_id: str):
                 prolong = hello.get("prolongationRequest")
                 waiting_ms = hello.get("waiting")
 
-                _LOGGER.info("⏳ [HELLO] STATUS: PENDING - Warte auf Bestätigung in der myVAILLANT App...")
-                _LOGGER.info("👉 JETZT in der App den Zugriff bestätigen!")
+                _LOGGER.warning(
+                    "⏳ [HELLO] PENDING — Approve the EEBUS connection in the "
+                    "myVAILLANT app on your phone. The handshake will continue after approval."
+                )
+                _LOGGER.warning(
+                    "⏳ If no prompt appears: put the VR921 into pairing mode "
+                    "via the heat pump display or myVAILLANT app."
+                )
 
-                # Important: while the remote side is still pending (waiting for user trust/pairing),
-                # we MUST NOT proceed to protocol/pin/access. To keep the hello phase alive and
-                # avoid timeouts, we answer with our own PENDING + waiting.
                 if isinstance(waiting_ms, int):
                     _LOGGER.info("⏳ [HELLO] Remote waiting=%sms prolongationRequest=%s", waiting_ms, prolong)
                 else:
@@ -293,7 +294,6 @@ async def perform_ship_handshake(ws, local_ship_id: str):
                 if now - last_pending_hello_sent > 5.0:
                     await send_ship_json(ws, {"connectionHello": {"phase": "pending", "waiting": 60000}})
                     last_pending_hello_sent = now
-                # Bleibe in WAITING_HELLO State
 
             elif phase == "ready":
                 _LOGGER.info("✅ [HELLO] Phase abgeschlossen - beide Seiten READY")
@@ -333,8 +333,6 @@ async def perform_ship_handshake(ws, local_ship_id: str):
                 return False
 
             _LOGGER.info("✅ [PROTOCOL] Protokoll-Handshake bestätigt (Version 1.0)")
-            protocol_handshake_received = True
-
             _LOGGER.info("📤 [PROTOCOL] Bestätige Auswahl (select)...")
             await send_ship_json(
                 ws,
@@ -362,10 +360,10 @@ async def perform_ship_handshake(ws, local_ship_id: str):
             pin_state = (msg.get("connectionPinState") or {}).get("pinState")
             _LOGGER.info("✅ [PIN] PIN-State bestätigt: %s", pin_state)
             if pin_state != "none":
-                _LOGGER.error("❌ [PIN] Gerät verlangt PIN (oder sendet unerwarteten Zustand). ship-go unterstützt nur 'none'.")
+                _LOGGER.error(
+                    "❌ [PIN] Gerät verlangt PIN (oder sendet unerwarteten Zustand). ship-go unterstützt nur 'none'."
+                )
                 return False
-
-            pin_state_received = True
 
             # === PHASE 5: ACCESS METHODS ===
             _LOGGER.info("📤 [ACCESS] Sende accessMethodsRequest...")

@@ -18,9 +18,9 @@
 - [x] Implement `vaillant/ship.py` — TLS WebSocket connection, SHIP handshake state machine, frame encoding
 - [x] Implement `vaillant/spine.py` — SPINE datagram read/write, EEBUS JSON conversion
 - [x] Implement `vaillant/discovery.py` — mDNS listener for `_ship._tcp.local.`, VR921 candidate tracking
-- [ ] Implement reconnect with exponential backoff
-- [ ] Unit tests for certificate generation
-- [ ] Unit tests for SPINE datagram parsing (from JSONL fixtures)
+- [x] Implement reconnect with exponential backoff
+- [x] Unit tests for certificate generation
+- [x] Unit tests for SPINE datagram parsing (from JSONL fixtures)
 - [ ] Unit tests for SHIP handshake
 
 ## Milestone 3: Protocol — VR921 measurement reading
@@ -30,20 +30,39 @@
 - [x] Implement subscription (NodeManagementSubscriptionRequestCall)
 - [x] Implement measurement parsing (measurementDescriptionListData + measurementListData)
 - [x] Map SPINE measurement IDs to HA-friendly names + units
-- [ ] Implement poll fallback for non-subscribable measurements
-- [ ] Unit tests with JSONL capture fixtures
+- [x] Implement poll fallback for non-subscribable measurements
+- [x] Unit tests with JSONL capture fixtures
 - [x] Integration test (local): full discovery → subscribe → read cycle tegen echte VR921
 - [x] Build local daemon wrapper to keep one persistent VR921 session alive during development
 - [x] Expose local debug API for cached state/descriptions/scopes
+
+### Current proven scope coverage
+
+- [x] Live: `acPowerTotal`
+- [x] Live: `dhwTemperature`
+- [x] Live: `roomAirTemperature`
+- [x] Live: `outsideAirTemperature`
+- [x] Described: `acCurrent`
+- [x] Described: `acEnergyConsumed`
+- [x] Described: `acEnergyProduced`
+- [x] Described: `acFrequency`
+- [x] Described: `acPower`
+- [x] Described: `acVoltage`
+
+### Next priority order
+
+1. [ ] Install on real Home Assistant server and validate entities end-to-end
+2. [ ] Add parsing/mapping/coordinator tests
+3. [ ] Decide release scope for described-but-not-live measurements
 
 ## Milestone 4: HA Integration — Setup
 
 - [x] Implement `__init__.py` — async_setup_entry, async_unload_entry
 - [x] Implement `const.py` — DOMAIN, platform lists, defaults
 - [x] Implement `config_flow.py`:
-  - [ ] mDNS discovery step
+  - [x] mDNS discovery step
   - [x] Manual IP fallback step
-  - [ ] Connection test step
+  - [x] Connection test step
   - [ ] Options flow (update interval)
 - [x] Implement `coordinator.py`:
   - [x] DataUpdateCoordinator wrapping VR921 client
@@ -58,6 +77,12 @@
 ## Milestone 5: HA Integration — Entities
 
 - [x] Implement `sensor.py`:
+  - [x] AC current
+  - [x] AC energy consumed
+  - [x] AC energy produced
+  - [x] AC frequency
+  - [x] AC power
+  - [x] AC voltage
   - [x] Outdoor temperature
   - [ ] Flow temperature
   - [ ] Return temperature
@@ -90,16 +115,15 @@
 
 ## Milestone 6: Polish
 
-- [ ] Create `docs/architecture.md` with C4 diagram
-- [ ] Create `docs/developer.md` — setup, testing, contributing
-- [ ] Create `docs/troubleshooting.md` — common issues
-- [ ] Create `docs/faq.md`
-- [ ] Create `examples/basic_dashboard.yaml`
+- [x] Create `docs/architecture.md` with C4 diagram
+- [x] Create `docs/developer.md` — setup, testing, contributing
+- [x] Create `docs/troubleshooting.md` — common issues
+- [x] Create `docs/faq.md`
+- [x] Create `examples/basic_dashboard.yaml`
 - [x] Final README polish
-- [ ] Full Ruff compliance pass
+- [x] Full Ruff compliance pass
 - [ ] Full mypy strict pass
 - [ ] Coverage report — target 90%+
-- [ ] Final README polish
 - [ ] Tag v0.1.0 release
 
 ## Out of scope (Phase 2+)

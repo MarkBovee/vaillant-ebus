@@ -17,3 +17,4 @@ htmlcov/
 *.key
 *.cert
 tests/fixtures/capture_*.jsonl
+home-assistant.log

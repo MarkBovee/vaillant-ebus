@@ -76,6 +76,44 @@ A pure Python EEBUS integration solves all of these: local, low-latency, no extr
 - CI (Ruff, mypy, pytest, pre-commit)
 - Documentation (README, architecture, troubleshooting)
 
+### Current status
+
+Implemented and proven against a real VR921:
+- SHIP handshake end-to-end
+- SPINE detailed discovery
+- Measurement subscriptions
+- Poll fallback for measurement servers that do not continuously push values
+- Local development daemon with cached state and HTTP debug API
+- HA lifecycle simulator for local capture/debug
+- Home Assistant install path prepared: config flow connection test, coordinator startup, basic sensor mapping
+
+Currently proven live values:
+- `acPowerTotal`
+- `dhwTemperature`
+- `roomAirTemperature`
+- `outsideAirTemperature`
+
+Currently proven measurement descriptions without live values yet in capture:
+- `acCurrent`
+- `acEnergyConsumed`
+- `acEnergyProduced`
+- `acFrequency`
+- `acPower`
+- `acVoltage`
+
+### Next execution order
+
+1. Install on real Home Assistant server and validate config entry + entities
+2. Fix install-time issues found in HA runtime
+3. Add missing HA tests (config flow, coordinator, entity lifecycle)
+4. Decide which remaining non-live scopes are publishable in v0.1.0
+5. Finish release/tagging
+
+### Install readiness
+
+Current status is good enough for a first real Home Assistant installation test, but not yet archive-ready.
+Main remaining gaps are HA-specific tests and full mypy coverage, not protocol connectivity.
+
 **Not in scope (later phases):**
 - Write operations (climate, switch, number)
 - Subscriptions (event-based updates)

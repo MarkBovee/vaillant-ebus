@@ -6,11 +6,11 @@ from typing import Any
 
 from zeroconf import ServiceListener
 
-_LOGGER = logging.getLogger(__name__)
-
 from . import const
 from .ship import MsgCounter, _make_spine_reply_addresses, send_ship_data
 from .spine import _spine_addr, send_spine_read
+
+_LOGGER = logging.getLogger(__name__)
 
 
 # POC line 517
@@ -130,10 +130,15 @@ def _extract_entities(discovery: dict[str, Any]) -> list[dict[str, Any]]:
 
 # POC line 871
 def _extract_measurement_servers(discovery: dict[str, Any]) -> list[dict[str, Any]]:
-    servers: list[dict[str, Any]] = []
+    return _extract_servers_by_types(discovery).get("Measurement", [])
+
+
+def _extract_servers_by_types(discovery: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Return {featureType: [{entity, feature}, ...]} for all server features."""
+    result: dict[str, list[dict[str, Any]]] = {}
     feature_info = discovery.get("featureInformation")
     if not isinstance(feature_info, list):
-        return servers
+        return result
     for item in feature_info:
         if not isinstance(item, dict):
             continue
@@ -142,7 +147,8 @@ def _extract_measurement_servers(discovery: dict[str, Any]) -> list[dict[str, An
             continue
         if desc.get("role") != "server":
             continue
-        if desc.get("featureType") != "Measurement":
+        ftype = desc.get("featureType")
+        if not isinstance(ftype, str):
             continue
         faddr = desc.get("featureAddress")
         if not isinstance(faddr, dict):
@@ -153,9 +159,14 @@ def _extract_measurement_servers(discovery: dict[str, Any]) -> list[dict[str, An
             continue
         if not isinstance(feature, int):
             continue
-        servers.append({"entity": [int(x) for x in entity], "feature": int(feature)})
-    servers.sort(key=lambda d: (d.get("entity") or [], d.get("feature") or 0))
-    return servers
+        result.setdefault(ftype, []).append({"entity": [int(x) for x in entity], "feature": int(feature)})
+    for lst in result.values():
+        lst.sort(key=lambda d: (d.get("entity") or [], d.get("feature") or 0))
+    return result
+
+
+def _extract_setpoint_servers(discovery: dict[str, Any]) -> list[dict[str, Any]]:
+    return _extract_servers_by_types(discovery).get("Setpoint", [])
 
 
 # POC line 591
