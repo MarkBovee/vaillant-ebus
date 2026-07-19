@@ -30,10 +30,12 @@ from .discovery import (
 from .measurement import (
     parse_measurement_description,
     parse_measurement_list,
+    read_remote_measurement_values,
     request_remote_measurement_once,
     subscribe_remote_feature,
     subscribe_remote_measurement,
 )
+from .model import CapabilityRegistry, UnknownFeatureRegistry
 from .ship import (
     MsgCounter,
     _parse_spine_datagram,
@@ -46,7 +48,10 @@ from .spine import _spine_addr, send_spine_call, send_spine_read, send_spine_res
 _LOGGER = logging.getLogger(__name__)
 
 FEATURE_READ_CMDS: dict[str, list[str]] = {
-    "ElectricalConnection": ["electricalConnectionParameterDescriptionListData"],
+    "ElectricalConnection": [
+        "electricalConnectionParameterDescriptionListData",
+        "electricalConnectionParameterListData",
+    ],
     "Setpoint": ["setpointData"],
     "HVAC": ["hvacModeListData"],
     "SmartEnergyManagementPs": ["deviceConfigurationData"],
@@ -148,6 +153,73 @@ def _friendly_sensor_name(scope_type: str, *, source_entity: list[int] | None = 
     return s or "Measurement"
 
 
+def _parse_and_register_use_cases(
+    use_case_data: dict[str, Any],
+    capabilities: CapabilityRegistry,
+) -> None:
+    data = use_case_data
+    if not isinstance(data, dict):
+        return
+    info = data.get("useCaseInformation") or data.get("nodeManagementUseCaseData")
+    if not isinstance(info, list):
+        info = [data]
+    for entry in info:
+        if not isinstance(entry, dict):
+            continue
+        eaddr = entry.get("entityAddress") or entry.get("entity")
+        if not isinstance(eaddr, dict):
+            continue
+        entity_list = eaddr.get("entity")
+        if not isinstance(entity_list, list) or not entity_list:
+            continue
+        entity = [int(x) for x in entity_list]
+        use_cases: list[str] = []
+        support_list = entry.get("useCaseSupportList") or entry.get("useCases")
+        if isinstance(support_list, list):
+            for uc in support_list:
+                if not isinstance(uc, dict):
+                    continue
+                ucinfo = uc.get("useCaseInformation") or uc
+                if isinstance(ucinfo, dict):
+                    name = ucinfo.get("useCaseName") or ucinfo.get("name") or ""
+                    if isinstance(name, str) and name:
+                        use_cases.append(name)
+        for feat_entry in [entry] if not use_cases else []:
+            if "feature" in feat_entry:
+                feat_val = feat_entry.get("feature")
+                if isinstance(feat_val, int):
+                    capabilities.register_use_cases(entity, feat_val, [])
+        # No feature address in useCaseData — apply to all capabilities for this entity
+        for cap in capabilities.all:
+            if tuple(int(x) for x in cap.entity) == tuple(entity):
+                best = [uc for uc in use_cases if uc not in cap.supported_use_cases]
+                if best:
+                    cap.supported_use_cases.extend(best)
+                    _LOGGER.info("📋 UseCase: entity=%s use_cases=%s", entity, best)
+
+
+class _WrappedWs:
+    """Wrap a WebSocket to record tx/rx through a SessionRecorder."""
+
+    def __init__(self, ws: Any, recorder: Any) -> None:
+        self._ws = ws
+        self._recorder = recorder
+
+    async def recv(self) -> Any:
+        data = await self._ws.recv()
+        if self._recorder and isinstance(data, bytes) and len(data) > 0:
+            self._recorder.record_rx(data, msg_type=data[0])
+        return data
+
+    async def send(self, data: Any) -> None:
+        if self._recorder and isinstance(data, bytes) and len(data) > 0:
+            self._recorder.record_tx(data, msg_type=data[0])
+        await self._ws.send(data)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._ws, name)
+
+
 class VaillantClient:
     """Manage one EEBUS SHIP/SPINE connection to a Vaillant VR921.
 
@@ -162,6 +234,8 @@ class VaillantClient:
         spine_message_callback: Any | None = None,
         publish_jsonl: bool = False,
         cert_ski: str | None = None,
+        recorder: Any | None = None,
+        test_transport: Any | None = None,
     ):
         if cert_ski is not None:
             self._cert_ski = cert_ski
@@ -173,12 +247,17 @@ class VaillantClient:
         self._measurement_callback = measurement_callback
         self._spine_message_callback = spine_message_callback
         self._publish_jsonl = publish_jsonl
+        self._recorder = recorder
+        self._test_transport = test_transport
 
         self._ws: Any = None
         self._remote_device_address: str | None = None
         self._aiozc: AsyncZeroconf | None = None
         self._zc_owned = True
         self._task: asyncio.Task | None = None
+
+        self._capabilities = CapabilityRegistry()
+        self._unknown = UnknownFeatureRegistry(capacity=100)
 
         self._latest_measurements: dict[str, dict[str, Any]] = {}
         self._device_info: dict[str, Any] = {}
@@ -187,6 +266,9 @@ class VaillantClient:
         self._remote_setpoint_servers: list[dict[str, Any]] = []
         self._remote_all_server_features: dict[str, list[dict[str, Any]]] = {}
         self._measurement_desc_maps: dict[tuple[tuple[int, ...], int], dict[int, dict[str, Any]]] = {}
+        self._electrical_connection_descriptions: dict[
+            tuple[tuple[int, ...], int], dict[int, dict[str, Any]]
+        ] = {}
         self._device_config_data: dict[tuple[tuple[int, ...], int], Any] = {}
 
         self._running = False
@@ -215,12 +297,35 @@ class VaillantClient:
         return descriptions
 
     @property
+    def electrical_connection_descriptions(self) -> list[dict[str, Any]]:
+        descriptions: list[dict[str, Any]] = []
+        for (entity, feature), ec_map in sorted(self._electrical_connection_descriptions.items()):
+            for pid, meta in sorted(ec_map.items()):
+                descriptions.append(
+                    {
+                        "entity": list(entity),
+                        "feature": feature,
+                        "parameterId": pid,
+                        **meta,
+                    }
+                )
+        return descriptions
+
+    @property
     def device_config_data(self) -> dict[tuple[tuple[int, ...], int], Any]:
         return dict(self._device_config_data)
 
     @property
     def connected(self) -> bool:
         return self._running and self._ws is not None
+
+    @property
+    def capabilities(self) -> CapabilityRegistry:
+        return self._capabilities
+
+    @property
+    def unknown(self) -> UnknownFeatureRegistry:
+        return self._unknown
 
     @property
     def setpoint_servers(self) -> list[dict[str, Any]]:
@@ -315,6 +420,17 @@ class VaillantClient:
             await self._cleanup()
 
     async def _run(self, host: str, port: int, local_ip: str | None, aiozc: AsyncZeroconf | None = None) -> None:
+        if self._test_transport is not None:
+            self._ws = self._test_transport
+            await self._ws.send(b"\x00\x00")
+            success = await perform_ship_handshake(self._ws, self._local_ship_id)
+            if not success:
+                _LOGGER.error("Handshake failed (replay)")
+                return
+            _LOGGER.info("SHIP handshake successful (replay)")
+            await self._receive_loop(self._ws)
+            return
+
         if local_ip is None:
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -354,7 +470,9 @@ class VaillantClient:
                 ssl=ssl_ctx,
                 subprotocols=cast(Any, ["ship"]),
                 open_timeout=const.WS_OPEN_TIMEOUT,
-            ) as ws:
+                    ) as ws:
+                if self._recorder:
+                    ws = _WrappedWs(ws, self._recorder)
                 self._ws = ws
                 await ws.send(b"\x00\x00")
 
@@ -488,6 +606,11 @@ class VaillantClient:
 
                                     _dump_full_discovery(discovery)
 
+                                    if remote_device_address:
+                                        self._capabilities.register_from_discovery(
+                                            remote_device_address, discovery
+                                        )
+
                                     self._device_info = {
                                         "entities": self._remote_entities,
                                         "feature_map": remote_feature_map,
@@ -513,6 +636,11 @@ class VaillantClient:
 
                             elif "nodeManagementUseCaseData" in cmd:
                                 peer_use_case_received = True
+                                use_case_data = cmd.get("nodeManagementUseCaseData", {})
+                                _LOGGER.info("📋 UseCaseData: %s", json.dumps(use_case_data, indent=2)[:2000])
+                                # Store use cases per feature for capability enrichment
+                                if isinstance(use_case_data, dict):
+                                    _parse_and_register_use_cases(use_case_data, self._capabilities)
                                 if not selected_measurement_servers and self._remote_measurement_servers:
                                     selected_measurement_servers = list(self._remote_measurement_servers)
 
@@ -521,6 +649,9 @@ class VaillantClient:
                                 key = _desc_key_from_address(hdr.get("addressSource"))
                                 if key is not None and desc_map:
                                     self._measurement_desc_maps[key] = desc_map
+                                    self._capabilities.load_measurement_descriptions(
+                                        list(key[0]), key[1], desc_map
+                                    )
 
                             elif "measurementListData" in cmd:
                                 key = _desc_key_from_address(hdr.get("addressSource"))
@@ -544,9 +675,112 @@ class VaillantClient:
                                     "electricalConnectionParameterDescriptionData", []
                                 )
                                 _LOGGER.info("📋 ElectricalConnection params: %d measurements mapped", len(descs))
+                                key = _desc_key_from_address(hdr.get("addressSource"))
+                                if key is not None:
+                                    ec_map: dict[int, dict[str, Any]] = {}
+                                    for d in descs if isinstance(descs, list) else []:
+                                        pid = d.get("parameterId")
+                                        if isinstance(pid, int):
+                                            ec_map[pid] = {
+                                                "scopeType": d.get("scopeType"),
+                                                "unit": d.get("unit"),
+                                                "measurementType": d.get("measurementType"),
+                                            }
+                                    self._electrical_connection_descriptions[key] = ec_map
+                                    self._capabilities.load_electrical_connection_descriptions(
+                                        list(key[0]), key[1], ec_map
+                                    )
+                                    _LOGGER.info(
+                                        "📋 EC descriptions (%d): %s",
+                                        len(ec_map),
+                                        {pid: m["scopeType"] for pid, m in sorted(ec_map.items())},
+                                    )
+
+                            elif "electricalConnectionParameterListData" in cmd:
+                                vals = cmd.get("electricalConnectionParameterListData", {}).get(
+                                    "electricalConnectionParameterData", []
+                                )
+                                key = _desc_key_from_address(hdr.get("addressSource"))
+                                ec_desc = self._electrical_connection_descriptions.get(key, {}) if key else {}
+                                if isinstance(vals, list):
+                                    for v in vals:
+                                        pid = v.get("parameterId")
+                                        if not isinstance(pid, int):
+                                            continue
+                                        meta = ec_desc.get(pid, {})
+                                        scope = meta.get("scopeType", "unknown")
+                                        unit = _unit_to_ha(meta.get("unit", ""))
+                                        raw_val = v.get("value", {})
+                                        number = raw_val.get("number") if isinstance(raw_val, dict) else None
+                                        scale = raw_val.get("scale", 0) if isinstance(raw_val, dict) else 0
+                                        if isinstance(number, int):
+                                            value = float(number) * (10.0 ** float(scale))
+                                        else:
+                                            value = None
+                                        _LOGGER.info(
+                                            "⚡ EC value: %s = %s %s (ID %s)",
+                                            scope, value, unit, pid,
+                                        )
+                                        if value is not None and scope != "unknown":
+                                            self._capabilities.update_value(
+                                                list(key[0]), key[1], value,
+                                                scope_type=scope,
+                                                unit=unit,
+                                                measurement_id=pid,
+                                            )
+                                            object_id = _slug(f"{scope}_ec_pid{pid}")
+                                            src_entity = key[0] if key else None
+                                            src_feature = key[1] if key else None
+                                            self._latest_measurements[object_id] = {
+                                                "value": value,
+                                                "unit": unit,
+                                                "scopeType": scope,
+                                                "measurementId": pid,
+                                                "source": {"entity": src_entity, "feature": src_feature},
+                                                "ts": time.time(),
+                                            }
+
+                            elif "hvacModeListData" in cmd:
+                                key = _desc_key_from_address(hdr.get("addressSource"))
+                                hvac = cmd.get("hvacModeListData", {})
+                                mode_list = (
+                                    hvac if isinstance(hvac, list)
+                                    else hvac.get("hvacMode", []) if isinstance(hvac, dict)
+                                    else []
+                                )
+                                if isinstance(mode_list, list) and mode_list:
+                                    mode = mode_list[0].get("mode") if isinstance(mode_list[0], dict) else None
+                                    if key is not None and mode is not None:
+                                        self._capabilities.update_value(
+                                            list(key[0]), key[1], mode,
+                                            scope_type="hvacMode",
+                                        )
+                                        _LOGGER.info("📋 HVAC mode (reply): entity=%s mode=%s", list(key[0]), mode)
+
+                            elif "setpointData" in cmd:
+                                key = _desc_key_from_address(hdr.get("addressSource"))
+                                sd = cmd.get("setpointData", {})
+                                sp_list = (
+                                    sd if isinstance(sd, list)
+                                    else sd.get("setpoints", []) if isinstance(sd, dict)
+                                    else []
+                                )
+                                if isinstance(sp_list, list) and sp_list:
+                                    val = None
+                                    for sp in sp_list:
+                                        if isinstance(sp, dict) and "value" in sp:
+                                            val = sp["value"]
+                                            break
+                                    if key is not None and val is not None:
+                                        self._capabilities.update_value(
+                                            list(key[0]), key[1], val,
+                                            scope_type="setpoint",
+                                        )
+                                        _LOGGER.info("📋 Setpoint (reply): entity=%s value=%s", list(key[0]), val)
 
                             else:
                                 cmd_name = list(cmd.keys())[0]
+                                self._unknown.record_command(cmd_name, hdr, cmd, direction="rx")
                                 _LOGGER.debug("📋 Unhandled reply cmd=%s: %s", cmd_name, str(cmd)[:200])
 
                         elif cmd_classifier == "notify":
@@ -571,19 +805,63 @@ class VaillantClient:
                                 config_data = cmd.get("deviceConfigurationData")
                                 if key is not None:
                                     self._device_config_data[key] = config_data
+                                    self._capabilities.update_value(
+                                        list(key[0]), key[1], config_data,
+                                        scope_type="deviceConfiguration",
+                                    )
                                 _LOGGER.info("📋 DeviceConfigurationData(nfy) (%s): %s", key, config_data)
 
                             elif "hvacModeListData" in cmd:
+                                key = _desc_key_from_address(hdr.get("addressSource"))
                                 _LOGGER.info("📋 HVAC mode notify: %s", str(cmd)[:500])
+                                hvac = cmd.get("hvacModeListData", {})
+                                mode_list = (
+                                    hvac if isinstance(hvac, list)
+                                    else hvac.get("hvacMode", []) if isinstance(hvac, dict)
+                                    else []
+                                )
+                                if isinstance(mode_list, list) and mode_list:
+                                    mode = mode_list[0].get("mode") if isinstance(mode_list[0], dict) else None
+                                    if key is not None and mode is not None:
+                                        self._capabilities.update_value(
+                                            list(key[0]), key[1], mode,
+                                            scope_type="hvacMode",
+                                        )
 
                             elif "setpointData" in cmd:
+                                key = _desc_key_from_address(hdr.get("addressSource"))
                                 _LOGGER.info("📋 Setpoint notify: %s", str(cmd)[:500])
+                                sp = cmd.get("setpointData", {})
+                                setpoints = (
+                                    sp if isinstance(sp, list)
+                                    else sp.get("setpoints", []) if isinstance(sp, dict)
+                                    else []
+                                )
+                                if isinstance(setpoints, list):
+                                    for sp_entry in setpoints:
+                                        if not isinstance(sp_entry, dict):
+                                            continue
+                                        val = sp_entry.get("value")
+                                        sid = sp_entry.get("setpointId")
+                                        if val is not None and key is not None:
+                                            self._capabilities.update_value(
+                                                list(key[0]), key[1], float(val),
+                                                scope_type="setpoint",
+                                                measurement_id=sid if isinstance(sid, int) else None,
+                                            )
 
                             elif "smartEnergyManagementData" in cmd:
+                                key = _desc_key_from_address(hdr.get("addressSource"))
                                 _LOGGER.info("📋 SmartEnergy notify: %s", str(cmd)[:500])
+                                if key is not None:
+                                    self._capabilities.update_value(
+                                        list(key[0]), key[1], cmd.get("smartEnergyManagementData"),
+                                        scope_type="smartEnergy",
+                                    )
 
                             else:
                                 cmd_name = list(cmd.keys())[0]
+                                self._unknown.record_command(cmd_name, hdr, cmd, direction="rx")
                                 _LOGGER.debug("📋 Unhandled notify cmd=%s: %s", cmd_name, str(cmd)[:200])
 
                         if (
@@ -602,7 +880,7 @@ class VaillantClient:
                                     msg_counter=self._msg_counter,
                                 )
 
-                            sub_types = {"Setpoint", "HVAC", "SmartEnergyManagementPs"}
+                            sub_types = {"Setpoint", "HVAC", "SmartEnergyManagementPs", "ElectricalConnection"}
                             for ftype in sub_types:
                                 servers = self._remote_all_server_features.get(ftype, [])
                                 for server in servers:
@@ -646,7 +924,6 @@ class VaillantClient:
                                 cmds = FEATURE_READ_CMDS.get(ftype)
                                 if not cmds or not servers:
                                     continue
-                                sender = send_spine_read if ftype == "ElectricalConnection" else send_spine_call
                                 for server in servers:
                                     dst = {
                                         "device": remote_device_address,
@@ -654,7 +931,7 @@ class VaillantClient:
                                         "feature": int(server["feature"]),
                                     }
                                     for cmd_name in cmds:
-                                        await sender(
+                                        await send_spine_read(
                                             ws,
                                             address_source=src,
                                             address_destination=dst,
@@ -686,13 +963,31 @@ class VaillantClient:
             await asyncio.sleep(const.POLL_FALLBACK_INTERVAL)
             _LOGGER.debug("🔁 Poll fallback: reading %d measurement servers", len(measurement_servers))
             for server in measurement_servers:
-                await request_remote_measurement_once(
+                await read_remote_measurement_values(
                     ws,
                     local_device_address=self._local_device_address,
                     remote_device_address=remote_device_address,
                     remote_measurement_feature=server,
                     msg_counter=self._msg_counter,
                 )
+
+            src = _spine_addr(device=self._local_device_address, entity=1, feature=1)
+            for ftype, cmds in FEATURE_READ_CMDS.items():
+                servers = self._remote_all_server_features.get(ftype, [])
+                for server in servers:
+                    dst = {
+                        "device": remote_device_address,
+                        "entity": list(server["entity"]),
+                        "feature": int(server["feature"]),
+                    }
+                    for cmd_name in cmds:
+                        await send_spine_read(
+                            ws,
+                            address_source=src,
+                            address_destination=dst,
+                            cmd={cmd_name: {}},
+                            msg_counter=self._msg_counter,
+                        )
 
     async def write_setpoint(
         self, server: dict[str, Any], temperature: float
@@ -758,6 +1053,15 @@ class VaillantClient:
             src = u.get("source") if isinstance(u.get("source"), dict) else {}
             ent = src.get("entity") if isinstance(src, dict) else None
             feat = src.get("feature") if isinstance(src, dict) else None
+            value = u.get("value")
+
+            if value is not None and isinstance(ent, list) and isinstance(feat, int):
+                self._capabilities.update_value(
+                    ent, feat, value,
+                    scope_type=scope,
+                    unit=unit,
+                    measurement_id=mid if isinstance(mid, int) else None,
+                )
 
             object_id = _slug(
                 f"{scope}_e{'_'.join(str(x) for x in ent) if isinstance(ent, list) else 'na'}"
@@ -765,7 +1069,7 @@ class VaillantClient:
             )
 
             self._latest_measurements[object_id] = {
-                "value": u.get("value"),
+                "value": value,
                 "unit": unit,
                 "scopeType": scope,
                 "measurementId": mid,

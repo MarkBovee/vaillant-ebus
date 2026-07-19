@@ -8,36 +8,46 @@
 ## Project summary
 
 - Project: `vaillant-eebus`
-- Goal: local Home Assistant integration for Vaillant heat pumps through the VR921 EEBUS interface
-- Scope today: read-only Phase 1
-- Transport: EEBUS SHIP over TLS WebSocket, SPINE datagrams inside SHIP data frames
-- No cloud dependency, no extra hardware, no addon/container required
+- Goal: local Home Assistant integration for Vaillant heat pumps
+- Phase 1: EEBUS via VR921 — proven, but only 4 measurements
+- Phase 2 (new): EBUS via ebusd + hardware adapter — full heat pump telemetry
+- The EEBUS code remains as optional supplement for energy measurements
 
 ## Current status
 
-- Real VR921 connection works end-to-end
-- SHIP handshake works
-- SPINE discovery works
-- Measurement subscriptions work
-- Poll fallback works
-- Local development daemon works
-- Home Assistant install path is prepared, but runtime validation on the real HA server is the next step
+**EEBUS (completed):** Real VR921 connection works end-to-end. SHIP handshake, SPINE discovery, measurement subscriptions, poll fallback, local daemon, and HA install path are all proven. **Only 4 live measurements available from the VR921** — confirmed after exhaustive testing (subscription, poll, setpoint write trigger, 120s capture, Loxone investigation, GitHub reference analysis). The VR921 is an energy-management gateway, not a full diagnostic interface.
 
-## Proven live measurements
+**EBUS (ebusd TCP backend):** ebusd draait als HA addon op 192.168.1.100, verbonden met aroTHERM via eBUS adapter. Custom_component praat direct via TCP (port 8888) — geen MQTT broker nodig. OpenSpec change `ebusd-tcp-backend`. 362 registers bekend, grouping/writes/translations als meerwaarde boven ebusd's ingebouwde HA integratie.
+
+### ebusd connectie details
+
+- HA server: `192.168.1.100`, user `homeassistant`, via SSH bereikbaar
+- MQTT broker: `core-mosquitto` op HA server, port 1883, user `mark`, pass `bovee`
+- ebusd device: `ens:192.168.1.101:9999` (netwerk eBUS adapter)
+- ebusd config: `--scanconfig --accesslevel=* --mqttjson --mqttint=/etc/ebusd/mqtt-hassio.cfg --mqtttopic=ebusd`
+- JSON format: `{"field": {"value": X}}` (niet `--mqttjson=short`)
+- Writable test: via `ebusctl write <circuit> <name> <value>` op HA server, of MQTT publish naar `ebusd/<circuit>/<name>/set`
+- Credentials in `.env` (git-ignored)
+- **TCP direct port:** 8888 (binary protocol, commands: `f`, `r`, `write -c`)
+- **HTTP port:** 8889 (ingeschakeld maar addon moet herstart voor actief)
+
+## Proven EEBUS measurements
 
 - `acPowerTotal`
 - `dhwTemperature`
 - `roomAirTemperature`
 - `outsideAirTemperature`
 
-## Described by VR921, but not yet returning live values in current captures
+## Described but never live (EEBUS)
 
-- `acCurrent`
+- `acCurrent` (3-phase)
 - `acEnergyConsumed`
 - `acEnergyProduced`
 - `acFrequency`
-- `acPower`
-- `acVoltage`
+- `acPower` (3-phase)
+- `acVoltage` (5-phase)
+- 16 ElectricalConnection parameters (all scopeType=None)
+- Setpoint/HVAC/SmartEnergy features (write-only, no data notify)
 
 ## Repository structure
 
@@ -79,14 +89,22 @@ Developer tooling.
 - `test_measurement.py`: parser tests and fixture presence checks
 - `fixtures/measurements.jsonl`: real captured live measurements
 
-### `openspec/changes/phase-1-read-only/`
+### `openspec/changes/ebusd-tcp-backend/`
 
-Primary change record. Read this first in a fresh session:
+Active change record (ebusd+MQTT backend). Read this first in a fresh session:
 
-- `proposal.md`
-- `design.md`
-- `tasks.md`
-- `specs/*`
+- `proposal.md` — why and what changes
+- `design.md` — architecture, MQTT reference, entity strategy, live setup details
+- `tasks.md` — implementation checklist (start at task 0: data capture)
+- `specs/*` — requirements per capability
+
+### `openspec/changes/archive/2026-07-18-phase-1-read-only/`
+
+Archived EEBUS phase 1 (reference only — not active). Contains full EEBUS protocol research, VR921 capabilities, and the pivot decision.
+
+## External references
+
+- [markusschultheis/Vaillant-VR921](https://github.com/markusschultheis/Vaillant-VR921) — diagnostic SHIP/SPINE client (single 88KB script). Confirms our entity/feature tree. Our implementation is more complete (Setpoint, ElectricalConnection, SmartEnergy, use case parsing) but the reference is useful for protocol exploration and independently confirms VR921 behaviour.
 
 ## Preferred development workflow
 
@@ -168,8 +186,11 @@ Current state:
 
 ## Next priorities
 
-1. validate install on the real HA server
-2. fix any HA runtime issues found there
-3. decide which described-but-not-live scopes belong in v0.1.0
-4. add HA config/coordinator/entity tests
-5. revisit mypy strict pass
+1. **Execute openspec change `ebusd-tcp-backend`** — taak 1 eerst: scaffolding (backend dir, TCP transport, find parser)
+2. Build auto-discovery + entity factory
+3. Build sensor/binary_sensor/control entities
+4. Build HA services + write verification
+5. Validate on real HA server (EEBUS supplement optional)
+6. Revisit mypy strict pass
+
+### Eerste taak bij nieuwe sessie: open `/opsx-apply ebusd-tcp-backend` en begin bij taak 1.1 (scaffolding).

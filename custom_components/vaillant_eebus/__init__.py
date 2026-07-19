@@ -18,22 +18,24 @@ _LOGGER = logging.getLogger(__name__)
 
 async def _handle_set_dhw_temperature(call: ServiceCall, coordinator: VaillantCoordinator) -> None:
     temperature = call.data["temperature"]
-    servers = coordinator.client.setpoint_servers
-    dhw_server = next((s for s in servers if s.get("entity") == [4]), None)
-    if dhw_server is None:
-        _LOGGER.warning("No DHW setpoint server found")
-        return
-    await coordinator.client.write_setpoint(dhw_server, temperature)
+    for cap in coordinator.capabilities.by_feature_type("SetpointServer"):
+        etype = coordinator.capabilities.get_entity_type(list(cap.entity))
+        if etype and "DHW" in etype:
+            server = {"entity": list(cap.entity), "feature": cap.feature}
+            await coordinator.client.write_setpoint(server, temperature)
+            return
+    _LOGGER.warning("No DHW setpoint server found")
 
 
 async def _handle_set_hvac_mode(call: ServiceCall, coordinator: VaillantCoordinator) -> None:
     mode = call.data["mode"]
-    servers = coordinator.client.all_server_features.get("HVAC", [])
-    room_server = next((s for s in servers if s.get("entity") == [5, 1, 1]), None)
-    if room_server is None:
-        _LOGGER.warning("No HVAC server found")
-        return
-    await coordinator.client.write_hvac_mode(room_server, mode)
+    for cap in coordinator.capabilities.by_feature_type("HVAC"):
+        etype = coordinator.capabilities.get_entity_type(list(cap.entity))
+        if etype and ("HVAC" in etype or "Room" in etype or "Zone" in etype):
+            server = {"entity": list(cap.entity), "feature": cap.feature}
+            await coordinator.client.write_hvac_mode(server, mode)
+            return
+    _LOGGER.warning("No HVAC server found")
 
 
 SET_DHW_SCHEMA = vol.Schema({vol.Required("temperature"): vol.All(vol.Coerce(float), vol.Range(min=5, max=80))})

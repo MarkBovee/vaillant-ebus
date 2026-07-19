@@ -133,6 +133,35 @@ async def subscribe_remote_measurement(
     )
 
 
+async def read_remote_measurement_values(
+    ws,
+    *,
+    local_device_address: str,
+    remote_device_address: str,
+    remote_measurement_feature: dict[str, Any],
+    msg_counter: MsgCounter,
+):
+    """Read only measurementListData (values), not descriptions. Use in poll loop."""
+    entity_list = remote_measurement_feature.get("entity")
+    feature = remote_measurement_feature.get("feature")
+    if not isinstance(entity_list, list) or not entity_list or not all(isinstance(x, int) for x in entity_list):
+        return
+    if not isinstance(feature, int):
+        return
+
+    src = _spine_addr(device=local_device_address, entity=1, feature=1)
+    dst = {"device": remote_device_address, "entity": [int(x) for x in entity_list], "feature": int(feature)}
+
+    await send_spine_read(
+        ws,
+        address_source=src,
+        address_destination=dst,
+        cmd={"measurementListData": {}},
+        msg_counter=msg_counter,
+        ack_request=True,
+    )
+
+
 # POC line 1174
 def parse_measurement_description(cmd: dict[str, Any]) -> dict[int, dict[str, Any]]:
     """Parse measurementDescriptionListData and return {measurementId: {scopeType, unit, measurementType}}.
