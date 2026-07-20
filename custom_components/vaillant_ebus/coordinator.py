@@ -55,12 +55,28 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.ebusd_backend = EbusdTcpBackend(host=host, port=port)
         await self.ebusd_backend.async_connect()
 
+        await self._define_custom_registers()
+
         discovered = await self.ebusd_backend.async_find()
         for reg in discovered:
             self.registers[reg.key] = reg
         _LOGGER.info("Discovered %d ebusd registers", len(discovered))
 
         self.entities = generate_entity_descriptions(discovered)
+
+    async def _define_custom_registers(self) -> None:
+        if not self.ebusd_backend:
+            return
+        defines = [
+            "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800"
+            ",value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity",
+        ]
+        for definition in defines:
+            try:
+                resp = await self.ebusd_backend.async_send_raw(f'define -r "{definition}"')
+                _LOGGER.debug("Define %s: %s", definition.split(",")[2], resp)
+            except Exception as exc:
+                _LOGGER.warning("Failed to define register: %s", exc)
 
     def _values_from_registers(
         self, registers: list[EbusdRegister] | None = None

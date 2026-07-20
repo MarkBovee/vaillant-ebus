@@ -67,6 +67,9 @@ class EbusdTcpBackend(Backend):
             self._reader = None
 
     async def _send_command(self, command: str) -> str:
+        return await self.async_send_raw(command)
+
+    async def async_send_raw(self, command: str) -> str:
         if not self._writer or not self._reader:
             raise ConnectionError("Not connected")
         data = (command + "\n").encode("utf-8")

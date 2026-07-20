@@ -123,6 +123,28 @@ Current state:
 - `pytest`: passing
 - `compileall`: passing
 
+## Z1RoomHumidity (room humidity)
+
+Room humidity is NOT discoverable via `find` — it's a temporary register defined at runtime via the `define` command. Works on CTLV2 (SW=0514, HW=1104).
+
+**Working define:**
+```bash
+ebusctl define -r "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800,value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity"
+```
+
+The custom_component auto-defines this on startup in `coordinator.py:_define_custom_registers()`. No CSV override needed.
+
+Key details:
+- Type `r5` (not `r`) — zone 1 read model
+- QQ=31 (ebusd master), ZZ=15 (CTLV2 slave)
+- Message B524, field ID `020003002800`
+- First field `value,,IGN:4,,,,` (padding)
+- Second field `value,,EXP,,%,z1 Room Humidity` (actual value)
+- Value type: `EXP` (exponential) with unit `%`
+- Register key in code: `ctlv2.z1RoomHumidity` (lowercase z)
+
+No conditional or IGN:4 flag — the `ign,,IGN:4` in the original CSV is a 4-byte IGNORE field (padding), not a condition.
+
 ## Known limitations
 
 - Home Assistant runtime validation is still pending on the real server
