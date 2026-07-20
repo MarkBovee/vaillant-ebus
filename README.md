@@ -1,103 +1,85 @@
-# Vaillant EEBUS
+# Vaillant eBUS
 
-Local Home Assistant integration for Vaillant heat pumps via the VR921 (sensoNET) EEBUS interface.
+Local Home Assistant integration for Vaillant heat pumps via ebusd TCP.
 
-**No cloud dependency. No addon. No extra hardware.**
+**No cloud. No addon dependencies (beyond ebusd).**
 
 ## Features
 
-- Read heat pump data directly from VR921 over local network
-- mDNS discovery — no IP configuration needed
-- 25+ sensor entities (temperatures, power, energy, COP, pressure, etc.)
-- Binary sensors (compressor, alarm, defrost, etc.)
-- Async from day one
-- Diagnostics support
-- HACS installable
+- Auto-discovers 250+ registers from 4 Vaillant slaves (HMU00, CTLV2, VWZ00, NETX2)
+- Entities grouped into 4 devices:
+  - **aroTHERM (Heat Pump)** — COP, temperatures, pressures, fan speeds, runtimes, yields
+  - **CTLV2 (Heating Control)** — water pressure, average temp, errors, hydraulic scheme
+  - **Woonkamer (Z1)** — room temperature, operation mode, flow temp, heat curve, holiday schedule, away mode
+  - **Boiler (DHW)** — storage temps, target temp, operation mode, cylinder params
+- Climate, water heater, number, select, switch, binary sensor, date, calendar platforms
+- Away mode (holiday period) switch
+- Read/write services (`read_parameter`, `write_parameter`, `refresh`, `rediscover`)
+- Async TCP connection with reconnect backoff
+
+## Requirements
+
+- Vaillant aroTHERM (or compatible) heat pump with eBUS interface
+- Network eBUS adapter (e.g., from ebusd project)
+- ebusd running on your network (HA addon or standalone)
+- Home Assistant 2026.x or newer
+
+## Installation
+
+### 1. ebusd addon configuration
+
+Install the ebusd addon from the HA addon store. Configure:
+
+```yaml
+network_device: ens:<YOUR_EBUSD_ADAPTER_IP>:9999
+seed_mqtt_cfg: false
+commandline_options:
+  - "--accesslevel=*"
+  - "--scanconfig"
+  - "--port=8888"
+  - "--enabledefine"
+```
+
+The addon will auto-discover all 4 Vaillant slaves.
+
+To add register definitions not in the default CSV set (e.g., Z1RoomHumidity), place a `.csv` file in the ebusd config directory (`/etc/ebusd/vaillant/`). This requires rebuilding the addon image or mounting a custom volume.
+
+### 2. Integration install
+
+Copy `custom_components/vaillant_ebus/` to your HA `config/custom_components/` and restart HA.
+
+### 3. Add integration
+
+Settings → Devices & Services → Add Integration → Vaillant eBUS. Enter:
+- **Host**: IP of your HA server (where ebusd runs)
+- **Port**: 8888 (default ebusd TCP port)
 
 ## Architecture
 
 ```
-VR921 ──wss://──► vaillant/ ──► custom_components/ ──► HA entities
-        SHIP/SPINE   ship/spine       vaillant_ebus      sensors
+Heat Pump ──eBUS──► Network Adapter ──TCP──► ebusd (port 8888)
+                                                    │
+                                               HA custom_component
+                                               (async TCP, no MQTT)
 ```
 
-## Local Daemon For Development
+## Services
 
-During development, repeated reconnects can trigger repeated trust prompts in the myVaillant app.
-Use the local daemon to keep one persistent EEBUS session alive while restarting wrappers, scripts, or UI code around it.
+| Service | Description |
+|---------|-------------|
+| `vaillant_ebus.read_parameter` | Read a register by circuit and name |
+| `vaillant_ebus.write_parameter` | Write a value and verify |
+| `vaillant_ebus.refresh` | Force re-read all registers |
+| `vaillant_ebus.rediscover` | Re-run `find` and rebuild entities |
 
-### Start daemon
+## Device / Circuit Mapping
 
-```bash
-.venv/bin/python scripts/daemon.py \
-  --host 192.168.1.130 \
-  --http-port 8125 \
-  --state-file /tmp/vaillant-state.json \
-  --event-log /tmp/vaillant-events.jsonl
-```
-
-### HTTP endpoints
-
-- `GET /health` — connection status, last update, reconnect info
-- `GET /state` — full cached snapshot
-- `GET /descriptions` — all measurement descriptions discovered from VR921
-- `GET /scopes` — compact scope summary with units, IDs, latest values
-
-Example:
-
-```bash
-curl http://127.0.0.1:8125/health
-curl http://127.0.0.1:8125/scopes
-curl http://127.0.0.1:8125/state | jq
-```
-
-### HA lifecycle simulator
-
-The standalone wrapper still exists and now captures full protocol flow plus discovered measurements:
-
-```bash
-.venv/bin/python scripts/test_local.py \
-  --host 192.168.1.130 \
-  --capture-seconds 60 \
-  --summary-file /tmp/opencode/vaillant-summary.json
-```
-
-This simulates:
-- SHIP handshake
-- SPINE discovery
-- subscriptions
-- incoming measurement handling
-- entity-like sensor registration in logs
-
-## Requirements
-
-- Vaillant heat pump with VR921 (sensoNET) gateway
-- Home Assistant 2025.x or newer
-- Network access to VR921 (mDNS must work)
-- Python 3.14+
-
-## Installation
-
-### HACS
-
-1. Add this repository as a custom repository in HACS
-2. Search for "Vaillant EEBUS" and install
-3. Restart Home Assistant
-4. Settings → Devices & Services → Add Integration → Vaillant EEBUS
-
-### Manual
-
-1. Download latest release
-2. Extract `custom_components/vaillant_ebus` to your HA `config/custom_components/`
-3. Restart Home Assistant
-4. Add the integration via Settings → Devices & Services
-
-## First-time pairing
-
-1. Install and add the integration
-2. The integration will discover your VR921 via mDNS
-3. Confirm the pairing request in the myVaillant app
-4. Done — data appears automatically
+| Device | Circuit(s) | Key entities |
+|--------|-----------|--------------|
+| aroTHERM (Heat Pump) | `hmu`, `Broadcast` | COP, temps, pressures, fan speeds, yields |
+| CTLV2 (Heating Control) | `ctlv2` (system) | water pressure, avg temp, errors |
+| Woonkamer (Z1) | `ctlv2` (Z1 sub) | room temp, heat curve, holiday, away |
+| Boiler (DHW) | `ctlv2` (DHW sub) | storage temp, target temp, operation |
 
 ## Development
 
@@ -105,15 +87,9 @@ This simulates:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pre-commit install
-pytest
-```
-
-Useful local debug loop:
-
-```bash
-.venv/bin/python scripts/daemon.py --host 192.168.1.130
-curl http://127.0.0.1:8125/scopes
+ruff check .
+pytest -q
+python3 -m compileall custom_components/vaillant_ebus/
 ```
 
 ## License
