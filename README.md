@@ -42,7 +42,21 @@ commandline_options:
 
 The addon will auto-discover all 4 Vaillant slaves.
 
-To add register definitions not in the default CSV set (e.g., Z1RoomHumidity), place a `.csv` file in the ebusd config directory (`/etc/ebusd/vaillant/`). This requires rebuilding the addon image or mounting a custom volume.
+The addon config directory on the host (`/addon_configs/b4d7ad18_ebusd/`) is mounted into the ebusd container as the config path (`/etc/ebusd/`). Placing `.csv` files in `vaillant/` subdirectory adds register definitions. To deploy custom CSV files:
+
+```bash
+# Compile latest ebusd-configuration locally
+git clone https://github.com/john30/ebusd-configuration.git /tmp/ebusd-conf
+cd /tmp/ebusd-conf && npm install && npm run compile-en
+# Upload the compiled CSV set to the addon config dir
+scp -r outcsv/@ebusd/ebus-typespec/vaillant/*.csv \
+  hass-host:/addon_configs/b4d7ad18_ebusd/vaillant/
+# Restart the ebusd addon
+```
+
+**Warning**: `--configpath=/config` in commandline_options overrides the default config path and breaks standard CSV loading — do not use.
+
+To replace the whole CSV set: upload compiled CSVs to the addon config dir as described above. The addon mounts this directory directly as `/etc/ebusd/` inside the container.
 
 ### 2. Integration install
 
@@ -71,6 +85,27 @@ Heat Pump ──eBUS──► Network Adapter ──TCP──► ebusd (port 888
 | `vaillant_ebus.write_parameter` | Write a value and verify |
 | `vaillant_ebus.refresh` | Force re-read all registers |
 | `vaillant_ebus.rediscover` | Re-run `find` and rebuild entities |
+
+## Register Discovery
+
+The integration uses ebusd's `find` command to discover available registers. Only registers with data OR those listed in `REGISTER_MAP` (mapping.py) become entities.
+
+Registers not in `find` output but known by name can be read directly via `read -c <circuit> <name>`. The coordinator's `_fallback_read` mechanism attempts this for all REGISTER_MAP entries that weren't found by `find`.
+
+This two-pass approach handles registers that only appear when the heat pump is active (compressor running) or that are available by name but not auto-discovered.
+
+Not all registers defined in circuit-specific CSV files are actually supported by every hardware revision. If a register returns `ERR: element not found` despite being in the CSV, the firmware variant likely omits that sensor.
+
+### ebusd TCP commands
+
+| Command | Purpose |
+|---------|---------|
+| `f` | List all known registers |
+| `r -c <circuit> <name>` | Read a register |
+| `i` | Daemon info (version, slaves, loaded CSVs) |
+| `scan <address>` | Scan a specific slave for new messages |
+| `scan full` | Scan all slaves |
+| `l` | Listen for bus traffic |
 
 ## Device / Circuit Mapping
 

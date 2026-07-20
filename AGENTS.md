@@ -23,11 +23,40 @@
 
 - HA server: `192.168.1.100`, user `homeassistant`, via SSH bereikbaar
 - ebusd device: `ens:192.168.1.101:9999` (netwerk eBUS adapter)
-- ebusd config: `--scanconfig --accesslevel=* --mqttjson --mqttint=/etc/ebusd/mqtt-hassio.cfg --mqtttopic=ebusd`
-- JSON format: `{"field": {"value": X}}` (niet `--mqttjson=short`)
+- ebusd addon config:
+  ```yaml
+  network_device: ens:192.168.1.101:9999
+  seed_mqtt_cfg: false
+  commandline_options:
+    - "--accesslevel=*"
+    - "--scanconfig"
+    - "--port=8888"
+    - "--enabledefine"
+  ```
+- Geen MQTT, geen `--mqttjson`, geen `--mqttint` — custom_component leest direct via TCP
 - Credentials in `.env` (git-ignored)
-- **TCP direct port:** 8888 (plain text, `\n`-delimited)
-- **HTTP port:** 8889 (ingeschakeld maar moet herstart voor actief)
+- **TCP port:** 8888 (plain text, `\n`-delimited)
+- **HTTP port:** 8889 (niet in gebruik)
+
+## ebusd addon CSV beheer
+
+De addon data directory (`/addon_configs/b4d7ad18_ebusd/`) wordt in de container gemount als `/etc/ebusd/`. CSV bestanden in `vaillant/` subdirectory worden door ebusd geladen bij startup.
+
+Om CSV set te updaten:
+1. Clone `https://github.com/john30/ebusd-configuration.git`
+2. `npm install && npm run compile-en`
+3. Upload `outcsv/@ebusd/ebus-typespec/vaillant/*.csv` naar `/addon_configs/b4d7ad18_ebusd/vaillant/`
+4. Restart ebusd addon
+
+**Belangrijk**: `--configpath=/config` OVERSCHRIJFT de default config path en breekt standaard CSV laden. Alleen gebruiken in combinatie met volledige CSV set op die locatie.
+
+## Register discoverie
+
+- `find` returned registers + metadata van ebusd
+- `REGISTER_MAP` in mapping.py fungeert als fallback: entities worden aangemaakt voor registers die in de map staan, ook al zijn ze niet in `find`
+- `_fallback_read` in coordinator probeert REGISTER_MAP entries die `find` miste alsnog te lezen via direct `read`
+- Sommige registers zijn alleen leesbaar als de compressor draait (summer: veel "no data stored")
+- Registers die `ERR: element not found` geven ondanks CSV definitie worden door de hardware niet ondersteund (firmware variant) — simpelweg accepteren
 
 ## SSH access
 
@@ -100,6 +129,19 @@ Current state:
 - Most heat pump registers show "no data stored" when compressor is idle (summer)
 - Entity classification (sensor vs number vs select) needs YAML overrides for best results
 - Native unit inference for uncommon registers is incomplete
+
+## File Upload (SSH)
+
+**Nooit `tee` gebruiken met `echo "PWD" | sudo -S tee`** — het wachtwoord komt in het bestand terecht (zsh heredoc interactie).
+
+Altijd base64 methode:
+```bash
+PAYLOAD=$(base64 -w0 /local/path/to/file)
+sshpass -p 'PASSWORD' ssh user@host \
+  'echo "PASSWORD" | sudo -S python3 -c "import sys,base64;open(\"/remote/path/file\",\"w\").write(base64.b64decode(sys.argv[1]).decode())" "'"${PAYLOAD}"'"
+```
+
+Voor grote bestanden (>40KB): splitten en append-en.
 
 ## Important constraints
 
