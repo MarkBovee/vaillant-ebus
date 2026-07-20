@@ -4,23 +4,42 @@ from __future__ import annotations
 
 from typing import Any
 
-from .mapping import RegisterMeta, get_meta
+from .mapping import REGISTER_MAP, RegisterMeta, get_meta
 from .models import EbusdRegister
+
+HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
+
+
+def _infer_device_circuit(circuit: str, name: str) -> str | None:
+    if circuit == "Broadcast":
+        return "hmu"
+    if circuit == "ctlv2":
+        if name.startswith(("Hwc", "Cylinder", "MaxCylinder", "DHW", "Solar")):
+            return "dhw"
+        if name.startswith(("Z1", "Hc1")):
+            return "z1"
+    return None
 
 
 def _is_hidden_register(register: EbusdRegister) -> bool:
-    """Exclude ebusd implementation/config noise from entity creation."""
-    circuit = register.circuit.lower()
+    circuit = register.circuit
     name = register.name.lower()
-    if circuit.startswith("scan"):
+    if circuit.lower().startswith("scan"):
         return True
-    if circuit == "broadcast" and name != "outsidetemp":
+    if circuit.lower() in ("memory",):
         return True
     if name.startswith(("cctimer_", "hwctimer_", "z1timer_", "z2timer_", "z3timer_")):
         return True
-    if name.startswith(("memory_", "prfuelsum", "installer", "phonenumber")):
+    if name.startswith(("prfuelsum",)):
         return True
-    if name in {"general_valuerange", "date_time", "datetime", "vdatetime"}:
+    if name.startswith(("installer", "phonenumber", "keycode", "maintenancedate", "maintenancedue")):
+        return True
+    if name in ("general_valuerange", "date_time", "datetime"):
+        return True
+    if circuit == "Broadcast" and name.lower() in HIDDEN_BROADCAST:
+        return True
+    if name.startswith(("hc2", "hc3", "z2", "z3")):
+        # ponytail: single-zone system (HC1+Z1 only). Remove for multi-zone setups.
         return True
     return False
 
@@ -52,6 +71,13 @@ class EntityDescription:
     @property
     def key(self) -> str:
         return f"{self.circuit}.{self.name}.{self.field}"
+
+    @property
+    def device_circuit(self) -> str:
+        if self.meta.device_circuit:
+            return self.meta.device_circuit
+        inferred = _infer_device_circuit(self.circuit, self.name)
+        return inferred or self.circuit
 
     @property
     def entity_type(self) -> str:
@@ -132,7 +158,8 @@ def generate_entity_descriptions(
             if merged_meta.entity_type == "":
                 merged_meta.entity_type = _classify_register(reg, field, raw)
 
-            if not reg.has_data and not merged_meta.entity_category:
+            known_register = f"{reg.circuit}.{reg.name}" in REGISTER_MAP
+            if not reg.has_data and not known_register:
                 merged_meta.enabled = False
 
             if not merged_meta.enabled:
@@ -147,6 +174,33 @@ def generate_entity_descriptions(
                 raw_value=raw,
             )
             entities.append(entity)
+
+    discovered_keys = {f"{reg.circuit}.{reg.name}" for reg in registers}
+    for map_key, meta in REGISTER_MAP.items():
+        if map_key in discovered_keys or map_key in seen:
+            continue
+        if map_key.count(".") != 1:
+            continue
+        circuit, name = map_key.split(".", 1)
+        virtual_reg = EbusdRegister(
+            circuit=circuit,
+            name=name,
+            fields=["value"],
+            value={"value": None},
+            has_data=False,
+        )
+        merged = _merge_overrides(meta, overrides.get(map_key) or {})
+        if not merged.enabled:
+            continue
+        entity = EntityDescription(
+            circuit=circuit,
+            name=name,
+            field="value",
+            meta=merged,
+            register=virtual_reg,
+            raw_value=None,
+        )
+        entities.append(entity)
 
     return entities
 
@@ -168,5 +222,6 @@ def _merge_overrides(meta: RegisterMeta, override: dict[str, Any]) -> RegisterMe
         options=override.get("options", meta.options),
         enabled=override.get("enabled", meta.enabled),
         entity_type=override.get("entity_type", meta.entity_type),
+        device_circuit=override.get("device_circuit", meta.device_circuit),
     )
     return merged

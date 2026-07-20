@@ -29,6 +29,17 @@
 - **TCP direct port:** 8888 (plain text, `\n`-delimited)
 - **HTTP port:** 8889 (ingeschakeld maar moet herstart voor actief)
 
+## SSH access
+
+```bash
+# Credentials in .env (git-ignored)
+sshpass -p 'PASSWORD' ssh user@192.168.1.100
+```
+
+- `find` via ebusd TCP (port 8888) over SSH: `echo 'f' | timeout 15 nc 192.168.1.100 8888`
+- HA Supervisor API (local on HA): `http://supervisor/core/api/...` met token uit `/run/s6/container_environment/SUPERVISOR_TOKEN`
+- HA restart via SSH: `ssh user@192.168.1.100 "docker restart hassio_... || ha core restart"`
+
 ## Repository structure
 
 ### `custom_components/vaillant_ebus/`

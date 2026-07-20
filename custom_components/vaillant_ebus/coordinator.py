@@ -12,6 +12,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .backend.entity_factory import EntityDescription, generate_entity_descriptions
+from .backend.mapping import REGISTER_MAP
 from .backend.models import CIRCUIT_NAMES, EbusdRegister
 from .backend.tcp import EbusdTcpBackend
 from .const import (
@@ -24,7 +25,6 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         _LOGGER.info("Initializing coordinator")
@@ -34,7 +34,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.registers: dict[str, EbusdRegister] = {}
         self.entities: list[EntityDescription] = []
         self._started = False
-        self._poll_registers: list[tuple[str, str, str]] = []
 
         scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL)
         super().__init__(
@@ -63,21 +62,65 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self.entities = generate_entity_descriptions(discovered)
 
-        for reg in discovered:
-            if reg.has_data:
-                for field in reg.fields:
-                    self._poll_registers.append((reg.circuit, reg.name, field))
-        _LOGGER.info("Poll list: %d register fields", len(self._poll_registers))
+    def _values_from_registers(
+        self, registers: list[EbusdRegister] | None = None
+    ) -> dict[str, str]:
+        values: dict[str, str] = {}
+        for reg in registers or list(self.registers.values()):
+            for field, value in reg.value.items():
+                if value is not None:
+                    values[f"{reg.circuit}.{reg.name}.{field}"] = value
+        return values
+
+    async def _fallback_read(self) -> None:
+        if not self.ebusd_backend:
+            return
+        known_missing = [
+            key for key in REGISTER_MAP
+            if key not in self.registers or not self.registers[key].has_data
+        ]
+        if not known_missing:
+            return
+        _LOGGER.debug("Fallback reading %d known register(s)", len(known_missing))
+        for key in known_missing:
+            parts = key.split(".", 1)
+            if len(parts) != 2:
+                continue
+            circuit, name = parts
+            try:
+                value = await self.ebusd_backend.async_read(circuit, name)
+                if value is not None:
+                    if key not in self.registers:
+                        self.registers[key] = EbusdRegister(
+                            circuit=circuit,
+                            name=name,
+                            fields=["value"],
+                            value={"value": value},
+                            has_data=True,
+                        )
+                    else:
+                        self.registers[key].value["value"] = value
+                        self.registers[key].has_data = True
+                    _LOGGER.debug("Fallback read %s = %s", key, value)
+            except Exception:
+                _LOGGER.debug("Fallback read failed: %s", key)
+        _LOGGER.info("Fallback: %d/%d known registers re-read (%d had data)",
+                     len(known_missing), len(REGISTER_MAP),
+                     len(known_missing) - sum(1 for k in known_missing
+                         if k not in self.registers or not self.registers[k].has_data))
 
     async def _async_update_data(self) -> dict[str, Any]:
         _LOGGER.debug("Coordinator update, started=%s", self._started)
         if not self._started:
             await self.async_start()
+            return {"ebusd": self._values_from_registers()}
 
         if self.ebusd_backend and self.ebusd_backend.connected:
             try:
-                polled = await self.ebusd_backend.async_poll(self._poll_registers)
-                return {"ebusd": polled}
+                discovered = await self.ebusd_backend.async_find()
+                self.registers = {reg.key: reg for reg in discovered}
+                await self._fallback_read()
+                return {"ebusd": self._values_from_registers()}
             except ConnectionError:
                 _LOGGER.warning("ebusd connection lost, reconnecting")
                 try:

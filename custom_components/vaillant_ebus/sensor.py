@@ -47,7 +47,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
         self._desc = desc
         self._attr_unique_id = unique_id
         self._attr_has_entity_name = True
-        self._attr_device_info = coordinator.get_device_info(desc.circuit)
+        self._attr_device_info = coordinator.get_device_info(desc.device_circuit)
         self._attr_name = desc.meta.friendly_name or desc.name
         if desc.meta.device_class:
             self._attr_device_class = desc.meta.device_class
@@ -61,7 +61,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
             self._attr_entity_category = EntityCategory(desc.meta.entity_category)
 
     @property
-    def native_value(self) -> float | int | None:
+    def native_value(self) -> float | str | None:
         data = self.coordinator.data.get("ebusd", {})
         raw = data.get(self._desc.key)
         if raw is None:
@@ -69,7 +69,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
         try:
             return float(raw)
         except (ValueError, TypeError):
-            return None
+            return str(raw)
 
     @property
     def available(self) -> bool:

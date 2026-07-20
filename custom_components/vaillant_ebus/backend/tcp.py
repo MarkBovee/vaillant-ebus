@@ -132,7 +132,7 @@ class EbusdTcpBackend(Backend):
         # Skip empty register names (scan.* lines with no name)
         if reg_name == "":
             return None
-        if rhs in ("-", "no data stored", ""):
+        if rhs in ("-", "no data stored", "") or rhs.startswith(("(empty ", "(ERR")):
             return circuit_name, reg_name, ["value"], {"value": None}
         return circuit_name, reg_name, ["value"], {"value": rhs}
 

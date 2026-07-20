@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
@@ -14,6 +15,8 @@ from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
 SWITCH_ON_VALUES = {"1", "on", "true", "yes"}
+FAR_FUTURE = "01.01.2099"
+UNSET_DATE = "01.01.2015"
 
 
 async def async_setup_entry(
@@ -30,6 +33,8 @@ async def async_setup_entry(
         uid = f"{entry.entry_id}_{desc.unique_id}"
         entities.append(EbusdSwitch(coordinator, desc, uid, entry))
 
+    entities.append(AwayModeSwitch(coordinator, entry))
+
     async_add_entities(entities)
 
 
@@ -45,7 +50,7 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         self._desc = desc
         self._attr_unique_id = unique_id
         self._attr_has_entity_name = True
-        self._attr_device_info = coordinator.get_device_info(desc.circuit)
+        self._attr_device_info = coordinator.get_device_info(desc.device_circuit)
         self._attr_name = desc.meta.friendly_name or desc.name
         if desc.meta.icon:
             self._attr_icon = desc.meta.icon
@@ -73,3 +78,82 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
             )
             if result.success:
                 await self.coordinator.async_request_refresh()
+
+
+def _parse_date(raw: str | None) -> date | None:
+    if not raw or raw in ("no data stored", "-", ""):
+        return None
+    try:
+        return datetime.strptime(raw.strip(), "%d.%m.%Y").date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _is_holiday_active(start_raw: str | None, end_raw: str | None) -> bool:
+    start = _parse_date(start_raw)
+    end = _parse_date(end_raw)
+    if start is None or end is None:
+        return False
+    today = date.today()
+    return start <= today <= end
+
+
+def _today_str() -> str:
+    return date.today().strftime("%d.%m.%Y")
+
+
+class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
+    def __init__(
+        self,
+        coordinator: VaillantCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_away_mode"
+        self._attr_has_entity_name = True
+        self._attr_name = "Away Mode"
+        self._attr_icon = "mdi:exit-run"
+        self._attr_device_info = coordinator.get_device_info("z1")
+
+    @property
+    def is_on(self) -> bool | None:
+        data = self.coordinator.data.get("ebusd", {})
+        start = data.get("ctlv2.Z1HolidayStartPeriod.value")
+        end = data.get("ctlv2.Z1HolidayEndPeriod.value")
+        if start is None or end is None:
+            return None
+        return _is_holiday_active(start, end)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        backend = self.coordinator.ebusd_backend
+        if not backend:
+            return
+        today = _today_str()
+        data = self.coordinator.data.get("ebusd", {})
+        holiday_temp = data.get("ctlv2.Z1HolidayTemp.value", "15")
+        writes = [
+            ("ctlv2", "Z1HolidayStartPeriod", today),
+            ("ctlv2", "Z1HolidayEndPeriod", FAR_FUTURE),
+            ("ctlv2", "HwcHolidayStartPeriod", today),
+            ("ctlv2", "HwcHolidayEndPeriod", FAR_FUTURE),
+        ]
+        for circuit, name, value in writes:
+            await backend.async_write(circuit, name, value)
+        if holiday_temp:
+            await backend.async_write("ctlv2", "Z1HolidayTemp", holiday_temp)
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        backend = self.coordinator.ebusd_backend
+        if not backend:
+            return
+        writes = [
+            ("ctlv2", "Z1HolidayStartPeriod", UNSET_DATE),
+            ("ctlv2", "Z1HolidayEndPeriod", UNSET_DATE),
+            ("ctlv2", "HwcHolidayStartPeriod", UNSET_DATE),
+            ("ctlv2", "HwcHolidayEndPeriod", UNSET_DATE),
+        ]
+        for circuit, name, value in writes:
+            await backend.async_write(circuit, name, value)
+        await backend.async_write("ctlv2", "Z1HolidayTemp", "15")
+        await self.coordinator.async_request_refresh()

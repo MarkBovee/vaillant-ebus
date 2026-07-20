@@ -43,7 +43,7 @@ class EbusdNumber(CoordinatorEntity[VaillantCoordinator], NumberEntity):
         self._desc = desc
         self._attr_unique_id = unique_id
         self._attr_has_entity_name = True
-        self._attr_device_info = coordinator.get_device_info(desc.circuit)
+        self._attr_device_info = coordinator.get_device_info(desc.device_circuit)
         self._attr_name = desc.meta.friendly_name or desc.name
         self._attr_native_min_value = desc.meta.min_value or 0
         self._attr_native_max_value = desc.meta.max_value or 100

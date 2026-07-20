@@ -9,14 +9,17 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "hmu.Status01": RegisterMeta(
         friendly_name="Status",
         icon="mdi:information",
+        entity_category="diagnostic",
     ),
     "hmu.StatusCirPump": RegisterMeta(
         friendly_name="Circulation Pump",
         entity_type="binary_sensor",
+        entity_category="diagnostic",
     ),
     "hmu.Currenterror": RegisterMeta(
         friendly_name="Error",
         icon="mdi:alert",
+        entity_category="diagnostic",
     ),
     "hmu.FlowTemp": RegisterMeta(
         friendly_name="Flow Temperature",
@@ -171,6 +174,65 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Fan 2 Runtime",
         device_class="duration",
         unit="h",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+    ),
+    "hmu.RunStatsBuildingCPumpStarts": RegisterMeta(
+        friendly_name="Building Pump Starts",
+        icon="mdi:counter",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+    ),
+    "hmu.RunStatsBuildingPumpHours": RegisterMeta(
+        friendly_name="Building Pump Runtime",
+        device_class="duration",
+        unit="h",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+    ),
+    "hmu.RunStatsFan1Starts": RegisterMeta(
+        friendly_name="Fan 1 Starts",
+        icon="mdi:counter",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+    ),
+    "hmu.RunStatsFan2Starts": RegisterMeta(
+        friendly_name="Fan 2 Starts",
+        icon="mdi:counter",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+    ),
+    "hmu.RunStatsHcHours": RegisterMeta(
+        friendly_name="Heating Runtime",
+        device_class="duration",
+        unit="h",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+    ),
+    "hmu.RunStatsHMUHours": RegisterMeta(
+        friendly_name="HMU Runtime",
+        device_class="duration",
+        unit="h",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+    ),
+    "hmu.RunStatsHwcHours": RegisterMeta(
+        friendly_name="DHW Runtime",
+        device_class="duration",
+        unit="h",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+    ),
+    "hmu.RunStats4PortValveHours": RegisterMeta(
+        friendly_name="4-Port Valve Runtime",
+        device_class="duration",
+        unit="h",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+    ),
+    "hmu.RunStats4PortValveSwitches": RegisterMeta(
+        friendly_name="4-Port Valve Switches",
+        icon="mdi:counter",
         state_class="total_increasing",
         entity_category="diagnostic",
     ),
@@ -574,7 +636,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "ctlv2.HwcOpMode": RegisterMeta(
         friendly_name="DHW Operation Mode",
         writable=True,
-        options=["off", "on", "auto"],
+        options=["off", "day", "night", "auto"],
         entity_type="select",
         entity_category="config",
     ),
@@ -640,6 +702,18 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         device_class="temperature",
         unit="°C",
     ),
+    "ctlv2.HwcHolidayStartPeriod": RegisterMeta(
+        friendly_name="DHW Holiday Start",
+        icon="mdi:calendar-start",
+    ),
+    "ctlv2.HwcHolidayEndPeriod": RegisterMeta(
+        friendly_name="DHW Holiday End",
+        icon="mdi:calendar-end",
+    ),
+    "ctlv2.HwcSFMode": RegisterMeta(
+        friendly_name="DHW Special Function",
+        icon="mdi:water-boiler",
+    ),
     # Zones
     "ctlv2.DisplayedOutsideTemp": RegisterMeta(
         friendly_name="Displayed Outside Temp",
@@ -659,6 +733,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "ctlv2.Currenterror": RegisterMeta(
         friendly_name="Error",
         icon="mdi:alert",
+        entity_category="diagnostic",
     ),
     "ctlv2.AdaptHeatCurve": RegisterMeta(
         friendly_name="Adapt Heat Curve",
@@ -670,6 +745,118 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "ctlv2.ContinuousHeating": RegisterMeta(
         friendly_name="Continuous Heating",
         icon="mdi:radiator",
+        entity_category="diagnostic",
+    ),
+    "ctlv2.HcStorageTempBottom": RegisterMeta(
+        friendly_name="Heating Storage Temp (Bottom)",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "ctlv2.HcStorageTempTop": RegisterMeta(
+        friendly_name="Heating Storage Temp (Top)",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "ctlv2.HydraulicScheme": RegisterMeta(
+        friendly_name="Hydraulic Scheme",
+        icon="mdi:pipe-valve",
+        entity_category="diagnostic",
+    ),
+    "ctlv2.MaxCylinderChargeTime": RegisterMeta(
+        friendly_name="Maximum Cylinder Charge Time",
+        icon="mdi:timer-outline",
+        unit="min",
+        entity_category="diagnostic",
+    ),
+    "ctlv2.MultiRelaySetting": RegisterMeta(
+        friendly_name="Multi Relay Setting",
+        icon="mdi:relay",
+        entity_category="diagnostic",
+    ),
+    "ctlv2.OutsideTempAvg": RegisterMeta(
+        friendly_name="Average Outside Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "ctlv2.Z1CoolingTemp": RegisterMeta(
+        friendly_name="Zone Cooling Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "ctlv2.Z1HolidayStartPeriod": RegisterMeta(
+        friendly_name="Holiday Start",
+        icon="mdi:calendar-start",
+    ),
+    "ctlv2.Z1HolidayEndPeriod": RegisterMeta(
+        friendly_name="Holiday End",
+        icon="mdi:calendar-end",
+    ),
+    "ctlv2.Z1QuickVetoEndDate": RegisterMeta(
+        friendly_name="Quick Veto End Date",
+        icon="mdi:calendar-clock",
+    ),
+    "ctlv2.Z1QuickVetoEndTime": RegisterMeta(
+        friendly_name="Quick Veto End Time",
+        icon="mdi:clock-outline",
+    ),
+    "ctlv2.Z1RoomTemp": RegisterMeta(
+        friendly_name="Room Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "ctlv2.Z1QuickVetoDuration": RegisterMeta(
+        friendly_name="Quick Veto Duration",
+        icon="mdi:timer-outline",
+        writable=True,
+        min_value=0,
+        max_value=24,
+        step=1,
+        entity_type="number",
+        entity_category="config",
+    ),
+    "ctlv2.Z1QuickVetoTemp": RegisterMeta(
+        friendly_name="Quick Veto Temperature",
+        device_class="temperature",
+        unit="°C",
+        writable=True,
+        min_value=5,
+        max_value=30,
+        step=0.5,
+        entity_type="number",
+        entity_category="config",
+    ),
+    "ctlv2.Z1HolidayTemp": RegisterMeta(
+        friendly_name="Holiday Temperature",
+        device_class="temperature",
+        unit="°C",
+        writable=True,
+        min_value=5,
+        max_value=30,
+        step=0.5,
+        entity_type="number",
+        entity_category="config",
+    ),
+    "ctlv2.Z1SFMode": RegisterMeta(
+        friendly_name="Zone Special Function",
+        icon="mdi:home-thermometer",
+        entity_category="diagnostic",
+    ),
+    "ctlv2.MaxRoomHumidity": RegisterMeta(
+        friendly_name="Max Room Humidity",
+        icon="mdi:water-percent",
+        unit="%",
+        writable=True,
+        min_value=0,
+        max_value=100,
+        step=1,
+        entity_type="number",
+        entity_category="config",
+    ),
+    "ctlv2.z1RoomHumidity": RegisterMeta(
+        friendly_name="Room Humidity",
+        device_class="humidity",
+        unit="%",
+        icon="mdi:water-percent",
     ),
     "ctlv2.Date": RegisterMeta(
         friendly_name="Date",
@@ -679,6 +866,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "ctlv2.FrostOverRideTime": RegisterMeta(
         friendly_name="Frost Override Time",
         icon="mdi:snowflake",
+        entity_category="diagnostic",
     ),
     "ctlv2.Errorhistory": RegisterMeta(
         friendly_name="Error History",
@@ -716,6 +904,21 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="System Error",
         icon="mdi:alert",
         entity_category="diagnostic",
+    ),
+    "Broadcast.HwcStatus": RegisterMeta(
+        friendly_name="DHW Status",
+        entity_type="binary_sensor",
+        entity_category="diagnostic",
+    ),
+    "Broadcast.WaterPressure": RegisterMeta(
+        friendly_name="Water Pressure",
+        device_class="pressure",
+        unit="bar",
+    ),
+    "Broadcast.FlowTemp": RegisterMeta(
+        friendly_name="Flow Temperature",
+        device_class="temperature",
+        unit="°C",
     ),
     # vwz (Valve) — test registers, disabled
     "vwz.TestHwcTemp": RegisterMeta(

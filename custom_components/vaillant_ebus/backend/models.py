@@ -34,10 +34,12 @@ class Circuit:
 
 
 CIRCUIT_NAMES: dict[str, str] = {
-    "hmu": "Vaillant HMU (Heat Pump Unit)",
+    "hmu": "Vaillant aroTHERM (Heat Pump)",
     "ctlv2": "Vaillant CTLV2 (Heating Control)",
-    "Broadcast": "Vaillant eBUS (System)",
-    "vwz": "Vaillant VWZ (Three-Way Valve)",
+    "z1": "Woonkamer (Z1)",
+    "dhw": "Boiler (DHW)",
+    "Broadcast": "Vaillant eBUS (Diagnostic)",
+    "vwz": "Vaillant VWZ (Ventilation)",
     "global": "ebusd (Daemon)",
     "scan": "Scan",
 }
@@ -58,6 +60,7 @@ class RegisterMeta:
     options: list[str] | None = None
     enabled: bool = True
     entity_type: str = ""
+    device_circuit: str | None = None
 
 
 @dataclass

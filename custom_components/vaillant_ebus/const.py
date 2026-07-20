@@ -18,4 +18,7 @@ PLATFORMS = [
     Platform.SELECT,
     Platform.SWITCH,
     Platform.CLIMATE,
+    Platform.WATER_HEATER,
+    Platform.CALENDAR,
+    Platform.DATE,
 ]
