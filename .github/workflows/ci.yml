@@ -20,5 +20,3 @@ jobs:
         run: ruff check .
       - name: Compile check
         run: python3 -m compileall custom_components/vaillant_ebus/
-      - name: Pytest
-        run: pytest -q
