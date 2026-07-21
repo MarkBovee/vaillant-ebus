@@ -41,7 +41,7 @@ Reads & writes 350+ eBUS registers from your heat pump, heating controller, and 
 **Settings → Add-ons → ebusd → Configuration:**
 
 ```yaml
-network_device: ens:192.168.1.101:9999
+network_device: ens:192.168.x.x:9999
 seed_mqtt_cfg: false
 commandline_options:
   - "--accesslevel=*"
