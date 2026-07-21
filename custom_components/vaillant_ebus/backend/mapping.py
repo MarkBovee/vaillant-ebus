@@ -156,12 +156,14 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         unit="h",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStatsCompressorStarts": RegisterMeta(
         friendly_name="Compressor Starts",
         icon="mdi:counter",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStatsFan1Hours": RegisterMeta(
         friendly_name="Fan 1 Runtime",
@@ -169,6 +171,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         unit="h",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStatsFan2Hours": RegisterMeta(
         friendly_name="Fan 2 Runtime",
@@ -176,12 +179,14 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         unit="h",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStatsBuildingCPumpStarts": RegisterMeta(
         friendly_name="Building Pump Starts",
         icon="mdi:counter",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStatsBuildingPumpHours": RegisterMeta(
         friendly_name="Building Pump Runtime",
@@ -189,18 +194,21 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         unit="h",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStatsFan1Starts": RegisterMeta(
         friendly_name="Fan 1 Starts",
         icon="mdi:counter",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStatsFan2Starts": RegisterMeta(
         friendly_name="Fan 2 Starts",
         icon="mdi:counter",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStatsHcHours": RegisterMeta(
         friendly_name="Heating Runtime",
@@ -208,6 +216,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         unit="h",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStatsHMUHours": RegisterMeta(
         friendly_name="HMU Runtime",
@@ -215,6 +224,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         unit="h",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStatsHwcHours": RegisterMeta(
         friendly_name="DHW Runtime",
@@ -222,6 +232,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         unit="h",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStats4PortValveHours": RegisterMeta(
         friendly_name="4-Port Valve Runtime",
@@ -229,12 +240,14 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         unit="h",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.RunStats4PortValveSwitches": RegisterMeta(
         friendly_name="4-Port Valve Switches",
         icon="mdi:counter",
         state_class="total_increasing",
         entity_category="diagnostic",
+        entity_type="sensor",
     ),
     "hmu.PowerConsumptionHmu": RegisterMeta(
         friendly_name="Power Consumption (HMU)",
@@ -246,6 +259,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Building Circuit Flow",
         icon="mdi:water",
         unit="l/min",
+        entity_type="sensor",
     ),
     "hmu.DateTime": RegisterMeta(
         friendly_name="Date/Time",

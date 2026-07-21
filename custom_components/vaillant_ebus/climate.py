@@ -138,6 +138,6 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     async def _write(self, name: str, value: str) -> None:
         backend = self.coordinator.ebusd_backend
         if backend:
-            result = await backend.        async_write(CIRCUIT, name, value)
+            result = await backend.async_write(CIRCUIT, name, value)
             if result.success:
                 await self.coordinator.async_request_refresh()

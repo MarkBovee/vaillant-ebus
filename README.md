@@ -1,80 +1,96 @@
 # Vaillant eBUS
 
-Local Home Assistant integration for Vaillant heat pumps via ebusd TCP.
+Home Assistant integration for Vaillant heat pumps via **direct ebusd TCP** — no MQTT, no cloud.
 
-**No cloud. No addon dependencies (beyond ebusd).**
+Reads & writes 350+ eBUS registers from your heat pump, heating controller, and DHW system. Fully local, no internet required.
 
 ## Features
 
-- Auto-discovers 250+ registers from 4 Vaillant slaves (HMU00, CTLV2, VWZ00, NETX2)
-- Entities grouped into 4 devices:
-  - **aroTHERM (Heat Pump)** — COP, temperatures, pressures, fan speeds, runtimes, yields
-  - **CTLV2 (Heating Control)** — water pressure, average temp, errors, hydraulic scheme
-  - **Woonkamer (Z1)** — room temperature, operation mode, flow temp, heat curve, holiday schedule, away mode
-  - **Boiler (DHW)** — storage temps, target temp, operation mode, cylinder params
-- Climate, water heater, number, select, switch, binary sensor, date, calendar platforms
-- Away mode (holiday period) switch
-- Read/write services (`read_parameter`, `write_parameter`, `refresh`, `rediscover`)
-- Async TCP connection with reconnect backoff
+- Direct TCP connection to ebusd — zero MQTT setup required
+- Auto-discovers all registers on connect
+- 60+ entity types generated: sensor, binary_sensor, number, select, switch, climate, water_heater, calendar
+- Read & write any register via HA services (`vaillant_ebus.read_parameter`, `vaillant_ebus.write_parameter`)
+- Custom registers via `--enabledefine` (e.g. room humidity)
+- YAML overrides for entity metadata (names, icons, units)
 
 ## Requirements
 
-- Vaillant aroTHERM (or compatible) heat pump with eBUS interface
-- Network eBUS adapter (e.g., from ebusd project)
-- ebusd running on your network (HA addon or standalone)
-- Home Assistant 2026.x or newer
+- Home Assistant 2024.6+ (recommended)
+- ebusd — install as HA addon or standalone on your network
+- Vaillant heat pump with eBUS adapter (network or serial)
 
 ## Installation
 
-### 1. ebusd addon configuration
+### HACS (recommended)
 
-Install the ebusd addon from the HA addon store. Configure:
+1. Go to HACS → Integrations → three-dot menu → Custom repositories
+2. Repository URL: `https://github.com/MarkBovee/vaillant-ebus`
+3. Category: Integration
+4. Click Add, then install "Vaillant eBUS" from HACS
+5. **Restart HA**
+6. Go to Settings → Devices & Services → Add Integration → search "Vaillant eBUS"
+
+### Manual
+
+1. Copy `custom_components/vaillant_ebus/` to your HA `config/custom_components/vaillant_ebus/`
+2. Restart HA
+3. Add integration via Settings → Devices & Services → Add Integration → Vaillant eBUS
+
+## ebusd addon configuration
+
+**Settings → Add-ons → ebusd → Configuration:**
 
 ```yaml
-network_device: ens:<YOUR_EBUSD_ADAPTER_IP>:9999
+network_device: ens:192.168.1.101:9999
 seed_mqtt_cfg: false
 commandline_options:
   - "--accesslevel=*"
-  - "--scanconfig"
   - "--port=8888"
   - "--enabledefine"
 ```
 
-The addon will auto-discover all 4 Vaillant slaves.
+| Setting | Purpose |
+|---------|---------|
+| `network_device` | Your eBUS adapter (network or serial) |
+| `seed_mqtt_cfg: false` | Disable MQTT — no broker needed |
+| `--accesslevel=*` | Full read/write access |
+| `--port=8888` | Raw TCP port — this integration connects here |
+| `--enabledefine` | Allows runtime register defines (e.g. room humidity) |
 
-The addon config directory on the host (`/addon_configs/b4d7ad18_ebusd/`) is mounted into the ebusd container as the config path (`/etc/ebusd/`). Placing `.csv` files in `vaillant/` subdirectory adds register definitions. To deploy custom CSV files:
+Do **not** add `--mqttjson`, `--mqttint`, or `--configpath` — this integration uses raw TCP only.
 
-```bash
-# Compile latest ebusd-configuration locally
-git clone https://github.com/john30/ebusd-configuration.git /tmp/ebusd-conf
-cd /tmp/ebusd-conf && npm install && npm run compile-en
-# Upload the compiled CSV set to the addon config dir
-scp -r outcsv/@ebusd/ebus-typespec/vaillant/*.csv \
-  hass-host:/addon_configs/b4d7ad18_ebusd/vaillant/
-# Restart the ebusd addon
-```
+## Integration setup
 
-**Warning**: `--configpath=/config` in commandline_options overrides the default config path and breaks standard CSV loading — do not use.
+1. After installation & restart, go to Settings → Devices & Services → Add Integration
+2. Search for "Vaillant eBUS"
+3. Enter ebusd host and TCP port (default: `8888`)
+4. Submit — integration connects and auto-discovers all registers
+5. Devices appear within 30 seconds
 
-To replace the whole CSV set: upload compiled CSVs to the addon config dir as described above. The addon mounts this directory directly as `/etc/ebusd/` inside the container.
+### Expected devices
 
-### 2. Integration install
+| Device | Circuit | Description |
+|--------|---------|-------------|
+| Vaillant aroTHERM heat pump | `hmu` | Heat pump telemetry |
+| Vaillant CTLV2 heating control | `ctlv2` | Heating controller (zone, DHW) |
+| Vaillant VWZ00 ventilation | `vwz00` | Ventilation unit |
+| Vaillant system | `Broadcast` | eBUS broadcast values |
+| Vaillant (global) | `global` | ebusd daemon status |
 
-Copy `custom_components/vaillant_ebus/` to your HA `config/custom_components/` and restart HA.
+### YAML entity overrides
 
-### 3. Add integration
+Create `config/vaillant_ebus/entities.yaml` to override auto-detected metadata:
 
-Settings → Devices & Services → Add Integration → Vaillant eBUS. Enter:
-- **Host**: IP of your HA server (where ebusd runs)
-- **Port**: 8888 (default ebusd TCP port)
-
-## Architecture
-
-```
-Heat Pump ──eBUS──► Network Adapter ──TCP──► ebusd (port 8888)
-                                                    │
-                                               HA custom_component
-                                               (async TCP, no MQTT)
+```yaml
+ctlv2.HwcTempDesired:
+  friendly_name: "DHW Target Temperature"
+  icon: "mdi:water-thermometer"
+  unit: "°C"
+  device_class: "temperature"
+  writable: true
+  min: 30
+  max: 70
+  step: 1
 ```
 
 ## Services
@@ -82,51 +98,25 @@ Heat Pump ──eBUS──► Network Adapter ──TCP──► ebusd (port 888
 | Service | Description |
 |---------|-------------|
 | `vaillant_ebus.read_parameter` | Read a register by circuit and name |
-| `vaillant_ebus.write_parameter` | Write a value and verify |
-| `vaillant_ebus.refresh` | Force re-read all registers |
-| `vaillant_ebus.rediscover` | Re-run `find` and rebuild entities |
+| `vaillant_ebus.write_parameter` | Write a value with read-after-write verification |
+| `vaillant_ebus.refresh` | Force re-read all active registers |
+| `vaillant_ebus.rediscover` | Re-run entity discovery (finds new registers) |
 
-## Register Discovery
+## Troubleshooting
 
-The integration uses ebusd's `find` command to discover available registers. Only registers with data OR those listed in `REGISTER_MAP` (mapping.py) become entities.
-
-Registers not in `find` output but known by name can be read directly via `read -c <circuit> <name>`. The coordinator's `_fallback_read` mechanism attempts this for all REGISTER_MAP entries that weren't found by `find`.
-
-This two-pass approach handles registers that only appear when the heat pump is active (compressor running) or that are available by name but not auto-discovered.
-
-Not all registers defined in circuit-specific CSV files are actually supported by every hardware revision. If a register returns `ERR: element not found` despite being in the CSV, the firmware variant likely omits that sensor.
-
-### ebusd TCP commands
-
-| Command | Purpose |
-|---------|---------|
-| `f` | List all known registers |
-| `r -c <circuit> <name>` | Read a register |
-| `i` | Daemon info (version, slaves, loaded CSVs) |
-| `scan <address>` | Scan a specific slave for new messages |
-| `scan full` | Scan all slaves |
-| `l` | Listen for bus traffic |
-
-## Device / Circuit Mapping
-
-| Device | Circuit(s) | Key entities |
-|--------|-----------|--------------|
-| aroTHERM (Heat Pump) | `hmu`, `Broadcast` | COP, temps, pressures, fan speeds, yields |
-| CTLV2 (Heating Control) | `ctlv2` (system) | water pressure, avg temp, errors |
-| Woonkamer (Z1) | `ctlv2` (Z1 sub) | room temp, heat curve, holiday, away |
-| Boiler (DHW) | `ctlv2` (DHW sub) | storage temp, target temp, operation |
+See [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Development
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
-ruff check .
-pytest -q
+pip install ruff pytest
+.venv/bin/ruff check .
+.venv/bin/pytest -q
 python3 -m compileall custom_components/vaillant_ebus/
 ```
 
 ## License
 
-Apache 2.0
+MIT

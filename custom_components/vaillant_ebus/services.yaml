@@ -5,7 +5,12 @@ read_parameter:
     circuit:
       required: true
       selector:
-        text:
+        select:
+          options:
+            - "hmu"
+            - "ctlv2"
+            - "Broadcast"
+            - "global"
     name:
       required: true
       selector:
@@ -22,7 +27,12 @@ write_parameter:
     circuit:
       required: true
       selector:
-        text:
+        select:
+          options:
+            - "hmu"
+            - "ctlv2"
+            - "Broadcast"
+            - "global"
     name:
       required: true
       selector:
