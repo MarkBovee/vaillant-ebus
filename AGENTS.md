@@ -165,6 +165,8 @@ No conditional or IGN:4 flag — the `ign,,IGN:4` in the original CSV is a 4-byt
 ### Historical context
 The shared session at https://opncd.ai/share/66JWAPw2 did this work. Another agent accidentally reverted it during a rename/docs rewrite. This AGENTS.md section exists to prevent repeat incidents. Do not remove these items — if you think they're obsolete, discuss with Mark first.
 
+The shared session at https://opncd.ai/share/s6qu6no also did this work. Another agent reverted it again shortly after. The pattern is: an agent refactors coordinator.py, drops `_define_custom_registers()` and `async_send_raw()`, and humidity breaks silently. **Always check**: does `coordinator.py` have `_define_custom_registers()` and call it? Does `tcp.py` have `async_send_raw()`? If not, restore from commit `6848b97`.
+
 ## Known limitations
 
 - Home Assistant runtime validation is still pending on the real server

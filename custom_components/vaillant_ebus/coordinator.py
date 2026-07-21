@@ -98,6 +98,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not known_missing:
             return
         _LOGGER.debug("Fallback reading %d known register(s)", len(known_missing))
+        added = 0
         for key in known_missing:
             parts = key.split(".", 1)
             if len(parts) != 2:
@@ -106,7 +107,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 value = await self.ebusd_backend.async_read(circuit, name)
                 if value is not None:
-                    if key not in self.registers:
+                    was_new = key not in self.registers
+                    if was_new:
                         self.registers[key] = EbusdRegister(
                             circuit=circuit,
                             name=name,
@@ -114,14 +116,17 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             value={"value": value},
                             has_data=True,
                         )
+                        added += 1
                     else:
                         self.registers[key].value["value"] = value
                         self.registers[key].has_data = True
                     _LOGGER.debug("Fallback read %s = %s", key, value)
             except Exception:
                 _LOGGER.debug("Fallback read failed: %s", key)
-        _LOGGER.info("Fallback: %d/%d known registers re-read (%d had data)",
-                     len(known_missing), len(REGISTER_MAP),
+        if added:
+            self.entities = generate_entity_descriptions(list(self.registers.values()))
+        _LOGGER.info("Fallback: %d/%d known registers re-read (%d added, %d had data)",
+                     len(known_missing), len(REGISTER_MAP), added,
                      len(known_missing) - sum(1 for k in known_missing
                          if k not in self.registers or not self.registers[k].has_data))
 
