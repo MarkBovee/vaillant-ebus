@@ -153,6 +153,11 @@ No conditional or IGN:4 flag — the `ign,,IGN:4` in the original CSV is a 4-byt
 - Agents that refactor `coordinator.py` or rewrite the startup flow **must preserve this method and its call** at line 58 (`await self._define_custom_registers()`).
 - Removing this will break room humidity until HA is restarted.
 
+### `coordinator.py:_fallback_read()` entity registration
+- `_fallback_read()` reads registers from REGISTER_MAP that `find` missed (like `z1RoomHumidity`).
+- When it finds a new register, it must also regenerate `self.entities` via `generate_entity_descriptions()`.
+- **If you refactor `_fallback_read()`**, ensure newly added registers trigger entity regeneration. Otherwise define-based registers work at the ebusd level but never get an HA entity.
+
 ### `sensor.py:native_value` None-check
 - Handles `"-"`, `"no data stored"`, `"empty"` from ebusd as `None` (unavailable) instead of passing them as string values to HA.
 - **Must stay.** Without it, sensors with idle registers show garbage string values in HA.
@@ -166,6 +171,8 @@ No conditional or IGN:4 flag — the `ign,,IGN:4` in the original CSV is a 4-byt
 The shared session at https://opncd.ai/share/66JWAPw2 did this work. Another agent accidentally reverted it during a rename/docs rewrite. This AGENTS.md section exists to prevent repeat incidents. Do not remove these items — if you think they're obsolete, discuss with Mark first.
 
 The shared session at https://opncd.ai/share/s6qu6no also did this work. Another agent reverted it again shortly after. The pattern is: an agent refactors coordinator.py, drops `_define_custom_registers()` and `async_send_raw()`, and humidity breaks silently. **Always check**: does `coordinator.py` have `_define_custom_registers()` and call it? Does `tcp.py` have `async_send_raw()`? If not, restore from commit `6848b97`.
+
+Another session (July 2026) also had to fix the same issue a third time, plus the additional bug where `_fallback_read()` found registers via REGISTER_MAP but never generated entities for them. This was fixed by regenerating `self.entities` when `_fallback_read()` discovers new registers. Agents refactoring `_fallback_read()` must ensure entity regeneration is preserved.
 
 ## Known limitations
 
