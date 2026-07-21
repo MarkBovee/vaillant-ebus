@@ -145,6 +145,26 @@ Key details:
 
 No conditional or IGN:4 flag — the `ign,,IGN:4` in the original CSV is a 4-byte IGNORE field (padding), not a condition.
 
+## CRITICAL: Do not remove or modify the following
+
+### `coordinator.py:_define_custom_registers()`
+- **Must stay.** Defines runtime registers at ebusd startup via `define` command.
+- Currently defines `ctlv2.z1RoomHumidity` — NOT discoverable via `find` (r5 message type).
+- Agents that refactor `coordinator.py` or rewrite the startup flow **must preserve this method and its call** at line 58 (`await self._define_custom_registers()`).
+- Removing this will break room humidity until HA is restarted.
+
+### `sensor.py:native_value` None-check
+- Handles `"-"`, `"no data stored"`, `"empty"` from ebusd as `None` (unavailable) instead of passing them as string values to HA.
+- **Must stay.** Without it, sensors with idle registers show garbage string values in HA.
+- If you refactor `sensor.py`, preserve the `raw in ("-", "no data stored", "empty")` guard.
+
+### `backend/tcp.py:async_send_raw()`
+- Public method used by `_define_custom_registers()` to send raw `define` commands to ebusd.
+- **Must stay** as long as `_define_custom_registers()` exists.
+
+### Historical context
+The shared session at https://opncd.ai/share/66JWAPw2 did this work. Another agent accidentally reverted it during a rename/docs rewrite. This AGENTS.md section exists to prevent repeat incidents. Do not remove these items — if you think they're obsolete, discuss with Mark first.
+
 ## Known limitations
 
 - Home Assistant runtime validation is still pending on the real server
