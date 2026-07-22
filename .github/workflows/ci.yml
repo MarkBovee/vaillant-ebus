@@ -59,7 +59,10 @@ jobs:
         run: python3 -m compileall -f custom_components/vaillant_ebus/
 
       - name: Build release zip
-        run: git archive --format=zip -o /tmp/vaillant_ebus.zip HEAD custom_components/vaillant_ebus/
+        run: |
+          cp -r custom_components/vaillant_ebus /tmp/vaillant_ebus_release
+          cd /tmp/vaillant_ebus_release && zip -qr /tmp/vaillant_ebus.zip .
+          rm -rf /tmp/vaillant_ebus_release
 
       - name: Extract changelog entry
         run: |
