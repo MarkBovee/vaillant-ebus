@@ -46,7 +46,6 @@ network_device: ens:192.168.x.x:9999
 seed_mqtt_cfg: false
 commandline_options:
   - "--accesslevel=*"
-  - "--scanconfig"
   - "--port=8888"
   - "--enabledefine"
 ```
@@ -56,7 +55,6 @@ commandline_options:
 | `network_device` | Your eBUS adapter: `ens:<ip>:<port>` for network adapters, or `/dev/ttyUSB0` for serial |
 | `seed_mqtt_cfg: false` | Disable MQTT — not needed |
 | `--accesslevel=*` | Full read/write access to all registers |
-| `--scanconfig` | Scans for additional registers during startup (recommended) |
 | `--port=8888` | Raw TCP command port — this integration connects to this |
 | `--enabledefine` | Allows runtime register creation (needed for room humidity) |
 
