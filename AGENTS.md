@@ -4,6 +4,36 @@
 
 - All code, commit messages, documentation, logs, UI strings, and technical names: **English**
 
+## Commit message conventions
+
+Format: `type(scope): short description` (subject ≤ 50 chars, lowercase after colon)
+
+Types:
+| Type | When to use |
+|------|-------------|
+| `feat` | New feature for the user (entity, service, integration) |
+| `fix` | Bug fix |
+| `chore` | Maintenance, tooling, deps, cleanup, refactoring |
+| `docs` | Documentation only |
+| `ci` | CI workflow changes |
+| `release` | Version bump + release commit (matches tag) |
+| `test` | Adding or updating tests |
+
+Rules:
+1. Subject line: ≤ 50 chars, lowercase after `type:`, no period at end
+2. Body (optional): wrap at 72 chars, bullet points with `- ` prefix
+3. Scope (optional but encouraged): `coordinator`, `tcp`, `sensor`, `config_flow`, `ci`, `deps`, etc.
+4. Release commits: `release: vX.Y.Z` with tag `vX.Y.Z`
+5. One logical change per commit — squash related WIP/fixup commits before push
+
+Examples:
+```
+chore(deps): bump actions/checkout from v4 to v7
+docs: add troubleshooting guide for connection issues
+fix(sensor): handle empty register values as unavailable
+release: v1.0.2
+```
+
 ## Project summary
 
 - Project: `vaillant-ebus`
@@ -129,7 +159,7 @@ For large files (>40KB): split and append.
 
 ```bash
 # Bump version in manifest.json + pyproject.toml
-# Commit: "chore: bump version to X.Y.Z"
+# Commit: "release: vX.Y.Z"
 git tag vX.Y.Z
 git push origin vX.Y.Z
 
