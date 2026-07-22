@@ -22,6 +22,7 @@ DONE_STR = "done"
 
 
 class EbusdTcpBackend:
+    # Initialize TCP backend with host and port
     def __init__(self, host: str = "192.168.1.100", port: int = 8888) -> None:
         self._host = host
         self._port = port
@@ -34,12 +35,15 @@ class EbusdTcpBackend:
 
     @property
     def connected(self) -> bool:
+        # Return whether TCP socket is currently connected
         return self._writer is not None
 
     @property
     def version(self) -> str | None:
+        # Return cached ebusd daemon version string
         return self._version
 
+    # Open TCP connection to ebusd, raise ConnectionError on failure
     async def async_connect(self) -> None:
         if self.connected:
             return
@@ -56,6 +60,7 @@ class EbusdTcpBackend:
             self._reader = None
             raise ConnectionError(f"Failed to connect to {self._host}:{self._port}: {exc}")
 
+    # Close TCP connection cleanly
     async def async_disconnect(self) -> None:
         if self._writer:
             try:
@@ -66,6 +71,7 @@ class EbusdTcpBackend:
             self._writer = None
             self._reader = None
 
+    # Send raw command string to ebusd, return response line
     async def async_send_raw(self, command: str) -> str:
         if not self._writer or not self._reader:
             raise ConnectionError("Not connected")
@@ -80,6 +86,7 @@ class EbusdTcpBackend:
             pass
         return res
 
+    # Send 'f' command, return raw response lines
     async def _send_find(self) -> list[str]:
         if not self._writer or not self._reader:
             raise ConnectionError("Not connected")
@@ -95,6 +102,7 @@ class EbusdTcpBackend:
             lines.append(decoded)
         return lines
 
+    # Discover all registers from ebusd via find command
     async def async_find(self) -> list[EbusdRegister]:
         raw_lines = await self._send_find()
         circuits: dict[str, dict[str, EbusdRegister]] = {}
@@ -118,6 +126,7 @@ class EbusdTcpBackend:
             result.extend(sorted(circuits[circuit_name].values(), key=lambda r: r.name))
         return result
 
+    # Parse a single find response line into circuit, name, fields, values
     @staticmethod
     def _parse_find_line(line: str) -> tuple[str, str, list[str], dict[str, str | None]] | None:
         line = line.strip()
@@ -136,6 +145,7 @@ class EbusdTcpBackend:
             return circuit_name, reg_name, ["value"], {"value": None}
         return circuit_name, reg_name, ["value"], {"value": rhs}
 
+    # Read a single register value from ebusd
     async def async_read(self, circuit: str, name: str, field: str = "") -> str | None:
         cmd = f"read -c {circuit} {name}"
         if field:
@@ -146,6 +156,7 @@ class EbusdTcpBackend:
             return None
         return response.strip() or None
 
+    # Write a value to an ebusd register, verify by read-back
     async def async_write(self, circuit: str, name: str, value: str) -> WriteResult:
         cmd = f"write -c {circuit} {name} {value}"
         response = await self.async_send_raw(cmd)
@@ -156,6 +167,7 @@ class EbusdTcpBackend:
             return WriteResult(success=True, verified_value=verified)
         return WriteResult(success=False, error_message=f"Unexpected response: {response}")
 
+    # Bulk-read multiple register fields from ebusd
     async def async_poll(self, registers: list[tuple[str, str, str]]) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for circuit, name, field in registers:
@@ -167,6 +179,7 @@ class EbusdTcpBackend:
                 _LOGGER.debug("Poll error %s.%s: %s", circuit, name, exc)
         return result
 
+    # Disconnect, backoff-sleep, then reconnect to ebusd
     async def async_reconnect(self) -> None:
         await self.async_disconnect()
         delay = min(self._reconnect_delay, MAX_RECONNECT_DELAY)

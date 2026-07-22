@@ -22,6 +22,7 @@ SCHEDULES = {
 }
 
 
+# Create calendar entities for heating/DHW schedules
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -39,6 +40,7 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
 
     _attr_has_entity_name = True
 
+    # Initialize calendar entity with timer prefix
     def __init__(
         self,
         coordinator: VaillantCoordinator,
@@ -54,11 +56,13 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
 
     @property
     def event(self) -> CalendarEvent | None:
+        # Return current or next upcoming scheduled event
         now = dt_util.now()
         events = self._events_between(now, now + timedelta(days=8))
         active = [event for event in events if event.start <= now < event.end]
         return active[0] if active else next((event for event in events if event.start >= now), None)
 
+    # Return calendar events in the given date range
     async def async_get_events(
         self,
         hass: HomeAssistant,
@@ -67,6 +71,7 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
     ) -> list[CalendarEvent]:
         return self._events_between(start_date, end_date)
 
+    # Build list of timer events between start and end dates
     def _events_between(
         self,
         start_date: datetime,
@@ -84,6 +89,7 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
             day += timedelta(days=1)
         return events
 
+    # Get timer register value from coordinator data or register cache
     def _value(self, name: str) -> str | None:
         key = f"ctlv2.{name}.value"
         value = self.coordinator.data.get("ebusd", {}).get(key)
@@ -93,6 +99,7 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         return register.value.get("value") if register else None
 
 
+# Parse a timer slot string into a CalendarEvent
 def _parse_slot(day: date, value: str | None, name: str) -> CalendarEvent | None:
     if not value:
         return None

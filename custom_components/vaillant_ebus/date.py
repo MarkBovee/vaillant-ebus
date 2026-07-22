@@ -21,6 +21,7 @@ HOLIDAY_DATES = {
 }
 
 
+# Create date entities for holiday start/end dates
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -38,6 +39,7 @@ class EbusdDate(CoordinatorEntity[VaillantCoordinator], DateEntity):
 
     _attr_has_entity_name = True
 
+    # Initialize date entity for a holiday register
     def __init__(
         self,
         coordinator: VaillantCoordinator,
@@ -53,12 +55,14 @@ class EbusdDate(CoordinatorEntity[VaillantCoordinator], DateEntity):
 
     @property
     def native_value(self) -> date | None:
+        # Return parsed date from DD.MM.YYYY string
         raw = self.coordinator.data.get("ebusd", {}).get(f"{CIRCUIT}.{self._register}.value")
         try:
             return datetime.strptime(str(raw), "%d.%m.%Y").date()
         except (TypeError, ValueError):
             return None
 
+    # Write date to ebusd in DD.MM.YYYY format and refresh
     async def async_set_value(self, value: date) -> None:
         backend = self.coordinator.ebusd_backend
         if backend:

@@ -16,6 +16,7 @@ class EbusdRegister:
 
     @property
     def key(self) -> str:
+        # Dot-separated circuit.name unique identifier
         return f"{self.circuit}.{self.name}"
 
 

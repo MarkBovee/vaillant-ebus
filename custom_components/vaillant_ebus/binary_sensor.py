@@ -16,6 +16,7 @@ from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
 
+# Create binary sensor entities plus connection and fault sensors
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -43,6 +44,7 @@ BINARY_TRUE_VALUES = {"on", "1", "true", "yes", "running", "day"}
 
 
 class EbusdBinarySensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntity):
+    # Initialize binary sensor from entity description
     def __init__(
         self,
         coordinator: VaillantCoordinator,
@@ -71,6 +73,7 @@ class EbusdBinarySensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEnti
 
     @property
     def is_on(self) -> bool | None:
+        # Return binary state from ebusd data
         data = self.coordinator.data.get("ebusd", {})
         raw = data.get(self._desc.key)
         if raw is None:
@@ -79,6 +82,7 @@ class EbusdBinarySensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEnti
 
     @property
     def available(self) -> bool:
+        # Entity available when coordinator updates succeed
         return self.coordinator.last_update_success
 
 
@@ -89,6 +93,7 @@ class EbusdConnectionSensor(CoordinatorEntity[VaillantCoordinator], BinarySensor
     _attr_name = "Online"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
 
+    # Initialize connection sensor with unique ID and device info
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_ebusd_online"
@@ -96,6 +101,7 @@ class EbusdConnectionSensor(CoordinatorEntity[VaillantCoordinator], BinarySensor
 
     @property
     def is_on(self) -> bool:
+        # True when coordinator last update succeeded
         return self.coordinator.last_update_success
 
 
@@ -106,6 +112,7 @@ class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntit
     _attr_name = "Trouble Codes"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
+    # Initialize fault sensor with unique ID and device info
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_fault_active"
@@ -124,4 +131,5 @@ class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntit
 
     @property
     def available(self) -> bool:
+        # Entity available when coordinator updates succeed
         return self.coordinator.last_update_success
