@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
@@ -11,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .backend.entity_factory import EntityDescription
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
@@ -39,7 +38,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
     def __init__(
         self,
         coordinator: VaillantCoordinator,
-        desc: Any,
+        desc: EntityDescription,
         unique_id: str,
         entry: ConfigEntry,
     ) -> None:

@@ -1,9 +1,8 @@
-"""Select platform for Vaillant EEBUS."""
+"""Select platform for Vaillant EBUS."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
@@ -11,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .backend.entity_factory import EntityDescription
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
@@ -38,7 +38,7 @@ class EbusdSelect(CoordinatorEntity[VaillantCoordinator], SelectEntity):
     def __init__(
         self,
         coordinator: VaillantCoordinator,
-        desc: Any,
+        desc: EntityDescription,
         unique_id: str,
         entry: ConfigEntry,
     ) -> None:

@@ -6,8 +6,9 @@ import asyncio
 import logging
 from typing import Any
 
-from .base import Backend
 from .models import EbusdRegister, WriteResult
+
+# ponytail: single-backend, no ABC abstraction needed. Add if a second transport variant materializes.
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -16,12 +17,11 @@ INITIAL_RECONNECT_DELAY = 1
 READ_TIMEOUT = 10
 WRITE_TIMEOUT = 10
 FIND_TIMEOUT = 30
-LINE_ENDING = b"\n"
 ERR_PREFIX = "ERR:"
 DONE_STR = "done"
 
 
-class EbusdTcpBackend(Backend):
+class EbusdTcpBackend:
     def __init__(self, host: str = "192.168.1.100", port: int = 8888) -> None:
         self._host = host
         self._port = port
@@ -65,9 +65,6 @@ class EbusdTcpBackend(Backend):
                 pass
             self._writer = None
             self._reader = None
-
-    async def _send_command(self, command: str) -> str:
-        return await self.async_send_raw(command)
 
     async def async_send_raw(self, command: str) -> str:
         if not self._writer or not self._reader:
@@ -143,7 +140,7 @@ class EbusdTcpBackend(Backend):
         cmd = f"read -c {circuit} {name}"
         if field:
             cmd += f" {field}"
-        response = await self._send_command(cmd)
+        response = await self.async_send_raw(cmd)
         if response.startswith(ERR_PREFIX):
             _LOGGER.debug("Read error %s.%s: %s", circuit, name, response)
             return None
@@ -151,7 +148,7 @@ class EbusdTcpBackend(Backend):
 
     async def async_write(self, circuit: str, name: str, value: str) -> WriteResult:
         cmd = f"write -c {circuit} {name} {value}"
-        response = await self._send_command(cmd)
+        response = await self.async_send_raw(cmd)
         if response.startswith(ERR_PREFIX):
             return WriteResult(success=False, error_message=response)
         if response.strip() == DONE_STR:
