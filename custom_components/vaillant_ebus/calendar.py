@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Any
+from datetime import date, datetime, timedelta
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.config_entries import ConfigEntry
@@ -94,7 +93,7 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         return register.value.get("value") if register else None
 
 
-def _parse_slot(day: Any, value: str | None, name: str) -> CalendarEvent | None:
+def _parse_slot(day: date, value: str | None, name: str) -> CalendarEvent | None:
     if not value:
         return None
     parts = value.split(";")

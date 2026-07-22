@@ -1,4 +1,4 @@
-"""Switch platform for Vaillant EEBUS."""
+"""Switch platform for Vaillant EBUS."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .backend.entity_factory import EntityDescription
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
@@ -45,7 +46,7 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     def __init__(
         self,
         coordinator: VaillantCoordinator,
-        desc: Any,
+        desc: EntityDescription,
         unique_id: str,
         entry: ConfigEntry,
     ) -> None:
