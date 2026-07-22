@@ -28,7 +28,7 @@ ebusd is available as an HA addon or standalone. The addon is the easiest route.
 ### HA addon (recommended)
 
 1. Go to **Settings → Add-ons → Add-on store**
-2. Add this repository as an external addon: `https://github.com/john30/ebusd-addon`
+2. Add this repository as an external addon: `https://github.com/LukasGrebe/ha-addons/`
 3. Install **ebusd**
 4. Go to **Configuration** and set:
 
