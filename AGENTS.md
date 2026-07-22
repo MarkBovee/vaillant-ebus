@@ -155,13 +155,23 @@ sshpass -p 'PASSWORD' ssh user@host \
 
 For large files (>40KB): split and append.
 
+## Branch workflow
+
+- **`main`** — stabiele releases. Alleen via `pre-release` → PR → merge.
+- **`pre-release`** — ontwikkeling en testing. Direct pushen, CI draait erop.
+
+```
+pre-release ──PR──► main ──tag──► release
+```
+
 ## Release workflow
 
 **Process (fully automated by `.github/workflows/ci.yml`):**
 
-1. **Bump version** — update `manifest.json` + `pyproject.toml`
-2. **Update** `CHANGELOG.md` — add entry under new version heading
-3. **Commit + tag + push:**
+1. **Merge `pre-release` naar `main`** — via GitHub PR (geeft code review kans)
+2. **Op main: bump version** — update `manifest.json` + `pyproject.toml`
+3. **Update** `CHANGELOG.md` — entry onder nieuwe versie
+4. **Commit + tag + push:**
 
    ```bash
    git add -A
@@ -170,11 +180,10 @@ For large files (>40KB): split and append.
    git push origin main --tags
    ```
 
-4. **CI/CD doet de rest:**
-   - `ci` job: lint + test + compile op elke push (inclusief tag push)
-   - `release` job (alleen bij tag `v*`): maakt `vaillant_ebus.zip` en `gh release create`
-   - Zip structuur: `vaillant_ebus/__init__.py` — extractie in `/config/custom_components/` werkt direct
-   - Changelog wordt automatisch uit `CHANGELOG.md` geplukt
+5. **CI/CD doet de rest:**
+   - `release` job: lint + test + compile → bouwt zip → `gh release create`
+   - Zip structuur: `custom_components/vaillant_ebus/__init__.py` (HACS compliant)
+   - Changelog-entry wordt automatisch uit `CHANGELOG.md` geplukt
 
 **Als een release mislukt** (verkeerde zip, gefaalde action): delete + retag + push:
 
@@ -183,7 +192,12 @@ gh release delete vX.Y.Z --yes && git push --delete origin vX.Y.Z
 git tag -d vX.Y.Z && git tag vX.Y.Z && git push origin main --tags
 ```
 
+**Belangrijk:** branch protectie op `main` staat aan (`require PR`).  
+Force-push alleen via `gh api repos/.../branches/main/protection --method DELETE` en later herstellen.
+
 HACS `zip_release` mode verwacht GitHub release met tag `vX.Y.Z` en asset `vaillant_ebus.zip`. `hacs.json` heeft `zip_release: true` en `hide_default_branch: true`.
+
+HA update via HACS: `HACS > integrations > Vaillant eBUS > download vX.Y.Z > herstart HA`.
 
 ## Important constraints
 
