@@ -1,0 +1,25 @@
+import zipfile, os, shutil
+
+TMP = "/tmp/_rel"
+os.makedirs(TMP, exist_ok=True)
+
+for root, dirs, files in os.walk("custom_components/vaillant_ebus"):
+    for f in files:
+        fp = os.path.join(root, f)
+        rel = os.path.relpath(fp, "custom_components/vaillant_ebus")
+        dst = os.path.join(TMP, rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        with open(fp, "rb") as sf, open(dst, "wb") as df:
+            df.write(sf.read())
+
+with open("hacs.json", "rb") as sf, open(f"{TMP}/hacs.json", "wb") as df:
+    df.write(sf.read())
+
+with zipfile.ZipFile("/tmp/vaillant_ebus.zip", "w", zipfile.ZIP_DEFLATED) as zf:
+    for root, dirs, files in os.walk(TMP):
+        for f in files:
+            fp = os.path.join(root, f)
+            rel = os.path.relpath(fp, TMP)
+            zf.write(fp, rel)
+shutil.rmtree(TMP)
+print("zip built: /tmp/vaillant_ebus.zip")

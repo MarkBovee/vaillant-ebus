@@ -20,4 +20,4 @@ tests/fixtures/capture_*.jsonl
 home-assistant.log
 openspec/
 captures/
-scripts/
+/scripts/
