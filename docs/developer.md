@@ -107,8 +107,8 @@ The register then appears as `ctlv2.z1RoomHumidity` and needs a mapping entry in
 
 ```bash
 # Quick read test
-echo 'r ctlv2 Hc1Temp' | nc 192.168.1.100 8888
+echo 'r ctlv2 Hc1Temp' | nc <ebusd-host> 8888
 
 # Full discovery dump
-echo 'f' | timeout 30 nc 192.168.1.100 8888
+echo 'f' | timeout 30 nc <ebusd-host> 8888
 ```
