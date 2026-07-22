@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .backend.entity_factory import EntityDescription, generate_entity_descriptions
 from .backend.mapping import REGISTER_MAP
-from .backend.models import CIRCUIT_NAMES, EbusdRegister
+from .backend.models import CIRCUIT_NAMES, EbusdRegister, set_idle_compressor_power
 from .backend.tcp import EbusdTcpBackend
 from .const import (
     CONF_EBUSD_HOST,
@@ -145,11 +145,16 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.ebusd_backend and self.ebusd_backend.connected:
             try:
                 discovered = await self.ebusd_backend.async_find()
+                discovered_registers = {reg.key: reg for reg in discovered}
                 for reg in discovered:
                     if reg.has_data:
                         self.registers[reg.key] = reg
                     elif reg.key not in self.registers:
                         self.registers[reg.key] = reg
+                set_idle_compressor_power(
+                    self.registers,
+                    discovered_registers.get("hmu.CurrentConsumedPower"),
+                )
                 await self._fallback_read()
                 return {"ebusd": self._values_from_registers()}
             except ConnectionError:
