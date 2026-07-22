@@ -60,9 +60,10 @@ jobs:
 
       - name: Build release zip
         run: |
-          cp -r custom_components/vaillant_ebus /tmp/vaillant_ebus_release
+          git archive --format=tar HEAD custom_components/vaillant_ebus | tar xf - -C /tmp
+          mv /tmp/custom_components/vaillant_ebus /tmp/vaillant_ebus_release
           cd /tmp/vaillant_ebus_release && zip -qr /tmp/vaillant_ebus.zip .
-          rm -rf /tmp/vaillant_ebus_release
+          rm -rf /tmp/vaillant_ebus_release /tmp/custom_components
 
       - name: Extract changelog entry
         run: |
