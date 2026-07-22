@@ -1,4 +1,6 @@
-import zipfile, os, shutil
+import os
+import shutil
+import zipfile
 
 TMP = "/tmp/_rel"
 os.makedirs(TMP, exist_ok=True)
