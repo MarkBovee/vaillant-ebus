@@ -954,29 +954,6 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         entity_category="diagnostic",
         enabled=False,
     ),
-    # global (ebusd daemon) — diagnostic only
-    "global.running": RegisterMeta(
-        friendly_name="ebusd Running",
-        entity_type="binary_sensor",
-        entity_category="diagnostic",
-    ),
-    "global.signal": RegisterMeta(
-        friendly_name="ebusd Signal",
-        entity_type="binary_sensor",
-        entity_category="diagnostic",
-    ),
-    "global.scan": RegisterMeta(
-        friendly_name="ebusd Scan Status",
-        entity_category="diagnostic",
-    ),
-    "global.uptime": RegisterMeta(
-        friendly_name="ebusd Uptime",
-        entity_category="diagnostic",
-    ),
-    "global.version": RegisterMeta(
-        friendly_name="ebusd Version",
-        entity_category="diagnostic",
-    ),
 }
 
 
