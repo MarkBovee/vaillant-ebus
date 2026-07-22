@@ -12,7 +12,7 @@
 Navigate to **Settings → Add-ons → ebusd → Configuration** and set:
 
 ```yaml
-network_device: ens:192.168.1.101:9999
+network_device: ens:192.168.1.100:9999
 seed_mqtt_cfg: false
 commandline_options:
   - "--accesslevel=*"
@@ -30,14 +30,14 @@ commandline_options:
 | `--port=8888` | Opens the raw TCP command port — this is what the integration connects to |
 | `--enabledefine` | Allows runtime `define` commands (used for custom registers like room humidity) |
 
-> Do not add `--mqttjson`, `--mqttint`, `--configpath`, or `--scanconfig` — the integration handles everything via raw TCP.
+> Do not add `--mqttjson`, `--mqttint`, or `--configpath` — the integration handles everything via raw TCP. `--scanconfig` is optional but recommended for broader register discovery.
 
 ### Standalone ebusd (no HA addon)
 
 If ebusd runs on a separate machine or bare-metal:
 
 ```bash
-ebusd --device=ens:192.168.1.101:9999 --port=8888 --accesslevel=* --enabledefine
+ebusd --device=ens:192.168.1.100:9999 --port=8888 --accesslevel=* --enabledefine
 ```
 
 ## Integration setup steps

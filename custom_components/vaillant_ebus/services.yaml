@@ -11,6 +11,7 @@ read_parameter:
             - "ctlv2"
             - "Broadcast"
             - "global"
+            - "vwz00"
     name:
       required: true
       selector:
@@ -33,6 +34,7 @@ write_parameter:
             - "ctlv2"
             - "Broadcast"
             - "global"
+            - "vwz00"
     name:
       required: true
       selector:

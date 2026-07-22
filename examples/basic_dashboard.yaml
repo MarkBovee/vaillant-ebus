@@ -1,8 +1,8 @@
 type: entities
-title: Vaillant EEBUS
+title: Vaillant eBUS
 entities:
-  - entity: sensor.vaillant_ebus_outside_temperature
-  - entity: sensor.vaillant_ebus_dhw_temperature
-  - entity: sensor.vaillant_ebus_room_temperature
-  - entity: sensor.vaillant_ebus_compressor_power
-  - entity: binary_sensor.vaillant_ebus_compressor_running
+  - entity: sensor.vaillant_arotherm_heat_pump_outside_temperature
+  - entity: sensor.vaillant_arotherm_heat_pump_flow_temperature
+  - entity: sensor.vaillant_ctlv2_heating_control_room_humidity
+  - entity: sensor.vaillant_arotherm_heat_pump_compressor_power
+  - entity: binary_sensor.vaillant_arotherm_heat_pump_circulation_pump

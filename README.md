@@ -15,7 +15,7 @@ Reads & writes 350+ eBUS registers from your heat pump, heating controller, and 
 
 ## Requirements
 
-- Home Assistant 2024.6+ (recommended)
+- Home Assistant 2025.1+ (recommended)
 - ebusd — install as HA addon or standalone on your network
 - Vaillant heat pump with eBUS adapter (network or serial)
 
@@ -45,6 +45,7 @@ network_device: ens:192.168.x.x:9999
 seed_mqtt_cfg: false
 commandline_options:
   - "--accesslevel=*"
+  - "--scanconfig"
   - "--port=8888"
   - "--enabledefine"
 ```
@@ -54,6 +55,7 @@ commandline_options:
 | `network_device` | Your eBUS adapter (network or serial) |
 | `seed_mqtt_cfg: false` | Disable MQTT — no broker needed |
 | `--accesslevel=*` | Full read/write access |
+| `--scanconfig` | Scans for additional registers (recommended) |
 | `--port=8888` | Raw TCP port — this integration connects here |
 | `--enabledefine` | Allows runtime register defines (e.g. room humidity) |
 
@@ -119,4 +121,4 @@ python3 -m compileall custom_components/vaillant_ebus/
 
 ## License
 
-MIT
+Apache 2.0

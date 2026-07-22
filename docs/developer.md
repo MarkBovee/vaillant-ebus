@@ -43,8 +43,7 @@ custom_components/vaillant_ebus/
 │   ├── logo.png        # HACS branding
 │   └── icon.png        # HACS branding
 ├── translations/
-│   ├── en.json         # English UI strings
-│   └── nl.json         # Dutch UI strings
+│   └── en.json         # English UI strings
 ├── const.py            # Constants
 ├── manifest.json       # HA manifest
 ├── services.yaml       # Service definitions
