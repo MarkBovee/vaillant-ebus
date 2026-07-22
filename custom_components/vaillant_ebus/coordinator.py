@@ -26,6 +26,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    # Initialize coordinator with HA instance and config entry
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         _LOGGER.info("Initializing coordinator")
         self._entry = entry
@@ -43,6 +44,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=scan_interval),
         )
 
+    # Connect backend, define custom registers, discover all registers
     async def async_start(self) -> None:
         if self._started:
             return
@@ -64,6 +66,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self.entities = generate_entity_descriptions(discovered)
 
+    # Define runtime registers (e.g. z1RoomHumidity) on ebusd
     async def _define_custom_registers(self) -> None:
         if not self.ebusd_backend:
             return
@@ -78,6 +81,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except Exception as exc:
                 _LOGGER.warning("Failed to define register: %s", exc)
 
+    # Flatten register values into circuit.name.field -> value dict
     def _values_from_registers(
         self, registers: list[EbusdRegister] | None = None
     ) -> dict[str, str]:
@@ -88,6 +92,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     values[f"{reg.circuit}.{reg.name}.{field}"] = value
         return values
 
+    # Read REGISTER_MAP entries that find missed, add entities if new
     async def _fallback_read(self) -> None:
         if not self.ebusd_backend:
             return
@@ -130,6 +135,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                      len(known_missing) - sum(1 for k in known_missing
                          if k not in self.registers or not self.registers[k].has_data))
 
+    # Poll ebusd for register values, called by HA update loop
     async def _async_update_data(self) -> dict[str, Any]:
         _LOGGER.debug("Coordinator update, started=%s", self._started)
         if not self._started:
@@ -155,10 +161,12 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return {}
 
+    # Disconnect ebusd backend on integration unload
     async def async_stop(self) -> None:
         if self.ebusd_backend:
             await self.ebusd_backend.async_disconnect()
 
+    # Build DeviceInfo for a given circuit identifier
     def get_device_info(self, circuit: str) -> DeviceInfo:
         name = CIRCUIT_NAMES.get(circuit, f"Vaillant ({circuit})")
         return DeviceInfo(

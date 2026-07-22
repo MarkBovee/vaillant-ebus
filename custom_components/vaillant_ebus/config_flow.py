@@ -26,6 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
+    # Handle user-initiated config flow for ebusd connection
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -69,15 +70,18 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=_user_schema(),
         )
 
+    # Return the options flow handler for this config entry
     @staticmethod
     def async_get_options_flow(config_entry: dict[str, Any]) -> OptionsFlow:
         return VaillantOptionsFlow(config_entry)
 
 
 class VaillantOptionsFlow(OptionsFlow):
+    # Initialize options flow with config entry
     def __init__(self, config_entry: dict[str, Any]) -> None:
         self._config_entry = config_entry
 
+    # Handle options flow init step (scan interval config)
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -96,6 +100,7 @@ class VaillantOptionsFlow(OptionsFlow):
         )
 
 
+# Build vol schema for user config step with optional defaults
 def _user_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     return vol.Schema(

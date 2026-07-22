@@ -15,6 +15,7 @@ from .coordinator import VaillantCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
+# Set up coordinator, forward platforms, register services.
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("Setting up vaillant_ebus entry: %s", entry.data)
     hass.data.setdefault(DOMAIN, {})
@@ -25,6 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Read a single register by circuit and name.
     async def svc_read_parameter(call: ServiceCall) -> None:
         circuit = call.data["circuit"]
         name = call.data["name"]
@@ -33,6 +35,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             value = await coordinator.ebusd_backend.async_read(circuit, name, field)
             _LOGGER.info("read_parameter %s.%s = %s", circuit, name, value)
 
+    # Write a value with read-after-write verification.
     async def svc_write_parameter(call: ServiceCall) -> None:
         circuit = call.data["circuit"]
         name = call.data["name"]
@@ -44,9 +47,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 circuit, name, value, result.success, result.verified_value,
             )
 
+    # Force re-read all active registers.
     async def svc_refresh(call: ServiceCall) -> None:
         await coordinator.async_request_refresh()
 
+    # Re-run entity discovery from scratch.
     async def svc_rediscover(call: ServiceCall) -> None:
         if coordinator.ebusd_backend:
             await coordinator.ebusd_backend.async_disconnect()
@@ -75,6 +80,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+# Tear down coordinator and unregister services.
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     for service in ("read_parameter", "write_parameter", "refresh", "rediscover"):
         hass.services.async_remove(DOMAIN, service)

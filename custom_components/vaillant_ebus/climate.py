@@ -25,11 +25,13 @@ NIGHT_TEMPERATURE = f"{CIRCUIT}.Z1NightTemp.value"
 PUMP_STATUS = f"{CIRCUIT}.Hc1PumpStatus.value"
 
 
+# Get string value from coordinator data by key
 def _value(coordinator: VaillantCoordinator, key: str) -> str | None:
     value = coordinator.data.get("ebusd", {}).get(key)
     return str(value) if value is not None else None
 
 
+# Safely convert string to float, return None on failure
 def _float(value: str | None) -> float | None:
     try:
         return float(value) if value is not None else None
@@ -37,6 +39,7 @@ def _float(value: str | None) -> float | None:
         return None
 
 
+# Map Vaillant operation mode to HA HVACMode
 def _hvac_mode(value: str | None) -> HVACMode | None:
     return {
         "off": HVACMode.OFF,
@@ -46,6 +49,7 @@ def _hvac_mode(value: str | None) -> HVACMode | None:
     }.get((value or "").lower())
 
 
+# Create the Z1 climate entity
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -67,6 +71,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     _attr_max_temp = 30
     _attr_target_temperature_step = 0.5
 
+    # Initialize Z1 climate entity
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_climate_z1"
@@ -74,10 +79,12 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     @property
     def current_temperature(self) -> float | None:
+        # Return current room temperature
         return _float(_value(self.coordinator, ROOM_TEMPERATURE))
 
     @property
     def target_temperature(self) -> float | None:
+        # Return target temperature, falling back to day/night setpoint
         value = _float(_value(self.coordinator, TARGET_TEMPERATURE))
         if value is not None and 5 <= value <= 30:
             return value
@@ -87,10 +94,12 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     @property
     def target_temperature_step(self) -> float:
+        # Return fixed 0.5C step for temperature adjustment
         return 0.5
 
     @property
     def supported_features(self) -> ClimateEntityFeature:
+        # Return PRESET_MODE and TARGET_TEMPERATURE when setpoint known
         features = ClimateEntityFeature.PRESET_MODE
         if self.target_temperature is not None:
             features |= ClimateEntityFeature.TARGET_TEMPERATURE
@@ -98,10 +107,12 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     @property
     def hvac_mode(self) -> HVACMode | None:
+        # Return current HVAC mode from operation register
         return _hvac_mode(_value(self.coordinator, OPERATION_MODE))
 
     @property
     def hvac_action(self) -> HVACAction | None:
+        # Return HEATING when pump is on, IDLE otherwise
         value = (_value(self.coordinator, PUMP_STATUS) or "").lower()
         if value in {"on", "1", "true"}:
             return HVACAction.HEATING
@@ -109,19 +120,23 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     @property
     def preset_mode(self) -> str | None:
+        # Return day/night preset from operation mode
         mode = (_value(self.coordinator, OPERATION_MODE) or "").lower()
         return mode if mode in self.preset_modes else None
 
     @property
     def available(self) -> bool:
+        # Entity available when coordinator updates succeed
         return self.coordinator.last_update_success
 
+    # Write day/night setpoint to ebusd based on preset
     async def async_set_temperature(self, **kwargs: Any) -> None:
         value = kwargs.get(ATTR_TEMPERATURE)
         if value is not None:
             name = "Z1NightTemp" if self.preset_mode == "night" else "Z1DayTemp"
             await self._write(name, str(value))
 
+    # Write HVAC mode (off/heat/auto) to ebusd
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         values = {
             HVACMode.OFF: "off",
@@ -130,11 +145,13 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         }
         await self._write("Z1OpMode", values[hvac_mode])
 
+    # Write day/night preset mode to ebusd
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         if preset_mode not in self.preset_modes:
             raise ValueError(f"Unsupported preset: {preset_mode}")
         await self._write("Z1OpMode", preset_mode)
 
+    # Write a CTLV2 register value and trigger refresh
     async def _write(self, name: str, value: str) -> None:
         backend = self.coordinator.ebusd_backend
         if backend:

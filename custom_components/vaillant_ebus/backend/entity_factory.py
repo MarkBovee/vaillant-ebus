@@ -10,6 +10,7 @@ from .models import EbusdRegister
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
 
 
+# Map circuit/name to logical device (hmu, dhw, z1)
 def _infer_device_circuit(circuit: str, name: str) -> str | None:
     if circuit == "Broadcast":
         return "hmu"
@@ -21,6 +22,7 @@ def _infer_device_circuit(circuit: str, name: str) -> str | None:
     return None
 
 
+# Return True if register should not generate an HA entity
 def _is_hidden_register(register: EbusdRegister) -> bool:
     circuit = register.circuit
     name = register.name.lower()
@@ -45,6 +47,7 @@ def _is_hidden_register(register: EbusdRegister) -> bool:
 
 
 class EntityDescription:
+    # Store entity metadata linking register to HA platform
     def __init__(
         self,
         circuit: str,
@@ -63,6 +66,7 @@ class EntityDescription:
 
     @property
     def unique_id(self) -> str:
+        # Globally unique entity identifier for HA registry
         suffix = self.name.lower().replace(" ", "_")
         if self.field != "value":
             suffix += f"_{self.field}"
@@ -70,10 +74,12 @@ class EntityDescription:
 
     @property
     def key(self) -> str:
+        # Dot-separated key for data lookup
         return f"{self.circuit}.{self.name}.{self.field}"
 
     @property
     def device_circuit(self) -> str:
+        # Resolve logical device circuit for grouping in HA
         if self.meta.device_circuit:
             return self.meta.device_circuit
         inferred = _infer_device_circuit(self.circuit, self.name)
@@ -81,14 +87,17 @@ class EntityDescription:
 
     @property
     def entity_type(self) -> str:
+        # Return HA platform type (sensor, binary_sensor, etc.)
         return self.meta.entity_type or ("binary_sensor" if self._is_binary else "sensor")
 
     @property
     def _is_binary(self) -> bool:
+        # Heuristic: raw value looks like on/off/true/false
         low = self.raw_value.lower().strip() if self.raw_value else ""
         return low in ("on", "off", "true", "false", "1", "0", "yes", "no")
 
 
+# Check if string can be parsed as a number
 def _is_numeric(value: str) -> bool:
     try:
         float(value)
@@ -97,6 +106,7 @@ def _is_numeric(value: str) -> bool:
         return False
 
 
+# Auto-detect HA platform type for a register+value
 def _classify_register(
     register: EbusdRegister, field: str, raw_value: str | None
 ) -> str:
@@ -126,6 +136,7 @@ def _classify_register(
     return "sensor"
 
 
+# Generate HA entity descriptions from discovered register list
 def generate_entity_descriptions(
     registers: list[EbusdRegister],
     yaml_overrides: dict[str, dict[str, Any]] | None = None,
@@ -205,6 +216,7 @@ def generate_entity_descriptions(
     return entities
 
 
+# Merge YAML overrides into a RegisterMeta, returning new instance
 def _merge_overrides(meta: RegisterMeta, override: dict[str, Any]) -> RegisterMeta:
     if not override:
         return meta

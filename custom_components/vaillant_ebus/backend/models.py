@@ -16,21 +16,8 @@ class EbusdRegister:
 
     @property
     def key(self) -> str:
+        # Dot-separated circuit.name unique identifier
         return f"{self.circuit}.{self.name}"
-
-
-@dataclass
-class Circuit:
-    name: str
-    registers: dict[str, EbusdRegister] = field(default_factory=dict)
-
-    @property
-    def friendly_name(self) -> str:
-        return CIRCUIT_NAMES.get(self.name, self.name)
-
-    @property
-    def register_count(self) -> int:
-        return len(self.registers)
 
 
 CIRCUIT_NAMES: dict[str, str] = {
@@ -69,7 +56,3 @@ class WriteResult:
     error_message: str = ""
     verified_value: str | None = None
 
-
-def parse_find_value(raw: str) -> dict[str, str | None]:
-    parts = raw.split(";")
-    return {str(i): (p if p != "-" else None) for i, p in enumerate(parts)}

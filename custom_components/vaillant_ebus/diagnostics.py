@@ -11,6 +11,7 @@ from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
 
+# Return diagnostics data for config entry
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
@@ -29,6 +30,7 @@ async def async_get_config_entry_diagnostics(
     return result
 
 
+# Count registers per circuit for diagnostics
 def _circuit_summary(coordinator: VaillantCoordinator) -> dict[str, int]:
     circuits: dict[str, int] = {}
     for reg in coordinator.registers.values():

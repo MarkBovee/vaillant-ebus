@@ -1,14 +1,24 @@
+<p align="center">
+  <img src="docs/logo-vaillant.png" alt="Vaillant eBUS" width="600"/>
+</p>
+
 # Vaillant eBUS
 
 Home Assistant integration for Vaillant heat pumps via **direct ebusd TCP** — no MQTT, no cloud.
 
 Reads & writes 350+ eBUS registers from your heat pump, heating controller, and DHW system. Fully local, no internet required.
 
+A **1-on-1 replacement for the mypyllant API integration** — climate entities (quick veto, away mode via calendar), water_heater entities (DHW boost, temp control), room humidity, and all sensors, fully local without cloud dependency.
+
 ## Features
 
+- Drop-in replacement for mypyllant API integration — same entities, no cloud
 - Direct TCP connection to ebusd — zero MQTT setup required
 - Auto-discovers all registers on connect
 - 60+ entity types generated: sensor, binary_sensor, number, select, switch, climate, water_heater, calendar
+- Climate entities with quick veto and away mode (calendar-based scheduling)
+- Water heater entities with DHW boost and temperature control
+- Room humidity (CTLV2) — not available via standard ebusd MQTT
 - Read & write any register via HA services (`vaillant_ebus.read_parameter`, `vaillant_ebus.write_parameter`)
 - Custom registers via `--enabledefine` (e.g. room humidity)
 - YAML overrides for entity metadata (names, icons, units)
@@ -16,10 +26,19 @@ Reads & writes 350+ eBUS registers from your heat pump, heating controller, and 
 ## Prerequisites
 
 - Home Assistant 2025.1+
-- **ebusd** — eBUS daemon, installed and running
-- Vaillant heat pump with eBUS adapter (network or serial)
+- **ebusd** — eBUS daemon, installed and running ([upstream](https://github.com/john30/ebusd))
+- Vaillant heat pump with eBUS adapter
 
 > This integration is a **client for ebusd**. You need ebusd running before adding this integration.
+
+### eBUS adapter
+
+The heat pump communicates over a two-wire eBUS. You need an adapter to connect it to your network:
+
+- **Network adapter** (recommended): Vaillant VR921 or third-party network eBUS adapter. Gets its own IP on your LAN. Address format: `ens:192.168.x.x:9999`
+- **Serial adapter**: USB-to-eBUS or serial adapter connected to the HA server. Address format: `/dev/ttyUSB0`
+
+Known compatible heat pumps: aroTHERM, aroTHERM plus, VWL series. Other Vaillant models with eBUS should work too — the integration auto-discovers whatever registers the heat pump exposes.
 
 ## Step 1: Install ebusd
 
@@ -28,8 +47,8 @@ ebusd is available as an HA addon or standalone. The addon is the easiest route.
 ### HA addon (recommended)
 
 1. Go to **Settings → Add-ons → Add-on store**
-2. Add this repository as an external addon: `https://github.com/john30/ebusd-addon`
-3. Install **ebusd**
+2. Click the **three-dot menu → Repositories**, add: `https://github.com/LukasGrebe/ha-addons/` (HA wrapper for [john30/ebusd](https://github.com/john30/ebusd))
+3. **Install ebusd** from the addon store
 4. Go to **Configuration** and set:
 
 ```yaml
@@ -37,7 +56,6 @@ network_device: ens:192.168.x.x:9999
 seed_mqtt_cfg: false
 commandline_options:
   - "--accesslevel=*"
-  - "--scanconfig"
   - "--port=8888"
   - "--enabledefine"
 ```
@@ -46,15 +64,14 @@ commandline_options:
 |---------|---------|
 | `network_device` | Your eBUS adapter: `ens:<ip>:<port>` for network adapters, or `/dev/ttyUSB0` for serial |
 | `seed_mqtt_cfg: false` | Disable MQTT — not needed |
-| `--accesslevel=*` | Full read/write access |
-| `--scanconfig` | Scans for additional registers (recommended) |
-| `--port=8888` | Raw TCP port — this integration connects here |
-| `--enabledefine` | Allows runtime register defines (e.g. room humidity) |
+| `--accesslevel=*` | Full read/write access to all registers |
+| `--port=8888` | Raw TCP command port — this integration connects to this |
+| `--enabledefine` | Allows runtime register creation (needed for room humidity) |
 
 Do **not** add `--mqttjson`, `--mqttint`, or `--configpath`.
 
-5. **Start** the ebusd addon
-6. Verify it's running: open the addon log — you should see no errors
+5. **Start** the addon and wait until it shows **"running"** in the addon dashboard
+6. Verify: open the addon log — you should see no errors. If you see `ERR: element not found` for some registers, that is normal — your hardware just doesn't support them.
 
 ### Standalone
 
@@ -63,6 +80,8 @@ If ebusd runs on a separate machine or bare-metal:
 ```bash
 ebusd --device=ens:192.168.1.100:9999 --port=8888 --accesslevel=* --enabledefine
 ```
+
+> Replace `192.168.1.100:9999` with your eBUS adapter's actual IP and port.
 
 ## Step 2: Install this integration
 
@@ -76,7 +95,7 @@ ebusd --device=ens:192.168.1.100:9999 --port=8888 --accesslevel=* --enabledefine
 
 ### Manual
 
-1. Copy `custom_components/vaillant_ebus/` to `config/custom_components/vaillant_ebus/`
+1. Copy `custom_components/vaillant_ebus/` to your HA `config/custom_components/vaillant_ebus/`
 2. Restart HA
 
 ## Step 3: Add integration
@@ -95,7 +114,6 @@ ebusd --device=ens:192.168.1.100:9999 --port=8888 --accesslevel=* --enabledefine
 | Vaillant CTLV2 heating control | `ctlv2` | Heating controller (zone, DHW) |
 | Vaillant VWZ00 ventilation | `vwz00` | Ventilation unit |
 | Vaillant system | `Broadcast` | eBUS broadcast values |
-| Vaillant (global) | `global` | ebusd daemon status |
 
 ### YAML entity overrides
 
@@ -107,11 +125,9 @@ ctlv2.HwcTempDesired:
   icon: "mdi:water-thermometer"
   unit: "°C"
   device_class: "temperature"
-  writable: true
-  min: 30
-  max: 70
-  step: 1
 ```
+
+Available override keys: `friendly_name`, `icon`, `unit`, `device_class`, `entity_category`, `entity_type`, `enabled`, `writable`, `min`, `max`, `step`, `options`.
 
 ## Services
 
@@ -122,20 +138,17 @@ ctlv2.HwcTempDesired:
 | `vaillant_ebus.refresh` | Force re-read all active registers |
 | `vaillant_ebus.rediscover` | Re-run entity discovery (finds new registers) |
 
+## Updating
+
+HACS notifies you when a new release is available. To update:
+
+1. Go to **HACS → Integrations → Vaillant eBUS**
+2. Click **"Update"** (if available)
+3. **Restart HA**
+
 ## Troubleshooting
 
 See [docs/troubleshooting.md](docs/troubleshooting.md).
-
-## Development
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install ruff pytest
-.venv/bin/ruff check .
-.venv/bin/pytest -q
-python3 -m compileall custom_components/vaillant_ebus/
-```
 
 ## License
 

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
@@ -11,10 +9,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .backend.entity_factory import EntityDescription
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
 
+# Create sensor entities from coordinator entity descriptions
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -36,10 +36,11 @@ async def async_setup_entry(
 
 
 class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
+    # Initialize sensor entity from entity description
     def __init__(
         self,
         coordinator: VaillantCoordinator,
-        desc: Any,
+        desc: EntityDescription,
         unique_id: str,
         entry: ConfigEntry,
     ) -> None:
@@ -62,6 +63,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
 
     @property
     def native_value(self) -> float | str | None:
+        # Return parsed numeric or string value, None for empty/unavailable
         data = self.coordinator.data.get("ebusd", {})
         raw = data.get(self._desc.key)
         if raw is None or raw in ("-", "no data stored", "empty"):
@@ -73,4 +75,5 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
 
     @property
     def available(self) -> bool:
+        # Entity available when coordinator updates succeed
         return self.coordinator.last_update_success

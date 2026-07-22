@@ -1,14 +1,11 @@
-"""EBUS backend for Vaillant EEBUS integration."""
+"""Backend for Vaillant EBUS integration."""
 
 from __future__ import annotations
 
-from .base import Backend
-from .models import Circuit, EbusdRegister, RegisterMeta, WriteResult
+from .models import EbusdRegister, RegisterMeta, WriteResult
 
 __all__ = [
-    "Backend",
     "EbusdRegister",
-    "Circuit",
     "RegisterMeta",
     "WriteResult",
 ]
