@@ -157,21 +157,33 @@ For large files (>40KB): split and append.
 
 ## Release workflow
 
-```bash
-# Bump version in manifest.json + pyproject.toml
-# Commit: "release: vX.Y.Z"
-git tag vX.Y.Z
-git push origin vX.Y.Z
+**Process (fully automated by `.github/workflows/ci.yml`):**
 
-# Create release zip and GitHub release
-git archive --format=zip -o /tmp/vaillant_ebus.zip vX.Y.Z custom_components/vaillant_ebus/
-gh release create vX.Y.Z /tmp/vaillant_ebus.zip \
-  --title "vX.Y.Z" --notes "Release notes." \
-  --repo MarkBovee/vaillant-ebus
-rm /tmp/vaillant_ebus.zip
+1. **Bump version** — update `manifest.json` + `pyproject.toml`
+2. **Update** `CHANGELOG.md` — add entry under new version heading
+3. **Commit + tag + push:**
+
+   ```bash
+   git add -A
+   git commit -m "release: vX.Y.Z"
+   git tag vX.Y.Z
+   git push origin main --tags
+   ```
+
+4. **CI/CD doet de rest:**
+   - `ci` job: lint + test + compile op elke push (inclusief tag push)
+   - `release` job (alleen bij tag `v*`): maakt `vaillant_ebus.zip` en `gh release create`
+   - Zip structuur: `vaillant_ebus/__init__.py` — extractie in `/config/custom_components/` werkt direct
+   - Changelog wordt automatisch uit `CHANGELOG.md` geplukt
+
+**Als een release mislukt** (verkeerde zip, gefaalde action): delete + retag + push:
+
+```bash
+gh release delete vX.Y.Z --yes && git push --delete origin vX.Y.Z
+git tag -d vX.Y.Z && git tag vX.Y.Z && git push origin main --tags
 ```
 
-HACS `zip_release` mode expects a GitHub release with tag `vX.Y.Z` and asset `vaillant_ebus.zip`. The `hacs.json` has `zip_release: true` and `hide_default_branch: true`.
+HACS `zip_release` mode verwacht GitHub release met tag `vX.Y.Z` en asset `vaillant_ebus.zip`. `hacs.json` heeft `zip_release: true` en `hide_default_branch: true`.
 
 ## Important constraints
 

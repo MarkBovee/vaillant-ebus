@@ -100,15 +100,26 @@ def compressor_is_idle(registers: Mapping[str, EbusdRegister]) -> bool:
     return bool(signals) and all(value == 0 for value in signals)
 
 
-# Clear cached compressor power when discovery confirms the compressor is idle.
-def set_idle_compressor_power(
-    registers: Mapping[str, EbusdRegister],
-    discovered_power: EbusdRegister | None,
-) -> None:
-    power = registers.get("hmu.CurrentConsumedPower")
-    if discovered_power and not discovered_power.has_data and power and compressor_is_idle(registers):
-        power.value["value"] = "0"
-        power.has_data = True
+# Registers to zero out when compressor is idle (stale-value prevention).
+COMPRESSOR_ZERO_REGISTERS: set[str] = {
+    "hmu.CurrentConsumedPower",
+    "hmu.CurrentYieldPower",
+    "hmu.CurrentCompressorUtil",
+    "hmu.RunDataCompressorSpeed",
+    "hmu.RunDataFan1Speed",
+    "hmu.RunDataFan2Speed",
+    "hmu.RunDataEEVPositionAbs",
+}
+
+# Zero stale compressor-dependent registers when compressor is idle.
+def zero_idle_registers(registers: Mapping[str, EbusdRegister]) -> None:
+    if not compressor_is_idle(registers):
+        return
+    for key in COMPRESSOR_ZERO_REGISTERS:
+        reg = registers.get(key)
+        if reg:
+            reg.value["value"] = "0"
+            reg.has_data = True
 
 
 CIRCUIT_NAMES: dict[str, str] = {

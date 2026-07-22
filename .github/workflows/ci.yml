@@ -1,22 +1,81 @@
-name: CI
+name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches:
+      - "**"
+    tags:
+      - "v*"
   pull_request:
-    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  validate:
+  ci:
+    if: github.ref_type == 'branch' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
+
       - name: Install dependencies
         run: pip install ruff pytest
-      - name: Ruff
-        run: ruff check custom_components/
-      - name: Compile check
-        run: python3 -m compileall custom_components/vaillant_ebus/
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest -q tests/
+
+      - name: Compile
+        run: python3 -m compileall -f custom_components/vaillant_ebus/
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: pip install ruff pytest
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest -q tests/
+
+      - name: Compile
+        run: python3 -m compileall -f custom_components/vaillant_ebus/
+
+      - name: Build release zip
+        run: git archive --format=zip -o /tmp/vaillant_ebus.zip HEAD custom_components/vaillant_ebus/
+
+      - name: Extract changelog entry
+        run: |
+          python3 -c "
+          import re
+          with open('CHANGELOG.md') as f:
+            content = f.read()
+          m = re.search(r'^##\s+.+?\s*\n(.*?)(?=\n##\s|\Z)', content, re.M|re.S)
+          notes = m.group(1).strip() if m else 'Release ${{ github.ref_name }}'
+          open('/tmp/release_notes.md','w').write(notes)
+          "
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" /tmp/vaillant_ebus.zip \
+            --title "${{ github.ref_name }}" \
+            --notes-file /tmp/release_notes.md
