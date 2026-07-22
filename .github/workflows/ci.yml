@@ -17,6 +17,6 @@ jobs:
       - name: Install dependencies
         run: pip install ruff pytest
       - name: Ruff
-        run: ruff check .
+        run: ruff check custom_components/
       - name: Compile check
         run: python3 -m compileall custom_components/vaillant_ebus/

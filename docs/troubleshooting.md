@@ -5,7 +5,7 @@
 Verify ebusd is running and TCP port 8888 is open:
 
 ```bash
-echo 'i' | nc 192.168.1.100 8888
+echo 'i' | nc <ebusd-host> 8888
 # Expected: "version: ebusd 26.x.x.x"
 ```
 

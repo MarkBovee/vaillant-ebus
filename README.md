@@ -1,6 +1,8 @@
 <p align="center">
-  <img src="docs/logo-vaillant.png" alt="Vaillant eBUS" width="600"/>
+  <img src="docs/social-preview.png" alt="Vaillant eBUS" width="700"/>
 </p>
+
+> **Disclaimer:** This project is an independent third-party integration and is **not affiliated with, endorsed by, or connected to Vaillant GmbH** in any way. All trademarks belong to their respective owners.
 
 # Vaillant eBUS
 
