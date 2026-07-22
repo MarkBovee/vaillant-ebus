@@ -194,6 +194,24 @@ sshpass -p 'PASSWORD' ssh user@host \
 
 Voor grote bestanden (>40KB): splitten en append-en.
 
+## Release workflow
+
+```bash
+# Bump version in manifest.json + pyproject.toml
+# Commit: "chore: bump version to X.Y.Z"
+git tag vX.Y.Z
+git push origin vX.Y.Z
+
+# Create release zip and GitHub release
+git archive --format=zip -o /tmp/vaillant_ebus.zip vX.Y.Z custom_components/vaillant_ebus/
+gh release create vX.Y.Z /tmp/vaillant_ebus.zip \
+  --title "vX.Y.Z" --notes "Release notes." \
+  --repo MarkBovee/vaillant-ebus
+rm /tmp/vaillant_ebus.zip
+```
+
+HACS `zip_release` mode verwacht een GitHub release met tag `vX.Y.Z` en een asset `vaillant_ebus.zip`. De `hacs.json` heeft `zip_release: true` en `hide_default_branch: true`.
+
 ## Important constraints
 
 - Never commit secrets from `.env`
