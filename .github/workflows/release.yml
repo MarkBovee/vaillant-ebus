@@ -18,12 +18,12 @@ jobs:
           python3 -c "
 import zipfile, os, shutil
 TMP = '/tmp/_rel'
-os.makedirs(f'{TMP}/vaillant_ebus', exist_ok=True)
+os.makedirs(TMP, exist_ok=True)
 for root, dirs, files in os.walk('custom_components/vaillant_ebus'):
     for f in files:
         fp = os.path.join(root, f)
         rel = os.path.relpath(fp, 'custom_components/vaillant_ebus')
-        dst = os.path.join(TMP, 'vaillant_ebus', rel)
+        dst = os.path.join(TMP, rel)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         with open(fp, 'rb') as sf, open(dst, 'wb') as df:
             df.write(sf.read())
