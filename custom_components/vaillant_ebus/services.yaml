@@ -1,0 +1,53 @@
+read_parameter:
+  name: Read Parameter
+  description: Read a single ebusd register by circuit and name.
+  fields:
+    circuit:
+      required: true
+      selector:
+        select:
+          options:
+            - "hmu"
+            - "ctlv2"
+            - "Broadcast"
+            - "global"
+            - "vwz00"
+    name:
+      required: true
+      selector:
+        text:
+    field:
+      default: "value"
+      selector:
+        text:
+
+write_parameter:
+  name: Write Parameter
+  description: Write a value to an ebusd register with verification.
+  fields:
+    circuit:
+      required: true
+      selector:
+        select:
+          options:
+            - "hmu"
+            - "ctlv2"
+            - "Broadcast"
+            - "global"
+            - "vwz00"
+    name:
+      required: true
+      selector:
+        text:
+    value:
+      required: true
+      selector:
+        text:
+
+refresh:
+  name: Refresh
+  description: Force re-read of all active registers.
+
+rediscover:
+  name: Rediscover
+  description: Re-run entity discovery via `find` command.
