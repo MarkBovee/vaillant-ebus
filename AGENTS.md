@@ -182,10 +182,43 @@ pre-release ──PR──► main ──tag──► release
 
 5. **CI/CD doet de rest:**
    - `release` job: lint + test + compile → bouwt zip → `gh release create`
-   - Zip structuur: `custom_components/vaillant_ebus/__init__.py` (HACS compliant)
    - Changelog-entry wordt automatisch uit `CHANGELOG.md` geplukt
 
-**Als een release mislukt** (verkeerde zip, gefaalde action): delete + retag + push:
+### CRITICAL: zip structuur
+
+De zip MOET `custom_components/vaillant_ebus/` als prefix hebben in alle bestanden.  
+HACS `zip_release` mode verwacht deze structuur — zonder prefix kan HACS de integratie niet vinden.
+
+**Juiste build (CI step in `.github/workflows/ci.yml`):**
+```yaml
+- name: Build release zip
+  run: |
+    git archive --format=zip --prefix=custom_components/vaillant_ebus/ \
+      HEAD custom_components/vaillant_ebus > /tmp/vaillant_ebus.zip
+```
+
+**Verkeerd (NIET doen — geen prefix → HACS ziet niks):**
+```yaml
+git archive --format=tar ... | tar xf - ... && zip -qr ... .  # ❌ GEEN PREFIX
+```
+
+**Verifiëren na build:**
+```bash
+unzip -l /tmp/vaillant_ebus.zip | head -5
+# Moet tonen: custom_components/vaillant_ebus/__init__.py
+```
+
+**Herstellen van verkeerde zip:** verwijder oude asset, upload nieuwe met exact de naam `vaillant_ebus.zip`:
+```bash
+gh release delete-asset vX.Y.Z vaillant_ebus.zip --yes
+git archive --format=zip --prefix=custom_components/vaillant_ebus/ \
+  HEAD custom_components/vaillant_ebus > /tmp/vaillant_ebus.zip
+gh release upload vX.Y.Z /tmp/vaillant_ebus.zip --clobber
+```
+
+### Release mislukt
+
+Delete + retag + push:
 
 ```bash
 gh release delete vX.Y.Z --yes && git push --delete origin vX.Y.Z
