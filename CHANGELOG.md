@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.7 - 2026-07-23
+
+- Fix CI release zip: missing `custom_components/vaillant_ebus/` prefix
+  broke HACS `zip_release` installation.
+- Fix trailing comma in manifest.json causing JSON parse error.
+
 ## 1.0.6 - 2026-07-23
 
 - Fix coordinator poll freezing after 2-3 cycles: ebusd `find` command
