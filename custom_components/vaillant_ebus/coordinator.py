@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .backend.entity_factory import EntityDescription, generate_entity_descriptions
 from .backend.mapping import REGISTER_MAP
-from .backend.models import CIRCUIT_NAMES, EbusdRegister, zero_idle_registers
+from .backend.models import CIRCUIT_NAMES, COMPRESSOR_STATUS_LABELS, EbusdRegister, zero_idle_registers
 from .backend.tcp import EbusdTcpBackend
 from .const import (
     CONF_EBUSD_HOST,
@@ -89,7 +89,10 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for reg in registers or list(self.registers.values()):
             for field, value in reg.value.items():
                 if value is not None:
-                    values[f"{reg.circuit}.{reg.name}.{field}"] = value
+                    translated = value
+                    if reg.key == "hmu.RunDataStatuscode":
+                        translated = COMPRESSOR_STATUS_LABELS.get(value, value)
+                    values[f"{reg.circuit}.{reg.name}.{field}"] = translated
         return values
 
     # Read REGISTER_MAP entries that find missed, add entities if new
