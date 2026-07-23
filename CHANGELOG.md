@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6 - 2026-07-23
+
+- Fix coordinator poll freezing after 2-3 cycles: ebusd `find` command
+  sends no end-of-data marker; use per-line timeout instead of one
+  long 30s FIND_TIMEOUT to prevent blocking.
+
 ## 1.0.5 - 2026-07-23
 
 - Fix compressor idle detection with string status codes (Standby,
