@@ -87,6 +87,9 @@ class EbusdTcpBackend:
         return res
 
     # Send 'f' command, return raw response lines
+    # ponytail: ebusd sends no end marker after f output. Use per-line
+    # timeout instead of one long FIND_TIMEOUT to avoid blocking the
+    # coordinator poll cycle. Bump FIND_TIMEOUT if lines arrive slowly.
     async def _send_find(self) -> list[str]:
         if not self._writer or not self._reader:
             raise ConnectionError("Not connected")
@@ -95,11 +98,14 @@ class EbusdTcpBackend:
         await self._writer.drain()
         lines: list[str] = []
         while True:
-            line = await asyncio.wait_for(self._reader.readline(), timeout=FIND_TIMEOUT)
-            decoded = line.decode("utf-8").rstrip("\n\r")
-            if not decoded:
+            try:
+                line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
+                decoded = line.decode("utf-8").rstrip("\n\r")
+                if not decoded:
+                    break
+                lines.append(decoded)
+            except TimeoutError:
                 break
-            lines.append(decoded)
         return lines
 
     # Discover all registers from ebusd via find command
