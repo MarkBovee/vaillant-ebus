@@ -73,6 +73,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         defines = [
             "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800"
             ",value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity",
+            "r,hmu,PowerConsumptionHmu,PowerConsumptionHmu,31,08,B516,14"
+            ",value,,UCH,1,W,PowerConsumptionHmu",
         ]
         for definition in defines:
             try:

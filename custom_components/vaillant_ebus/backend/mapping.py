@@ -252,9 +252,9 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     ),
     "hmu.PowerConsumptionHmu": RegisterMeta(
         friendly_name="Power Consumption (HMU)",
-        device_class="energy",
-        unit="kWh",
-        state_class="total_increasing",
+        device_class="power",
+        unit="W",
+        state_class="measurement",
     ),
     "hmu.BuildingCircuitFlow": RegisterMeta(
         friendly_name="Building Circuit Flow",
