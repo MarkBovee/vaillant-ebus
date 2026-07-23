@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.5b3 - 2026-07-23
+
+- Fix PowerConsumptionHmu decode error (CSV defines IGN:1+EXP for 1-byte
+  response; override with define -r as UCH+W).
+- Translate compressor numeric status codes to human-readable labels.
+- Disable 3 unsupported registers (RunDataLowPressure, HcStorageTempBottom,
+  HcStorageTempTop) to suppress repeated fallback warnings.
+- Skip disabled REGISTER_MAP entries in fallback read loop.
+
 ## 1.0.4 - 2026-07-22
 
 - Extend stale-value fix to all compressor-dependent registers: speed,
