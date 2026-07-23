@@ -197,14 +197,14 @@ HACS `zip_release` mode verwacht deze structuur — zonder prefix kan HACS de in
 ```yaml
 - name: Build release zip
   run: |
-    git archive --format=zip --prefix=custom_components/vaillant_ebus/ \
-      HEAD custom_components/vaillant_ebus > /tmp/vaillant_ebus.zip
+    git archive --format=tar HEAD custom_components/vaillant_ebus | tar xf - -C /tmp
+    cd /tmp && zip -qr /tmp/vaillant_ebus.zip custom_components/vaillant_ebus
+    rm -rf /tmp/custom_components
 ```
 
-**Verkeerd (NIET doen — geen prefix → HACS ziet niks):**
-```yaml
-git archive --format=tar ... | tar xf - ... && zip -qr ... .  # ❌ GEEN PREFIX
-```
+**Verkeerd (NIET doen):**
+- `git archive --prefix` met path filter: geeft dubbele nesting ❌
+- `zip .` zonder prefix: HACS vindt niks ❌
 
 **Verifiëren na build:**
 ```bash

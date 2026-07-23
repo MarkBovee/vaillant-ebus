@@ -60,8 +60,9 @@ jobs:
 
       - name: Build release zip
         run: |
-          git archive --format=zip --prefix=custom_components/vaillant_ebus/ \
-            HEAD custom_components/vaillant_ebus > /tmp/vaillant_ebus.zip
+          git archive --format=tar HEAD custom_components/vaillant_ebus | tar xf - -C /tmp
+          cd /tmp && zip -qr /tmp/vaillant_ebus.zip custom_components/vaillant_ebus
+          rm -rf /tmp/custom_components
 
       - name: Extract changelog entry
         run: |
