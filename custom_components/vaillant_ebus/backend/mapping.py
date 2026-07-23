@@ -45,6 +45,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Low Pressure",
         device_class="pressure",
         unit="bar",
+        enabled=False,
     ),
     "hmu.RunDataCompressorInletTemp": RegisterMeta(
         friendly_name="Compressor Inlet Temperature",
@@ -251,9 +252,9 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     ),
     "hmu.PowerConsumptionHmu": RegisterMeta(
         friendly_name="Power Consumption (HMU)",
-        device_class="energy",
-        unit="kWh",
-        state_class="total_increasing",
+        device_class="power",
+        unit="W",
+        state_class="measurement",
     ),
     "hmu.BuildingCircuitFlow": RegisterMeta(
         friendly_name="Building Circuit Flow",
@@ -769,11 +770,13 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Heating Storage Temp (Bottom)",
         device_class="temperature",
         unit="°C",
+        enabled=False,
     ),
     "ctlv2.HcStorageTempTop": RegisterMeta(
         friendly_name="Heating Storage Temp (Top)",
         device_class="temperature",
         unit="°C",
+        enabled=False,
     ),
     "ctlv2.HydraulicScheme": RegisterMeta(
         friendly_name="Hydraulic Scheme",

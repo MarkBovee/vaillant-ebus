@@ -75,6 +75,29 @@ class EbusdRegister:
         return f"{self.circuit}.{self.name}"
 
 
+# String statuses that explicitly indicate the compressor is NOT idle.
+_COMPRESSOR_ACTIVE_STATUS_STRINGS: set[str] = {
+    "hwc_compressor_active",
+    "heat_compressor_active",
+    "cooling_compressor_active",
+    "defrost",
+}
+
+# String statuses that explicitly indicate the compressor IS idle.
+_COMPRESSOR_IDLE_STATUS_STRINGS: set[str] = {
+    "standby",
+}
+
+# Map ebusd compressor status strings to human-readable labels.
+COMPRESSOR_STATUS_LABELS: dict[str, str] = {
+    "standby": "Standby",
+    "hwc_compressor_active": "Active (DHW)",
+    "heat_compressor_active": "Active (Heating)",
+    "cooling_compressor_active": "Active (Cooling)",
+    "heat_compressor_shutdown": "Shutdown (Heating)",
+    "defrost": "Defrost",
+}
+
 # Return whether current compressor state explicitly indicates idle.
 def compressor_is_idle(registers: Mapping[str, EbusdRegister]) -> bool:
     status = registers.get("hmu.RunDataStatuscode")
@@ -83,7 +106,13 @@ def compressor_is_idle(registers: Mapping[str, EbusdRegister]) -> bool:
         try:
             status_code = int(raw_status)
         except (TypeError, ValueError):
-            status_code = None
+            if raw_status in _COMPRESSOR_ACTIVE_STATUS_STRINGS:
+                return False
+            if raw_status in _COMPRESSOR_IDLE_STATUS_STRINGS:
+                return True
+            # Unknown string: don't assume idle
+            return False
+
         if status_code in COMPRESSOR_ACTIVE_STATUS_CODES:
             return False
         if status_code in COMPRESSOR_STATUS_CODES:

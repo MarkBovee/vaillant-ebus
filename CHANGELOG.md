@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.5 - 2026-07-23
+
+- Fix compressor idle detection with string status codes (Standby,
+  hwc_compressor_active, etc.) — use explicit string matching instead
+  of int() to prevent compressor misclassification.
+- Translate numeric compressor status codes to human-readable labels
+  (Standby, Heating: Compressor active, etc.).
+- Fix PowerConsumptionHmu decode error: override faulty CSV definition
+  (IGN:1+EXP on 1-byte response) with define -r as UCH+W.
+- Disable 3 unsupported registers (RunDataLowPressure, HcStorageTempBottom,
+  HcStorageTempTop) to suppress repeated fallback warnings.
+- Skip disabled REGISTER_MAP entries in fallback read loop.
+
 ## 1.0.4 - 2026-07-22
 
 - Extend stale-value fix to all compressor-dependent registers: speed,

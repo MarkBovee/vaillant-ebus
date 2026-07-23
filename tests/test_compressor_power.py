@@ -75,3 +75,29 @@ def test_zero_idle_registers_skips_when_compressor_active() -> None:
     ])
     zero_idle_registers(regs)
     assert regs["hmu.CurrentConsumedPower"].value["value"] == "2.7"
+
+
+def test_compressor_is_idle_string_status_standby() -> None:
+    regs = dict([
+        _register("hmu.RunDataStatuscode", "standby"),
+        _register("hmu.RunDataCompressorSpeed", "4500"),
+    ])
+    assert compressor_is_idle(regs)
+
+
+def test_compressor_is_idle_string_status_hwc_active() -> None:
+    regs = dict([
+        _register("hmu.RunDataStatuscode", "hwc_compressor_active"),
+        _register("hmu.RunDataCompressorSpeed", "0"),
+    ])
+    assert not compressor_is_idle(regs)
+
+
+def test_zero_idle_registers_skips_on_hwc_active_string() -> None:
+    regs = dict([
+        _register("hmu.CurrentConsumedPower", "1.8"),
+        _register("hmu.RunDataStatuscode", "hwc_compressor_active"),
+        _register("hmu.RunDataCompressorSpeed", "0"),
+    ])
+    zero_idle_registers(regs)
+    assert regs["hmu.CurrentConsumedPower"].value["value"] == "1.8"
