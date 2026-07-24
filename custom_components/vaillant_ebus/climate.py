@@ -156,6 +156,10 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             HVACMode.AUTO: "auto",
         }
         await self._write("Z1OpMode", values[hvac_mode])
+        if hvac_mode == HVACMode.COOL:
+            await self._write("Z1CoolingTemp", str(self.target_temperature or 20))
+        elif hvac_mode == HVACMode.HEAT:
+            await self._write("Z1CoolingTemp", "0")
 
     # Write day/night preset mode to ebusd
     async def async_set_preset_mode(self, preset_mode: str) -> None:

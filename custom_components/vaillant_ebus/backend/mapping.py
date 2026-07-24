@@ -803,6 +803,12 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Zone Cooling Temperature",
         device_class="temperature",
         unit="°C",
+        writable=True,
+        min_value=17,
+        max_value=30,
+        step=0.5,
+        entity_type="number",
+        entity_category="config",
     ),
     "ctlv2.Z1HolidayStartPeriod": RegisterMeta(
         friendly_name="Holiday Start",
