@@ -18,15 +18,17 @@ A **1-on-1 replacement for the mypyllant API integration** — climate entities 
 flowchart LR
     HP[Vaillant Heat Pump<br/>eBUS two-wire]
     C6[C6 eBUS Adapter<br/>TCP enhanced mode<br/>192.168.x.x:9999]
-    E[ebusd Addon<br/>TCP API :8888]
+    E[ebusd Addon<br/>:8888]
     I[Vaillant eBUS Integration<br/>in Home Assistant]
 
     HP --- C6
-    C6 -- TCP --> E
-    E -- TCP localhost:8888 --> I
+    C6 -- eBUS data over TCP --> E
+    E -- localhost:8888 --> I
 ```
 
-The C6 adapter converts the heat pump eBUS to TCP. ebusd handles the eBUS protocol decoding. The integration connects to ebusd only — it never talks to the C6 adapter directly.
+The C6 adapter converts the eBUS two-wire signal to TCP. ebusd runs as a Home Assistant addon and decodes the eBUS data. The integration connects to ebusd (inside Home Assistant, port 8888) — it never connects to the C6 adapter directly.
+
+**Important:** When adding the integration, point it to **Home Assistant's own address** (or `localhost`), not the C6 adapter's IP. Port is always `8888` (ebusd's TCP API), never `9999` (C6 adapter port).
 
 ## Features
 
@@ -127,8 +129,11 @@ If you see `ERR: element not found` for some registers, that is normal — your 
 
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **"Vaillant eBUS"**
-3. The integration tries to discover ebusd automatically. If it succeeds, no further input is needed.
-4. If auto-discovery fails, enter the ebusd host and port manually (default: `localhost:8888`).
+3. The integration tries to discover ebusd automatically on `localhost` and `homeassistant.local`. If it succeeds, no further input is needed.
+4. If auto-discovery fails, enter the ebusd host and port manually:
+   - **Host**: Home Assistant's own IP address (or `localhost`)
+   - **Port**: `8888` (ebusd TCP API, not the C6 adapter port)
+   - Do **not** enter the C6 adapter's IP. The integration talks to ebusd inside HA, not to the adapter.
 5. Devices appear within 30 seconds.
 
 ### Expected devices
