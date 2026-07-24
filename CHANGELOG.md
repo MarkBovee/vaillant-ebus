@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.8 - 2026-07-24
+
+- Hide vwz and general circuits (no useful single-zone data)
+- Hide broadcast registers: id, idanswer, load, signoflife
+- Hide single-zone system: hc2, hc3, z2, z3 prefixes
+- Hide installer, maintenance, and keycode registers
+- Disable empty-value registers by default (`enabled_by_default=False`)
+- Keep known REGISTER_MAP entries always enabled even when empty
+- All 5 entity platforms pass `desc.enabled_by_default` to HA
+- Fix CI zip build: remove `custom_components/vaillant_ebus/` prefix
+- Update AGENTS.md with entity filtering docs and test workflow
+
 ## 1.0.7 - 2026-07-23
 
 - Fix CI release zip: missing `custom_components/vaillant_ebus/` prefix
