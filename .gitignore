@@ -19,6 +19,8 @@ htmlcov/
 tests/fixtures/capture_*.jsonl
 home-assistant.log
 openspec/
+.openspec/
+.opencode/
 captures/
 /scripts/
 strings.json
