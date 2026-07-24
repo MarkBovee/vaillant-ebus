@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.9 - 2026-07-24
+
+- Auto-detect active secondary zones (hc2/hc3/z2/z3) instead of hardcoded filter
+  — enables entities when multi-zone system registers report data
+- Fix HA 2026.7.3 strict sensor validation: return `None` for non-numeric
+  strings when `native_unit_of_measurement` is set
+- Safe `getattr` access for optional HA entity attributes in `native_value`
+- Match secondary zone registers by name suffix (`PumpStatus_hc2`) and prefix
+  (`hc2FlowTemp`) in addition to circuit name
+- Remove dead `pass` block in `_classify_register`
+
 ## 1.0.8 - 2026-07-24
 
 - Hide vwz and general circuits (no useful single-zone data)
