@@ -52,6 +52,9 @@ def _is_hidden_register(
         return True
     if circuit in SECONDARY_ZONE_CIRCUITS and not (active_zone_circuits and circuit in active_zone_circuits):
         return True
+    for suffix in SECONDARY_ZONE_CIRCUITS:
+        if name.endswith(f"_{suffix}") and not (active_zone_circuits and suffix in active_zone_circuits):
+            return True
     return False
 
 
