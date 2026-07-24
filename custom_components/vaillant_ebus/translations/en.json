@@ -11,12 +11,20 @@
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to ebusd",
+      "cannot_connect": "Cannot reach ebusd at {host}:{port}",
+      "no_bus_signal": "Connected to ebusd but no eBUS signal detected. Check the adapter connection to the heat pump.",
+      "no_vaillant_device": "ebusd running but no Vaillant device found on the bus.",
       "unknown": "Unexpected error"
     },
     "abort": {
       "cannot_connect": "Cannot connect to ebusd",
       "unknown": "Unexpected error"
+    }
+  },
+  "issues": {
+    "ebusd_unreachable": {
+      "title": "ebusd is unreachable",
+      "description": "The integration cannot reach the ebusd daemon. Ensure ebusd is running and restart Home Assistant to retry."
     }
   }
 }

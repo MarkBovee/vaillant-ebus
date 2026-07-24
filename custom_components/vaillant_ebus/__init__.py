@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
+from . import repairs  # noqa: F401 — registers issue translation keys
 from .const import DOMAIN, PLATFORMS
 from .coordinator import VaillantCoordinator
 

@@ -12,6 +12,22 @@ Reads & writes 350+ eBUS registers from your heat pump, heating controller, and 
 
 A **1-on-1 replacement for the mypyllant API integration** — climate entities (quick veto, away mode via calendar), water_heater entities (DHW boost, temp control), room humidity, and all sensors, fully local without cloud dependency.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    HP[Vaillant Heat Pump<br/>eBUS two-wire]
+    C6[C6 eBUS Adapter<br/>TCP enhanced mode<br/>192.168.x.x:9999]
+    E[ebusd Addon<br/>TCP API :8888]
+    I[Vaillant eBUS Integration<br/>in Home Assistant]
+
+    HP --- C6
+    C6 -- TCP --> E
+    E -- TCP localhost:8888 --> I
+```
+
+The C6 adapter converts the heat pump eBUS to TCP. ebusd handles the eBUS protocol decoding. The integration connects to ebusd only — it never talks to the C6 adapter directly.
+
 ## Features
 
 - Drop-in replacement for mypyllant API integration — same entities, no cloud
@@ -28,25 +44,25 @@ A **1-on-1 replacement for the mypyllant API integration** — climate entities 
 ## Prerequisites
 
 - Home Assistant 2025.1+
-- **ebusd** — eBUS daemon, installed and running ([upstream](https://github.com/john30/ebusd))
-- Vaillant heat pump with eBUS adapter
-
-> This integration is a **client for ebusd**. You need ebusd running before adding this integration.
-
-### eBUS adapter
-
-The heat pump communicates over a two-wire eBUS. You need an adapter to connect it to your network:
-
-- **Network adapter (recommended):** C6 eBUS adapter running in **TCP enhanced** mode. The adapter connects to your WiFi/Ethernet network, receives its own IP address, and is used by ebusd via `ens:<ip>:9999`. Example: `ens:192.168.86.24:9999`
-- **Serial adapter:** USB-to-eBUS or serial adapter connected directly to the Home Assistant server. Address format: `/dev/ttyUSB0`
+- C6 eBUS adapter connected to your Vaillant heat pump
+- ebusd running as HA addon
 
 Known compatible heat pumps: aroTHERM, aroTHERM plus, VWL series. Other Vaillant models with eBUS should work too — the integration auto-discovers whatever registers the heat pump exposes.
 
-## Step 1: Install ebusd
+## Step 1: Configure the C6 eBUS adapter
 
-ebusd is available as an HA addon or standalone. The addon is the easiest route.
+The C6 adapter bridges your heat pump's eBUS to your LAN.
 
-### HA addon (recommended)
+1. Connect the C6 adapter to a PC using **USB-C**.
+2. Configure the adapter:
+   - Set it to **WiFi mode** and connect it to your home network.
+   - Assign a **fixed IP address** in your router (DHCP reservation).
+3. Disconnect from PC and connect the C6 adapter to the **Vaillant heat pump**.
+4. Switch the adapter to **TCP enhanced mode**.
+
+The adapter is ready when it has a fixed IP on your LAN (e.g. `192.168.86.24`).
+
+## Step 2: Install ebusd
 
 1. Go to **Settings → Add-ons → Add-on store**
 2. Click the **three-dot menu → Repositories**, add: `https://github.com/LukasGrebe/ha-addons/` (HA wrapper for [john30/ebusd](https://github.com/john30/ebusd))
@@ -54,7 +70,7 @@ ebusd is available as an HA addon or standalone. The addon is the easiest route.
 4. Go to **Configuration** and set:
 
 ```yaml
-network_device: ens:192.168.x.x:9999
+network_device: ens:192.168.86.24
 seed_mqtt_cfg: false
 commandline_options:
   - "--accesslevel=*"
@@ -62,9 +78,11 @@ commandline_options:
   - "--enabledefine"
 ```
 
+Replace `192.168.86.24` with your C6 adapter's fixed IP.
+
 | Setting | Purpose |
 |---------|---------|
-| `network_device` | Your eBUS adapter: `ens:<ip>:<port>` for network adapters, or `/dev/ttyUSB0` for serial |
+| `network_device` | C6 adapter in TCP enhanced mode: `ens:<ip>:<port>` |
 | `seed_mqtt_cfg: false` | Disable MQTT — not needed |
 | `--accesslevel=*` | Full read/write access to all registers |
 | `--port=8888` | Raw TCP command port — this integration connects to this |
@@ -73,19 +91,24 @@ commandline_options:
 Do **not** add `--mqttjson`, `--mqttint`, or `--configpath`.
 
 5. **Start** the addon and wait until it shows **"running"** in the addon dashboard
-6. Verify: open the addon log — you should see no errors. If you see `ERR: element not found` for some registers, that is normal — your hardware just doesn't support them.
+6. **Verify** — open the addon log. You should see:
 
-### Standalone
+```
+ebusd 26.1.26.1 started with broadcast scan on device:
+192.168.86.24, TCP, enhanced
 
-If ebusd runs on a separate machine or bare-metal:
-
-```bash
-ebusd --device=ens:192.168.1.100:9999 --port=8888 --accesslevel=* --enabledefine
+bus started with own address 31/36
+signal acquired
 ```
 
-> Replace `192.168.1.100:9999` with your eBUS adapter's actual IP and port.
+This confirms ebusd is talking to the C6 adapter and has acquired the eBUS signal.
 
-## Step 2: Install this integration
+If you see `ERR: element not found` for some registers, that is normal — your hardware just doesn't support them. If you see **no signal acquired**, check:
+- The C6 adapter is powered and connected to the heat pump.
+- The C6 adapter is in TCP enhanced mode.
+- The IP and port in `network_device` are correct.
+
+## Step 3: Install this integration
 
 ### HACS (recommended)
 
@@ -100,13 +123,13 @@ ebusd --device=ens:192.168.1.100:9999 --port=8888 --accesslevel=* --enabledefine
 1. Copy `custom_components/vaillant_ebus/` to your HA `config/custom_components/vaillant_ebus/`
 2. Restart HA
 
-## Step 3: Add integration
+## Step 4: Add the integration
 
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **"Vaillant eBUS"**
-3. Enter your ebusd host and TCP port (default: `8888`)
-4. Submit — the integration connects and auto-discovers all registers
-5. Devices appear within 30 seconds
+3. The integration tries to discover ebusd automatically. If it succeeds, no further input is needed.
+4. If auto-discovery fails, enter the ebusd host and port manually (default: `localhost:8888`).
+5. Devices appear within 30 seconds.
 
 ### Expected devices
 

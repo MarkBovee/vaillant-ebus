@@ -21,3 +21,4 @@ home-assistant.log
 openspec/
 captures/
 /scripts/
+strings.json

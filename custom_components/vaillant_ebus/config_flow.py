@@ -14,60 +14,121 @@ from .const import (
     CONF_EBUSD_HOST,
     CONF_EBUSD_PORT,
     CONF_SCAN_INTERVAL,
-    DEFAULT_EBUSD_HOST,
     DEFAULT_EBUSD_POLL_INTERVAL,
     DEFAULT_EBUSD_PORT,
+    DISCOVERY_CANDIDATES,
+    DISCOVERY_PORT,
+    DISCOVERY_TIMEOUT,
     DOMAIN,
 )
 
+_DEFAULT_EBUSD_HOST = ""
+
 _LOGGER = logging.getLogger(__name__)
+
+# Attempt a TCP connect + info command against one ebusd candidate.
+# Returns (host, port, info_line) on success, None on failure.
+async def _probe_candidate(
+    host: str, port: int = DISCOVERY_PORT
+) -> tuple[str, int, str] | None:
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port),
+            timeout=DISCOVERY_TIMEOUT,
+        )
+        writer.write(b"i\n")
+        await writer.drain()
+        line = await asyncio.wait_for(reader.readline(), timeout=DISCOVERY_TIMEOUT)
+        writer.close()
+        await writer.wait_closed()
+        decoded = line.decode("utf-8").strip()
+        if decoded:
+            return host, port, decoded
+    except (OSError, TimeoutError, ConnectionError):
+        pass
+    return None
+
+# Validate ebusd info response: check signal and Vaillant presence.
+# Returns (error_key | None).
+def _validate_info(info: str) -> str | None:
+    if "signal acquired" not in info:
+        return "no_bus_signal"
+    if "Vaillant" not in info:
+        return "no_vaillant_device"
+    return None
 
 
 class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
-    # Handle user-initiated config flow for ebusd connection
+    # Try to discover ebusd automatically, fall back to manual form
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         if user_input is not None:
             host = str(user_input[CONF_EBUSD_HOST]).strip()
             port = int(user_input[CONF_EBUSD_PORT])
-            unique_id = f"ebusd_{host}:{port}"
-            await self.async_set_unique_id(unique_id)
-            self._abort_if_unique_id_configured()
-
-            try:
-                reader, writer = await asyncio.wait_for(
-                    asyncio.open_connection(host, port),
-                    timeout=5,
-                )
-                writer.write(b"i\n")
-                await writer.drain()
-                response = await asyncio.wait_for(reader.readline(), timeout=5)
-                writer.close()
-                await writer.wait_closed()
-                _LOGGER.info("ebusd connect OK: %s", response.decode().strip())
-            except Exception as exc:
-                _LOGGER.warning("ebusd connect failed: %s", exc)
+            info_line = await _probe_candidate(host, port)
+            if info_line is None:
                 return self.async_show_form(
                     step_id="user",
                     data_schema=_user_schema(user_input),
                     errors={"base": "cannot_connect"},
                 )
+            error = _validate_info(info_line[2])
+            if error:
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=_user_schema(user_input),
+                    errors={"base": error},
+                )
+            return self._create_entry(host, port, user_input)
 
-            return self.async_create_entry(
-                title="Vaillant eBUS (ebusd)",
-                data={
-                    CONF_EBUSD_HOST: host,
-                    CONF_EBUSD_PORT: port,
-                    CONF_SCAN_INTERVAL: user_input.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL),
-                },
-            )
+        result = await self._try_discover()
+        if result:
+            return result
 
         return self.async_show_form(
             step_id="user",
             data_schema=_user_schema(),
+        )
+
+    # Probe discovery candidates in order, return entry on first success
+    async def _try_discover(self) -> FlowResult | None:
+        for host in DISCOVERY_CANDIDATES:
+            _LOGGER.debug("Probing ebusd candidate: %s", host)
+            result = await _probe_candidate(host, DISCOVERY_PORT)
+            if result is None:
+                continue
+            found_host, found_port, info_line = result
+            error = _validate_info(info_line)
+            if error:
+                _LOGGER.warning("ebusd found at %s but %s: %s", found_host, error, info_line)
+                continue
+            _LOGGER.info("ebusd discovered at %s:%s — %s", found_host, found_port, info_line)
+            unique_id = f"ebusd_{found_host}:{found_port}"
+            await self.async_set_unique_id(unique_id)
+            self._abort_if_unique_id_configured()
+            return self._create_entry(found_host, found_port)
+
+        _LOGGER.info("No ebusd discovered on candidates: %s", DISCOVERY_CANDIDATES)
+        return None
+
+    # Build and return a config entry
+    def _create_entry(
+        self,
+        host: str,
+        port: int,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        return self.async_create_entry(
+            title="Vaillant eBUS (ebusd)",
+            data={
+                CONF_EBUSD_HOST: host,
+                CONF_EBUSD_PORT: port,
+                CONF_SCAN_INTERVAL: user_input.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL)
+                if user_input else DEFAULT_EBUSD_POLL_INTERVAL,
+            },
         )
 
     # Return the options flow handler for this config entry
@@ -105,7 +166,7 @@ def _user_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     return vol.Schema(
         {
-            vol.Required(CONF_EBUSD_HOST, default=defaults.get(CONF_EBUSD_HOST, DEFAULT_EBUSD_HOST)): str,
+            vol.Required(CONF_EBUSD_HOST, default=defaults.get(CONF_EBUSD_HOST, _DEFAULT_EBUSD_HOST)): str,
             vol.Required(CONF_EBUSD_PORT, default=defaults.get(CONF_EBUSD_PORT, DEFAULT_EBUSD_PORT)): int,
             vol.Optional(
                 CONF_SCAN_INTERVAL,
