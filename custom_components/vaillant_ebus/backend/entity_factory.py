@@ -8,6 +8,8 @@ from .mapping import REGISTER_MAP, RegisterMeta, get_meta
 from .models import EbusdRegister
 
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
+HIDDEN_CIRCUITS = {"vwz", "general"}
+HIDDEN_REGISTERS = {"hmu.FlowTemperature", "Broadcast.FlowTemp"}
 
 
 # Map circuit/name to logical device (hmu, dhw, z1)
@@ -26,9 +28,11 @@ def _infer_device_circuit(circuit: str, name: str) -> str | None:
 def _is_hidden_register(register: EbusdRegister) -> bool:
     circuit = register.circuit
     name = register.name.lower()
+    if f"{register.circuit}.{register.name}" in HIDDEN_REGISTERS:
+        return True
     if circuit.lower().startswith("scan"):
         return True
-    if circuit.lower() in ("memory",):
+    if circuit.lower() in ("memory",) or circuit.lower() in HIDDEN_CIRCUITS:
         return True
     if name.startswith(("cctimer_", "hwctimer_", "z1timer_", "z2timer_", "z3timer_")):
         return True
@@ -56,6 +60,7 @@ class EntityDescription:
         meta: RegisterMeta,
         register: EbusdRegister,
         raw_value: str | None = None,
+        enabled_by_default: bool = True,
     ) -> None:
         self.circuit = circuit
         self.name = name
@@ -63,6 +68,7 @@ class EntityDescription:
         self.meta = meta
         self.register = register
         self.raw_value = raw_value or ""
+        self.enabled_by_default = enabled_by_default
 
     @property
     def unique_id(self) -> str:
@@ -170,11 +176,14 @@ def generate_entity_descriptions(
                 merged_meta.entity_type = _classify_register(reg, field, raw)
 
             known_register = f"{reg.circuit}.{reg.name}" in REGISTER_MAP
+            empty_values = ("-", "no data stored", "empty", "")
+            entity_enabled = True
+            if raw in empty_values and not known_register:
+                entity_enabled = False
             if not reg.has_data and not known_register:
-                merged_meta.enabled = False
-
+                entity_enabled = False
             if not merged_meta.enabled:
-                continue
+                entity_enabled = False
 
             entity = EntityDescription(
                 circuit=reg.circuit,
@@ -183,12 +192,13 @@ def generate_entity_descriptions(
                 meta=merged_meta,
                 register=reg,
                 raw_value=raw,
+                enabled_by_default=entity_enabled,
             )
             entities.append(entity)
 
     discovered_keys = {f"{reg.circuit}.{reg.name}" for reg in registers}
     for map_key, meta in REGISTER_MAP.items():
-        if map_key in discovered_keys or map_key in seen:
+        if map_key in discovered_keys or map_key in seen or map_key in HIDDEN_REGISTERS:
             continue
         if map_key.count(".") != 1:
             continue

@@ -62,6 +62,17 @@ To update CSV set:
 - Some registers only readable when compressor is running (summer: many "no data stored")
 - Registers returning `ERR: element not found` despite CSV definition are not supported by the hardware — accept silently
 
+## Entity filtering
+
+- `_is_hidden_register()` in `entity_factory.py` filters registers by circuit/name:
+  - `HIDDEN_CIRCUITS = {"vwz", "general"}` — ventilation and general circuits hidden (no useful data on single-zone systems)
+  - `HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}` — uninteresting broadcast registers
+  - `hc2/hc3/z2/z3` prefixes — single-zone system assumption
+  - Various installer/maintenance registers hidden
+- Registers returning empty values (`"-"`, `"no data stored"`, `"empty"`) are created as **disabled by default** (`enabled_by_default=False` on `EntityDescription`)
+- Known registers in `REGISTER_MAP` are always enabled even if empty — they have known useful metadata
+- All 5 entity platforms (sensor, binary_sensor, number, select, switch) pass `desc.enabled_by_default` to HA via `_attr_entity_registry_enabled_default`
+
 ## Repository structure
 
 ### `custom_components/vaillant_ebus/`
@@ -140,7 +151,7 @@ Key details:
 
 ## Known limitations
 
-- Most heat pump registers show "no data stored" when compressor is idle (summer)
+- Most heat pump registers show "no data stored" when compressor is idle (summer) — these entities are disabled by default
 - Entity classification (sensor vs number vs select) needs YAML overrides for best results
 - Native unit inference for uncommon registers is incomplete
 
@@ -190,40 +201,79 @@ Niet meer gebruiken: `pre-release` branch (verwijderd). Alles op `main`.
 
 ### CRITICAL: zip structuur
 
-De zip MOET `custom_components/vaillant_ebus/` als prefix hebben in alle bestanden.  
-HACS `zip_release` mode verwacht deze structuur — zonder prefix kan HACS de integratie niet vinden.
+De zip mag GEEN `custom_components/vaillant_ebus/` prefix hebben.  
+HACS downloadt de zip en pakt uit naar `custom_components/vaillant_ebus/` — bestanden moeten direct in de zip root staan, niet in een submap.
 
 **Juiste build (CI step in `.github/workflows/ci.yml`):**
 ```yaml
 - name: Build release zip
   run: |
     git archive --format=tar HEAD custom_components/vaillant_ebus | tar xf - -C /tmp
-    cd /tmp && zip -qr /tmp/vaillant_ebus.zip custom_components/vaillant_ebus
+    cd /tmp/custom_components/vaillant_ebus && zip -qr /tmp/vaillant_ebus.zip .
     rm -rf /tmp/custom_components
 ```
 
 **Verkeerd (NIET doen):**
-- `git archive --prefix` met path filter: geeft dubbele nesting ❌
-- `zip .` zonder prefix: HACS vindt niks ❌
+- `zip -qr ... custom_components/vaillant_ebus` — geeft prefix, HACS vindt niks ❌
+- `git archive --prefix` met path filter — geeft double nesting ❌
 
 **Verifiëren na build:**
 ```bash
 unzip -l /tmp/vaillant_ebus.zip | head -5
-# Moet tonen: custom_components/vaillant_ebus/__init__.py
+# Moet tonen: __init__.py (direct in root, NIET in custom_components/ submap)
 ```
 
-**Herstellen van verkeerde zip:** verwijder oude asset, upload nieuwe met exact de naam `vaillant_ebus.zip`:
+**Herstellen van verkeerde zip:** verwijder oude asset, bouw correcte zip, upload:
+```bash
+# Verwijder corrupte asset
+gh release delete-asset vX.Y.Z vaillant_ebus.zip --yes
+
+# Bouw correcte zip (zip vanuit de subdirectory, geen prefix)
+cd $(mktemp -d)
+git archive --format=tar HEAD custom_components/vaillant_ebus | tar xf -
+cd custom_components/vaillant_ebus && zip -qr /tmp/vaillant_ebus.zip .
+rm -rf /tmp/custom_components
+
+# Upload met exact de naam vaillant_ebus.zip
+gh release upload vX.Y.Z /tmp/vaillant_ebus.zip --clobber
+
+# Verifieer
+unzip -l /tmp/vaillant_ebus.zip | head -5
+# Moet tonen: __init__.py (direct in root, NIET in submap!)
+```
+
+**Alternatief (geen `zip` tool, Python):**
 ```bash
 gh release delete-asset vX.Y.Z vaillant_ebus.zip --yes
-git archive --format=zip --prefix=custom_components/vaillant_ebus/ \
-  HEAD custom_components/vaillant_ebus > /tmp/vaillant_ebus.zip
+cd /tmp
+git archive --format=tar HEAD custom_components/vaillant_ebus | tar xf -
+cd custom_components/vaillant_ebus
+python3 -c "
+import zipfile, os
+with zipfile.ZipFile('/tmp/vaillant_ebus.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+    for root, dirs, files in os.walk('.'):
+        for fn in files:
+            fp = os.path.join(root, fn)
+            z.write(fp, os.path.relpath(fp, '.'))
+"
+cd /tmp && rm -rf custom_components
 gh release upload vX.Y.Z /tmp/vaillant_ebus.zip --clobber
 ```
 
 ### Release mislukt
 
-Delete + retag + push:
+**Let op:** als de CI al een (corrupte) zip heeft geüpload, overschrijft een hernieuwde CI-run de asset niet — `gh release create` faalt omdat de release al bestaat, en `gh release upload` zonder `--clobber` overschrijft niet. Eerst handmatig verwijderen of opnieuw taggen:
 
+**Optie A — asset vervangen (behoudt release + tag):**
+```bash
+# Verwijder corrupte asset
+gh release delete-asset vX.Y.Z vaillant_ebus.zip --yes
+
+# Bouw correcte zip (zie hierboven) en upload
+gh release upload vX.Y.Z /tmp/vaillant_ebus.zip --clobber
+```
+
+**Optie B — volledig opnieuw (verwijdert release + tag):**
 ```bash
 gh release delete vX.Y.Z --yes && git push --delete origin vX.Y.Z
 git tag -d vX.Y.Z && git tag vX.Y.Z && git push origin main --tags
@@ -235,6 +285,65 @@ Force-push alleen via `gh api repos/.../branches/main/protection --method DELETE
 HACS `zip_release` mode verwacht GitHub release met tag `vX.Y.Z` en asset `vaillant_ebus.zip`. `hacs.json` heeft `zip_release: true` en `hide_default_branch: true`.
 
 HA update via HACS: `HACS > integrations > Vaillant eBUS > download vX.Y.Z > herstart HA`.
+
+## Local test workflow (push branch to HA)
+
+Test een feature branch op de lokale HA installatie voordat je merged:
+
+```bash
+# 1. Valideer
+.venv/bin/ruff check . && .venv/bin/pytest -q && python3 -m compileall -f custom_components/vaillant_ebus/
+
+# 2. Bouw zip (zonder prefix, direct in root)
+cd /tmp && rm -rf custom_components && \
+git -C /pad/naar/vaillant-ebus archive --format=tar HEAD custom_components/vaillant_ebus | tar xf - && \
+cd custom_components/vaillant_ebus && \
+python3 -c "import zipfile, os; z=zipfile.ZipFile('/tmp/vaillant_ebus_branch.zip','w',zipfile.ZIP_DEFLATED);[z.write(os.path.join(r,f),os.path.relpath(os.path.join(r,f),'.')) for r,_,fs in os.walk('.') for f in fs]" && \
+cd /tmp && rm -rf custom_components
+
+# 3. Upload via SMB (credentials uit .env: HA_USER, HA_PASSWORD)
+HA_USER=$(grep HA_USER /pad/naar/vaillant-ebus/.env | cut -d= -f2-)
+HA_PASS=$(grep HA_PASSWORD /pad/naar/vaillant-ebus/.env | cut -d= -f2-)
+smbclient //HA_IP/CONFIG -U "${HA_USER}%${HA_PASS}" -c "put /tmp/vaillant_ebus_branch.zip vaillant_ebus_branch.zip"
+
+# 4. Unzip op HA (vervangt oude bestanden)
+PASS=$(grep HA_SSH_PASSWORD /pad/naar/vaillant-ebus/.env | cut -d= -f2-)
+ssh -o StrictHostKeyChecking=no "markbovee@HA_IP" \
+  "printf '%s\n' '$PASS' | sudo -S bash -c 'cd /config/custom_components/vaillant_ebus && rm -f *.py *.json *.yaml && rm -rf backend brand translations && unzip -o /config/vaillant_ebus_branch.zip && rm -f /config/vaillant_ebus_branch.zip'"
+
+# 5. HA herstarten
+TOKEN=$(ssh -o StrictHostKeyChecking=no "markbovee@HA_IP" "printf '%s\n' '$PASS' | sudo -S cat /run/s6/container_environment/SUPERVISOR_TOKEN")
+ssh -o StrictHostKeyChecking=no "markbovee@HA_IP" "curl -s -X POST http://supervisor/core/api/services/homeassistant/stop -H 'Authorization: Bearer $TOKEN'"
+sleep 10
+ssh -o StrictHostKeyChecking=no "markbovee@HA_IP" "curl -s -X POST http://supervisor/core/start -H 'Authorization: Bearer $TOKEN'"
+sleep 15
+
+# 6. Check of HA online is
+curl -s -o /dev/null -w '%{http_code}' http://HA_IP:8123/
+```
+
+### Device registry opschonen
+
+Als er stale apparaten of entities achterblijven na een update, stop HA en pas het registry bestand aan:
+
+```bash
+# Stop HA (zie stap 5), pas device_registry aan, start HA
+ssh -o StrictHostKeyChecking=no "markbovee@HA_IP" \
+  "printf '%s\n' '$PASS' | sudo -S python3 -c '
+import json
+with open(\"/config/.storage/core.device_registry\") as f:
+    d = json.load(f)
+d[\"data\"][\"devices\"] = [e for e in d[\"data\"][\"devices\"] if not any(
+    isinstance(t, list) and len(t) == 2 and t[0] == \"vaillant_ebus\" and t[1] in (\"vwz\", \"General\")
+    for t in e.get(\"identifiers\", [])
+)]
+with open(\"/config/.storage/core.device_registry\", \"w\") as f:
+    json.dump(d, f, indent=2)
+print(\"Cleaned up\")
+'"
+```
+
+Hetzelfde patroon werkt voor `core.entity_registry` (entires met `vaillant_ebus` in `platform` of `unique_id`).
 
 ## Important constraints
 

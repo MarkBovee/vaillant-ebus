@@ -56,6 +56,7 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         self._desc = desc
         self._attr_unique_id = unique_id
         self._attr_has_entity_name = True
+        self._attr_entity_registry_enabled_default = desc.enabled_by_default
         self._attr_device_info = coordinator.get_device_info(desc.device_circuit)
         self._attr_name = desc.meta.friendly_name or desc.name
         if desc.meta.icon:
