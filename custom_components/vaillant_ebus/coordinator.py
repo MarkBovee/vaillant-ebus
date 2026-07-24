@@ -90,7 +90,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.info("Generated %d entity descriptions", len(self.entities))
 
         await self._fallback_read()
-        _LOGGER.info("Coordinator startup complete")    # Define runtime registers (e.g. z1RoomHumidity) on ebusd
+        _LOGGER.info("Coordinator startup complete")
     async def _define_custom_registers(self) -> None:
         if not self.ebusd_backend:
             return
