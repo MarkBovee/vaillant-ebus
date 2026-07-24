@@ -52,7 +52,7 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
     _attr_has_entity_name = True
     _attr_name = "Domestic Hot Water"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_min_temp = 30
+    _attr_min_temp = 35
     _attr_max_temp = 70
     _attr_target_temperature_step = 1
     _attr_operation_list = OPERATION_MODES
