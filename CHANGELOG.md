@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.10-pre - 2026-07-24
+
+- Auto-discover ebusd in config flow: probe core-ebusd, localhost,
+  127.0.0.1, homeassistant.local — only show manual form if all fail
+- Validate ebusd info response: check eBUS signal + Vaillant device
+  presence with specific error messages
+- Repairs integration: create HA repair issue when ebusd is unreachable,
+  auto-dismiss on reconnect
+- Better startup logging: connect status, ebusd version, circuit scan
+- Add 127.0.0.1 to discovery candidates
+- Diagnostics: include circuit_names list
+- Update README with C6 adapter setup guide and architecture diagram
+- Improve secondary zone register matching (prefix and suffix)
+
 ## 1.0.9 - 2026-07-24
 
 - Auto-detect active secondary zones (hc2/hc3/z2/z3) instead of hardcoded filter
