@@ -80,6 +80,7 @@ _COMPRESSOR_ACTIVE_STATUS_STRINGS: set[str] = {
     "hwc_compressor_active",
     "heat_compressor_active",
     "cooling_compressor_active",
+    "cool_compressor_active",
     "defrost",
 }
 
@@ -94,6 +95,7 @@ COMPRESSOR_STATUS_LABELS: dict[str, str] = {
     "hwc_compressor_active": "Active (DHW)",
     "heat_compressor_active": "Active (Heating)",
     "cooling_compressor_active": "Active (Cooling)",
+    "cool_compressor_active": "Active (Cooling)",
     "heat_compressor_shutdown": "Shutdown (Heating)",
     "defrost": "Defrost",
 }
