@@ -23,6 +23,7 @@ OPERATION_MODE = f"{CIRCUIT}.Z1OpMode.value"
 DAY_TEMPERATURE = f"{CIRCUIT}.Z1DayTemp.value"
 NIGHT_TEMPERATURE = f"{CIRCUIT}.Z1NightTemp.value"
 PUMP_STATUS = f"{CIRCUIT}.Hc1PumpStatus.value"
+COMPRESSOR_STATUS = "hmu.RunDataStatuscode.value"
 
 
 # Get string value from coordinator data by key
@@ -39,8 +40,16 @@ def _float(value: str | None) -> float | None:
         return None
 
 
+# Check if coordinator data indicates cooling is active
+def _is_cooling(coordinator: VaillantCoordinator) -> bool:
+    status = _value(coordinator, COMPRESSOR_STATUS)
+    return status is not None and "Cooling" in status
+
+
 # Map Vaillant operation mode to HA HVACMode
-def _hvac_mode(value: str | None) -> HVACMode | None:
+def _hvac_mode(value: str | None, coordinator: VaillantCoordinator | None = None) -> HVACMode | None:
+    if coordinator is not None and _is_cooling(coordinator):
+        return HVACMode.COOL
     return {
         "off": HVACMode.OFF,
         "auto": HVACMode.AUTO,
@@ -64,7 +73,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     _attr_has_entity_name = True
     _attr_name = "Home"
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO]
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO]
     _attr_preset_modes = ["day", "night"]
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = 5
@@ -108,11 +117,13 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode | None:
         # Return current HVAC mode from operation register
-        return _hvac_mode(_value(self.coordinator, OPERATION_MODE))
+        return _hvac_mode(_value(self.coordinator, OPERATION_MODE), self.coordinator)
 
     @property
     def hvac_action(self) -> HVACAction | None:
-        # Return HEATING when pump is on, IDLE otherwise
+        # Return COOLING, HEATING, or IDLE based on compressor and pump state
+        if _is_cooling(self.coordinator):
+            return HVACAction.COOLING
         value = (_value(self.coordinator, PUMP_STATUS) or "").lower()
         if value in {"on", "1", "true"}:
             return HVACAction.HEATING
@@ -136,11 +147,12 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             name = "Z1NightTemp" if self.preset_mode == "night" else "Z1DayTemp"
             await self._write(name, str(value))
 
-    # Write HVAC mode (off/heat/auto) to ebusd
+    # Write HVAC mode (off/heat/cool/auto) to ebusd
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         values = {
             HVACMode.OFF: "off",
             HVACMode.HEAT: "day",
+            HVACMode.COOL: "auto",
             HVACMode.AUTO: "auto",
         }
         await self._write("Z1OpMode", values[hvac_mode])
