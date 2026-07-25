@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.climate import ClimateEntity, ClimateEntityFeature
@@ -14,6 +15,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 ZONE = "z1"
 CIRCUIT = "ctlv2"
@@ -185,13 +188,20 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Write HVAC mode to ebusd via SetMode (cooling) and Z1OpMode (heating)
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
+        _LOGGER.warning(
+            "async_set_hvac_mode: %s (backend=%s)", hvac_mode,
+            self.coordinator.ebusd_backend is not None,
+        )
         self._optimistic_hvac_mode = hvac_mode
         self.async_write_ha_state()
         try:
             if hvac_mode == HVACMode.COOL:
-                temp = str(_float(_value(self.coordinator, MIN_COOLING_TEMP)) or 17)
+                raw_val = _value(self.coordinator, MIN_COOLING_TEMP)
+                temp = str(_float(raw_val) or 17)
+                _LOGGER.warning("COOL write: raw=%s temp=%s", raw_val, temp)
                 await self._write_raw("hmu", "SetMode", f"auto;{temp};-;-;1;1;1;0;0;1")
             elif hvac_mode == HVACMode.HEAT:
+                _LOGGER.warning("HEAT write: SetMode disable + Z1OpMode auto")
                 await self._write_raw("hmu", "SetMode", "auto;0.0;-;-;1;1;1;0;0;0")
                 await self._write("Z1OpMode", "auto")
             elif hvac_mode == HVACMode.AUTO:
@@ -216,7 +226,11 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # Write any circuit register and trigger refresh
     async def _write_raw(self, circuit: str, name: str, value: str) -> None:
         backend = self.coordinator.ebusd_backend
-        if backend:
-            result = await backend.async_write(circuit, name, value)
-            if result.success:
-                await self.coordinator.async_request_refresh()
+        if not backend:
+            _LOGGER.warning("_write_raw: backend is None, cannot write %s.%s=%s", circuit, name, value)
+            return
+        _LOGGER.warning("_write_raw: writing %s.%s=%s", circuit, name, value)
+        result = await backend.async_write(circuit, name, value)
+        _LOGGER.warning("_write_raw: result success=%s verified=%s", result.success, result.verified_value)
+        if result.success:
+            await self.coordinator.async_request_refresh()
