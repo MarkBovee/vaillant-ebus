@@ -24,6 +24,7 @@ DAY_TEMPERATURE = f"{CIRCUIT}.Z1DayTemp.value"
 NIGHT_TEMPERATURE = f"{CIRCUIT}.Z1NightTemp.value"
 PUMP_STATUS = f"{CIRCUIT}.Hc1PumpStatus.value"
 COMPRESSOR_STATUS = "hmu.RunDataStatuscode.value"
+COOLING_TEMP = f"{CIRCUIT}.Z1CoolingTemp.value"
 
 
 # Get string value from coordinator data by key
@@ -40,10 +41,13 @@ def _float(value: str | None) -> float | None:
         return None
 
 
-# Check if coordinator data indicates cooling is active
+# Check if coordinator data indicates cooling is configured or active
 def _is_cooling(coordinator: VaillantCoordinator) -> bool:
     status = _value(coordinator, COMPRESSOR_STATUS)
-    return status is not None and "Cooling" in status
+    if status is not None and "Cooling" in status:
+        return True
+    cooling_temp = _float(_value(coordinator, COOLING_TEMP))
+    return cooling_temp is not None and cooling_temp > 0
 
 
 # Map Vaillant operation mode to HA HVACMode
