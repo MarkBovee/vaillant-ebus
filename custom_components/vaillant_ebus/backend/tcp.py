@@ -168,7 +168,7 @@ class EbusdTcpBackend:
         response = await self.async_send_raw(cmd)
         if response.startswith(ERR_PREFIX):
             return WriteResult(success=False, error_message=response)
-        if response.strip() == DONE_STR:
+        if response.strip() in (DONE_STR, ""):
             verified = await self.async_read(circuit, name)
             return WriteResult(success=True, verified_value=verified)
         return WriteResult(success=False, error_message=f"Unexpected response: {response}")
