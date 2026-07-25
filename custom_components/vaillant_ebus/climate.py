@@ -188,30 +188,27 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Write HVAC mode to ebusd via SetMode (cooling) and Z1OpMode (heating)
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        _LOGGER.warning(
-            "async_set_hvac_mode: %s (backend=%s)", hvac_mode,
-            self.coordinator.ebusd_backend is not None,
-        )
         self._optimistic_hvac_mode = hvac_mode
         self.async_write_ha_state()
+        ok = True
         try:
             if hvac_mode == HVACMode.COOL:
-                raw_val = _value(self.coordinator, MIN_COOLING_TEMP)
-                temp = str(_float(raw_val) or 17)
-                _LOGGER.warning("COOL write: raw=%s temp=%s", raw_val, temp)
-                await self._write_raw("hmu", "SetMode", f"auto;{temp};-;-;1;1;1;0;0;1")
+                temp = str(_float(_value(self.coordinator, MIN_COOLING_TEMP)) or 17)
+                ok = await self._write_raw("hmu", "SetMode", f"auto;{temp};-;-;1;1;1;0;0;1")
             elif hvac_mode == HVACMode.HEAT:
-                _LOGGER.warning("HEAT write: SetMode disable + Z1OpMode auto")
-                await self._write_raw("hmu", "SetMode", "auto;0.0;-;-;1;1;1;0;0;0")
-                await self._write("Z1OpMode", "auto")
+                ok1 = await self._write_raw("hmu", "SetMode", "auto;0.0;-;-;1;1;1;0;0;0")
+                ok2 = await self._write("Z1OpMode", "auto")
+                ok = ok1 and ok2
             elif hvac_mode == HVACMode.AUTO:
-                await self._write("Z1OpMode", "auto")
+                ok = await self._write("Z1OpMode", "auto")
             elif hvac_mode == HVACMode.OFF:
-                await self._write("Z1OpMode", "off")
-        except Exception:
+                ok = await self._write("Z1OpMode", "off")
+        except Exception as exc:
+            _LOGGER.exception("set_hvac_mode failed: %s", exc)
+            ok = False
+        if not ok:
             self._optimistic_hvac_mode = None
             self.async_write_ha_state()
-            raise
 
     # Write day/night preset mode to ebusd
     async def async_set_preset_mode(self, preset_mode: str) -> None:
@@ -220,17 +217,15 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         await self._write("Z1OpMode", preset_mode)
 
     # Write a CTLV2 register value and trigger refresh
-    async def _write(self, name: str, value: str) -> None:
-        await self._write_raw(CIRCUIT, name, value)
+    async def _write(self, name: str, value: str) -> bool:
+        return await self._write_raw(CIRCUIT, name, value)
 
     # Write any circuit register and trigger refresh
-    async def _write_raw(self, circuit: str, name: str, value: str) -> None:
+    async def _write_raw(self, circuit: str, name: str, value: str) -> bool:
         backend = self.coordinator.ebusd_backend
         if not backend:
-            _LOGGER.warning("_write_raw: backend is None, cannot write %s.%s=%s", circuit, name, value)
-            return
-        _LOGGER.warning("_write_raw: writing %s.%s=%s", circuit, name, value)
+            return False
         result = await backend.async_write(circuit, name, value)
-        _LOGGER.warning("_write_raw: result success=%s verified=%s", result.success, result.verified_value)
         if result.success:
             await self.coordinator.async_request_refresh()
+        return result.success
