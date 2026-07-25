@@ -103,6 +103,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_climate_z1"
         self._attr_device_info = coordinator.get_device_info(ZONE)
+        self._optimistic_hvac_mode: HVACMode | None = None
 
     @property
     def current_temperature(self) -> float | None:
@@ -136,7 +137,9 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     @property
     def hvac_mode(self) -> HVACMode | None:
-        # Return current HVAC mode from operation register
+        # Return optimistic state first, then fall back to coordinator data
+        if self._optimistic_hvac_mode is not None:
+            return self._optimistic_hvac_mode
         return _hvac_mode(_value(self.coordinator, OPERATION_MODE), self.coordinator)
 
     @property
@@ -170,18 +173,34 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
                 name = "Z1NightTemp" if self.preset_mode == "night" else "Z1DayTemp"
                 await self._write(name, str(value))
 
+    # Override coordinator update to preserve optimistic state until confirmed
+    def _handle_coordinator_update(self) -> None:
+        # Reconcile optimistic state with fresh coordinator data
+        if self._optimistic_hvac_mode is not None:
+            confirmed = _hvac_mode(_value(self.coordinator, OPERATION_MODE), self.coordinator)
+            if confirmed == self._optimistic_hvac_mode:
+                self._optimistic_hvac_mode = None
+        super()._handle_coordinator_update()
+
     # Write HVAC mode to ebusd via SetMode (cooling) and Z1OpMode (heating)
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        if hvac_mode == HVACMode.COOL:
-            temp = str(_float(_value(self.coordinator, COOLING_TARGET)) or 20)
-            await self._write_raw("hmu", "SetMode", f"auto;{temp};-;-;1;1;1;0;0;1")
-        elif hvac_mode == HVACMode.HEAT:
-            await self._write_raw("hmu", "SetMode", "auto;0.0;-;-;1;1;1;0;0;0")
-            await self._write("Z1OpMode", "day")
-        elif hvac_mode == HVACMode.AUTO:
-            await self._write("Z1OpMode", "auto")
-        elif hvac_mode == HVACMode.OFF:
-            await self._write("Z1OpMode", "off")
+        self._optimistic_hvac_mode = hvac_mode
+        self.async_write_ha_state()
+        try:
+            if hvac_mode == HVACMode.COOL:
+                temp = str(_float(_value(self.coordinator, COOLING_TARGET)) or 20)
+                await self._write_raw("hmu", "SetMode", f"auto;{temp};-;-;1;1;1;0;0;1")
+            elif hvac_mode == HVACMode.HEAT:
+                await self._write_raw("hmu", "SetMode", "auto;0.0;-;-;1;1;1;0;0;0")
+                await self._write("Z1OpMode", "day")
+            elif hvac_mode == HVACMode.AUTO:
+                await self._write("Z1OpMode", "auto")
+            elif hvac_mode == HVACMode.OFF:
+                await self._write("Z1OpMode", "off")
+        except Exception:
+            self._optimistic_hvac_mode = None
+            self.async_write_ha_state()
+            raise
 
     # Write day/night preset mode to ebusd
     async def async_set_preset_mode(self, preset_mode: str) -> None:
