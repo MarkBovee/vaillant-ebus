@@ -94,21 +94,22 @@ class EbusdTcpBackend:
     # timeout instead of one long FIND_TIMEOUT to avoid blocking the
     # coordinator poll cycle. Bump FIND_TIMEOUT if lines arrive slowly.
     async def _send_find(self) -> list[str]:
-        if not self._writer or not self._reader:
-            raise ConnectionError("Not connected")
-        command = "f\n"
-        self._writer.write(command.encode("utf-8"))
-        await self._writer.drain()
-        lines: list[str] = []
-        while True:
-            try:
-                line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
-                decoded = line.decode("utf-8").rstrip("\n\r")
-                if not decoded:
+        async with self._lock:
+            if not self._writer or not self._reader:
+                raise ConnectionError("Not connected")
+            command = "f\n"
+            self._writer.write(command.encode("utf-8"))
+            await self._writer.drain()
+            lines: list[str] = []
+            while True:
+                try:
+                    line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
+                    decoded = line.decode("utf-8").rstrip("\n\r")
+                    if not decoded:
+                        break
+                    lines.append(decoded)
+                except TimeoutError:
                     break
-                lines.append(decoded)
-            except TimeoutError:
-                break
         return lines
 
     # Discover all registers from ebusd via find command
