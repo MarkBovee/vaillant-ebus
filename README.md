@@ -180,6 +180,20 @@ HACS notifies you when a new release is available. To update:
 
 See [docs/troubleshooting.md](docs/troubleshooting.md).
 
+## Community & support
+
+[GitHub Discussions](https://github.com/MarkBovee/vaillant-ebus/discussions) is the place for questions, discoveries, and feedback.
+
+| Category | When to use |
+|----------|-------------|
+| Q&A | Setup help, "will this work with my model" questions |
+| Data Reports | Share register dumps, telemetry exports, and data findings from any Vaillant model |
+| Comparisons & Feedback | Compare with myVaillant, mypyllant, ebusd MQTT; workflow feedback |
+| Ideas | Feature requests that aren't formal issues yet |
+| Announcements | Release notes and breaking changes (maintainer only) |
+
+**Bugs & crashes** → [GitHub Issues](https://github.com/MarkBovee/vaillant-ebus/issues)
+
 ## License
 
 Apache 2.0

@@ -24,7 +24,7 @@ DAY_TEMPERATURE = f"{CIRCUIT}.Z1DayTemp.value"
 NIGHT_TEMPERATURE = f"{CIRCUIT}.Z1NightTemp.value"
 PUMP_STATUS = f"{CIRCUIT}.Hc1PumpStatus.value"
 COMPRESSOR_STATUS = "hmu.RunDataStatuscode.value"
-COOLING_TEMP = f"{CIRCUIT}.Z1CoolingTemp.value"
+SET_MODE = "hmu.SetMode.value"
 
 
 # Get string value from coordinator data by key
@@ -41,12 +41,26 @@ def _float(value: str | None) -> float | None:
         return None
 
 
-# Check if coordinator data indicates cooling is active (prerun or compressor)
+# Check if SetMode indicates cooling is configured (like away mode toggle)
+def _is_cooling_enabled(coordinator: VaillantCoordinator) -> bool:
+    raw = _value(coordinator, SET_MODE)
+    if raw is None:
+        return False
+    fields = raw.split(";")
+    if len(fields) < 9:
+        return False
+    try:
+        return float(fields[1]) > 0 and fields[8] == "1"
+    except (TypeError, ValueError):
+        return False
+
+
+# Check if coordinator data indicates cooling is active (prerun, compressor, or configured)
 def _is_cooling(coordinator: VaillantCoordinator) -> bool:
     status = _value(coordinator, COMPRESSOR_STATUS)
     if status is not None and "cool" in status.lower():
         return True
-    return False
+    return _is_cooling_enabled(coordinator)
 
 
 # Map Vaillant operation mode to HA HVACMode
@@ -150,19 +164,18 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             name = "Z1NightTemp" if self.preset_mode == "night" else "Z1DayTemp"
             await self._write(name, str(value))
 
-    # Write HVAC mode (off/heat/cool/auto) to ebusd
+    # Write HVAC mode to ebusd via SetMode (cooling) and Z1OpMode (heating)
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        values = {
-            HVACMode.OFF: "off",
-            HVACMode.HEAT: "day",
-            HVACMode.COOL: "auto",
-            HVACMode.AUTO: "auto",
-        }
-        await self._write("Z1OpMode", values[hvac_mode])
         if hvac_mode == HVACMode.COOL:
-            await self._write("Z1CoolingTemp", str(self.target_temperature or 20))
+            temp = str(self.target_temperature or 20)
+            await self._write_raw("hmu", "SetMode", f"auto;{temp};-;-;1;1;1;0;0;1")
         elif hvac_mode == HVACMode.HEAT:
-            await self._write("Z1CoolingTemp", "0")
+            await self._write_raw("hmu", "SetMode", "auto;0.0;-;-;1;1;1;0;0;0")
+            await self._write("Z1OpMode", "day")
+        elif hvac_mode == HVACMode.AUTO:
+            await self._write("Z1OpMode", "auto")
+        elif hvac_mode == HVACMode.OFF:
+            await self._write("Z1OpMode", "off")
 
     # Write day/night preset mode to ebusd
     async def async_set_preset_mode(self, preset_mode: str) -> None:
@@ -172,8 +185,12 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Write a CTLV2 register value and trigger refresh
     async def _write(self, name: str, value: str) -> None:
+        await self._write_raw(CIRCUIT, name, value)
+
+    # Write any circuit register and trigger refresh
+    async def _write_raw(self, circuit: str, name: str, value: str) -> None:
         backend = self.coordinator.ebusd_backend
         if backend:
-            result = await backend.async_write(CIRCUIT, name, value)
+            result = await backend.async_write(circuit, name, value)
             if result.success:
                 await self.coordinator.async_request_refresh()
