@@ -25,6 +25,14 @@
   not recognized as active, causing `zero_idle_registers` to clear all
   compressor values during cooling
 
+### Power sensors
+
+- `RunDataBuildingCPumpPower`: reclassified from Speed (%) to Power (W)
+  with correct device class
+- `PowerConsumptionHmu`: disabled by default (decode error)
+- `CurrentConsumedPower` (Compressor Power, kW): already working
+- `TotalEnergyUsage` (Total Energy, kWh): already working
+
 ### DHW
 
 - Limit DHW target temperature range to 35–70°C (was 30–70)
