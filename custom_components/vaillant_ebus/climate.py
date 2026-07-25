@@ -202,7 +202,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         try:
             if hvac_mode == HVACMode.COOL:
                 temp = str(_float(_value(self.coordinator, MIN_COOLING_TEMP)) or 17)
-                ok = await self._write_raw("hmu", "SetMode", f"auto;{temp};-;-;1;1;1;0;0;1")
+                ok = await self._write_raw("hmu", "SetMode", f"auto {temp} - - 1 1 1 0 0 1")
             elif hvac_mode == HVACMode.HEAT:
                 ok1 = await self._write_raw("hmu", "SetMode", "auto;0.0;-;-;1;1;1;0;0;0")
                 ok2 = await self._write("Z1OpMode", "auto")

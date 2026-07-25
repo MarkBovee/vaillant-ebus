@@ -101,14 +101,12 @@ class EbusdTcpBackend:
             lines: list[str] = []
             while True:
                 try:
-                    line = await asyncio.wait_for(self._reader.readline(), timeout=FIND_TIMEOUT)
+                    line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
                 except TimeoutError:
                     break
                 if not line:
                     break
                 decoded = line.decode("utf-8").rstrip("\n\r")
-                if not decoded:
-                    break
                 lines.append(decoded)
         return lines
 
