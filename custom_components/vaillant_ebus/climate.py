@@ -41,13 +41,12 @@ def _float(value: str | None) -> float | None:
         return None
 
 
-# Check if coordinator data indicates cooling is configured or active
+# Check if coordinator data indicates cooling is active (prerun or compressor)
 def _is_cooling(coordinator: VaillantCoordinator) -> bool:
     status = _value(coordinator, COMPRESSOR_STATUS)
-    if status is not None and "Cooling" in status:
+    if status is not None and "cool" in status.lower():
         return True
-    cooling_temp = _float(_value(coordinator, COOLING_TEMP))
-    return cooling_temp is not None and cooling_temp > 0
+    return False
 
 
 # Map Vaillant operation mode to HA HVACMode
