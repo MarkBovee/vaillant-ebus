@@ -9,6 +9,7 @@ from typing import Any
 from .models import EbusdRegister, WriteResult
 
 # ponytail: single-backend, no ABC abstraction needed. Add if a second transport variant materializes.
+# ponytail: global lock on async_send_raw serializes all TCP ops. Per-circuit or connection-pool locks if throughput matters.
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,18 +74,19 @@ class EbusdTcpBackend:
 
     # Send raw command string to ebusd, return response line
     async def async_send_raw(self, command: str) -> str:
-        if not self._writer or not self._reader:
-            raise ConnectionError("Not connected")
-        data = (command + "\n").encode("utf-8")
-        self._writer.write(data)
-        await self._writer.drain()
-        response = await asyncio.wait_for(self._reader.readline(), timeout=READ_TIMEOUT)
-        res = response.decode("utf-8").rstrip("\n\r")
-        try:
-            await asyncio.wait_for(self._reader.readline(), timeout=0.1)
-        except (TimeoutError, ConnectionError):
-            pass
-        return res
+        async with self._lock:
+            if not self._writer or not self._reader:
+                raise ConnectionError("Not connected")
+            data = (command + "\n").encode("utf-8")
+            self._writer.write(data)
+            await self._writer.drain()
+            response = await asyncio.wait_for(self._reader.readline(), timeout=READ_TIMEOUT)
+            res = response.decode("utf-8").rstrip("\n\r")
+            try:
+                await asyncio.wait_for(self._reader.readline(), timeout=0.1)
+            except (TimeoutError, ConnectionError):
+                pass
+            return res
 
     # Send 'f' command, return raw response lines
     # ponytail: ebusd sends no end marker after f output. Use per-line
