@@ -48,10 +48,10 @@ def _is_cooling_enabled(coordinator: VaillantCoordinator) -> bool:
     if raw is None:
         return False
     fields = raw.split(";")
-    if len(fields) < 9:
+    if len(fields) < 10:
         return False
     try:
-        return float(fields[1]) > 0 and fields[8] == "1"
+        return float(fields[1]) > 0 and fields[9] == "1"
     except (TypeError, ValueError):
         return False
 
