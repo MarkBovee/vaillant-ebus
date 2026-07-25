@@ -81,7 +81,12 @@ class EbusdTcpBackend:
             data = (command + "\n").encode("utf-8")
             self._writer.write(data)
             await self._writer.drain()
-            response = await asyncio.wait_for(self._reader.readline(), timeout=READ_TIMEOUT)
+            try:
+                response = await asyncio.wait_for(self._reader.readline(), timeout=READ_TIMEOUT)
+            except TimeoutError:
+                return ""
+            if not response:
+                return "ERR: connection closed"
             res = response.decode("utf-8").rstrip("\n\r")
             try:
                 await asyncio.wait_for(self._reader.readline(), timeout=0.1)
@@ -172,10 +177,12 @@ class EbusdTcpBackend:
         response = await self.async_send_raw(cmd)
         if response.startswith(ERR_PREFIX):
             return WriteResult(success=False, error_message=response)
-        if response.strip() in (DONE_STR, ""):
-            verified = await self.async_read(circuit, name)
-            return WriteResult(success=True, verified_value=verified)
-        return WriteResult(success=False, error_message=f"Unexpected response: {response}")
+        if not response.strip():
+            return WriteResult(success=False, error_message="Write returned empty response (connection lost?)")
+        if response.strip() != DONE_STR:
+            return WriteResult(success=False, error_message=f"Unexpected response: {response}")
+        verified = await self.async_read(circuit, name)
+        return WriteResult(success=True, verified_value=verified)
 
     # Bulk-read multiple register fields from ebusd
     async def async_poll(self, registers: list[tuple[str, str, str]]) -> dict[str, Any]:
