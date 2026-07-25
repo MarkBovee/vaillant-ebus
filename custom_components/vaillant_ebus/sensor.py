@@ -74,7 +74,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
             if getattr(self, '_attr_native_unit_of_measurement', None):
                 val = None
             else:
-                val = str(raw)
+                val = str(raw) if raw else None
         if val is not None:
             self._cached_value = val
         return val
