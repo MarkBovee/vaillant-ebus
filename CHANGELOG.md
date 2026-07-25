@@ -2,17 +2,38 @@
 
 ## 1.0.10-pre - 2026-07-24
 
+### First-time setup
+
 - Auto-discover ebusd in config flow: probe core-ebusd, localhost,
   127.0.0.1, homeassistant.local — only show manual form if all fail
 - Validate ebusd info response: check eBUS signal + Vaillant device
   presence with specific error messages
 - Repairs integration: create HA repair issue when ebusd is unreachable,
   auto-dismiss on reconnect
-- Better startup logging: connect status, ebusd version, circuit scan
-- Add 127.0.0.1 to discovery candidates
+- Better startup logging: connect status, ebusd version, circuit names
 - Diagnostics: include circuit_names list
-- Update README with C6 adapter setup guide and architecture diagram
+- Update README with C6 adapter setup guide, architecture diagram,
+  and simplified install flow
+
+### Cooling support (NEW)
+
+- Climate entity now detects cooling mode (`cool_compressor_active`)
+  and displays `COOL` HVAC mode + `COOLING` action automatically
+- Set cooling from HA: selecting `COOL` mode writes to `Z1CoolingTemp`
+- Add `Z1CoolingTemp` as writable number entity (range 17–30°C, step 0.5)
+- Fix compressor status string matching: `cool_compressor_active` was
+  not recognized as active, causing `zero_idle_registers` to clear all
+  compressor values during cooling
+
+### DHW
+
+- Limit DHW target temperature range to 35–70°C (was 30–70)
+- Sync water_heater entity `min_temp` to match (35°C)
+
+### Other
+
 - Improve secondary zone register matching (prefix and suffix)
+- Add 127.0.0.1 to discovery candidates
 
 ## 1.0.9 - 2026-07-24
 
