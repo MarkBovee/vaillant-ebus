@@ -26,6 +26,7 @@ PUMP_STATUS = f"{CIRCUIT}.Hc1PumpStatus.value"
 COMPRESSOR_STATUS = "hmu.RunDataStatuscode.value"
 SET_MODE = "hmu.SetMode.value"
 COOLING_TARGET = f"{CIRCUIT}.Z1CoolingTemp.value"
+MIN_COOLING_TEMP = f"{CIRCUIT}.Hc1MinCoolingTempDesired.value"
 
 
 # Get string value from coordinator data by key
@@ -188,7 +189,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         self.async_write_ha_state()
         try:
             if hvac_mode == HVACMode.COOL:
-                temp = str(_float(_value(self.coordinator, COOLING_TARGET)) or 20)
+                temp = str(_float(_value(self.coordinator, MIN_COOLING_TEMP)) or 17)
                 await self._write_raw("hmu", "SetMode", f"auto;{temp};-;-;1;1;1;0;0;1")
             elif hvac_mode == HVACMode.HEAT:
                 await self._write_raw("hmu", "SetMode", "auto;0.0;-;-;1;1;1;0;0;0")
