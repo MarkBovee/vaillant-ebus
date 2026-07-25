@@ -264,6 +264,23 @@ HACS `zip_release` mode verwacht GitHub release met tag `vX.Y.Z` en asset `vaill
 
 HA update via HACS: `HACS > integrations > Vaillant eBUS > download vX.Y.Z > herstart HA`.
 
+## GitHub Discussions
+
+Discussions staan aan op https://github.com/MarkBovee/vaillant-ebus/discussions
+
+Categorieën:
+- **General** — vragen, setup hulp
+- **Ideas** — feature requests
+- **Q&A** — vragen met antwoord
+- **Show and tell** — setups delen
+- **Announcements** — alleen jij post hier (releases, belangrijke mededelingen)
+- **Polls** — peilingen
+
+Release posten: maak een Discussion in `Announcements` met changelog + hoogtepunten.
+Pin 'm tijdelijk bovenaan. Link ernaar vanuit de GitHub Release description.
+
+**Niet in Discussions:** bug reports — die horen in Issues.
+
 ## Local test workflow (push branch to HA)
 
 Test een feature branch op de lokale HA installatie voordat je merged:
