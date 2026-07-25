@@ -34,6 +34,10 @@
 
 - Improve secondary zone register matching (prefix and suffix)
 - Add 127.0.0.1 to discovery candidates
+- Fix `RunDataBuildingCPumpPower`: friendly_name from "Speed" to "Power",
+  unit from "%" to "W", add device_class "power" (65 = Watt, not percent)
+- Remove broken `PowerConsumptionHmu` define: B516 has no power field
+  (only fields 10-13 exist). Disable the entity by default.
 
 ## 1.0.9 - 2026-07-24
 
