@@ -25,6 +25,7 @@ NIGHT_TEMPERATURE = f"{CIRCUIT}.Z1NightTemp.value"
 PUMP_STATUS = f"{CIRCUIT}.Hc1PumpStatus.value"
 COMPRESSOR_STATUS = "hmu.RunDataStatuscode.value"
 SET_MODE = "hmu.SetMode.value"
+COOLING_TARGET = f"{CIRCUIT}.Z1CoolingTemp.value"
 
 
 # Get string value from coordinator data by key
@@ -110,7 +111,9 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     @property
     def target_temperature(self) -> float | None:
-        # Return target temperature, falling back to day/night setpoint
+        # Return cooling setpoint when in COOL mode
+        if self.hvac_mode == HVACMode.COOL:
+            return _float(_value(self.coordinator, COOLING_TARGET))
         value = _float(_value(self.coordinator, TARGET_TEMPERATURE))
         if value is not None and 5 <= value <= 30:
             return value
@@ -157,17 +160,20 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         # Entity available when coordinator updates succeed
         return self.coordinator.last_update_success
 
-    # Write day/night setpoint to ebusd based on preset
+    # Write temperature setpoint to ebusd (cooling or heating)
     async def async_set_temperature(self, **kwargs: Any) -> None:
         value = kwargs.get(ATTR_TEMPERATURE)
         if value is not None:
-            name = "Z1NightTemp" if self.preset_mode == "night" else "Z1DayTemp"
-            await self._write(name, str(value))
+            if self.hvac_mode == HVACMode.COOL:
+                await self._write("Z1CoolingTemp", str(value))
+            else:
+                name = "Z1NightTemp" if self.preset_mode == "night" else "Z1DayTemp"
+                await self._write(name, str(value))
 
     # Write HVAC mode to ebusd via SetMode (cooling) and Z1OpMode (heating)
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.COOL:
-            temp = str(self.target_temperature or 20)
+            temp = str(_float(_value(self.coordinator, COOLING_TARGET)) or 20)
             await self._write_raw("hmu", "SetMode", f"auto;{temp};-;-;1;1;1;0;0;1")
         elif hvac_mode == HVACMode.HEAT:
             await self._write_raw("hmu", "SetMode", "auto;0.0;-;-;1;1;1;0;0;0")
