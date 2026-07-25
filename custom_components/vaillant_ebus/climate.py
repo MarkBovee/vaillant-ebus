@@ -108,6 +108,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         self._attr_unique_id = f"{entry.entry_id}_climate_z1"
         self._attr_device_info = coordinator.get_device_info(ZONE)
         self._optimistic_hvac_mode: HVACMode | None = None
+        self._last_write_error: str = ""
 
     @property
     def current_temperature(self) -> float | None:
@@ -167,6 +168,13 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         # Entity available when coordinator updates succeed
         return self.coordinator.last_update_success
 
+    @property
+    def extra_state_attributes(self) -> dict[str, str] | None:
+        # Expose last write error for debugging
+        if self._last_write_error:
+            return {"last_write_error": self._last_write_error}
+        return None
+
     # Write temperature setpoint to ebusd (cooling or heating)
     async def async_set_temperature(self, **kwargs: Any) -> None:
         value = kwargs.get(ATTR_TEMPERATURE)
@@ -224,8 +232,12 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     async def _write_raw(self, circuit: str, name: str, value: str) -> bool:
         backend = self.coordinator.ebusd_backend
         if not backend:
+            self._last_write_error = "backend is None"
             return False
         result = await backend.async_write(circuit, name, value)
         if result.success:
+            self._last_write_error = ""
             await self.coordinator.async_request_refresh()
+        else:
+            self._last_write_error = result.error_message or "unknown error"
         return result.success

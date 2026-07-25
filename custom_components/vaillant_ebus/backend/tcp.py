@@ -9,7 +9,8 @@ from typing import Any
 from .models import EbusdRegister, WriteResult
 
 # ponytail: single-backend, no ABC abstraction needed. Add if a second transport variant materializes.
-# ponytail: global lock on async_send_raw serializes all TCP ops. Per-circuit or connection-pool locks if throughput matters.
+# ponytail: global lock on async_send_raw serializes all TCP ops.
+# Per-circuit or connection-pool locks if throughput matters.
 
 _LOGGER = logging.getLogger(__name__)
 
