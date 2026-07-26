@@ -148,7 +148,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 value = await self.ebusd_backend.async_read(circuit, name)
                 was_new = key not in self.registers
-                if value is None and was_new:
+                has_stale = not was_new and not self.registers[key].has_data
+                if value is None and (was_new or has_stale):
                     for _ in range(5):
                         await asyncio.sleep(1)
                         value = await self.ebusd_backend.async_read(circuit, name)
