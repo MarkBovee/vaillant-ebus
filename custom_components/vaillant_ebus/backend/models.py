@@ -184,6 +184,12 @@ class RegisterMeta:
 
 
 @dataclass
+class SendResult:
+    data: str
+    error: str | None = None
+
+
+@dataclass
 class WriteResult:
     success: bool
     error_message: str = ""
