@@ -72,7 +72,7 @@ The adapter is ready when it has a fixed IP on your LAN (e.g. `192.168.86.24`).
 4. Go to **Configuration** and set:
 
 ```yaml
-network_device: ens:192.168.86.24
+network_device: ens:192.168.x.x
 seed_mqtt_cfg: false
 commandline_options:
   - "--accesslevel=*"
@@ -80,7 +80,9 @@ commandline_options:
   - "--enabledefine"
 ```
 
-Replace `192.168.86.24` with your C6 adapter's fixed IP.
+Replace `192.168.x.x` with your C6 adapter's fixed IP.
+
+<img width="1301" height="1027" alt="image" src="https://github.com/user-attachments/assets/b98d020d-6b20-484e-b173-5a4023a0cac8" />
 
 | Setting | Purpose |
 |---------|---------|
@@ -97,7 +99,7 @@ Do **not** add `--mqttjson`, `--mqttint`, or `--configpath`.
 
 ```
 ebusd 26.1.26.1 started with broadcast scan on device:
-192.168.86.24, TCP, enhanced
+192.168.x.x, TCP, enhanced
 
 bus started with own address 31/36
 signal acquired
