@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 from datetime import timedelta
 from typing import Any
 
@@ -122,7 +124,28 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if reg.key == "hmu.RunDataStatuscode":
                         translated = COMPRESSOR_STATUS_LABELS.get(value, value)
                     values[f"{reg.circuit}.{reg.name}.{field}"] = translated
+        self._save_cache(values)
         return values
+
+    @property
+    def _cache_path(self) -> str:
+        return self.hass.config.path(DOMAIN, "register_cache.json")
+
+    def _save_cache(self, values: dict[str, str]) -> None:
+        cache_dir = os.path.dirname(self._cache_path)
+        try:
+            os.makedirs(cache_dir, exist_ok=True)
+            with open(self._cache_path, "w") as f:
+                json.dump(values, f)
+        except Exception:
+            pass
+
+    def _load_cache(self) -> dict[str, str]:
+        try:
+            with open(self._cache_path) as f:
+                return json.load(f)
+        except Exception:
+            return {}
 
     # Read REGISTER_MAP entries that find missed, add entities if new
     async def _fallback_read(self) -> None:
@@ -157,6 +180,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             break
                 if value and (value.startswith(("or:", "ERR:")) or "read [-" in value):
                     value = None
+                if value is None:
+                    cache = self._load_cache()
+                    cached = cache.get(f"{circuit}.{name}.value")
+                    if cached is not None:
+                        value = cached
                 if value is not None:
                     if was_new:
                         self.registers[key] = EbusdRegister(
