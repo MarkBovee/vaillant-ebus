@@ -84,6 +84,7 @@ Replace `192.168.x.x` with your C6 adapter's fixed IP.
 
 <img width="1301" height="1027" alt="image" src="https://github.com/user-attachments/assets/b98d020d-6b20-484e-b173-5a4023a0cac8" />
 
+
 | Setting | Purpose |
 |---------|---------|
 | `network_device` | C6 adapter in TCP enhanced mode: `ens:<ip>:<port>` |
@@ -92,7 +93,7 @@ Replace `192.168.x.x` with your C6 adapter's fixed IP.
 | `--port=8888` | Raw TCP command port — this integration connects to this |
 | `--enabledefine` | Allows runtime register creation (needed for room humidity) |
 
-Do **not** add `--mqttjson`, `--mqttint`, or `--configpath`.
+It is not needed to add `--mqttjson`, `--mqttint`, or `--configpath`. Since we don't use MQTT.
 
 5. **Start** the addon and wait until it shows **"running"** in the addon dashboard
 6. **Verify** — open the addon log. You should see:
