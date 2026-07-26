@@ -167,6 +167,20 @@ Available override keys: `friendly_name`, `icon`, `unit`, `device_class`, `entit
 | `vaillant_ebus.write_parameter` | Write a value with read-after-write verification |
 | `vaillant_ebus.refresh` | Force re-read all active registers |
 | `vaillant_ebus.rediscover` | Re-run entity discovery (finds new registers) |
+| `vaillant_ebus.export_discovery_dump` | Export full register dump to YAML for troubleshooting |
+
+### Export Discovery Dump
+
+Generates a complete register dump for troubleshooting hardware-specific issues (new models, unknown registers, weird values):
+
+1. In HA, go to **Developer Tools → Services**
+2. Select **`vaillant_ebus.export_discovery_dump`** (no fields needed)
+3. Click **Call Service**
+4. Check the persistent notification for the file path (e.g. `/config/vaillant_ebus/discovery_dump_2026-07-26_143000.yaml`)
+5. Retrieve the file via **SMB** or **HA Samba addon** from `/config/vaillant_ebus/`
+6. Review the file for sensitive info before sharing, then attach to a GitHub issue or discussion
+
+The dump includes every register from `find` plus `REGISTER_MAP` entries, sorted by circuit then name. Sensitive fields (serial numbers, installer codes) are redacted automatically. Disabled-by-default registers are included with a `disabled: true` annotation.
 
 ## Updating
 
