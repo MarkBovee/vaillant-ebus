@@ -206,9 +206,10 @@ class EbusdTcpBackend:
         result = await self.async_send_raw(cmd)
         if result.error:
             return WriteResult(success=False, error_message=result.error)
-        data = result.data.strip()
-        if data and data != DONE_STR:
-            return WriteResult(success=False, error_message=f"Unexpected response: {data}")
+        if not result.data.strip():
+            return WriteResult(success=False, error_message="Write returned empty response")
+        if result.data.strip() != DONE_STR:
+            return WriteResult(success=False, error_message=f"Unexpected response: {result.data}")
         verified = await self.async_read(circuit, name)
         return WriteResult(success=True, verified_value=verified)
 
