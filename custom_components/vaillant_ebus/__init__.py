@@ -12,6 +12,7 @@ from homeassistant.helpers import config_validation as cv
 from . import repairs  # noqa: F401 — registers issue translation keys
 from .const import DOMAIN, PLATFORMS
 from .coordinator import VaillantCoordinator
+from .dump_service import async_export_discovery_dump
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,13 +78,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(DOMAIN, "refresh", svc_refresh, schema=vol.Schema({}))
     hass.services.async_register(DOMAIN, "rediscover", svc_rediscover, schema=vol.Schema({}))
 
+    # Export full discovery dump to YAML.
+    async def svc_export_discovery_dump(call: ServiceCall) -> None:
+        await async_export_discovery_dump(hass, coordinator)
+
+    hass.services.async_register(
+        DOMAIN, "export_discovery_dump", svc_export_discovery_dump,
+        schema=vol.Schema({}),
+    )
+
     _LOGGER.info("vaillant_ebus setup complete")
     return True
 
 
 # Tear down coordinator and unregister services.
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    for service in ("read_parameter", "write_parameter", "refresh", "rediscover"):
+    for service in ("read_parameter", "write_parameter", "refresh", "rediscover", "export_discovery_dump"):
         hass.services.async_remove(DOMAIN, service)
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:

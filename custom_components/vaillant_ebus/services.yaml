@@ -51,3 +51,7 @@ refresh:
 rediscover:
   name: Rediscover
   description: Re-run entity discovery via `find` command.
+
+export_discovery_dump:
+  name: Export Discovery Dump
+  description: Export all discovered registers plus full REGISTER_MAP to a YAML file for troubleshooting.

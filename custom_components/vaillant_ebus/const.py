@@ -14,6 +14,11 @@ DEFAULT_EBUSD_POLL_INTERVAL = 60
 DISCOVERY_PORT = 8888
 DISCOVERY_TIMEOUT = 3
 DISCOVERY_CANDIDATES = ["core-ebusd", "localhost", "127.0.0.1", "homeassistant.local"]
+SENSITIVE_FIELDS: set[str] = {
+    "serial", "keycode", "installer", "bc", "code",
+    "password", "secret", "token", "pin",
+}
+
 PLATFORMS = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
