@@ -72,14 +72,18 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 value={"value": cached} if cached else {"value": None},
                 has_data=cached is not None,
             )
-        # Without ebusd data, treat all known REGISTER_MAP circuits as active
+        core_circuits: set[str] = {"hmu", "ctlv2", "Broadcast"}
+        active: set[str] = set(core_circuits)
+        for reg in self.registers.values():
+            if reg.has_data:
+                active.add(reg.circuit)
         self.entities = generate_entity_descriptions(
             list(self.registers.values()),
             active_zone_circuits=known_circuits,
-            skip_active_check=True,
+            present_circuits=active,
         )
-        _LOGGER.info("Seeded %d entities from REGISTER_MAP + cache (%d circuits)",
-                     len(self.entities), len(known_circuits))
+        _LOGGER.info("Seeded %d entities from REGISTER_MAP + cache (%d circuits present)",
+                     len(self.entities), len(active))
 
     @property
     def ebusd_host(self) -> str:
