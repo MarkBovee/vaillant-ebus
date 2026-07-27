@@ -210,6 +210,8 @@ class EbusdTcpBackend:
         if data and data != DONE_STR:
             return WriteResult(success=False, error_message=f"Unexpected response: {data}")
         verified = await self.async_read(circuit, name)
+        if not data and not verified:
+            return WriteResult(success=False, error_message="Write verification returned empty")
         return WriteResult(success=True, verified_value=verified)
 
     # Disconnect, backoff-sleep, then reconnect to ebusd

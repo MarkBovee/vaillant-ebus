@@ -194,22 +194,15 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
                 self._optimistic_hvac_mode = None
         super()._handle_coordinator_update()
 
-    # Write HVAC mode to ebusd via SetMode (cooling) and Z1OpMode (heating)
+    # Write HVAC mode to ebusd via controller registers
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         self._optimistic_hvac_mode = hvac_mode
         self.async_write_ha_state()
         ok = True
         try:
-            if hvac_mode == HVACMode.COOL:
-                temp = str(_float(_value(self.coordinator, MIN_COOLING_TEMP)) or 17)
-                ok1 = await self._write_raw("hmu", "SetMode", f"auto;{temp};-;-;1;1;1;0;0;1")
-                ok2 = await self._write("Z1OpMode", "auto")
-                ok = ok1 and ok2
+            if hvac_mode in (HVACMode.COOL, HVACMode.AUTO):
+                ok = await self._write("Z1OpMode", "auto")
             elif hvac_mode == HVACMode.HEAT:
-                ok1 = await self._write_raw("hmu", "SetMode", "auto;0.0;-;-;1;1;1;0;0;0")
-                ok2 = await self._write("Z1OpMode", "auto")
-                ok = ok1 and ok2
-            elif hvac_mode == HVACMode.AUTO:
                 ok = await self._write("Z1OpMode", "auto")
             elif hvac_mode == HVACMode.OFF:
                 ok = await self._write("Z1OpMode", "off")

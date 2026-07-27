@@ -42,17 +42,26 @@ release: v1.0.2
 - HA custom_component connects directly to ebusd TCP port 8888 — no MQTT, no cloud
 - 350+ registers auto-discovered, entities generated dynamically
 
-## ebusd addon CSV management
+## CRITICAL: Never touch ebusd addon CSV files or configpath
 
-The addon data directory is mounted as `/etc/ebusd/` in the ebusd container. CSV files in `vaillant/` subdirectory are loaded at startup.
+**NEVER modify, upload, or delete CSV files on the ebusd addon.**
+**NEVER set `--configpath` in the addon options.**
 
-To update CSV set:
-1. Clone `https://github.com/john30/ebusd-configuration.git`
-2. `npm install && npm run compile-en`
-3. Upload `outcsv/@ebusd/ebus-typespec/vaillant/*.csv` to the ebusd addon `vaillant/` directory
-4. Restart ebusd addon
+The ebusd addon CSV management is entirely the user's responsibility. Our integration:
 
-**Important**: `--configpath=/config` overrides default config path and breaks standard CSV loading. Only use with a complete CSV set at that location.
+1. Uses `define` commands in `coordinator.py:_define_custom_registers()` for all custom registers
+2. Auto-discovers registers via `find` — whatever the addon provides
+3. Falls back to `REGISTER_MAP` entries via `_fallback_read()` for known registers not found by `find`
+
+This applies even when debugging register issues, testing, or deploying. If registers are missing:
+- The user must add CSV files to the addon themselves through the HA addon UI
+- Or we add more `define` commands in the coordinator
+
+**Consequences of violating this rule:**
+- Setting `--configpath=/config` overwrites the addon's default CSV loading
+- Uploading CSVs to `/config/vaillant/` pollutes the HA config directory
+- Resetting the addon to defaults loses all custom CSV config
+- The user has a working setup that we should not interfere with
 
 ## Register discovery
 
