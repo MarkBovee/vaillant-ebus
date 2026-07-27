@@ -184,8 +184,7 @@ def generate_entity_descriptions(
     for reg in registers:
         if _is_hidden_register(reg, active_zone_circuits):
             continue
-        in_present = present_circuits and reg.circuit in present_circuits
-        if not skip_active_check and not in_present and reg.circuit not in active_circuits:
+        if not skip_active_check and reg.circuit not in active_circuits:
             continue
 
         for field in reg.fields:
@@ -208,12 +207,8 @@ def generate_entity_descriptions(
             if merged_meta.entity_type == "":
                 merged_meta.entity_type = _classify_register(reg, field, raw)
 
-            known_register = f"{reg.circuit}.{reg.name}" in REGISTER_MAP
-            empty_values = ("-", "no data stored", "empty", "")
             entity_enabled = True
-            if raw in empty_values and not known_register:
-                entity_enabled = False
-            if not reg.has_data and not known_register:
+            if not skip_active_check and not reg.has_data:
                 entity_enabled = False
             if not merged_meta.enabled:
                 entity_enabled = False

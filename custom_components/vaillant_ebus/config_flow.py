@@ -195,6 +195,13 @@ class VaillantOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         if user_input is not None:
+            host = user_input.get(CONF_EBUSD_HOST)
+            port = user_input.get(CONF_EBUSD_PORT)
+            if host and port:
+                current = self._config_entry.data
+                if host != current.get(CONF_EBUSD_HOST) or port != current.get(CONF_EBUSD_PORT):
+                    new_data = {**current, CONF_EBUSD_HOST: host, CONF_EBUSD_PORT: port}
+                    self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
             return self.async_create_entry(title="", data=user_input)
 
         data = self._config_entry.data if hasattr(self._config_entry, "data") else self._config_entry
@@ -202,6 +209,14 @@ class VaillantOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
+                vol.Optional(
+                    CONF_EBUSD_HOST,
+                    default=data.get(CONF_EBUSD_HOST, ""),
+                ): str,
+                vol.Optional(
+                    CONF_EBUSD_PORT,
+                    default=data.get(CONF_EBUSD_PORT, DEFAULT_EBUSD_PORT),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
                 vol.Optional(
                     CONF_SCAN_INTERVAL,
                     default=data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL),
