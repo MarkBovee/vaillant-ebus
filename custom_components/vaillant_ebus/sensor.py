@@ -67,7 +67,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
-        if last and last.state not in (None, "unknown", "unavailable"):
+        if last and last.state not in (None, "unknown", "unavailable", ""):
             self._cached_value = last.state
 
     @property
