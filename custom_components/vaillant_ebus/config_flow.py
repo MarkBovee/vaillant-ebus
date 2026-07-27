@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 from typing import Any
 
 import voluptuous as vol
@@ -27,7 +28,28 @@ from .const import (
     DOMAIN,
 )
 
-_DEFAULT_EBUSD_HOST = ""
+
+def _get_local_ip() -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(2)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        if ip and ip != "127.0.0.1":
+            return ip
+    except Exception:
+        pass
+    try:
+        ip = socket.gethostbyname(socket.gethostname())
+        if ip and ip != "127.0.0.1":
+            return ip
+    except Exception:
+        pass
+    return ""
+
+
+_DEFAULT_EBUSD_HOST = _get_local_ip()
 
 _LOGGER = logging.getLogger(__name__)
 
