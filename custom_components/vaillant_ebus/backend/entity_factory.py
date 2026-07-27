@@ -155,6 +155,8 @@ def _classify_register(
     if low in ("on", "off", "true", "false"):
         return "binary_sensor" if not register.writable else "switch"
     if low in ("0", "1", "yes", "no"):
+        if meta.unit or meta.device_class:
+            return "sensor"
         if register.writable:
             return "switch"
         return "binary_sensor"
@@ -184,7 +186,8 @@ def generate_entity_descriptions(
     for reg in registers:
         if _is_hidden_register(reg, active_zone_circuits):
             continue
-        if not skip_active_check and reg.circuit not in active_circuits:
+        in_present = present_circuits and reg.circuit in present_circuits
+        if not skip_active_check and not in_present and reg.circuit not in active_circuits:
             continue
 
         for field in reg.fields:

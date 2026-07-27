@@ -185,10 +185,9 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self, registers: list[EbusdRegister] | None = None
     ) -> dict[str, str]:
         values: dict[str, str] = {}
-        placeholders = ("-", "no data stored", "empty", "")
         for reg in registers or list(self.registers.values()):
             for field, value in reg.value.items():
-                if value is not None and value not in placeholders:
+                if value is not None:
                     translated = value
                     if reg.key == "hmu.RunDataStatuscode":
                         translated = COMPRESSOR_STATUS_LABELS.get(value, value)
