@@ -78,13 +78,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(DOMAIN, "refresh", svc_refresh, schema=vol.Schema({}))
     hass.services.async_register(DOMAIN, "rediscover", svc_rediscover, schema=vol.Schema({}))
 
-    # Export full discovery dump to YAML.
+    # Export full discovery dump to YAML, optionally with raw grab.
     async def svc_export_discovery_dump(call: ServiceCall) -> None:
-        await async_export_discovery_dump(hass, coordinator)
+        grab_duration = call.data.get("grab_duration", 0)
+        await async_export_discovery_dump(hass, coordinator, grab_duration)
 
     hass.services.async_register(
         DOMAIN, "export_discovery_dump", svc_export_discovery_dump,
-        schema=vol.Schema({}),
+        schema=vol.Schema({
+            vol.Optional("grab_duration", default=0): vol.All(
+                vol.Coerce(int), vol.Range(min=0, max=300)
+            ),
+        }),
     )
 
     _LOGGER.info("vaillant_ebus setup complete")

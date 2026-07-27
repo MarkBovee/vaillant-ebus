@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 
@@ -25,16 +26,12 @@ def _redact(value: str | None, name: str) -> str | None:
     return value
 
 
-async def async_export_discovery_dump(
-    hass: HomeAssistant, coordinator: VaillantCoordinator
-) -> None:
-    backend = coordinator.ebusd_backend
-    if not backend or not backend.connected:
-        _LOGGER.error("Cannot export dump: ebusd not connected")
-        return
-
+async def _dump_registers(
+    backend, seen_keys: set[str] | None = None
+) -> tuple[list[dict], set[str]]:
     discovered = await backend.async_find()
-    seen_keys: set[str] = set()
+    if seen_keys is None:
+        seen_keys = set()
     register_list: list[dict] = []
 
     for reg in discovered:
@@ -70,22 +67,87 @@ async def async_export_discovery_dump(
         register_list.append(entry)
 
     register_list.sort(key=lambda r: (r["circuit"], r["name"]))
+    return register_list, seen_keys
+
+
+async def async_grab(host: str, port: int, duration: int) -> list[str]:
+    reader, writer = await asyncio.open_connection(host, port)
+    try:
+        writer.write(b"grab on\n")
+        await writer.drain()
+        await asyncio.wait_for(reader.readline(), timeout=5)
+
+        lines = []
+        deadline = asyncio.get_running_loop().time() + duration
+        while asyncio.get_running_loop().time() < deadline:
+            remaining = deadline - asyncio.get_running_loop().time()
+            try:
+                line = await asyncio.wait_for(
+                    reader.readline(), timeout=min(1, remaining)
+                )
+                if line:
+                    decoded = line.decode().strip()
+                    if decoded:
+                        lines.append(decoded)
+            except TimeoutError:
+                continue
+
+        writer.write(b"grab off\n")
+        await writer.drain()
+        return lines
+    finally:
+        writer.close()
+        await writer.wait_closed()
+
+
+async def async_export_discovery_dump(
+    hass: HomeAssistant,
+    coordinator: VaillantCoordinator,
+    grab_duration: int = 0,
+) -> None:
+    backend = coordinator.ebusd_backend
+    if not backend or not backend.connected:
+        _LOGGER.error("Cannot export dump: ebusd not connected")
+        return
+
+    before_registers, seen = await _dump_registers(backend)
+
+    grab_lines = []
+    if grab_duration > 0:
+        _LOGGER.info(
+            "Capturing raw eBUS traffic for %d seconds...", grab_duration
+        )
+        try:
+            grab_lines = await async_grab(
+                coordinator.ebusd_host, coordinator.ebusd_port, grab_duration
+            )
+            _LOGGER.info("Captured %d raw lines", len(grab_lines))
+        except Exception as exc:
+            _LOGGER.warning("Grab failed: %s", exc)
+
+    after_registers = []
+    if grab_duration > 0:
+        after_registers, _ = await _dump_registers(backend)
 
     output_dir = hass.config.path(DOMAIN)
     hass.async_add_executor_job(_mkdir, output_dir)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     filepath = f"{output_dir}/discovery_dump_{timestamp}.yaml"
 
-    dump_data = {
+    dump_data: dict = {
         "metadata": {
             "timestamp": datetime.now().isoformat(),
             "ebusd_version": backend.version,
-            "register_count": len(register_list),
-            "circuit_count": len({r["circuit"] for r in register_list}),
-            "dump_version": 1,
+            "register_count": len(after_registers or before_registers),
+            "grab_duration": grab_duration,
+            "dump_version": 2,
         },
-        "registers": register_list,
+        "before_registers": before_registers,
     }
+    if grab_lines:
+        dump_data["grab"] = grab_lines
+    if after_registers:
+        dump_data["after_registers"] = after_registers
 
     await hass.async_add_executor_job(_write_yaml, filepath, dump_data)
     _LOGGER.info("Discovery dump written to %s", filepath)
@@ -94,7 +156,7 @@ async def async_export_discovery_dump(
         hass,
         (
             f"Discovery dump written to:<br><code>{filepath}</code><br><br>"
-            "Attach this file to your GitHub issue report."
+            f"Captured {len(grab_lines)} raw grab lines."
         ),
         title="Vaillant eBUS Discovery Dump",
         notification_id="vaillant_ebus_discovery_dump",
@@ -103,6 +165,7 @@ async def async_export_discovery_dump(
 
 def _mkdir(path: str) -> None:
     import os
+
     os.makedirs(path, exist_ok=True)
 
 
@@ -111,6 +174,8 @@ def _write_yaml(filepath: str, data: dict) -> None:
         "# Discovery dump for vaillant_ebus\n"
         "# Review this file for sensitive information before sharing\n"
     )
-    body = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    body = yaml.dump(
+        data, default_flow_style=False, allow_unicode=True, sort_keys=False
+    )
     with open(filepath, "w") as f:
         f.write(header + body)

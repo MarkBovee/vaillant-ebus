@@ -55,3 +55,14 @@ rediscover:
 export_discovery_dump:
   name: Export Discovery Dump
   description: Export all discovered registers plus full REGISTER_MAP to a YAML file for troubleshooting.
+  fields:
+    grab_duration:
+      name: Grab Duration
+      description: Capture raw eBUS traffic for N seconds before final dump (0 = disable)
+      advanced: true
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 300
+          unit_of_measurement: seconds

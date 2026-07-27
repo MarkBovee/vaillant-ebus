@@ -49,6 +49,14 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=scan_interval),
         )
 
+    @property
+    def ebusd_host(self) -> str:
+        return self._entry.data.get(CONF_EBUSD_HOST, "")
+
+    @property
+    def ebusd_port(self) -> int:
+        return self._entry.data.get(CONF_EBUSD_PORT, 8888)
+
     # Connect backend, define custom registers, discover all registers
     async def async_start(self) -> None:
         if self._started:
