@@ -11,10 +11,14 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from . import repairs
-from .backend.entity_factory import EntityDescription, generate_entity_descriptions
+from .backend.entity_factory import (
+    EntityDescription,
+    _detect_active_circuits,
+    generate_entity_descriptions,
+)
 from .backend.mapping import REGISTER_MAP
 from .backend.models import CIRCUIT_NAMES, COMPRESSOR_STATUS_LABELS, EbusdRegister, zero_idle_registers
 from .backend.tcp import EbusdTcpBackend
@@ -31,7 +35,6 @@ _LOGGER = logging.getLogger(__name__)
 class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Initialize coordinator with HA instance and config entry
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        _LOGGER.info("Initializing coordinator")
         self._entry = entry
 
         self.ebusd_backend: EbusdTcpBackend | None = None
@@ -39,6 +42,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entities: list[EntityDescription] = []
         self._active_zone_circuits: set[str] = set()
         self._started = False
+        self._ebusd_connected = False
 
         scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL)
         super().__init__(
@@ -47,6 +51,35 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name=DOMAIN,
             update_interval=timedelta(seconds=scan_interval),
         )
+
+        # Immediately seed entities from REGISTER_MAP + cache (no ebusd needed)
+        self._seed_entities_from_cache()
+
+    def _seed_entities_from_cache(self) -> None:
+        cache = self._load_cache()
+        known_circuits: set[str] = set()
+        for key, meta in REGISTER_MAP.items():
+            if not meta.enabled:
+                continue
+            parts = key.split(".", 1)
+            if len(parts) != 2:
+                continue
+            known_circuits.add(parts[0])
+            cached = cache.get(f"{key}.value")
+            self.registers[key] = EbusdRegister(
+                circuit=parts[0], name=parts[1],
+                fields=["value"],
+                value={"value": cached} if cached else {"value": None},
+                has_data=cached is not None,
+            )
+        # Without ebusd data, treat all known REGISTER_MAP circuits as active
+        self.entities = generate_entity_descriptions(
+            list(self.registers.values()),
+            active_zone_circuits=known_circuits,
+            skip_active_check=True,
+        )
+        _LOGGER.info("Seeded %d entities from REGISTER_MAP + cache (%d circuits)",
+                     len(self.entities), len(known_circuits))
 
     @property
     def ebusd_host(self) -> str:
@@ -57,35 +90,31 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return self._entry.data.get(CONF_EBUSD_PORT, 8888)
 
     # Connect backend, define custom registers, discover all registers
-    async def async_start(self) -> None:
-        if self._started:
-            return
-        self._started = True
+    async def _ebusd_connect_and_discover(self) -> None:
         host = self._entry.data.get(CONF_EBUSD_HOST)
         port = self._entry.data.get(CONF_EBUSD_PORT, 8888)
         if not host:
-            raise UpdateFailed("Missing ebusd host")
-        _LOGGER.info("Starting coordinator: connecting to ebusd at %s:%s", host, port)
-        self.ebusd_backend = EbusdTcpBackend(host=host, port=port)
-        try:
-            await self.ebusd_backend.async_connect()
-            _LOGGER.info("Connected to ebusd")
-        except Exception as exc:
-            _LOGGER.warning("ebusd connect failed, will retry on poll: %s", exc)
             return
+        _LOGGER.info("Connecting to ebusd at %s:%s", host, port)
+        backend = EbusdTcpBackend(host=host, port=port)
+        try:
+            await backend.async_connect()
+        except Exception as exc:
+            _LOGGER.warning("ebusd connect failed, will retry: %s", exc)
+            return
+        self.ebusd_backend = backend
+        self._ebusd_connected = True
 
-        version = self.ebusd_backend.version
+        version = backend.version
         if version:
             _LOGGER.info("ebusd version: %s", version)
-        _LOGGER.info("Defining custom registers")
         try:
             await self._define_custom_registers()
         except Exception as exc:
             _LOGGER.warning("define_custom_registers failed: %s", exc)
 
-        _LOGGER.info("Scanning eBUS circuits")
         try:
-            discovered = await self.ebusd_backend.async_find()
+            discovered = await backend.async_find()
         except Exception as exc:
             _LOGGER.warning("ebusd find failed: %s", exc)
             return
@@ -112,6 +141,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 has_data=cached is not None,
             )
 
+        try:
+            await self._fallback_read()
+        except Exception as exc:
+            _LOGGER.warning("Initial fallback read failed: %s", exc)
+
         self._active_zone_circuits = {
             reg.circuit for reg in discovered
             if reg.circuit in {"hc2", "hc3", "z2", "z3"} and reg.has_data
@@ -119,12 +153,14 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._active_zone_circuits:
             _LOGGER.info("Active zone circuits: %s", self._active_zone_circuits)
 
+        self._parse_scan_metadata()
+
         self.entities = generate_entity_descriptions(
             list(self.registers.values()),
             active_zone_circuits=self._active_zone_circuits,
         )
-        _LOGGER.info("Generated %d entity descriptions", len(self.entities))
-        _LOGGER.info("Coordinator startup complete")
+        _LOGGER.info("Generated %d entity descriptions after ebusd discovery", len(self.entities))
+        self.async_update_listeners()
     async def _define_custom_registers(self) -> None:
         if not self.ebusd_backend:
             return
@@ -173,6 +209,22 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return json.load(f)
         except Exception:
             return {}
+
+    # Store device metadata (makes, models, versions) from scan.* registers
+    def _parse_scan_metadata(self) -> None:
+        self._scan_metadata: dict[str, dict[str, str]] = {}
+        for key, reg in self.registers.items():
+            if reg.circuit != "scan":
+                continue
+            parts = reg.name.split("_", 1)
+            if len(parts) != 2:
+                continue
+            device, field = parts
+            value = reg.value.get("value")
+            if value is not None and value not in ("-", "no data stored", ""):
+                self._scan_metadata.setdefault(device.lower(), {})[field.upper()] = str(value)
+        if self._scan_metadata:
+            _LOGGER.info("Scan metadata: %s", self._scan_metadata)
 
     # Read REGISTER_MAP entries that find missed, add entities if new
     async def _fallback_read(self) -> None:
@@ -232,6 +284,9 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except Exception as exc:
                 _LOGGER.warning("Fallback read failed: %s (%s)", key, exc)
         if added:
+            self._active_zone_circuits = _detect_active_circuits(
+                list(self.registers.values())
+            )
             self.entities = generate_entity_descriptions(
                 list(self.registers.values()),
                 active_zone_circuits=self._active_zone_circuits,
@@ -241,35 +296,14 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     # Poll ebusd for register values, called by HA update loop
     async def _async_update_data(self) -> dict[str, Any]:
-        _LOGGER.debug("Coordinator update, started=%s", self._started)
-        if not self._started:
-            try:
-                await self.async_start()
-            except Exception as exc:
-                _LOGGER.warning("ebusd startup failed: %s", exc)
-            if not self.ebusd_backend or not self.ebusd_backend.connected:
-                return {}
+        if not self._ebusd_connected:
+            # First poll: return cached data immediately, connect in background
+            if not self._started:
+                self._started = True
+                self.hass.async_create_task(self._ebusd_connect_and_discover())
             return {"ebusd": self._values_from_registers()}
 
-        if self.ebusd_backend:
-            if not self.ebusd_backend.connected:
-                try:
-                    await self.ebusd_backend.async_connect()
-                    await self._define_custom_registers()
-                    discovered = await self.ebusd_backend.async_find()
-                    self._last_find_keys = {r.key for r in discovered}
-                    for reg in discovered:
-                        self.registers[reg.key] = reg
-                    self._active_zone_circuits = {
-                        reg.circuit for reg in discovered
-                        if reg.circuit in {"hc2", "hc3", "z2", "z3"} and reg.has_data
-                    }
-                    self.entities = generate_entity_descriptions(
-                        discovered, active_zone_circuits=self._active_zone_circuits
-                    )
-                except Exception as exc:
-                    _LOGGER.warning("ebusd retry connect failed: %s", exc)
-                    return {}
+        if self.ebusd_backend and self.ebusd_backend.connected:
             try:
                 discovered = await self.ebusd_backend.async_find()
                 self._last_find_keys = {r.key for r in discovered}
@@ -290,20 +324,32 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.error("ebusd reconnect failed: %s", exc)
                     await repairs.async_create_ebusd_unreachable(self.hass)
 
-        return {}
+        return {"ebusd": self._values_from_registers()}
 
     # Disconnect ebusd backend on integration unload
     async def async_stop(self) -> None:
         if self.ebusd_backend:
             await self.ebusd_backend.async_disconnect()
 
-    # Build DeviceInfo for a given circuit identifier
+    PARENT_CIRCUITS: dict[str, str] = {"z1": "ctlv2", "dhw": "ctlv2", "Broadcast": "hmu"}
+
     def get_device_info(self, circuit: str) -> DeviceInfo:
         name = CIRCUIT_NAMES.get(circuit, f"Vaillant ({circuit})")
+        scan = self._scan_metadata.get(circuit, {}) if hasattr(self, "_scan_metadata") else {}
+        model = scan.get("ID") or name
+        manufacturer = "Vaillant"
+        sw_version = scan.get("SW")
+        hw_version = scan.get("HW")
+        via_device: tuple[str, str] | None = None
+        parent = self.PARENT_CIRCUITS.get(circuit)
+        if parent:
+            via_device = (DOMAIN, parent)
         return DeviceInfo(
             identifiers={(DOMAIN, circuit)},
             name=name,
-            manufacturer="Vaillant",
-            model=name,
-            sw_version=self.ebusd_backend.version if self.ebusd_backend else None,
+            manufacturer=manufacturer,
+            model=model,
+            sw_version=sw_version or (self.ebusd_backend.version if self.ebusd_backend else None),
+            hw_version=hw_version,
+            via_device=via_device,
         )

@@ -132,6 +132,9 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     def hvac_action(self) -> HVACAction | None:
         hc = _float(_value(self.coordinator, HC_STATUS))
         zone_active = hc is not None and hc > 0
+        if hc is None:
+            pump = _value(self.coordinator, f"{CIRCUIT}.Hc1PumpStatus.value")
+            zone_active = (pump or "").lower() in ("on", "1", "true", "yes", "running")
         comp = (_value(self.coordinator, COMPRESSOR_STATUS) or "").lower()
         global_heat = comp in HEATING_STATES
         global_cool = comp in COOLING_STATES
@@ -182,6 +185,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         self._optimistic_hvac_mode = hvac_mode
         self.async_write_ha_state()
+        if self.preset_mode == PRESET_BOOST:
+            await self._cancel_quick_veto()
         ebusd_mode = HA_TO_EBUSD_HVAC.get(hvac_mode.value)
         if ebusd_mode is None:
             self._optimistic_hvac_mode = None
@@ -235,14 +240,20 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     async def _start_quick_veto(self) -> None:
         temp = _float(_value(self.coordinator, ROOM_TEMPERATURE))
-        if temp is not None:
+        options = self.coordinator._entry.options
+        veto_temp = options.get("quick_veto_temp")
+        if veto_temp is not None:
+            await self._write("Z1QuickVetoTemp", str(veto_temp))
+        elif temp is not None:
             await self._write("Z1QuickVetoTemp", str(round(temp, 1)))
-        await self._write("Z1QuickVetoDuration", "3")
+        veto_duration = options.get("quick_veto_duration", 3)
+        await self._write("Z1QuickVetoDuration", str(veto_duration))
 
     async def _start_holiday(self) -> None:
         today = datetime.now().date()
+        away_duration = self.coordinator._entry.options.get("away_duration", 7)
         await self._write("Z1HolidayStartPeriod", today.strftime(DATE_FMT))
-        await self._write("Z1HolidayEndPeriod", (today + timedelta(days=7)).strftime(DATE_FMT))
+        await self._write("Z1HolidayEndPeriod", (today + timedelta(days=away_duration)).strftime(DATE_FMT))
         ht = _float(_value(self.coordinator, f"{CIRCUIT}.Z1HolidayTemp.value"))
         if ht is None:
             await self._write("Z1HolidayTemp", "15.0")

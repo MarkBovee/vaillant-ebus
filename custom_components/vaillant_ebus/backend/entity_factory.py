@@ -8,7 +8,7 @@ from .mapping import REGISTER_MAP, RegisterMeta, get_meta
 from .models import EbusdRegister
 
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
-HIDDEN_CIRCUITS = {"general"}  # v32, vwz removed — circuit detection replaces hardcoded list
+HIDDEN_CIRCUITS = {"general", "v32"}  # v32: ventilation, no useful data on single-zone systems
 HIDDEN_REGISTERS = {"hmu.FlowTemperature", "Broadcast.FlowTemp"}
 
 ALWAYS_HIDDEN = {"memory"}
@@ -172,6 +172,7 @@ def generate_entity_descriptions(
     registers: list[EbusdRegister],
     yaml_overrides: dict[str, dict[str, Any]] | None = None,
     active_zone_circuits: set[str] | None = None,
+    skip_active_check: bool = False,
 ) -> list[EntityDescription]:
     overrides = yaml_overrides or {}
     seen: set[str] = set()
@@ -182,7 +183,7 @@ def generate_entity_descriptions(
     for reg in registers:
         if _is_hidden_register(reg, active_zone_circuits):
             continue
-        if reg.circuit not in active_circuits:
+        if not skip_active_check and reg.circuit not in active_circuits:
             continue
 
         for field in reg.fields:
@@ -243,7 +244,7 @@ def generate_entity_descriptions(
         merged = _merge_overrides(meta, overrides.get(map_key) or {})
         if not merged.enabled:
             continue
-        if circuit not in active_circuits:
+        if not skip_active_check and circuit not in active_circuits:
             continue
         entity = EntityDescription(
             circuit=circuit,

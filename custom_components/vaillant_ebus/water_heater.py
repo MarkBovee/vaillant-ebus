@@ -19,7 +19,8 @@ CIRCUIT = "ctlv2"
 CURRENT_TEMPERATURE = f"{CIRCUIT}.HwcStorageTemp.value"
 TARGET_TEMPERATURE = f"{CIRCUIT}.HwcTempDesired.value"
 OPERATION_MODE = f"{CIRCUIT}.HwcOpMode.value"
-OPERATION_MODES = ["off", "day", "night", "auto"]
+OPERATION_MODES = ["off", "day", "night", "auto", "boost"]
+HWC_SF_MODE = f"{CIRCUIT}.HwcSFMode.value"
 
 
 # Get string value from coordinator data by key
@@ -61,11 +62,11 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         | WaterHeaterEntityFeature.OPERATION_MODE
     )
 
-    # Initialize DHW water heater entity
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_water_heater_dhw"
         self._attr_device_info = coordinator.get_device_info(ZONE)
+        self._saved_op_mode: str | None = None
 
     @property
     def current_temperature(self) -> float | None:
@@ -80,9 +81,11 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
 
     @property
     def current_operation(self) -> str | None:
-        # Return DHW operation mode (off/day/night/auto)
+        sf = (_value(self.coordinator, HWC_SF_MODE) or "").lower()
+        if sf == "load":
+            return "boost"
         operation = (_value(self.coordinator, OPERATION_MODE) or "").lower()
-        return operation if operation in OPERATION_MODES else None
+        return operation if operation in ("off", "day", "night", "auto") else None
 
     @property
     def available(self) -> bool:
@@ -95,11 +98,17 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         if value is not None:
             await self._write("HwcTempDesired", str(value))
 
-    # Write DHW operation mode to ebusd
     async def async_set_operation_mode(self, operation_mode: str) -> None:
         if operation_mode not in OPERATION_MODES:
             raise ValueError(f"Unsupported DHW operation: {operation_mode}")
-        await self._write("HwcOpMode", operation_mode)
+        if operation_mode == "boost":
+            current = self.current_operation
+            if current and current != "boost":
+                self._saved_op_mode = current
+            await self._write("HwcSFMode", "load")
+        else:
+            await self._write("HwcSFMode", "auto")
+            await self._write("HwcOpMode", operation_mode)
 
     # Write a CTLV2 register value and trigger refresh
     async def _write(self, name: str, value: str) -> None:

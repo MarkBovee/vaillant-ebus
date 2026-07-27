@@ -11,11 +11,16 @@ from homeassistant.config_entries import ConfigFlow, OptionsFlow
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
+    CONF_AWAY_DURATION,
     CONF_EBUSD_HOST,
     CONF_EBUSD_PORT,
+    CONF_QUICK_VETO_DURATION,
+    CONF_QUICK_VETO_TEMP,
     CONF_SCAN_INTERVAL,
+    DEFAULT_AWAY_DURATION,
     DEFAULT_EBUSD_POLL_INTERVAL,
     DEFAULT_EBUSD_PORT,
+    DEFAULT_QUICK_VETO_DURATION,
     DISCOVERY_CANDIDATES,
     DISCOVERY_PORT,
     DISCOVERY_TIMEOUT,
@@ -150,6 +155,7 @@ class VaillantOptionsFlow(OptionsFlow):
             return self.async_create_entry(title="", data=user_input)
 
         data = self._config_entry.data if hasattr(self._config_entry, "data") else self._config_entry
+        options = self._config_entry.options if hasattr(self._config_entry, "options") else {}
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
@@ -157,6 +163,18 @@ class VaillantOptionsFlow(OptionsFlow):
                     CONF_SCAN_INTERVAL,
                     default=data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL),
                 ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+                vol.Optional(
+                    CONF_AWAY_DURATION,
+                    default=options.get(CONF_AWAY_DURATION, DEFAULT_AWAY_DURATION),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=365)),
+                vol.Optional(
+                    CONF_QUICK_VETO_DURATION,
+                    default=options.get(CONF_QUICK_VETO_DURATION, DEFAULT_QUICK_VETO_DURATION),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
+                vol.Optional(
+                    CONF_QUICK_VETO_TEMP,
+                    default=options.get(CONF_QUICK_VETO_TEMP, ""),
+                ): str,
             }),
         )
 
