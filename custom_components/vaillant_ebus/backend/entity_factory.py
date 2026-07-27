@@ -8,8 +8,10 @@ from .mapping import REGISTER_MAP, RegisterMeta, get_meta
 from .models import EbusdRegister
 
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
-HIDDEN_CIRCUITS = {"vwz", "general", "v32"}
+HIDDEN_CIRCUITS = {"general"}  # v32, vwz removed — circuit detection replaces hardcoded list
 HIDDEN_REGISTERS = {"hmu.FlowTemperature", "Broadcast.FlowTemp"}
+
+ALWAYS_HIDDEN = {"memory"}
 
 
 # Map circuit/name to logical device (hmu, dhw, z1)
@@ -38,7 +40,7 @@ def _is_hidden_register(
         return True
     if circuit.lower().startswith("scan"):
         return True
-    if circuit.lower() in ("memory",) or circuit.lower() in HIDDEN_CIRCUITS:
+    if circuit.lower() in ALWAYS_HIDDEN or circuit.lower() in HIDDEN_CIRCUITS:
         return True
     if name.startswith(("cctimer_", "hwctimer_", "z1timer_", "z2timer_", "z3timer_")):
         return True
@@ -57,6 +59,17 @@ def _is_hidden_register(
             if name.startswith(suffix) or name.endswith(f"_{suffix}"):
                 return True
     return False
+
+
+# Determine which eBUS circuits have active data
+def _detect_active_circuits(registers: list[EbusdRegister]) -> set[str]:
+    circuit_data: dict[str, bool] = {}
+    for reg in registers:
+        if reg.circuit not in circuit_data:
+            circuit_data[reg.circuit] = False
+        if reg.has_data and any(v is not None for v in reg.value.values()):
+            circuit_data[reg.circuit] = True
+    return {c for c, active in circuit_data.items() if active}
 
 
 class EntityDescription:
@@ -158,8 +171,12 @@ def generate_entity_descriptions(
     seen: set[str] = set()
     entities: list[EntityDescription] = []
 
+    active_circuits = _detect_active_circuits(registers)
+
     for reg in registers:
         if _is_hidden_register(reg, active_zone_circuits):
+            continue
+        if reg.circuit not in active_circuits:
             continue
 
         for field in reg.fields:
@@ -219,6 +236,8 @@ def generate_entity_descriptions(
         )
         merged = _merge_overrides(meta, overrides.get(map_key) or {})
         if not merged.enabled:
+            continue
+        if circuit not in active_circuits:
             continue
         entity = EntityDescription(
             circuit=circuit,
