@@ -108,6 +108,10 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
         if not errors:
             found = await self._try_discover()
             if found:
+                host, port, info = found
+                self._discovered_host = host
+                self._discovered_port = port
+                self._discovered_info = info
                 return await self.async_step_confirm()
 
         defaults = {CONF_EBUSD_HOST: await _get_host_ip(), CONF_EBUSD_PORT: DEFAULT_EBUSD_PORT}
