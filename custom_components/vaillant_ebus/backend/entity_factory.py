@@ -61,13 +61,19 @@ def _is_hidden_register(
     return False
 
 
+PLACEHOLDER_VALUES = frozenset({"-", "no data stored", "empty", "", "unknown", "unavailable"})
+
+
 # Determine which eBUS circuits have active data
 def _detect_active_circuits(registers: list[EbusdRegister]) -> set[str]:
     circuit_data: dict[str, bool] = {}
     for reg in registers:
         if reg.circuit not in circuit_data:
             circuit_data[reg.circuit] = False
-        if reg.has_data and any(v is not None for v in reg.value.values()):
+        if reg.has_data and any(
+            v is not None and v.strip().lower() not in PLACEHOLDER_VALUES
+            for v in reg.value.values()
+        ):
             circuit_data[reg.circuit] = True
     return {c for c, active in circuit_data.items() if active}
 
