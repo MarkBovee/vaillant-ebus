@@ -297,7 +297,7 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_climate_flow_temp_range"
-        self._attr_device_info = coordinator.get_device_info("hmu")
+        self._attr_device_info = coordinator.get_device_info("z1")
 
     @property
     def supported_features(self) -> ClimateEntityFeature:
