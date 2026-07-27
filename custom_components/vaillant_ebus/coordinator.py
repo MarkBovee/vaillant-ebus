@@ -158,6 +158,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entities = generate_entity_descriptions(
             list(self.registers.values()),
             active_zone_circuits=self._active_zone_circuits,
+            present_circuits=self._present_circuits,
         )
         _LOGGER.info("Generated %d entity descriptions after ebusd discovery", len(self.entities))
         self.async_update_listeners()
@@ -210,21 +211,39 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception:
             return {}
 
-    # Store device metadata (makes, models, versions) from scan.* registers
+    # Store device metadata (makes, models, versions) from scan.* registers.
+    # Scan registers use circuit names like "Scan.08" (HMU), "Scan.15" (CTLV2), etc.
     def _parse_scan_metadata(self) -> None:
         self._scan_metadata: dict[str, dict[str, str]] = {}
+        self._present_devices: set[str] = set()
         for key, reg in self.registers.items():
-            if reg.circuit != "scan":
+            if not reg.circuit.lower().startswith("scan"):
                 continue
-            parts = reg.name.split("_", 1)
-            if len(parts) != 2:
-                continue
-            device, field = parts
+            if "." in reg.circuit:
+                device_id = reg.circuit.split(".")[1].lower()
+            else:
+                device_id = "general"
             value = reg.value.get("value")
             if value is not None and value not in ("-", "no data stored", ""):
-                self._scan_metadata.setdefault(device.lower(), {})[field.upper()] = str(value)
+                self._scan_metadata.setdefault(device_id, {})[reg.name.upper()] = str(value)
+                self._present_devices.add(device_id)
         if self._scan_metadata:
-            _LOGGER.info("Scan metadata: %s", self._scan_metadata)
+            _LOGGER.info("Scan metadata: %s | present devices: %s",
+                         self._scan_metadata, self._present_devices)
+
+    DEVICE_ID_TO_CIRCUIT = {
+        "08": "hmu", "15": "ctlv2", "76": "vwz", "f6": "Broadcast",
+    }
+
+    @property
+    def _present_circuits(self) -> set[str]:
+        devices = getattr(self, "_present_devices", set())
+        result: set[str] = set()
+        for did in devices:
+            ckt = self.DEVICE_ID_TO_CIRCUIT.get(did)
+            if ckt:
+                result.add(ckt)
+        return result
 
     # Read REGISTER_MAP entries that find missed, add entities if new
     async def _fallback_read(self) -> None:
@@ -290,6 +309,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.entities = generate_entity_descriptions(
                 list(self.registers.values()),
                 active_zone_circuits=self._active_zone_circuits,
+                present_circuits=self._present_circuits,
             )
         _LOGGER.info("Fallback: %d/%d known registers checked",
                      len(need_read), len(REGISTER_MAP))
