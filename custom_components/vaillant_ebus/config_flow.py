@@ -69,8 +69,8 @@ async def _probe_candidate(
         writer.close()
         await writer.wait_closed()
         status = data.decode("utf-8", errors="replace").strip().lower()
-        if status == "acquired":
-            return host, port, "acquired"
+        if "acquired" in status:
+            return host, port, status
     except (OSError, TimeoutError, ConnectionError):
         pass
     return None
@@ -78,7 +78,7 @@ async def _probe_candidate(
 # Validate ebusd state response.
 # Returns (error_key | None).
 def _validate_info(info: str) -> str | None:
-    if info != "acquired":
+    if "acquired" not in info.lower():
         return "no_bus_signal"
     return None
 
