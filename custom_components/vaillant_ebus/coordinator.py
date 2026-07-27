@@ -351,11 +351,19 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.ebusd_backend:
             await self.ebusd_backend.async_disconnect()
 
-    PARENT_CIRCUITS: dict[str, str] = {"z1": "ctlv2", "dhw": "ctlv2", "Broadcast": "hmu"}
+    PARENT_CIRCUITS: dict[str, str] = {
+        "ctlv2": "hmu", "z1": "ctlv2", "dhw": "ctlv2", "Broadcast": "hmu",
+    }
+    CIRCUIT_TO_DEVICE_ID: dict[str, str] = {
+        "hmu": "08", "ctlv2": "15", "vwz": "76", "Broadcast": "f6",
+    }
 
     def get_device_info(self, circuit: str) -> DeviceInfo:
         name = CIRCUIT_NAMES.get(circuit, f"Vaillant ({circuit})")
-        scan = self._scan_metadata.get(circuit, {}) if hasattr(self, "_scan_metadata") else {}
+        device_id = self.CIRCUIT_TO_DEVICE_ID.get(circuit)
+        scan = {}
+        if hasattr(self, "_scan_metadata") and device_id:
+            scan = self._scan_metadata.get(device_id, {})
         model = scan.get("ID") or name
         manufacturer = "Vaillant"
         sw_version = scan.get("SW")
