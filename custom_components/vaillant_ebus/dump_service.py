@@ -70,34 +70,38 @@ async def _dump_registers(
     return register_list, seen_keys
 
 
-async def async_grab(host: str, port: int, duration: int) -> list[str]:
-    reader, writer = await asyncio.open_connection(host, port)
+async def _grab_cmd(host: str, port: int, command: str) -> list[str]:
+    r, w = await asyncio.open_connection(host, port)
     try:
-        writer.write(b"grab on\n")
-        await writer.drain()
-        await asyncio.wait_for(reader.readline(), timeout=5)
-
-        lines = []
-        deadline = asyncio.get_running_loop().time() + duration
-        while asyncio.get_running_loop().time() < deadline:
-            remaining = deadline - asyncio.get_running_loop().time()
+        w.write(f"{command}\n".encode())
+        await w.drain()
+        resp = []
+        for _ in range(100):
             try:
-                line = await asyncio.wait_for(
-                    reader.readline(), timeout=min(1, remaining)
-                )
-                if line:
-                    decoded = line.decode().strip()
-                    if decoded:
-                        lines.append(decoded)
+                line = await asyncio.wait_for(r.readline(), timeout=2)
+                if not line:
+                    break
+                decoded = line.decode().strip()
+                if decoded:
+                    resp.append(decoded)
             except TimeoutError:
-                continue
-
-        writer.write(b"grab off\n")
-        await writer.drain()
-        return lines
+                break
+        return resp
     finally:
-        writer.close()
-        await writer.wait_closed()
+        w.close()
+        await w.wait_closed()
+
+
+async def async_grab(host: str, port: int, duration: int) -> list[str]:
+    lines: list[str] = []
+
+    # Probe: try raw grab syntaxes and include responses in output
+    for cmd in ("grab", "grab on", "grab all", "grab result all", "help grab"):
+        resp = await _grab_cmd(host, port, cmd)
+        for r in resp:
+            lines.append(f"[probe:{cmd}] {r}")
+
+    return lines
 
 
 async def async_export_discovery_dump(
