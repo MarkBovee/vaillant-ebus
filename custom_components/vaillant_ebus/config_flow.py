@@ -53,8 +53,8 @@ _DEFAULT_EBUSD_HOST = _get_local_ip()
 
 _LOGGER = logging.getLogger(__name__)
 
-# Attempt a TCP connect + info command against one ebusd candidate.
-# Returns (host, port, full_info) on success, None on failure.
+# Attempt a TCP connect + state command against one ebusd candidate.
+# Returns (host, port, "acquired") on success, None on failure.
 async def _probe_candidate(
     host: str, port: int = DISCOVERY_PORT
 ) -> tuple[str, int, str] | None:
@@ -63,34 +63,23 @@ async def _probe_candidate(
             asyncio.open_connection(host, port),
             timeout=DISCOVERY_TIMEOUT,
         )
-        writer.write(b"i\n")
+        writer.write(b"s\n")
         await writer.drain()
-        lines: list[str] = []
-        deadline = asyncio.get_event_loop().time() + DISCOVERY_TIMEOUT
-        while asyncio.get_event_loop().time() < deadline:
-            line = await asyncio.wait_for(reader.readline(), timeout=2)
-            if not line:
-                break
-            decoded = line.decode("utf-8", errors="replace").strip()
-            if decoded:
-                lines.append(decoded)
-            if "signal" in decoded.lower():
-                break
+        data = await asyncio.wait_for(reader.read(4096), timeout=DISCOVERY_TIMEOUT)
         writer.close()
         await writer.wait_closed()
-        if lines:
-            return host, port, "\n".join(lines)
+        status = data.decode("utf-8", errors="replace").strip().lower()
+        if status == "acquired":
+            return host, port, "acquired"
     except (OSError, TimeoutError, ConnectionError):
         pass
     return None
 
-# Validate ebusd info response: check signal and Vaillant presence.
+# Validate ebusd state response.
 # Returns (error_key | None).
 def _validate_info(info: str) -> str | None:
-    if "signal" not in info.lower() or "acquired" not in info.lower():
+    if info != "acquired":
         return "no_bus_signal"
-    if "Vaillant" not in info:
-        return "no_vaillant_device"
     return None
 
 
@@ -126,26 +115,9 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._discovered_host, self._discovered_port, user_input
             )
 
-        info = self._discovered_info
-        version = ""
-        device = ""
-        signal = ""
-        for line in info.split("\n"):
-            low = line.lower()
-            if low.startswith("version:"):
-                version = line.split(":", 1)[1].strip()
-            elif low.startswith("device:"):
-                device = line.split(":", 1)[1].strip()
-            elif "signal" in low:
-                signal = line.strip()
-        desc = (
-            f"**Version:** {version}\n\n"
-            f"**Device:** {device}\n\n"
-            f"**Signal:** {signal}"
-        )
         return self.async_show_form(
             step_id="confirm",
-            description_placeholders={"info": desc},
+            description_placeholders={"info": "ebusd is running and has acquired the bus signal."},
             data_schema=vol.Schema({
                 vol.Optional(
                     CONF_SCAN_INTERVAL,
