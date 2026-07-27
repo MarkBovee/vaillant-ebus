@@ -76,7 +76,7 @@ async def _grab_cmd(host: str, port: int, command: str) -> list[str]:
         w.write(f"{command}\n".encode())
         await w.drain()
         resp = []
-        for _ in range(100):
+        for _ in range(200):
             try:
                 line = await asyncio.wait_for(r.readline(), timeout=2)
                 if not line:
@@ -95,11 +95,21 @@ async def _grab_cmd(host: str, port: int, command: str) -> list[str]:
 async def async_grab(host: str, port: int, duration: int) -> list[str]:
     lines: list[str] = []
 
-    # Probe: try raw grab syntaxes and include responses in output
-    for cmd in ("grab", "grab on", "grab all", "grab result all", "help grab"):
-        resp = await _grab_cmd(host, port, cmd)
-        for r in resp:
-            lines.append(f"[probe:{cmd}] {r}")
+    # Enable grab (uses global ebusd flag)
+    enable_resp = await _grab_cmd(host, port, "grab")
+    lines.append(f"[grab] {enable_resp[0] if enable_resp else 'no response'}")
+
+    # Wait for capture duration
+    await asyncio.sleep(duration)
+
+    # Get buffered results
+    result_resp = await _grab_cmd(host, port, "grab result all")
+    for line in result_resp:
+        lines.append(line)
+
+    # Disable grab
+    stop_resp = await _grab_cmd(host, port, "grab stop")
+    lines.append(f"[grab stop] {stop_resp[0] if stop_resp else 'no response'}")
 
     return lines
 
