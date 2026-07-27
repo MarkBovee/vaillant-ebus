@@ -85,8 +85,6 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         errors: dict[str, str] = {}
 
-        defaults = {CONF_EBUSD_HOST: await _get_host_ip(), CONF_EBUSD_PORT: DEFAULT_EBUSD_PORT}
-
         if user_input is not None:
             host = user_input[CONF_EBUSD_HOST]
             port = user_input[CONF_EBUSD_PORT]
@@ -99,17 +97,20 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
                 if _validate_info(info):
                     errors["base"] = "no_bus_signal"
                 else:
-                    self._async_abort_entries_match({CONF_EBUSD_HOST: host, CONF_EBUSD_PORT: port})
-                    return self._create_entry(host, port, user_input)
+                    self._discovered_host = host
+                    self._discovered_port = port
+                    self._discovered_info = info
+                    unique_id = f"ebusd_{host}:{port}"
+                    await self.async_set_unique_id(unique_id)
+                    self._abort_if_unique_id_configured()
+                    return await self.async_step_confirm()
 
         if not errors:
             found = await self._try_discover()
             if found:
-                host, port, info = found
-                defaults = {CONF_EBUSD_HOST: host, CONF_EBUSD_PORT: port}
-                self._discovered_host = host
-                self._discovered_port = port
+                return await self.async_step_confirm()
 
+        defaults = {CONF_EBUSD_HOST: await _get_host_ip(), CONF_EBUSD_PORT: DEFAULT_EBUSD_PORT}
         return self.async_show_form(
             step_id="user",
             data_schema=_user_schema(defaults),
@@ -126,7 +127,9 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="confirm",
-            description_placeholders={"info": "ebusd is running and has acquired the bus signal."},
+            description_placeholders={
+                "info": f"Connected to **{self._discovered_host}:{self._discovered_port}** — signal acquired."
+            },
             data_schema=vol.Schema({
                 vol.Optional(
                     CONF_SCAN_INTERVAL,
