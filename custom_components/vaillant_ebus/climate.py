@@ -87,7 +87,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([EbusdClimate(coordinator, entry)])
+    async_add_entities([EbusdClimate(coordinator, entry), EbusdFlowTempRange(coordinator, entry)])
 
 
 class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
@@ -271,6 +271,85 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             return False
         try:
             result = await backend.async_write(circuit, name, value)
+            if result.success:
+                await self.coordinator.async_request_refresh()
+            return result.success
+        except Exception:
+            return False
+
+
+CIRCUIT_HMU = "hmu"
+MIN_FLOW_TEMP = f"{CIRCUIT}.Hc1MinFlowTempDesired.value"
+MAX_FLOW_TEMP = f"{CIRCUIT}.Hc1MaxFlowTempDesired.value"
+CURRENT_FLOW_TEMP = f"{CIRCUIT}.Hc1FlowTemp.value"
+
+
+class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
+
+    _attr_has_entity_name = True
+    _attr_name = "Flow Temperature Range"
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO]
+    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_min_temp = 5
+    _attr_max_temp = 75
+    _attr_target_temperature_step = 1
+
+    def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_climate_flow_temp_range"
+        self._attr_device_info = coordinator.get_device_info("hmu")
+
+    @property
+    def supported_features(self) -> ClimateEntityFeature:
+        return ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
+
+    @property
+    def current_temperature(self) -> float | None:
+        return _float(_value(self.coordinator, CURRENT_FLOW_TEMP))
+
+    @property
+    def target_temperature_low(self) -> float | None:
+        return _float(_value(self.coordinator, MIN_FLOW_TEMP))
+
+    @property
+    def target_temperature_high(self) -> float | None:
+        return _float(_value(self.coordinator, MAX_FLOW_TEMP))
+
+    @property
+    def hvac_action(self) -> HVACAction | None:
+        comp = (_value(self.coordinator, COMPRESSOR_STATUS) or "").lower()
+        if comp in HEATING_STATES:
+            return HVACAction.HEATING
+        if comp in COOLING_STATES:
+            return HVACAction.COOLING
+        if self.hvac_mode == HVACMode.OFF:
+            return HVACAction.OFF
+        if comp:
+            return HVACAction.IDLE
+        return HVACAction.OFF
+
+    @property
+    def hvac_mode(self) -> HVACMode | None:
+        return _hvac_mode(_value(self.coordinator, OPERATION_MODE))
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    async def async_set_temperature(self, **kwargs: Any) -> None:
+        low = kwargs.get("target_temp_low")
+        high = kwargs.get("target_temp_high")
+        if low is not None:
+            await self._write("Hc1MinFlowTempDesired", str(int(low)))
+        if high is not None:
+            await self._write("Hc1MaxFlowTempDesired", str(int(high)))
+
+    async def _write(self, name: str, value: str) -> bool:
+        backend = self.coordinator.ebusd_backend
+        if not backend:
+            return False
+        try:
+            result = await backend.async_write(CIRCUIT, name, value)
             if result.success:
                 await self.coordinator.async_request_refresh()
             return result.success

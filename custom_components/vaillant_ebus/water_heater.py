@@ -66,7 +66,6 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_water_heater_dhw"
         self._attr_device_info = coordinator.get_device_info(ZONE)
-        self._saved_op_mode: str | None = None
 
     @property
     def current_temperature(self) -> float | None:
@@ -102,9 +101,6 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         if operation_mode not in OPERATION_MODES:
             raise ValueError(f"Unsupported DHW operation: {operation_mode}")
         if operation_mode == "boost":
-            current = self.current_operation
-            if current and current != "boost":
-                self._saved_op_mode = current
             await self._write("HwcSFMode", "load")
         else:
             await self._write("HwcSFMode", "auto")
