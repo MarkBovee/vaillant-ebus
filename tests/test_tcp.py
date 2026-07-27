@@ -131,10 +131,17 @@ async def test_write_unexpected_response() -> None:
 
 async def test_write_empty_response() -> None:
     b = _backend()
-    b._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"\n"])
-    result = await b.async_write("hmu", "SetMode", "auto 17 - - 1 1 1 0 0 1")
-    assert not result.success
-    assert "empty" in result.error_message
+    b._reader.readline = AsyncMock(
+        side_effect=[
+            TimeoutError(),  # drain for write
+            b"\n",  # write returns empty
+            TimeoutError(),  # drain for read-back
+            b"auto;22.0;-;-;1;1;1;0;0;1\n",  # read-back
+        ]
+    )
+    result = await b.async_write("hmu", "SetMode", "auto;22.0;-;-;1;1;1;0;0;1")
+    assert result.success
+    assert result.verified_value == "auto;22.0;-;-;1;1;1;0;0;1"
 
 
 async def test_send_find_returns_lines() -> None:
