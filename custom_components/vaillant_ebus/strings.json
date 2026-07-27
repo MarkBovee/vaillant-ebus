@@ -8,6 +8,10 @@
           "ebusd_port": "Port",
           "scan_interval": "Update interval (seconds)"
         }
+      },
+      "confirm": {
+        "title": "Vaillant eBUS (ebusd)",
+        "description": "ebusd found on your home network.\n\n{info}"
       }
     },
     "error": {

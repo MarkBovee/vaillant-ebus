@@ -54,7 +54,7 @@ _DEFAULT_EBUSD_HOST = _get_local_ip()
 _LOGGER = logging.getLogger(__name__)
 
 # Attempt a TCP connect + info command against one ebusd candidate.
-# Returns (host, port, info_line) on success, None on failure.
+# Returns (host, port, full_info) on success, None on failure.
 async def _probe_candidate(
     host: str, port: int = DISCOVERY_PORT
 ) -> tuple[str, int, str] | None:
@@ -65,12 +65,21 @@ async def _probe_candidate(
         )
         writer.write(b"i\n")
         await writer.drain()
-        line = await asyncio.wait_for(reader.readline(), timeout=DISCOVERY_TIMEOUT)
+        lines: list[str] = []
+        deadline = asyncio.get_event_loop().time() + DISCOVERY_TIMEOUT
+        while asyncio.get_event_loop().time() < deadline:
+            line = await asyncio.wait_for(reader.readline(), timeout=2)
+            if not line:
+                break
+            decoded = line.decode("utf-8", errors="replace").strip()
+            if decoded:
+                lines.append(decoded)
+            if "signal" in decoded.lower():
+                break
         writer.close()
         await writer.wait_closed()
-        decoded = line.decode("utf-8").strip()
-        if decoded:
-            return host, port, decoded
+        if lines:
+            return host, port, "\n".join(lines)
     except (OSError, TimeoutError, ConnectionError):
         pass
     return None
@@ -78,7 +87,7 @@ async def _probe_candidate(
 # Validate ebusd info response: check signal and Vaillant presence.
 # Returns (error_key | None).
 def _validate_info(info: str) -> str | None:
-    if "signal acquired" not in info:
+    if "signal" not in info.lower() or "acquired" not in info.lower():
         return "no_bus_signal"
     if "Vaillant" not in info:
         return "no_vaillant_device"
@@ -88,60 +97,88 @@ def _validate_info(info: str) -> str | None:
 class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
-    # Try to discover ebusd automatically, fall back to manual form
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         if user_input is not None:
-            host = str(user_input[CONF_EBUSD_HOST]).strip()
-            port = int(user_input[CONF_EBUSD_PORT])
-            info_line = await _probe_candidate(host, port)
-            if info_line is None:
-                return self.async_show_form(
-                    step_id="user",
-                    data_schema=_user_schema(user_input),
-                    errors={"base": "cannot_connect"},
-                )
-            error = _validate_info(info_line[2])
-            if error:
-                return self.async_show_form(
-                    step_id="user",
-                    data_schema=_user_schema(user_input),
-                    errors={"base": error},
-                )
-            return self._create_entry(host, port, user_input)
+            return self._create_entry(
+                self._discovered_host, self._discovered_port, user_input
+            )
 
-        result = await self._try_discover()
-        if result:
-            return result
+        found = await self._try_discover()
+        if found:
+            host, port, info = found
+            self._discovered_host = host
+            self._discovered_port = port
+            return await self.async_step_confirm()
 
         return self.async_show_form(
             step_id="user",
             data_schema=_user_schema(),
+            errors={"base": "cannot_connect"},
         )
 
-    # Probe discovery candidates in order, return entry on first success
-    async def _try_discover(self) -> FlowResult | None:
-        for host in DISCOVERY_CANDIDATES:
+    async def async_step_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        if user_input is not None:
+            return self._create_entry(
+                self._discovered_host, self._discovered_port, user_input
+            )
+
+        info = self._discovered_info
+        version = ""
+        device = ""
+        signal = ""
+        for line in info.split("\n"):
+            low = line.lower()
+            if low.startswith("version:"):
+                version = line.split(":", 1)[1].strip()
+            elif low.startswith("device:"):
+                device = line.split(":", 1)[1].strip()
+            elif "signal" in low:
+                signal = line.strip()
+        desc = (
+            f"**Version:** {version}\n\n"
+            f"**Device:** {device}\n\n"
+            f"**Signal:** {signal}"
+        )
+        return self.async_show_form(
+            step_id="confirm",
+            description_placeholders={"info": desc},
+            data_schema=vol.Schema({
+                vol.Optional(
+                    CONF_SCAN_INTERVAL,
+                    default=DEFAULT_EBUSD_POLL_INTERVAL,
+                ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+            }),
+        )
+
+    async def _try_discover(self) -> tuple[str, int, str] | None:
+        candidates = list(DISCOVERY_CANDIDATES)
+        local_ip = _get_local_ip()
+        if local_ip and local_ip not in candidates:
+            candidates.insert(0, local_ip)
+        for host in candidates:
             _LOGGER.debug("Probing ebusd candidate: %s", host)
             result = await _probe_candidate(host, DISCOVERY_PORT)
             if result is None:
                 continue
-            found_host, found_port, info_line = result
-            error = _validate_info(info_line)
+            found_host, found_port, info = result
+            error = _validate_info(info)
             if error:
-                _LOGGER.warning("ebusd found at %s but %s: %s", found_host, error, info_line)
+                _LOGGER.warning("ebusd found at %s but %s", found_host, error)
                 continue
-            _LOGGER.info("ebusd discovered at %s:%s — %s", found_host, found_port, info_line)
+            _LOGGER.info("ebusd discovered at %s:%s", found_host, found_port)
             unique_id = f"ebusd_{found_host}:{found_port}"
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
-            return self._create_entry(found_host, found_port)
+            self._discovered_info = info
+            return found_host, found_port, info
 
-        _LOGGER.info("No ebusd discovered on candidates: %s", DISCOVERY_CANDIDATES)
+        _LOGGER.info("No ebusd discovered on candidates")
         return None
 
-    # Build and return a config entry
     def _create_entry(
         self,
         host: str,
