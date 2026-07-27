@@ -34,6 +34,7 @@ DAY_TEMPERATURE = f"{CIRCUIT}.Z1DayTemp.value"
 NIGHT_TEMPERATURE = f"{CIRCUIT}.Z1NightTemp.value"
 HC_STATUS = f"{CIRCUIT}.Hc1Status.value"
 COMPRESSOR_STATUS = "hmu.RunDataStatuscode.value"
+QUICK_VETO_DURATION = f"{CIRCUIT}.Z1QuickVetoDuration.value"
 QUICK_VETO_END_DATE = f"{CIRCUIT}.Z1QuickVetoEndDate.value"
 QUICK_VETO_END_TIME = f"{CIRCUIT}.Z1QuickVetoEndTime.value"
 HOLIDAY_START = f"{CIRCUIT}.Z1HolidayStartPeriod.value"
@@ -106,6 +107,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         self._attr_unique_id = f"{entry.entry_id}_climate_z1"
         self._attr_device_info = coordinator.get_device_info(ZONE)
         self._optimistic_hvac_mode: HVACMode | None = None
+        self._quick_veto_until: datetime | None = None
 
     @property
     def current_temperature(self) -> float | None:
@@ -156,6 +158,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     @property
     def preset_mode(self) -> str | None:
+        if self._quick_veto_until and self._quick_veto_until > datetime.now():
+            return PRESET_BOOST
         end_date = _value(self.coordinator, QUICK_VETO_END_DATE)
         end_time = _value(self.coordinator, QUICK_VETO_END_TIME)
         if end_date and end_time and end_date != HOLIDAY_RESET:
@@ -217,8 +221,21 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         temp = kwargs.get(ATTR_TEMPERATURE)
-        if temp is not None:
-            await self._write("Z1QuickVetoTemp", str(temp))
+        if temp is None:
+            return
+        opmode = (_value(self.coordinator, OPERATION_MODE) or "").lower()
+        if opmode == "day":
+            await self._write("Z1DayTemp", str(temp))
+        else:
+            if self.preset_mode == PRESET_BOOST:
+                await self._write("Z1QuickVetoTemp", str(temp))
+            else:
+                options = self.coordinator._entry.options
+                veto_duration = options.get("quick_veto_duration", 3)
+                self._quick_veto_until = datetime.now() + timedelta(hours=veto_duration)
+                await self._write("Z1QuickVetoTemp", str(temp))
+                await self._write("Z1QuickVetoDuration", str(veto_duration))
+                self.async_write_ha_state()
 
     async def async_turn_on(self) -> None:
         await self._write("Z1OpMode", "auto")
@@ -227,6 +244,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         await self._write("Z1OpMode", "off")
 
     def _handle_coordinator_update(self) -> None:
+        if self._quick_veto_until and self._quick_veto_until <= datetime.now():
+            self._quick_veto_until = None
         if self._optimistic_hvac_mode is not None:
             confirmed = _hvac_mode(_value(self.coordinator, OPERATION_MODE))
             if confirmed == self._optimistic_hvac_mode:
@@ -234,20 +253,27 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         super()._handle_coordinator_update()
 
     async def _cancel_quick_veto(self) -> None:
+        self._quick_veto_until = None
+        self.async_write_ha_state()
         await self._write("Z1QuickVetoDuration", "0")
-        await self._write("Z1QuickVetoEndDate", HOLIDAY_RESET)
-        await self._write("Z1QuickVetoEndTime", "00:00:00")
 
-    async def _start_quick_veto(self) -> None:
-        temp = _float(_value(self.coordinator, ROOM_TEMPERATURE))
+    async def _start_quick_veto(self, temp_override: float | None = None) -> None:
+        if temp_override is not None:
+            veto_temp = temp_override
+        else:
+            temp = _float(_value(self.coordinator, ROOM_TEMPERATURE))
+            options = self.coordinator._entry.options
+            veto_temp = options.get("quick_veto_temp")
+            if veto_temp is None and temp is not None:
+                veto_temp = round(temp, 1)
+        if veto_temp is None:
+            return
         options = self.coordinator._entry.options
-        veto_temp = options.get("quick_veto_temp")
-        if veto_temp is not None:
-            await self._write("Z1QuickVetoTemp", str(veto_temp))
-        elif temp is not None:
-            await self._write("Z1QuickVetoTemp", str(round(temp, 1)))
         veto_duration = options.get("quick_veto_duration", 3)
+        self._quick_veto_until = datetime.now() + timedelta(hours=veto_duration)
+        await self._write("Z1QuickVetoTemp", str(veto_temp))
         await self._write("Z1QuickVetoDuration", str(veto_duration))
+        self.async_write_ha_state()
 
     async def _start_holiday(self) -> None:
         today = datetime.now().date()

@@ -25,10 +25,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = VaillantCoordinator(hass, entry)
     hass.data[DOMAIN][entry.entry_id] = coordinator
     await coordinator.async_config_entry_first_refresh()
-    _LOGGER.error("DEBUG: async_config_entry_first_refresh done, entities=%d", len(coordinator.entities))
-
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    _LOGGER.error("DEBUG: async_forward_entry_setups done")
 
     # Read a single register by circuit and name.
     async def svc_read_parameter(call: ServiceCall) -> None:
@@ -93,7 +90,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         }),
     )
 
-    _LOGGER.error("DEBUG: vaillant_ebus setup complete, entities=%d", len(coordinator.entities))
     return True
 
 

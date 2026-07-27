@@ -42,6 +42,23 @@ release: v1.0.2
 - HA custom_component connects directly to ebusd TCP port 8888 — no MQTT, no cloud
 - 350+ registers auto-discovered, entities generated dynamically
 
+## CRITICAL: Follow mypyllant logic — this is a replacement project
+
+**Goal: drop-in replacement for https://github.com/signalkraft/mypyllant-component**
+
+All entity logic, especially climate, must follow mypyllant's patterns as closely as possible. Reference implementation is the authority:
+- `climate.py` → `mypyllant/.../climate.py`
+- Operating mode decisions, preset handling, quick veto, manual setpoint → 1:1 mapping
+- When in doubt, check mypyllant first
+
+**Climate entity logic (mypyllant-aligned):**
+- `async_set_temperature`: operating mode is the primary decision point:
+  - `day` mode (MANUAL) → write setpoint directly (`Z1DayTemp`)
+  - Other modes (TIME_CONTROLLED) → quick veto (`Z1QuickVetoTemp` + `Z1QuickVetoDuration`)
+  - If QV already active in time-controlled mode → update QV temp only (no new duration)
+- `async_set_preset_mode` / `preset_mode` → map mypyllant special functions
+- HVAC modes, presets, services → mirror mypyllant's structure
+
 ## CRITICAL: Never touch ebusd addon CSV files or configpath
 
 **NEVER modify, upload, or delete CSV files on the ebusd addon.**

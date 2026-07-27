@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
@@ -50,6 +51,7 @@ class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEn
         if not end_date or not end_time or end_date == HOLIDAY_RESET:
             return None
         try:
-            return datetime.strptime(f"{end_date} {end_time}", f"{DATE_FMT} {TIME_FMT}")
+            naive = datetime.strptime(f"{end_date} {end_time}", f"{DATE_FMT} {TIME_FMT}")
+            return naive.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
         except (ValueError, TypeError):
             return None
