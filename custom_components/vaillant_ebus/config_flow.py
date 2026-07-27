@@ -85,6 +85,8 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         errors: dict[str, str] = {}
 
+        defaults = {CONF_EBUSD_HOST: await _get_host_ip(), CONF_EBUSD_PORT: DEFAULT_EBUSD_PORT}
+
         if user_input is not None:
             host = user_input[CONF_EBUSD_HOST]
             port = user_input[CONF_EBUSD_PORT]
@@ -104,11 +106,10 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
             found = await self._try_discover()
             if found:
                 host, port, info = found
+                defaults = {CONF_EBUSD_HOST: host, CONF_EBUSD_PORT: port}
                 self._discovered_host = host
                 self._discovered_port = port
-                return await self.async_step_confirm()
 
-        defaults = {CONF_EBUSD_HOST: await _get_host_ip(), CONF_EBUSD_PORT: DEFAULT_EBUSD_PORT}
         return self.async_show_form(
             step_id="user",
             data_schema=_user_schema(defaults),
