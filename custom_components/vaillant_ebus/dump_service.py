@@ -95,21 +95,20 @@ async def _grab_cmd(host: str, port: int, command: str) -> list[str]:
 async def async_grab(host: str, port: int, duration: int) -> list[str]:
     lines: list[str] = []
 
-    # Enable grab (uses global ebusd flag)
-    enable_resp = await _grab_cmd(host, port, "grab")
-    lines.append(f"[grab] {enable_resp[0] if enable_resp else 'no response'}")
+    # Debug: test write
+    write_test = await _grab_cmd(host, port, "write -c hmu SetMode auto;22.0;-;-;1;1;1;0;0;1")
+    lines.append(f"[write] {write_test[0] if write_test else 'no response'}")
+    await asyncio.sleep(0.5)
+    read_test = await _grab_cmd(host, port, "read -c hmu SetMode")
+    lines.append(f"[readback] {read_test[0] if read_test else 'no response'}")
 
-    # Wait for capture duration
-    await asyncio.sleep(duration)
+    write_f = await _grab_cmd(host, port, "write -f -c hmu SetMode auto;22.0;-;-;1;1;1;0;0;1")
+    lines.append(f"[write -f] {write_f[0] if write_f else 'no response'}")
 
-    # Get buffered results
-    result_resp = await _grab_cmd(host, port, "grab result all")
-    for line in result_resp:
-        lines.append(line)
-
-    # Disable grab
-    stop_resp = await _grab_cmd(host, port, "grab stop")
-    lines.append(f"[grab stop] {stop_resp[0] if stop_resp else 'no response'}")
+    write_f11 = await _grab_cmd(host, port, "write -c hmu SetMode 11 1")
+    lines.append(f"[write field11] {write_f11[0] if write_f11 else 'no response'}")
+    write_f1 = await _grab_cmd(host, port, "write -c hmu SetMode 1 22.0")
+    lines.append(f"[write field1] {write_f1[0] if write_f1 else 'no response'}")
 
     return lines
 
