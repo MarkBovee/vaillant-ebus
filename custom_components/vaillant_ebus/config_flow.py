@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import socket
 from typing import Any
 
+import aiohttp
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, OptionsFlow
 from homeassistant.data_entry_flow import FlowResult
@@ -29,27 +29,21 @@ from .const import (
 )
 
 
-def _get_local_ip() -> str:
+async def _get_host_ip() -> str:
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(2)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        if ip and ip != "127.0.0.1":
-            return ip
-    except Exception:
-        pass
-    try:
-        ip = socket.gethostbyname(socket.gethostname())
-        if ip and ip != "127.0.0.1":
-            return ip
+        async with aiohttp.ClientSession() as session:
+            async with session.get("http://supervisor/network/info") as resp:
+                data = await resp.json()
+                for iface in data.get("data", {}).get("interfaces", []):
+                    if iface.get("primary"):
+                        for addr in iface.get("ipv4", {}).get("address", []):
+                            ip = addr.split("/")[0]
+                            if ip and ip != "127.0.0.1":
+                                return ip
     except Exception:
         pass
     return ""
 
-
-_DEFAULT_EBUSD_HOST = _get_local_ip()
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -71,8 +65,8 @@ async def _probe_candidate(
         status = data.decode("utf-8", errors="replace").strip().lower()
         if "acquired" in status:
             return host, port, status
-    except (OSError, TimeoutError, ConnectionError):
-        pass
+    except (OSError, TimeoutError, ConnectionError) as e:
+        _LOGGER.debug("Probe failed for %s:%s: %s", host, port, e)
     return None
 
 # Validate ebusd state response.
@@ -89,22 +83,36 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
+        errors: dict[str, str] = {}
+
         if user_input is not None:
-            return self._create_entry(
-                self._discovered_host, self._discovered_port, user_input
-            )
+            host = user_input[CONF_EBUSD_HOST]
+            port = user_input[CONF_EBUSD_PORT]
 
-        found = await self._try_discover()
-        if found:
-            host, port, info = found
-            self._discovered_host = host
-            self._discovered_port = port
-            return await self.async_step_confirm()
+            result = await _probe_candidate(host, port)
+            if result is None:
+                errors["base"] = "cannot_connect"
+            else:
+                _, _, info = result
+                if _validate_info(info):
+                    errors["base"] = "no_bus_signal"
+                else:
+                    self._async_abort_entries_match({CONF_EBUSD_HOST: host, CONF_EBUSD_PORT: port})
+                    return self._create_entry(host, port, user_input)
 
+        if not errors:
+            found = await self._try_discover()
+            if found:
+                host, port, info = found
+                self._discovered_host = host
+                self._discovered_port = port
+                return await self.async_step_confirm()
+
+        defaults = {CONF_EBUSD_HOST: await _get_host_ip(), CONF_EBUSD_PORT: DEFAULT_EBUSD_PORT}
         return self.async_show_form(
             step_id="user",
-            data_schema=_user_schema(),
-            errors={"base": "cannot_connect"},
+            data_schema=_user_schema(defaults),
+            errors=errors or None,
         )
 
     async def async_step_confirm(
@@ -127,10 +135,10 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def _try_discover(self) -> tuple[str, int, str] | None:
-        candidates = list(DISCOVERY_CANDIDATES)
-        local_ip = _get_local_ip()
-        if local_ip and local_ip not in candidates:
-            candidates.insert(0, local_ip)
+        candidates = set(DISCOVERY_CANDIDATES)
+        host_ip = await _get_host_ip()
+        if host_ip:
+            candidates.add(host_ip)
         for host in candidates:
             _LOGGER.debug("Probing ebusd candidate: %s", host)
             result = await _probe_candidate(host, DISCOVERY_PORT)
@@ -215,7 +223,7 @@ def _user_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     return vol.Schema(
         {
-            vol.Required(CONF_EBUSD_HOST, default=defaults.get(CONF_EBUSD_HOST, _DEFAULT_EBUSD_HOST)): str,
+            vol.Required(CONF_EBUSD_HOST, default=defaults.get(CONF_EBUSD_HOST, "")): str,
             vol.Required(CONF_EBUSD_PORT, default=defaults.get(CONF_EBUSD_PORT, DEFAULT_EBUSD_PORT)): int,
             vol.Optional(
                 CONF_SCAN_INTERVAL,
