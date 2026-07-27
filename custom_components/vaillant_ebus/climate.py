@@ -43,7 +43,7 @@ EBUSD_TO_HA_HVAC = {
     "off": "off",
     "auto": "auto",
     "day": "heat",
-    "night": "cool",
+    "night": "heat",
 }
 HA_TO_EBUSD_HVAC = {v: k for k, v in EBUSD_TO_HA_HVAC.items()}
 

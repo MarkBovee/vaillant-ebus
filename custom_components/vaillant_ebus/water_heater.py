@@ -19,7 +19,7 @@ CIRCUIT = "ctlv2"
 CURRENT_TEMPERATURE = f"{CIRCUIT}.HwcStorageTemp.value"
 TARGET_TEMPERATURE = f"{CIRCUIT}.HwcTempDesired.value"
 OPERATION_MODE = f"{CIRCUIT}.HwcOpMode.value"
-OPERATION_MODES = ["off", "day", "night", "auto", "boost"]
+OPERATION_MODES = ["off", "auto", "manual", "boost"]
 HWC_SF_MODE = f"{CIRCUIT}.HwcSFMode.value"
 
 
@@ -85,7 +85,7 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         if sf == "load":
             return "boost"
         operation = (_value(self.coordinator, OPERATION_MODE) or "").lower()
-        return operation if operation in ("off", "day", "night", "auto") else None
+        return operation if operation in ("off", "auto", "manual") else None
 
     @property
     def available(self) -> bool:
