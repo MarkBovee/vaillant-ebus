@@ -1,51 +1,79 @@
 # Changelog
 
-## 1.0.10-pre - 2026-07-24
+## 1.1.0 - 2026-07-27
 
-### First-time setup
+### Config flow — major rewrite
 
-- Auto-discover ebusd in config flow: probe core-ebusd, localhost,
-  127.0.0.1, homeassistant.local — only show manual form if all fail
-- Validate ebusd info response: check eBUS signal + Vaillant device
-  presence with specific error messages
-- Repairs integration: create HA repair issue when ebusd is unreachable,
-  auto-dismiss on reconnect
-- Better startup logging: connect status, ebusd version, circuit names
-- Diagnostics: include circuit_names list
-- Update README with C6 adapter setup guide, architecture diagram,
-  and simplified install flow
+- **Reliable auto-discovery**: probes ebusd via `s` command (state), checks for
+  `"acquired"` substring. Reads all response data in one `read(4096)` call
+  instead of fragile readline loop.
+- **Supervisor API integration**: detect host IP from `http://supervisor/network/info`
+  and use it as discovery candidate — works on HA OS where localhost/127.0.0.1
+  resolve to the core container, not the ebusd addon.
+- **Confirm step**: after successful connection test, show "Connected to
+  *host:port* — signal acquired." message before creating the entry.
+- **Options flow with host/port**: edit ebusd host, port, scan interval, away
+  duration, quick veto duration, and quick veto temperature in a single form.
+  Host/port changes update the config entry data via `async_update_entry`.
+- **Translations**: options step labels added to `en.json` and `strings.json`.
+- Remove stale `{host}:{port}` placeholders from `cannot_connect` error message.
 
-### Cooling support (NEW)
+### Device detection & circuit filtering
 
-- Climate entity now detects cooling mode (`cool_compressor_active`)
-  and displays `COOL` HVAC mode + `COOLING` action automatically
-- Set cooling from HA: selecting `COOL` mode writes to `Z1CoolingTemp`
-- Add `Z1CoolingTemp` as writable number entity (range 17–30°C, step 0.5)
-- Fix compressor status string matching: `cool_compressor_active` was
-  not recognized as active, causing `zero_idle_registers` to clear all
-  compressor values during cooling
+- **Scan metadata parsing**: extract MF/ID/SW/HW from `scan.XX` registers to
+  detect which eBUS devices are present on the bus.
+- **Dynamic circuit detection** replaces hardcoded `HIDDEN_CIRCUITS`: `v32` and
+  `vwz` are now auto-detected via scan metadata instead of being always hidden.
+- **Data-based filtering**: circuits without any register with actual data (all
+  return "no data stored" / "-" / empty) get zero entities — even if scan
+  metadata suggests the device exists. This prevents VWZ (passive cooling) and
+  v32 (ventilation) entities on systems without those modules.
+- **Standby device handling**: circuits with scan metadata but no register data
+  do not get entities (was: disabled-by-default entities for standby). Keeps
+  the device list clean for single-zone heat pumps.
 
-### Power sensors
+### Entity management
 
-- `RunDataBuildingCPumpPower`: reclassified from Speed (%) to Power (W)
-  with correct device class
-- `PowerConsumptionHmu`: disabled by default (decode error)
-- `CurrentConsumedPower` (Compressor Power, kW): already working
-- `TotalEnergyUsage` (Total Energy, kWh): already working
+- **Immediate startup**: entities are seeded from `REGISTER_MAP` + cache within
+  milliseconds, before ebusd connects. Only core circuits (`hmu`, `ctlv2`,
+  `Broadcast`) plus circuits with cached data get initial entities — no more
+  speculative v32/vwz entities at startup.
+- **Background discovery**: ebusd connect, `find`, and `fallback_read` run in a
+  background task without blocking HA startup. No more 10-15s timeout delays.
+- **Empty value handling**: registers returning `""`, `"-"`, `"no data stored`,
+  or `"empty"` are now excluded from the coordinator data dict entirely
+  (`_values_from_registers`). Sensor `async_added_to_hass` rejects empty string
+  as cached state. Prevents HA 2026.7+ strict validation warnings.
+- **Known registers without data** (`Hc1CoolingEnabled`, `Hc1DewPointMonitoring`,
+  `Hc1AutoOffMode`, etc.) are now disabled by default after discovery confirms
+  they have no data. Previously always enabled because they are in REGISTER_MAP.
+
+### Climate — Flow Temperature Range (NEW)
+
+- New `EbusdFlowTempRange` climate entity with `TARGET_TEMPERATURE_RANGE` support.
+  Reads `Hc1MinFlowTempDesired` (low) and `Hc1MaxFlowTempDesired` (high) for
+  the range, `Hc1FlowTemp` for current temperature. Writes min/max via
+  `async_set_temperature`. HVAC action from `RunDataStatuscode`.
+  Placed on the z1 (Woonkamer) device.
+- `Hc1ActualFlowTempDesired` made read-only (`writable=False`) — the heat pump
+  manages flow temperature target automatically; manual override via the range
+  entity's min/max setpoints.
+- Fix HVAC mode mapping: `night` → `heat` (setback), not `cool`.
 
 ### DHW
 
-- Limit DHW target temperature range to 35–70°C (was 30–70)
-- Sync water_heater entity `min_temp` to match (35°C)
+- Operation modes: `off`, `auto`, `manual`, `boost` (was: `off`, `auto`,
+  `day`, `night`). Corrected per `15.ctlv2.csv`: 0=off, 1=auto, 2=manual.
+- Remove dead `_saved_op_mode` code — the heat pump handles mode restoration
+  when boost naturally ends. No manual restore needed.
 
-### Other
+### Boilerplate & validation
 
-- Improve secondary zone register matching (prefix and suffix)
-- Add 127.0.0.1 to discovery candidates
-- Fix `RunDataBuildingCPumpPower`: friendly_name from "Speed" to "Power",
-  unit from "%" to "W", add device_class "power" (65 = Watt, not percent)
-- Remove broken `PowerConsumptionHmu` define: B516 has no power field
-  (only fields 10-13 exist). Disable the entity by default.
+- Circuits without any enabled registers get no entities at all (the minimum
+  viable circuit filter).
+- Keep `general` in HIDDEN_CIRCUITS (always hidden).
+- All validation commands pass: `ruff check .`, `pytest -q`,
+  `python3 -m compileall -f custom_components/vaillant_ebus/`.
 
 ## 1.0.9 - 2026-07-24
 
