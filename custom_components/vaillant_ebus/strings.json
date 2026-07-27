@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Vaillant eBUS (ebusd)",
+        "data": {
+          "ebusd_host": "Host",
+          "ebusd_port": "Port",
+          "scan_interval": "Update interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to ebusd",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "cannot_connect": "Cannot connect to ebusd",
+      "unknown": "Unexpected error"
+    }
+  }
+}

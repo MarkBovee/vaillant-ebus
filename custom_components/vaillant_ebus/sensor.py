@@ -61,7 +61,8 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
         if desc.meta.icon:
             self._attr_icon = desc.meta.icon
         if desc.meta.entity_category:
-            self._attr_entity_category = EntityCategory(desc.meta.entity_category)
+            cat = desc.meta.entity_category
+            self._attr_entity_category = EntityCategory(cat) if cat != "config" else None
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

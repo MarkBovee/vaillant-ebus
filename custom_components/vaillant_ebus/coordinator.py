@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -79,10 +78,17 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if version:
             _LOGGER.info("ebusd version: %s", version)
         _LOGGER.info("Defining custom registers")
-        await self._define_custom_registers()
+        try:
+            await self._define_custom_registers()
+        except Exception as exc:
+            _LOGGER.warning("define_custom_registers failed: %s", exc)
 
         _LOGGER.info("Scanning eBUS circuits")
-        discovered = await self.ebusd_backend.async_find()
+        try:
+            discovered = await self.ebusd_backend.async_find()
+        except Exception as exc:
+            _LOGGER.warning("ebusd find failed: %s", exc)
+            return
         self._last_find_keys = {r.key for r in discovered}
         for reg in discovered:
             self.registers[reg.key] = reg
@@ -90,6 +96,21 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                      len(discovered),
                      len({r.circuit for r in discovered}),
                      sorted({r.circuit for r in discovered}))
+
+        cache = self._load_cache()
+        for key, meta in REGISTER_MAP.items():
+            if key in self.registers or not meta.enabled:
+                continue
+            cached = cache.get(f"{key}.value")
+            parts = key.split(".", 1)
+            if len(parts) != 2:
+                continue
+            self.registers[key] = EbusdRegister(
+                circuit=parts[0], name=parts[1],
+                fields=["value"],
+                value={"value": cached} if cached else {"value": None},
+                has_data=cached is not None,
+            )
 
         self._active_zone_circuits = {
             reg.circuit for reg in discovered
@@ -102,8 +123,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             list(self.registers.values()),
             active_zone_circuits=self._active_zone_circuits,
         )
-
-        await self._fallback_read()
         _LOGGER.info("Generated %d entity descriptions", len(self.entities))
         _LOGGER.info("Coordinator startup complete")
     async def _define_custom_registers(self) -> None:
@@ -179,13 +198,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 value = await self.ebusd_backend.async_read(circuit, name)
                 was_new = key not in self.registers
-                has_stale = not was_new and not self.registers[key].has_data
-                if value is None and (was_new or has_stale):
-                    for _ in range(5):
-                        await asyncio.sleep(1)
-                        value = await self.ebusd_backend.async_read(circuit, name)
-                        if value:
-                            break
                 if value and (value.startswith(("or:", "ERR:")) or "read [-" in value):
                     value = None
                 if value is None:
@@ -231,7 +243,10 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         _LOGGER.debug("Coordinator update, started=%s", self._started)
         if not self._started:
-            await self.async_start()
+            try:
+                await self.async_start()
+            except Exception as exc:
+                _LOGGER.warning("ebusd startup failed: %s", exc)
             if not self.ebusd_backend or not self.ebusd_backend.connected:
                 return {}
             return {"ebusd": self._values_from_registers()}
@@ -266,7 +281,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self._fallback_read()
                 zero_idle_registers(self.registers)
                 return {"ebusd": self._values_from_registers()}
-            except ConnectionError:
+            except (ConnectionError, TimeoutError, OSError):
                 _LOGGER.warning("ebusd connection lost, reconnecting")
                 try:
                     await self.ebusd_backend.async_reconnect()

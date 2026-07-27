@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.components.climate import ClimateEntity, ClimateEntityFeature
-from homeassistant.components.climate.const import HVACAction, HVACMode
+from homeassistant.components.climate.const import (
+    PRESET_AWAY,
+    PRESET_BOOST,
+    PRESET_NONE,
+    HVACAction,
+    HVACMode,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
@@ -25,20 +32,43 @@ TARGET_TEMPERATURE = f"{CIRCUIT}.Z1ActualRoomTempDesired.value"
 OPERATION_MODE = f"{CIRCUIT}.Z1OpMode.value"
 DAY_TEMPERATURE = f"{CIRCUIT}.Z1DayTemp.value"
 NIGHT_TEMPERATURE = f"{CIRCUIT}.Z1NightTemp.value"
-PUMP_STATUS = f"{CIRCUIT}.Hc1PumpStatus.value"
+HC_STATUS = f"{CIRCUIT}.Hc1Status.value"
 COMPRESSOR_STATUS = "hmu.RunDataStatuscode.value"
-SET_MODE = "hmu.SetMode.value"
-COOLING_TARGET = f"{CIRCUIT}.Z1CoolingTemp.value"
-MIN_COOLING_TEMP = f"{CIRCUIT}.Hc1MinCoolingTempDesired.value"
+QUICK_VETO_END_DATE = f"{CIRCUIT}.Z1QuickVetoEndDate.value"
+QUICK_VETO_END_TIME = f"{CIRCUIT}.Z1QuickVetoEndTime.value"
+HOLIDAY_START = f"{CIRCUIT}.Z1HolidayStartPeriod.value"
+HOLIDAY_END = f"{CIRCUIT}.Z1HolidayEndPeriod.value"
+
+EBUSD_TO_HA_HVAC = {
+    "off": "off",
+    "auto": "auto",
+    "day": "heat",
+    "night": "cool",
+}
+HA_TO_EBUSD_HVAC = {v: k for k, v in EBUSD_TO_HA_HVAC.items()}
+
+HEATING_STATES = frozenset({
+    "heat_compressor_active",
+    "heat_prerun",
+    "heat_overrun",
+    "heat_immersion_heater_active",
+})
+COOLING_STATES = frozenset({
+    "cool_compressor_active",
+    "cool_prerun",
+    "cool_overrun",
+})
+
+DATE_FMT = "%d.%m.%Y"
+TIME_FMT = "%H:%M:%S"
+HOLIDAY_RESET = "01.01.2015"
 
 
-# Get string value from coordinator data by key
 def _value(coordinator: VaillantCoordinator, key: str) -> str | None:
     value = coordinator.data.get("ebusd", {}).get(key)
     return str(value) if value is not None else None
 
 
-# Safely convert string to float, return None on failure
 def _float(value: str | None) -> float | None:
     try:
         return float(value) if value is not None else None
@@ -46,41 +76,11 @@ def _float(value: str | None) -> float | None:
         return None
 
 
-# Check if SetMode indicates cooling is configured (like away mode toggle)
-def _is_cooling_enabled(coordinator: VaillantCoordinator) -> bool:
-    raw = _value(coordinator, SET_MODE)
-    if raw is None:
-        return False
-    fields = raw.split(";")
-    if len(fields) < 10:
-        return False
-    try:
-        return float(fields[1]) > 0 and fields[9] == "1"
-    except (TypeError, ValueError):
-        return False
+def _hvac_mode(value: str | None) -> HVACMode | None:
+    ha = EBUSD_TO_HA_HVAC.get((value or "").lower())
+    return HVACMode(ha) if ha else None
 
 
-# Check if coordinator data indicates cooling is active (prerun, compressor, or configured)
-def _is_cooling(coordinator: VaillantCoordinator) -> bool:
-    status = _value(coordinator, COMPRESSOR_STATUS)
-    if status is not None and "cool" in status.lower():
-        return True
-    return _is_cooling_enabled(coordinator)
-
-
-# Map Vaillant operation mode to HA HVACMode
-def _hvac_mode(value: str | None, coordinator: VaillantCoordinator | None = None) -> HVACMode | None:
-    if coordinator is not None and _is_cooling(coordinator):
-        return HVACMode.COOL
-    return {
-        "off": HVACMode.OFF,
-        "auto": HVACMode.AUTO,
-        "day": HVACMode.HEAT,
-        "night": HVACMode.HEAT,
-    }.get((value or "").lower())
-
-
-# Create the Z1 climate entity
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -91,121 +91,105 @@ async def async_setup_entry(
 
 
 class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
-    """Aggregated climate control for primary zone Z1."""
 
     _attr_has_entity_name = True
     _attr_name = "Home"
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO]
-    _attr_preset_modes = ["day", "night"]
+    _attr_preset_modes = [PRESET_NONE, PRESET_BOOST, PRESET_AWAY]
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = 5
     _attr_max_temp = 30
     _attr_target_temperature_step = 0.5
 
-    # Initialize Z1 climate entity
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_climate_z1"
         self._attr_device_info = coordinator.get_device_info(ZONE)
         self._optimistic_hvac_mode: HVACMode | None = None
-        self._last_write_error: str = ""
 
     @property
     def current_temperature(self) -> float | None:
-        # Return current room temperature
         return _float(_value(self.coordinator, ROOM_TEMPERATURE))
 
     @property
     def target_temperature(self) -> float | None:
-        # Return cooling setpoint when in COOL mode
-        if self.hvac_mode == HVACMode.COOL:
-            return _float(_value(self.coordinator, COOLING_TARGET))
         value = _float(_value(self.coordinator, TARGET_TEMPERATURE))
         if value is not None and 5 <= value <= 30:
             return value
-        if self.preset_mode == "night":
-            return _float(_value(self.coordinator, NIGHT_TEMPERATURE))
         return _float(_value(self.coordinator, DAY_TEMPERATURE))
 
     @property
-    def target_temperature_step(self) -> float:
-        # Return fixed 0.5C step for temperature adjustment
-        return 0.5
-
-    @property
     def supported_features(self) -> ClimateEntityFeature:
-        # Return PRESET_MODE and TARGET_TEMPERATURE when setpoint known
-        features = ClimateEntityFeature.PRESET_MODE
-        if self.target_temperature is not None:
-            features |= ClimateEntityFeature.TARGET_TEMPERATURE
-        return features
+        return ClimateEntityFeature.PRESET_MODE | ClimateEntityFeature.TARGET_TEMPERATURE
 
     @property
     def hvac_mode(self) -> HVACMode | None:
-        # Return optimistic state first, then fall back to coordinator data
         if self._optimistic_hvac_mode is not None:
             return self._optimistic_hvac_mode
-        return _hvac_mode(_value(self.coordinator, OPERATION_MODE), self.coordinator)
+        return _hvac_mode(_value(self.coordinator, OPERATION_MODE))
 
     @property
     def hvac_action(self) -> HVACAction | None:
-        # Return COOLING, HEATING, or IDLE based on compressor and pump state
-        if _is_cooling(self.coordinator):
-            return HVACAction.COOLING
-        value = (_value(self.coordinator, PUMP_STATUS) or "").lower()
-        if value in {"on", "1", "true"}:
+        hc = _float(_value(self.coordinator, HC_STATUS))
+        zone_active = hc is not None and hc > 0
+        comp = (_value(self.coordinator, COMPRESSOR_STATUS) or "").lower()
+        global_heat = comp in HEATING_STATES
+        global_cool = comp in COOLING_STATES
+        if zone_active:
+            if global_heat:
+                return HVACAction.HEATING
+            if global_cool:
+                return HVACAction.COOLING
+            if global_heat or global_cool:
+                return HVACAction.IDLE
+        mode = self.hvac_mode
+        if mode == HVACMode.OFF:
+            return HVACAction.OFF
+        if global_heat:
             return HVACAction.HEATING
-        return HVACAction.IDLE if value else None
+        if global_cool:
+            return HVACAction.COOLING
+        return HVACAction.IDLE
 
     @property
     def preset_mode(self) -> str | None:
-        # Return day/night preset from operation mode
-        mode = (_value(self.coordinator, OPERATION_MODE) or "").lower()
-        return mode if mode in self.preset_modes else None
+        end_date = _value(self.coordinator, QUICK_VETO_END_DATE)
+        end_time = _value(self.coordinator, QUICK_VETO_END_TIME)
+        if end_date and end_time and end_date != HOLIDAY_RESET:
+            try:
+                veto_end = datetime.strptime(f"{end_date} {end_time}", f"{DATE_FMT} {TIME_FMT}")
+                if veto_end > datetime.now():
+                    return PRESET_BOOST
+            except ValueError:
+                pass
+        h_start = _value(self.coordinator, HOLIDAY_START)
+        h_end = _value(self.coordinator, HOLIDAY_END)
+        if h_start and h_end and h_start != HOLIDAY_RESET:
+            try:
+                now = datetime.now().date()
+                start = datetime.strptime(h_start, DATE_FMT).date()
+                end = datetime.strptime(h_end, DATE_FMT).date()
+                if start <= now <= end:
+                    return PRESET_AWAY
+            except ValueError:
+                pass
+        return PRESET_NONE
 
     @property
     def available(self) -> bool:
-        # Entity available when coordinator updates succeed
         return self.coordinator.last_update_success
 
-    @property
-    def extra_state_attributes(self) -> dict[str, str] | None:
-        # Expose last write error for debugging
-        if self._last_write_error:
-            return {"last_write_error": self._last_write_error}
-        return None
-
-    # Write temperature setpoint to ebusd (cooling or heating)
-    async def async_set_temperature(self, **kwargs: Any) -> None:
-        value = kwargs.get(ATTR_TEMPERATURE)
-        if value is not None:
-            if self.hvac_mode == HVACMode.COOL:
-                await self._write("Z1CoolingTemp", str(value))
-            else:
-                name = "Z1NightTemp" if self.preset_mode == "night" else "Z1DayTemp"
-                await self._write(name, str(value))
-
-    # Override coordinator update to preserve optimistic state until confirmed
-    def _handle_coordinator_update(self) -> None:
-        # Reconcile optimistic state with fresh coordinator data
-        if self._optimistic_hvac_mode is not None:
-            confirmed = _hvac_mode(_value(self.coordinator, OPERATION_MODE), self.coordinator)
-            if confirmed == self._optimistic_hvac_mode:
-                self._optimistic_hvac_mode = None
-        super()._handle_coordinator_update()
-
-    # Write HVAC mode to ebusd via controller registers
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         self._optimistic_hvac_mode = hvac_mode
         self.async_write_ha_state()
+        ebusd_mode = HA_TO_EBUSD_HVAC.get(hvac_mode.value)
+        if ebusd_mode is None:
+            self._optimistic_hvac_mode = None
+            self.async_write_ha_state()
+            return
         ok = True
         try:
-            if hvac_mode in (HVACMode.COOL, HVACMode.AUTO):
-                ok = await self._write("Z1OpMode", "auto")
-            elif hvac_mode == HVACMode.HEAT:
-                ok = await self._write("Z1OpMode", "auto")
-            elif hvac_mode == HVACMode.OFF:
-                ok = await self._write("Z1OpMode", "off")
+            ok = await self._write("Z1OpMode", ebusd_mode)
         except Exception as exc:
             _LOGGER.exception("set_hvac_mode failed: %s", exc)
             ok = False
@@ -213,26 +197,71 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             self._optimistic_hvac_mode = None
             self.async_write_ha_state()
 
-    # Write day/night preset mode to ebusd
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        if preset_mode not in self.preset_modes:
+        if preset_mode not in self._attr_preset_modes:
             raise ValueError(f"Unsupported preset: {preset_mode}")
-        await self._write("Z1OpMode", preset_mode)
+        current = self.preset_mode
+        if current == PRESET_BOOST and preset_mode != PRESET_BOOST:
+            await self._cancel_quick_veto()
+        if preset_mode == PRESET_BOOST and current != PRESET_BOOST:
+            await self._start_quick_veto()
+        if preset_mode == PRESET_AWAY and current != PRESET_AWAY:
+            await self._start_holiday()
+        elif preset_mode != PRESET_AWAY and current == PRESET_AWAY:
+            await self._cancel_holiday()
 
-    # Write a CTLV2 register value and trigger refresh
+    async def async_set_temperature(self, **kwargs: Any) -> None:
+        temp = kwargs.get(ATTR_TEMPERATURE)
+        if temp is not None:
+            await self._write("Z1QuickVetoTemp", str(temp))
+
+    async def async_turn_on(self) -> None:
+        await self._write("Z1OpMode", "auto")
+
+    async def async_turn_off(self) -> None:
+        await self._write("Z1OpMode", "off")
+
+    def _handle_coordinator_update(self) -> None:
+        if self._optimistic_hvac_mode is not None:
+            confirmed = _hvac_mode(_value(self.coordinator, OPERATION_MODE))
+            if confirmed == self._optimistic_hvac_mode:
+                self._optimistic_hvac_mode = None
+        super()._handle_coordinator_update()
+
+    async def _cancel_quick_veto(self) -> None:
+        await self._write("Z1QuickVetoDuration", "0")
+        await self._write("Z1QuickVetoEndDate", HOLIDAY_RESET)
+        await self._write("Z1QuickVetoEndTime", "00:00:00")
+
+    async def _start_quick_veto(self) -> None:
+        temp = _float(_value(self.coordinator, ROOM_TEMPERATURE))
+        if temp is not None:
+            await self._write("Z1QuickVetoTemp", str(round(temp, 1)))
+        await self._write("Z1QuickVetoDuration", "3")
+
+    async def _start_holiday(self) -> None:
+        today = datetime.now().date()
+        await self._write("Z1HolidayStartPeriod", today.strftime(DATE_FMT))
+        await self._write("Z1HolidayEndPeriod", (today + timedelta(days=7)).strftime(DATE_FMT))
+        ht = _float(_value(self.coordinator, f"{CIRCUIT}.Z1HolidayTemp.value"))
+        if ht is None:
+            await self._write("Z1HolidayTemp", "15.0")
+
+    async def _cancel_holiday(self) -> None:
+        await self._write("Z1HolidayStartPeriod", HOLIDAY_RESET)
+        await self._write("Z1HolidayEndPeriod", HOLIDAY_RESET)
+
     async def _write(self, name: str, value: str) -> bool:
         return await self._write_raw(CIRCUIT, name, value)
 
-    # Write any circuit register and trigger refresh
     async def _write_raw(self, circuit: str, name: str, value: str) -> bool:
         backend = self.coordinator.ebusd_backend
         if not backend:
-            self._last_write_error = "backend is None"
             return False
-        result = await backend.async_write(circuit, name, value)
-        if result.success:
-            self._last_write_error = ""
-            await self.coordinator.async_request_refresh()
-        else:
-            self._last_write_error = result.error_message or "unknown error"
-        return result.success
+        try:
+            result = await backend.async_write(circuit, name, value)
+            if result.success:
+                await self.coordinator.async_request_refresh()
+            return result.success
+        except Exception:
+            return False

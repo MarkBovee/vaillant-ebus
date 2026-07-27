@@ -156,7 +156,22 @@ async def test_write_empty_response_and_readback_empty() -> None:
     )
     result = await b.async_write("hmu", "SetMode", "auto;22.0;-;-;1;1;1;0;0;1")
     assert not result.success
-    assert "empty" in result.error_message
+    assert "Write verification returned empty" in result.error_message
+
+
+async def test_write_write_done_readback_syn() -> None:
+    b = _backend()
+    b._reader.readline = AsyncMock(
+        side_effect=[
+            TimeoutError(),  # drain for write
+            b"done\n",  # write returns done
+            TimeoutError(),  # drain for read-back
+            b"ERR: SYN received\n",  # bus error on read-back
+        ]
+    )
+    result = await b.async_write("ctlv2", "Z1OpMode", "night")
+    assert not result.success
+    assert "Write verification failed: ERR: SYN received" in result.error_message
 
 
 async def test_send_find_returns_lines() -> None:

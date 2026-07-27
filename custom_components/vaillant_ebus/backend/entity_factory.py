@@ -8,7 +8,7 @@ from .mapping import REGISTER_MAP, RegisterMeta, get_meta
 from .models import EbusdRegister
 
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
-HIDDEN_CIRCUITS = {"vwz", "general"}
+HIDDEN_CIRCUITS = {"vwz", "general", "v32"}
 HIDDEN_REGISTERS = {"hmu.FlowTemperature", "Broadcast.FlowTemp"}
 
 
