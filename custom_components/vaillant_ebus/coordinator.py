@@ -159,10 +159,14 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self._parse_scan_metadata()
 
+        active_present: set[str] = {"hmu", "ctlv2", "Broadcast"}
+        for reg in self.registers.values():
+            if reg.has_data:
+                active_present.add(reg.circuit)
         self.entities = generate_entity_descriptions(
             list(self.registers.values()),
             active_zone_circuits=self._active_zone_circuits,
-            present_circuits=self._present_circuits,
+            present_circuits=active_present,
         )
         _LOGGER.info("Generated %d entity descriptions after ebusd discovery", len(self.entities))
         self.async_update_listeners()
@@ -310,10 +314,14 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._active_zone_circuits = _detect_active_circuits(
                 list(self.registers.values())
             )
+            fp_present: set[str] = {"hmu", "ctlv2", "Broadcast"}
+            for reg in self.registers.values():
+                if reg.has_data:
+                    fp_present.add(reg.circuit)
             self.entities = generate_entity_descriptions(
                 list(self.registers.values()),
                 active_zone_circuits=self._active_zone_circuits,
-                present_circuits=self._present_circuits,
+                present_circuits=fp_present,
             )
         _LOGGER.info("Fallback: %d/%d known registers checked",
                      len(need_read), len(REGISTER_MAP))
