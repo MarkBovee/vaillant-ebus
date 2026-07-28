@@ -16,13 +16,6 @@ from .const import CONF_AWAY_DURATION, DEFAULT_AWAY_DURATION, DOMAIN
 from .coordinator import VaillantCoordinator
 
 ZONE = "dhw"
-CIRCUIT = "ctlv2"
-CURRENT_TEMPERATURE = f"{CIRCUIT}.HwcStorageTemp.value"
-TARGET_TEMPERATURE = f"{CIRCUIT}.HwcTempDesired.value"
-OPERATION_MODE = f"{CIRCUIT}.HwcOpMode.value"
-HWC_SF_MODE = f"{CIRCUIT}.HwcSFMode.value"
-HOLIDAY_START = f"{CIRCUIT}.HwcHolidayStartPeriod.value"
-HOLIDAY_END = f"{CIRCUIT}.HwcHolidayEndPeriod.value"
 
 EBUSD_TO_HA_OPMODE = {
     "off": "off",
@@ -38,8 +31,10 @@ DATE_FMT = "%d.%m.%Y"
 HOLIDAY_RESET = "01.01.2015"
 
 
-# Look up a string value from coordinator ebusd data by key
-def _value(coordinator: VaillantCoordinator, key: str) -> str | None:
+# Look up a string value from coordinator ebusd data by register name
+def _value(coordinator: VaillantCoordinator, register: str) -> str | None:
+    circuit = coordinator.heating_circuit
+    key = f"{circuit}.{register}.value"
     value = coordinator.data.get("ebusd", {}).get(key)
     return str(value) if value is not None else None
 
@@ -91,8 +86,8 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
     # True when HwcHolidayStartPeriod/EndPeriod bracket today
     @property
     def is_away_mode_on(self) -> bool | None:
-        h_start = _value(self.coordinator, HOLIDAY_START)
-        h_end = _value(self.coordinator, HOLIDAY_END)
+        h_start = _value(self.coordinator, "HwcHolidayStartPeriod")
+        h_end = _value(self.coordinator, "HwcHolidayEndPeriod")
         if not h_start or not h_end:
             return None
         try:
@@ -106,21 +101,21 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
     # Current DHW storage temperature from HwcStorageTemp
     @property
     def current_temperature(self) -> float | None:
-        return _float(_value(self.coordinator, CURRENT_TEMPERATURE))
+        return _float(_value(self.coordinator, "HwcStorageTemp"))
 
     # Target temperature from HwcTempDesired, filtered to valid range
     @property
     def target_temperature(self) -> float | None:
-        value = _float(_value(self.coordinator, TARGET_TEMPERATURE))
+        value = _float(_value(self.coordinator, "HwcTempDesired"))
         return value if value is not None and 30 <= value <= 70 else None
 
     # Current operation mode: off/auto/manual/boost (boost from HwcSFMode)
     @property
     def current_operation(self) -> str | None:
-        sf = (_value(self.coordinator, HWC_SF_MODE) or "").lower()
+        sf = (_value(self.coordinator, "HwcSFMode") or "").lower()
         if sf == "load":
             return "boost"
-        operation = (_value(self.coordinator, OPERATION_MODE) or "").lower()
+        operation = (_value(self.coordinator, "HwcOpMode") or "").lower()
         return EBUSD_TO_HA_OPMODE.get(operation)
 
     @property
@@ -141,11 +136,11 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         if not backend:
             return
         if operation_mode == "boost":
-            await backend.async_write(CIRCUIT, "HwcSFMode", "load")
+            await backend.async_write(self.coordinator.heating_circuit, "HwcSFMode", "load")
         else:
             ebusd_mode = HA_TO_EBUSD_OPMODE.get(operation_mode, operation_mode)
-            await backend.async_write(CIRCUIT, "HwcSFMode", "auto")
-            await backend.async_write(CIRCUIT, "HwcOpMode", ebusd_mode)
+            await backend.async_write(self.coordinator.heating_circuit, "HwcSFMode", "auto")
+            await backend.async_write(self.coordinator.heating_circuit, "HwcOpMode", ebusd_mode)
         await self.coordinator.async_request_refresh()
 
     # Turn DHW on by setting operation mode to auto
@@ -169,10 +164,10 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         await self._write("HwcHolidayStartPeriod", HOLIDAY_RESET)
         await self._write("HwcHolidayEndPeriod", HOLIDAY_RESET)
 
-    # Write value to a CTLV2 register and trigger coordinator refresh
+    # Write value to a DHW register and trigger coordinator refresh
     async def _write(self, name: str, value: str) -> None:
         backend = self.coordinator.ebusd_backend
         if backend:
-            result = await backend.async_write(CIRCUIT, name, value)
+            result = await backend.async_write(self.coordinator.heating_circuit, name, value)
             if result.success:
                 await self.coordinator.async_request_refresh()

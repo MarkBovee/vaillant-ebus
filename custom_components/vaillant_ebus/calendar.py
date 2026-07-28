@@ -52,7 +52,7 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         self._prefix = prefix
         self._attr_name = name
         self._attr_unique_id = f"{entry.entry_id}_calendar_{prefix.lower()}"
-        self._attr_device_info = coordinator.get_device_info("ctlv2")
+        self._attr_device_info = coordinator.get_device_info(coordinator.heating_circuit)
 
     @property
     def event(self) -> CalendarEvent | None:
@@ -91,11 +91,12 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
 
     # Get timer register value from coordinator data or register cache
     def _value(self, name: str) -> str | None:
-        key = f"ctlv2.{name}.value"
+        c = self.coordinator.heating_circuit
+        key = f"{c}.{name}.value"
         value = self.coordinator.data.get("ebusd", {}).get(key)
         if value is not None:
             return str(value)
-        register = self.coordinator.registers.get(f"ctlv2.{name}")
+        register = self.coordinator.registers.get(f"{c}.{name}")
         return register.value.get("value") if register else None
 
 

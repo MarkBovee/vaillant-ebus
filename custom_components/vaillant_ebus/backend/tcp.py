@@ -20,6 +20,16 @@ INITIAL_RECONNECT_DELAY = 1
 READ_TIMEOUT = 10
 DONE_STR = "done"
 
+EBUSD_STATUS_SUFFIXES = (";ok", ";err", ";inv", ";too_small", ";too_big", ";nan", ";unknown")
+
+
+# Strip ebusd read status suffix from value (e.g. "23.50;ok" -> "23.50")
+def _strip_suffix(value: str) -> str:
+    for suffix in EBUSD_STATUS_SUFFIXES:
+        if value.endswith(suffix):
+            return value[:-len(suffix)]
+    return value
+
 
 class EbusdTcpBackend:
     # Initialize TCP backend with host and port
@@ -190,12 +200,15 @@ class EbusdTcpBackend:
             rhs = rhs.strip()
             parts = lhs.split(" ", 1)
             circuit_name = parts[0]
-            if len(parts) <= 1 or not parts[1].strip():
+            reg_name = parts[1].strip() if len(parts) > 1 else ""
+            if not reg_name and circuit_name.lower().startswith("scan"):
+                # Scan circuit metadata line: "scan.XX = MF;TYPE;SW;HW"
+                return circuit_name, reg_name, ["value"], {"value": _strip_suffix(rhs)}, "", ""
+            if not reg_name:
                 return None
-            reg_name = parts[1].strip()
             if rhs in ("-", "no data stored", "") or rhs.startswith(("(empty ", "(ERR")):
                 return circuit_name, reg_name, ["value"], {"value": None}, "", ""
-            return circuit_name, reg_name, ["value"], {"value": rhs}, "", ""
+            return circuit_name, reg_name, ["value"], {"value": _strip_suffix(rhs)}, "", ""
         # Multi-field register: "circuit type name QQ:ZZ:MSG:FIELDS: field=val field=val"
         if line.startswith("#"):
             return None
@@ -219,7 +232,7 @@ class EbusdTcpBackend:
                 continue
             fname, fval = pair.split("=", 1)
             fields.append(fname)
-            values[fname] = fval if fval not in ("-", "no data stored", "") else None
+            values[fname] = _strip_suffix(fval) if fval not in ("-", "no data stored", "") else None
         if not fields:
             fields = ["value"]
             values = {"value": None}
@@ -234,7 +247,9 @@ class EbusdTcpBackend:
         if result.error:
             _LOGGER.debug("Read error %s.%s: %s", circuit, name, result.error)
             return None
-        return result.data.strip() or None
+        raw = result.data.strip()
+        return _strip_suffix(raw) if raw else None
+
 
     # Write a value to an ebusd register, verify by read-back
     async def async_write(self, circuit: str, name: str, value: str) -> WriteResult:

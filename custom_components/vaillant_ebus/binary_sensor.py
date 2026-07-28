@@ -122,9 +122,10 @@ class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntit
     # True when either HMU or CTLV2 has active error codes
     @property
     def is_on(self) -> bool:
+        c = self.coordinator.heating_circuit
         values = (
             self.coordinator.data.get("ebusd", {}).get("hmu.Currenterror.value"),
-            self.coordinator.data.get("ebusd", {}).get("ctlv2.Currenterror.value"),
+            self.coordinator.data.get("ebusd", {}).get(f"{c}.Currenterror.value"),
         )
         return any(
             value and any(part.strip() not in {"", "-"} for part in str(value).split(";"))

@@ -139,8 +139,8 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     def is_on(self) -> bool | None:
         # True when holiday start/end dates contain today
         data = self.coordinator.data.get("ebusd", {})
-        start = data.get("ctlv2.Z1HolidayStartPeriod.value")
-        end = data.get("ctlv2.Z1HolidayEndPeriod.value")
+        start = data.get(f"{self.coordinator.heating_circuit}.Z1HolidayStartPeriod.value")
+        end = data.get(f"{self.coordinator.heating_circuit}.Z1HolidayEndPeriod.value")
         if start is None or end is None:
             return None
         return _is_holiday_active(start, end)
@@ -152,17 +152,17 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
             return
         today = _today_str()
         data = self.coordinator.data.get("ebusd", {})
-        holiday_temp = data.get("ctlv2.Z1HolidayTemp.value", "15")
+        holiday_temp = data.get(f"{self.coordinator.heating_circuit}.Z1HolidayTemp.value", "15")
         writes = [
-            ("ctlv2", "Z1HolidayStartPeriod", today),
-            ("ctlv2", "Z1HolidayEndPeriod", FAR_FUTURE),
-            ("ctlv2", "HwcHolidayStartPeriod", today),
-            ("ctlv2", "HwcHolidayEndPeriod", FAR_FUTURE),
+            (self.coordinator.heating_circuit, "Z1HolidayStartPeriod", today),
+            (self.coordinator.heating_circuit, "Z1HolidayEndPeriod", FAR_FUTURE),
+            (self.coordinator.heating_circuit, "HwcHolidayStartPeriod", today),
+            (self.coordinator.heating_circuit, "HwcHolidayEndPeriod", FAR_FUTURE),
         ]
         for circuit, name, value in writes:
             await backend.async_write(circuit, name, value)
         if holiday_temp:
-            await backend.async_write("ctlv2", "Z1HolidayTemp", holiday_temp)
+            await backend.async_write(self.coordinator.heating_circuit, "Z1HolidayTemp", holiday_temp)
         await self.coordinator.async_request_refresh()
 
     # Reset holiday dates to unset, disable away mode
@@ -171,14 +171,14 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         if not backend:
             return
         writes = [
-            ("ctlv2", "Z1HolidayStartPeriod", UNSET_DATE),
-            ("ctlv2", "Z1HolidayEndPeriod", UNSET_DATE),
-            ("ctlv2", "HwcHolidayStartPeriod", UNSET_DATE),
-            ("ctlv2", "HwcHolidayEndPeriod", UNSET_DATE),
+            (self.coordinator.heating_circuit, "Z1HolidayStartPeriod", UNSET_DATE),
+            (self.coordinator.heating_circuit, "Z1HolidayEndPeriod", UNSET_DATE),
+            (self.coordinator.heating_circuit, "HwcHolidayStartPeriod", UNSET_DATE),
+            (self.coordinator.heating_circuit, "HwcHolidayEndPeriod", UNSET_DATE),
         ]
         for circuit, name, value in writes:
             await backend.async_write(circuit, name, value)
-        await backend.async_write("ctlv2", "Z1HolidayTemp", "15")
+        await backend.async_write(self.coordinator.heating_circuit, "Z1HolidayTemp", "15")
         await self.coordinator.async_request_refresh()
 
 
@@ -202,7 +202,7 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         data = self.coordinator.data.get("ebusd", {})
-        raw = data.get("ctlv2.HwcSFMode.value")
+        raw = data.get(f"{self.coordinator.heating_circuit}.HwcSFMode.value")
         if raw is None:
             return None
         return raw.strip().lower() == "load"
@@ -212,7 +212,7 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         backend = self.coordinator.ebusd_backend
         if not backend:
             return
-        await backend.async_write("ctlv2", "HwcSFMode", "load")
+        await backend.async_write(self.coordinator.heating_circuit, "HwcSFMode", "load")
         await self.coordinator.async_request_refresh()
 
     # Write "auto" to HwcSFMode to stop DHW boost
@@ -220,7 +220,7 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         backend = self.coordinator.ebusd_backend
         if not backend:
             return
-        await backend.async_write("ctlv2", "HwcSFMode", "auto")
+        await backend.async_write(self.coordinator.heating_circuit, "HwcSFMode", "auto")
         await self.coordinator.async_request_refresh()
 
 
@@ -244,8 +244,8 @@ class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         data = self.coordinator.data.get("ebusd", {})
-        start = data.get("ctlv2.HwcHolidayStartPeriod.value")
-        end = data.get("ctlv2.HwcHolidayEndPeriod.value")
+        start = data.get(f"{self.coordinator.heating_circuit}.HwcHolidayStartPeriod.value")
+        end = data.get(f"{self.coordinator.heating_circuit}.HwcHolidayEndPeriod.value")
         if start is None or end is None:
             return None
         return _is_holiday_active(start, end)
@@ -256,8 +256,8 @@ class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         if not backend:
             return
         today = _today_str()
-        await backend.async_write("ctlv2", "HwcHolidayStartPeriod", today)
-        await backend.async_write("ctlv2", "HwcHolidayEndPeriod", FAR_FUTURE)
+        await backend.async_write(self.coordinator.heating_circuit, "HwcHolidayStartPeriod", today)
+        await backend.async_write(self.coordinator.heating_circuit, "HwcHolidayEndPeriod", FAR_FUTURE)
         await self.coordinator.async_request_refresh()
 
     # Reset DHW holiday dates to unset value
@@ -265,6 +265,6 @@ class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         backend = self.coordinator.ebusd_backend
         if not backend:
             return
-        await backend.async_write("ctlv2", "HwcHolidayStartPeriod", UNSET_DATE)
-        await backend.async_write("ctlv2", "HwcHolidayEndPeriod", UNSET_DATE)
+        await backend.async_write(self.coordinator.heating_circuit, "HwcHolidayStartPeriod", UNSET_DATE)
+        await backend.async_write(self.coordinator.heating_circuit, "HwcHolidayEndPeriod", UNSET_DATE)
         await self.coordinator.async_request_refresh()

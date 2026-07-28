@@ -18,11 +18,11 @@ ALWAYS_HIDDEN = {"memory"}
 def _infer_device_circuit(circuit: str, name: str) -> str | None:
     if circuit == "Broadcast":
         return "hmu"
-    if circuit == "ctlv2":
-        if name.startswith(("Hwc", "Cylinder", "MaxCylinder", "DHW", "Solar")):
-            return "dhw"
-        if name.startswith(("Z1", "Hc1")):
-            return "z1"
+    # ponytail: no circuit guard — name patterns are heating-controller-specific enough
+    if name.startswith(("Hwc", "Cylinder", "MaxCylinder", "DHW", "Solar")):
+        return "dhw"
+    if name.startswith(("Z1", "Hc1")):
+        return "z1"
     return None
 
 

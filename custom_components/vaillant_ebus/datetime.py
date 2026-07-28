@@ -27,8 +27,6 @@ HOLIDAY_ENTITIES = [
     ("DHW Holiday End", "HwcHolidayEndPeriod", "mdi:calendar-end", "dhw"),
 ]
 
-CIRCUIT = "ctlv2"
-
 
 # Create datetime entities for quick veto end and holiday periods
 async def async_setup_entry(
@@ -63,8 +61,9 @@ class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEn
     @property
     def native_value(self) -> datetime | None:
         data = self.coordinator.data.get("ebusd", {})
-        end_date = data.get("ctlv2.Z1QuickVetoEndDate.value")
-        end_time = data.get("ctlv2.Z1QuickVetoEndTime.value")
+        c = self.coordinator.heating_circuit
+        end_date = data.get(f"{c}.Z1QuickVetoEndDate.value")
+        end_time = data.get(f"{c}.Z1QuickVetoEndTime.value")
         if not end_date or not end_time or end_date == HOLIDAY_RESET:
             return None
         try:
@@ -97,7 +96,7 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity)
     # Return holiday start/end date as datetime (time set to midnight)
     @property
     def native_value(self) -> datetime | None:
-        raw = self.coordinator.data.get("ebusd", {}).get(f"{CIRCUIT}.{self._register}.value")
+        raw = self.coordinator.data.get("ebusd", {}).get(f"{self.coordinator.heating_circuit}.{self._register}.value")
         if not raw or str(raw) == HOLIDAY_RESET:
             return None
         try:
@@ -111,6 +110,6 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity)
         backend = self.coordinator.ebusd_backend
         if backend:
             date_str = value.strftime(DATE_FMT)
-            result = await backend.async_write(CIRCUIT, self._register, date_str)
+            result = await backend.async_write(self.coordinator.heating_circuit, self._register, date_str)
             if result.success:
                 await self.coordinator.async_request_refresh()
