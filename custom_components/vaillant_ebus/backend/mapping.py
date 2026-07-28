@@ -129,6 +129,10 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="COP Cooling",
         icon="mdi:lightning-bolt",
     ),
+    "hmu.CopCoolingMonth": RegisterMeta(
+        friendly_name="COP Cooling Month",
+        icon="mdi:lightning-bolt",
+    ),
     "hmu.YieldHc": RegisterMeta(
         friendly_name="Yield Heating",
         device_class="energy",
@@ -150,6 +154,18 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Yield Cooling Today",
         device_class="energy",
         unit="kWh",
+    ),
+    "hmu.YieldCooling": RegisterMeta(
+        friendly_name="Yield Cooling",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+    ),
+    "hmu.YieldCoolingMonth": RegisterMeta(
+        friendly_name="Yield Cooling Month",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
     ),
     "hmu.HoursCool": RegisterMeta(
         friendly_name="Cooling Runtime",

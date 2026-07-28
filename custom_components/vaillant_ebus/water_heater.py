@@ -126,12 +126,16 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
     async def async_set_operation_mode(self, operation_mode: str) -> None:
         if operation_mode not in OPERATION_MODES:
             raise ValueError(f"Unsupported DHW operation: {operation_mode}")
+        backend = self.coordinator.ebusd_backend
+        if not backend:
+            return
         if operation_mode == "boost":
-            await self._write("HwcSFMode", "load")
+            await backend.async_write(CIRCUIT, "HwcSFMode", "load")
         else:
             ebusd_mode = HA_TO_EBUSD_OPMODE.get(operation_mode, operation_mode)
-            await self._write("HwcSFMode", "auto")
-            await self._write("HwcOpMode", ebusd_mode)
+            await backend.async_write(CIRCUIT, "HwcSFMode", "auto")
+            await backend.async_write(CIRCUIT, "HwcOpMode", ebusd_mode)
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_on(self) -> None:
         await self.async_set_operation_mode("auto")

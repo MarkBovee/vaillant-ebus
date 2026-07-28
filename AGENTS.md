@@ -366,6 +366,40 @@ print(\"Cleaned up\")
 
 Hetzelfde patroon werkt voor `core.entity_registry` (entires met `vaillant_ebus` in `platform` of `unique_id`).
 
+## Direct ebusd test workflow
+
+**Always test writes directly on ebusd TCP before modifying integration code.**
+
+1. Write a small Python script that opens TCP to ebusd host (HA IP), sends commands, reads responses line by line
+2. First test `state` to verify connection, then `read` to check current value, then `write`, then `read` again to verify
+3. Each command gets its own TCP connection (connect, send, read response, close)
+4. Only when the write returns `done` and verify-read shows the new value, proceed to change integration code
+
+Script pattern (save as `scripts/ebusd_test.py`):
+```python
+import asyncio
+
+HOST = sys.argv[1] if len(sys.argv) > 1 else "192.168.1.135"
+PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8888
+
+async def send(cmd):
+    r, w = await asyncio.wait_for(asyncio.open_connection(HOST, PORT), timeout=5)
+    w.write((cmd + "\n").encode())
+    await w.drain()
+    try:
+        line = await asyncio.wait_for(r.readline(), timeout=5)
+        return line.decode().strip() if line else "(empty)"
+    except asyncio.TimeoutError:
+        return "(timeout)"
+```
+
+Run: `python3 scripts/ebusd_test.py <HA_IP> 8888`
+
+Also test via HTTP (port 8889):
+```bash
+curl -s "http://<HA_IP>:8889/read?circuit=ctlv2&name=HwcOpMode"
+```
+
 ## Important constraints
 
 - Never commit secrets from `.env`

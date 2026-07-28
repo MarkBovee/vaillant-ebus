@@ -2,11 +2,30 @@
 """Standalone ebusd TCP CLI — find, read, write, grab, dump."""
 import argparse
 import asyncio
+import importlib.util
 import os
 import sys
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+_SCRIPT_DIR = os.path.dirname(__file__)
+_REPO_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, ".."))
+
+_BACKEND_PKG = "vaillant_ebus.backend"
+_BACKEND_DIR = os.path.join(_REPO_ROOT, "custom_components", "vaillant_ebus", "backend")
+
+# Load backend modules without triggering homeassistant imports
+_LOADED = {}
+for mod_name, file in [("models", "models.py"), ("tcp", "tcp.py"), ("mapping", "mapping.py")]:
+    fqn = f"{_BACKEND_PKG}.{mod_name}"
+    spec = importlib.util.spec_from_file_location(fqn, os.path.join(_BACKEND_DIR, file))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[fqn] = mod
+    spec.loader.exec_module(mod)
+    _LOADED[mod_name] = mod
+
+EbusdTcpBackend = _LOADED["tcp"].EbusdTcpBackend
+EbusdRegister = _LOADED["models"].EbusdRegister
+REGISTER_MAP = _LOADED["mapping"].REGISTER_MAP
 
 try:
     import yaml
@@ -14,12 +33,6 @@ except ImportError:
     import subprocess
     subprocess.run([sys.executable, "-m", "pip", "install", "pyyaml"], check=True)
     import yaml
-
-from custom_components.vaillant_ebus.backend.tcp import EbusdTcpBackend, SendResult
-from custom_components.vaillant_ebus.backend.mapping import REGISTER_MAP
-from custom_components.vaillant_ebus.backend.models import EbusdRegister
-
-
 async def cmd_find(backend: EbusdTcpBackend, args) -> int:
     raw_lines = await backend.async_find_lines()
     circuits: dict[str, dict[str, EbusdRegister]] = {}

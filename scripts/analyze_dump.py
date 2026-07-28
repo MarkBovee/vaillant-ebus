@@ -1,12 +1,27 @@
 #!/usr/bin/env python3
 """Analyze a discovery dump: compare vs REGISTER_MAP, detect program patterns."""
 import argparse
+import importlib.util
 import os
 import re
 import sys
 from collections import defaultdict
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+_SCRIPT_DIR = os.path.dirname(__file__)
+_REPO_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, ".."))
+
+_BACKEND_PKG = "vaillant_ebus.backend"
+_BACKEND_DIR = os.path.join(_REPO_ROOT, "custom_components", "vaillant_ebus", "backend")
+
+# Load backend modules without triggering homeassistant imports
+for mod_name, file in [("models", "models.py"), ("mapping", "mapping.py")]:
+    fqn = f"{_BACKEND_PKG}.{mod_name}"
+    spec = importlib.util.spec_from_file_location(fqn, os.path.join(_BACKEND_DIR, file))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[fqn] = mod
+    spec.loader.exec_module(mod)
+
+REGISTER_MAP = sys.modules[f"{_BACKEND_PKG}.mapping"].REGISTER_MAP
 
 try:
     import yaml
@@ -14,12 +29,6 @@ except ImportError:
     import subprocess
     subprocess.run([sys.executable, "-m", "pip", "install", "pyyaml"], check=True)
     import yaml
-
-try:
-    from custom_components.vaillant_ebus.backend.mapping import REGISTER_MAP
-except ImportError:
-    REGISTER_MAP = {}
-
 
 DATE_PATTERN = re.compile(r"(Start|End)(Period|Date|Time)$", re.IGNORECASE)
 TEMP_PATTERN = re.compile(r"(Temp(erature)?|Setpoint|Desired)$", re.IGNORECASE)
