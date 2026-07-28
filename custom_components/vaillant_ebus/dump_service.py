@@ -17,6 +17,7 @@ from .coordinator import VaillantCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
+# Redact sensitive fields (serial, keycode, etc.) before writing dump
 def _redact(value: str | None, name: str) -> str | None:
     if value is None:
         return None
@@ -26,6 +27,7 @@ def _redact(value: str | None, name: str) -> str | None:
     return value
 
 
+# Collect discovered + REGISTER_MAP registers into serializable dicts
 async def _dump_registers(
     backend, seen_keys: set[str] | None = None
 ) -> tuple[list[dict], set[str], list[str]]:
@@ -83,6 +85,7 @@ async def _dump_registers(
     return register_list, seen_keys, raw_lines
 
 
+# Send a raw grab command to ebusd and collect response lines
 async def _grab_cmd(host: str, port: int, command: str) -> list[str]:
     r, w = await asyncio.open_connection(host, port)
     try:
@@ -105,28 +108,26 @@ async def _grab_cmd(host: str, port: int, command: str) -> list[str]:
         await w.wait_closed()
 
 
+# Capture raw eBUS traffic for N seconds via ebusd grab command
 async def async_grab(host: str, port: int, duration: int) -> list[str]:
     lines: list[str] = []
 
-    # Enable grab (uses global ebusd flag)
     enable_resp = await _grab_cmd(host, port, "grab")
     lines.append(f"[grab] {enable_resp[0] if enable_resp else 'no response'}")
 
-    # Wait for capture duration
     await asyncio.sleep(duration)
 
-    # Get buffered results
     result_resp = await _grab_cmd(host, port, "grab result all")
     for line in result_resp:
         lines.append(line)
 
-    # Disable grab
     stop_resp = await _grab_cmd(host, port, "grab stop")
     lines.append(f"[grab stop] {stop_resp[0] if stop_resp else 'no response'}")
 
     return lines
 
 
+# Main entry point: dump registers + optional grab to YAML, notify user
 async def async_export_discovery_dump(
     hass: HomeAssistant,
     coordinator: VaillantCoordinator,
@@ -193,12 +194,14 @@ async def async_export_discovery_dump(
     )
 
 
+# Create output directory if it does not exist
 def _mkdir(path: str) -> None:
     import os
 
     os.makedirs(path, exist_ok=True)
 
 
+# Write YAML dump file with security header
 def _write_yaml(filepath: str, data: dict) -> None:
     header = (
         "# Discovery dump for vaillant_ebus\n"

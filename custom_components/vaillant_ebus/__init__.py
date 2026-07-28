@@ -56,7 +56,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def svc_rediscover(call: ServiceCall) -> None:
         if coordinator.ebusd_backend:
             await coordinator.ebusd_backend.async_disconnect()
-            await coordinator.async_start()
+        coordinator.ebusd_backend = None
+        coordinator._ebusd_connected = False
+        coordinator._started = False
+        await coordinator.async_request_refresh()
 
     hass.services.async_register(
         DOMAIN, "read_parameter", svc_read_parameter,

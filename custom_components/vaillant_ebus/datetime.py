@@ -30,6 +30,7 @@ HOLIDAY_ENTITIES = [
 CIRCUIT = "ctlv2"
 
 
+# Create datetime entities for quick veto end and holiday periods
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -47,6 +48,7 @@ class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEn
     _attr_name = "Quick Veto End"
     _attr_icon = "mdi:calendar-clock"
 
+    # Initialize quick veto end entity, disabled by default
     def __init__(
         self,
         coordinator: VaillantCoordinator,
@@ -57,6 +59,7 @@ class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEn
         self._attr_entity_registry_enabled_default = False
         self._attr_device_info = coordinator.get_device_info("z1")
 
+    # Return quick veto end date/time as local datetime
     @property
     def native_value(self) -> datetime | None:
         data = self.coordinator.data.get("ebusd", {})
@@ -74,6 +77,7 @@ class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEn
 class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity):
     _attr_has_entity_name = True
 
+    # Initialize holiday date entity with register and zone mapping
     def __init__(
         self,
         coordinator: VaillantCoordinator,
@@ -90,6 +94,7 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity)
         self._attr_unique_id = f"{entry.entry_id}_{register.lower()}"
         self._attr_device_info = coordinator.get_device_info(zone)
 
+    # Return holiday start/end date as datetime (time set to midnight)
     @property
     def native_value(self) -> datetime | None:
         raw = self.coordinator.data.get("ebusd", {}).get(f"{CIRCUIT}.{self._register}.value")
@@ -101,6 +106,7 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity)
         except (ValueError, TypeError):
             return None
 
+    # Write holiday date to ebusd register and trigger refresh
     async def async_set_value(self, value: datetime) -> None:
         backend = self.coordinator.ebusd_backend
         if backend:

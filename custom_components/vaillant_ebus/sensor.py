@@ -64,6 +64,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
             cat = desc.meta.entity_category
             self._attr_entity_category = EntityCategory(cat) if cat != "config" else None
 
+    # Restore last known state from HA registry on startup
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last = await self.async_get_last_state()

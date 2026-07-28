@@ -55,6 +55,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Immediately seed entities from REGISTER_MAP + cache (no ebusd needed)
         self._seed_entities_from_cache()
 
+    # Seed register dict + entities from REGISTER_MAP and local cache before ebusd connects
     def _seed_entities_from_cache(self) -> None:
         cache = self._load_cache()
         known_circuits: set[str] = set()
@@ -170,6 +171,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         _LOGGER.info("Generated %d entity descriptions after ebusd discovery", len(self.entities))
         self.async_update_listeners()
+
+    # Define runtime registers (z1RoomHumidity) via ebusd define command
     async def _define_custom_registers(self) -> None:
         if not self.ebusd_backend:
             return
@@ -203,6 +206,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _cache_path(self) -> str:
         return self.hass.config.path(DOMAIN, "register_cache.json")
 
+    # Persist register values to JSON cache for fast startup on next HA boot
     def _save_cache(self, values: dict[str, str]) -> None:
         cache_dir = os.path.dirname(self._cache_path)
         try:
@@ -212,6 +216,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception:
             pass
 
+    # Load previously cached register values from JSON file
     def _load_cache(self) -> dict[str, str]:
         try:
             with open(self._cache_path) as f:
@@ -243,6 +248,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         "08": "hmu", "15": "ctlv2", "76": "vwz", "f6": "Broadcast",
     }
 
+    # Map scan-detected device IDs to known circuit names
     @property
     def _present_circuits(self) -> set[str]:
         devices = getattr(self, "_present_devices", set())
@@ -370,6 +376,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         "hmu": "08", "ctlv2": "15", "vwz": "76", "Broadcast": "f6",
     }
 
+    # Build HA DeviceInfo for a circuit, using scan metadata (SW/HW) when available
     def get_device_info(self, circuit: str) -> DeviceInfo:
         name = CIRCUIT_NAMES.get(circuit, f"Vaillant ({circuit})")
         device_id = self.CIRCUIT_TO_DEVICE_ID.get(circuit)

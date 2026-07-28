@@ -116,6 +116,7 @@ class EbusdTcpBackend:
             res = response.decode("utf-8").rstrip("\n\r")
             return self._log_cmd(command, SendResult(data=res), t0)
 
+    # Record command in ring-buffer log with duration for diagnostics
     def _log_cmd(self, command: str, result: SendResult, t0: float | None = None) -> SendResult:
         duration = int((time.monotonic() - t0) * 1000) if t0 else 0
         self._command_log.append({

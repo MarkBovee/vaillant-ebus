@@ -1149,6 +1149,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
 }
 
 
+# Look up RegisterMeta by circuit.name, return empty meta if unknown
 def get_meta(circuit: str, name: str, field: str = "value") -> RegisterMeta:
     key = f"{circuit}.{name}"
     if field != "value":

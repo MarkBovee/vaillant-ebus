@@ -30,6 +30,7 @@ from .const import (
 )
 
 
+# Detect host IP from HA supervisor network info for auto-discovery
 async def _get_host_ip() -> str:
     try:
         async with aiohttp.ClientSession() as session:
@@ -70,17 +71,10 @@ async def _probe_candidate(
         _LOGGER.debug("Probe failed for %s:%s: %s", host, port, e)
     return None
 
-# Validate ebusd state response.
-# Returns (error_key | None).
-def _validate_info(info: str) -> str | None:
-    if "acquired" not in info.lower():
-        return "no_bus_signal"
-    return None
-
-
 class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
+    # User-facing config step: probe host or auto-discover, then confirm
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -94,17 +88,13 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
             if result is None:
                 errors["base"] = "cannot_connect"
             else:
-                _, _, info = result
-                if _validate_info(info):
-                    errors["base"] = "no_bus_signal"
-                else:
-                    self._discovered_host = host
-                    self._discovered_port = port
-                    self._discovered_info = info
-                    unique_id = f"ebusd_{host}:{port}"
-                    await self.async_set_unique_id(unique_id)
-                    self._abort_if_unique_id_configured()
-                    return await self.async_step_confirm()
+                self._discovered_host = host
+                self._discovered_port = port
+                self._discovered_info = result[2]
+                unique_id = f"ebusd_{host}:{port}"
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
+                return await self.async_step_confirm()
 
         if not errors:
             found = await self._try_discover()
@@ -122,6 +112,7 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors or None,
         )
 
+    # Confirm step: show connection info and accept scan interval
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -143,6 +134,7 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
             }),
         )
 
+    # Try all discovery candidates, return first ebusd with acquired signal
     async def _try_discover(self) -> tuple[str, int, str] | None:
         candidates = set(DISCOVERY_CANDIDATES)
         host_ip = await _get_host_ip()
@@ -154,10 +146,6 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
             if result is None:
                 continue
             found_host, found_port, info = result
-            error = _validate_info(info)
-            if error:
-                _LOGGER.warning("ebusd found at %s but %s", found_host, error)
-                continue
             _LOGGER.info("ebusd discovered at %s:%s", found_host, found_port)
             unique_id = f"ebusd_{found_host}:{found_port}"
             await self.async_set_unique_id(unique_id)
@@ -168,6 +156,7 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
         _LOGGER.info("No ebusd discovered on candidates")
         return None
 
+    # Create the config entry with host, port, and scan interval
     def _create_entry(
         self,
         host: str,

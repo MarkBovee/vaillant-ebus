@@ -17,6 +17,8 @@
   Host/port changes update the config entry data via `async_update_entry`.
 - **Translations**: options step labels added to `en.json` and `strings.json`.
 - Remove stale `{host}:{port}` placeholders from `cannot_connect` error message.
+- Remove dead `_validate_info()` function — already covered by `_probe_candidate`
+  which only returns on `"acquired"`.
 
 ### Device detection & circuit filtering
 
@@ -58,7 +60,6 @@
 - `Hc1ActualFlowTempDesired` made read-only (`writable=False`) — the heat pump
   manages flow temperature target automatically; manual override via the range
   entity's min/max setpoints.
-- Fix HVAC mode mapping: `night` → `heat` (setback), not `cool`.
 
 ### DHW
 
@@ -72,6 +73,11 @@
 - Circuits without any enabled registers get no entities at all (the minimum
   viable circuit filter).
 - Keep `general` in HIDDEN_CIRCUITS (always hidden).
+- Fix rediscover service crash: `async_start()` did not exist on
+  `VaillantCoordinator` — now resets state flags and triggers background reconnect.
+- Add intent comments to all Python functions per coding-standards rule 11.
+- Remove `backend/base.py` from repo (single-backend, no abstraction needed).
+- `AGENTS.md`: update repo structure, fix `HIDDEN_CIRCUITS`, add priority rules.
 - All validation commands pass: `ruff check .`, `pytest -q`,
   `python3 -m compileall -f custom_components/vaillant_ebus/`.
 

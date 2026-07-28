@@ -119,6 +119,7 @@ class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntit
         self._attr_unique_id = f"{entry.entry_id}_fault_active"
         self._attr_device_info = coordinator.get_device_info("hmu")
 
+    # True when either HMU or CTLV2 has active error codes
     @property
     def is_on(self) -> bool:
         values = (

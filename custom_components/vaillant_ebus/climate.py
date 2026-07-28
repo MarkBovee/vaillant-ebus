@@ -54,11 +54,13 @@ DATE_FMT = "%d.%m.%Y"
 HOLIDAY_RESET = "01.01.2015"
 
 
+# Look up a string value from coordinator ebusd data by key
 def _value(coordinator: VaillantCoordinator, key: str) -> str | None:
     value = coordinator.data.get("ebusd", {}).get(key)
     return str(value) if value is not None else None
 
 
+# Parse string value to float, return None on failure
 def _float(value: str | None) -> float | None:
     try:
         return float(value) if value is not None else None
@@ -66,11 +68,13 @@ def _float(value: str | None) -> float | None:
         return None
 
 
+# Map ebusd operation mode string to HA HVACMode
 def _hvac_mode(value: str | None) -> HVACMode | None:
     ha = EBUSD_TO_HA_HVAC.get((value or "").lower())
     return HVACMode(ha) if ha else None
 
 
+# Create climate entities: zone thermostat and flow temperature range
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -91,6 +95,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     _attr_max_temp = 30
     _attr_target_temperature_step = 0.5
 
+    # Initialize zone climate entity with device info and optimistic state tracking
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_climate_z1"
@@ -98,10 +103,12 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         self._optimistic_hvac_mode: HVACMode | None = None
         self._quick_veto_until: datetime | None = None
 
+    # Current room temperature from Z1RoomTemp
     @property
     def current_temperature(self) -> float | None:
         return _float(_value(self.coordinator, ROOM_TEMPERATURE))
 
+    # Target temperature: quick veto temp (boost) or actual/target, filtered to valid range
     @property
     def target_temperature(self) -> float | None:
         if self.preset_mode == PRESET_BOOST:
@@ -113,6 +120,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             return value
         return _float(_value(self.coordinator, DAY_TEMPERATURE))
 
+    # Supported features: preset mode, target temp, turn on/off
     @property
     def supported_features(self) -> ClimateEntityFeature:
         return (
@@ -122,12 +130,14 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             | ClimateEntityFeature.TURN_OFF
         )
 
+    # Current HVAC mode: optimistic value or ebusd Z1OpMode
     @property
     def hvac_mode(self) -> HVACMode | None:
         if self._optimistic_hvac_mode is not None:
             return self._optimistic_hvac_mode
         return _hvac_mode(_value(self.coordinator, OPERATION_MODE))
 
+    # HVAC action derived from HC1 status, pump, and compressor state
     @property
     def hvac_action(self) -> HVACAction | None:
         hc = _float(_value(self.coordinator, HC_STATUS))
@@ -154,6 +164,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             return HVACAction.COOLING
         return HVACAction.IDLE
 
+    # Current preset: boost (QV active), away (holiday period), or none
     @property
     def preset_mode(self) -> str | None:
         if self._quick_veto_until and self._quick_veto_until > datetime.now():
@@ -175,6 +186,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     def available(self) -> bool:
         return self.coordinator.last_update_success
 
+    # Set HVAC mode: cancel boost first, then write ebusd op mode
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         self._optimistic_hvac_mode = hvac_mode
         self.async_write_ha_state()
@@ -195,6 +207,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             self._optimistic_hvac_mode = None
             self.async_write_ha_state()
 
+    # Set preset: boost (quick veto), away (holiday), or cancel
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         if preset_mode not in self._attr_preset_modes:
             raise ValueError(f"Unsupported preset: {preset_mode}")
@@ -208,6 +221,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         elif preset_mode != PRESET_AWAY and current == PRESET_AWAY:
             await self._cancel_holiday()
 
+    # Set target temperature: write Z1DayTemp (manual) or Z1QuickVetoTemp (boost)
     async def async_set_temperature(self, **kwargs: Any) -> None:
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is None:
@@ -217,12 +231,15 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         else:
             await self._write("Z1DayTemp", str(temp))
 
+    # Turn on by setting operation mode to auto
     async def async_turn_on(self) -> None:
         await self._write("Z1OpMode", "auto")
 
+    # Turn off
     async def async_turn_off(self) -> None:
         await self._write("Z1OpMode", "off")
 
+    # Clear optimistic mode when ebusd confirms, expire quick veto timer
     def _handle_coordinator_update(self) -> None:
         if self._quick_veto_until and self._quick_veto_until <= datetime.now():
             self._quick_veto_until = None
@@ -232,6 +249,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
                 self._optimistic_hvac_mode = None
         super()._handle_coordinator_update()
 
+    # Cancel quick veto: restore day temp, set duration to 0
     async def _cancel_quick_veto(self) -> None:
         self._quick_veto_until = None
         self.async_write_ha_state()
@@ -240,6 +258,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             await self._write("Z1QuickVetoTemp", str(day_temp))
         await self._write("Z1QuickVetoDuration", "0")
 
+    # Start quick veto with specified temp or config-based default for N hours
     async def _start_quick_veto(self, temp_override: float | None = None) -> None:
         if temp_override is not None:
             veto_temp = temp_override
@@ -258,6 +277,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         await self._write("Z1QuickVetoDuration", str(veto_duration))
         self.async_write_ha_state()
 
+    # Start holiday period: set Z1HolidayStartPeriod/EndPeriod from today
     async def _start_holiday(self) -> None:
         today = datetime.now().date()
         away_duration = self.coordinator._entry.options.get("away_duration", 7)
@@ -267,13 +287,16 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if ht is None:
             await self._write("Z1HolidayTemp", "15.0")
 
+    # Cancel holiday: reset dates to unset value
     async def _cancel_holiday(self) -> None:
         await self._write("Z1HolidayStartPeriod", HOLIDAY_RESET)
         await self._write("Z1HolidayEndPeriod", HOLIDAY_RESET)
 
+    # Write register to CTLV2 circuit via backend
     async def _write(self, name: str, value: str) -> bool:
         return await self._write_raw(CIRCUIT, name, value)
 
+    # Write register to arbitrary circuit via backend, trigger refresh on success
     async def _write_raw(self, circuit: str, name: str, value: str) -> bool:
         backend = self.coordinator.ebusd_backend
         if not backend:
@@ -303,27 +326,33 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     _attr_max_temp = 75
     _attr_target_temperature_step = 1
 
+    # Initialize flow temp range entity on z1 device
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_climate_flow_temp_range"
         self._attr_device_info = coordinator.get_device_info("z1")
 
+    # Supports target temperature range (min/max flow temp)
     @property
     def supported_features(self) -> ClimateEntityFeature:
         return ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
 
+    # Current flow temperature from Hc1FlowTemp
     @property
     def current_temperature(self) -> float | None:
         return _float(_value(self.coordinator, CURRENT_FLOW_TEMP))
 
+    # Minimum flow temperature target from Hc1MinFlowTempDesired
     @property
     def target_temperature_low(self) -> float | None:
         return _float(_value(self.coordinator, MIN_FLOW_TEMP))
 
+    # Maximum flow temperature target from Hc1MaxFlowTempDesired
     @property
     def target_temperature_high(self) -> float | None:
         return _float(_value(self.coordinator, MAX_FLOW_TEMP))
 
+    # HVAC action from compressor status (heating/cooling/idle/off)
     @property
     def hvac_action(self) -> HVACAction | None:
         comp = (_value(self.coordinator, COMPRESSOR_STATUS) or "").lower()
@@ -337,6 +366,7 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             return HVACAction.IDLE
         return HVACAction.OFF
 
+    # HVAC mode from Z1OpMode
     @property
     def hvac_mode(self) -> HVACMode | None:
         return _hvac_mode(_value(self.coordinator, OPERATION_MODE))
@@ -345,6 +375,7 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     def available(self) -> bool:
         return self.coordinator.last_update_success
 
+    # Set min/max flow temperature range via Hc1Min/MaxFlowTempDesired
     async def async_set_temperature(self, **kwargs: Any) -> None:
         low = kwargs.get("target_temp_low")
         high = kwargs.get("target_temp_high")
@@ -353,6 +384,7 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if high is not None:
             await self._write("Hc1MaxFlowTempDesired", str(int(high)))
 
+    # Write register to CTLV2 circuit, trigger refresh on success
     async def _write(self, name: str, value: str) -> bool:
         backend = self.coordinator.ebusd_backend
         if not backend:

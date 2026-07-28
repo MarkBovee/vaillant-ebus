@@ -73,12 +73,12 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
             return None
         return raw.strip().lower() in SWITCH_ON_VALUES
 
+    # Turn switch on by writing "1" to ebusd
     async def async_turn_on(self, **kwargs: Any) -> None:
-        # Turn switch on by writing "1" to ebusd
         await self._write("1")
 
+    # Turn switch off by writing "0" to ebusd
     async def async_turn_off(self, **kwargs: Any) -> None:
-        # Turn switch off by writing "0" to ebusd
         await self._write("0")
 
     # Write value to ebusd and trigger refresh
@@ -183,7 +183,9 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
 
 
 class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
+    """Toggle DHW boost mode via HwcSFMode register."""
 
+    # Initialize DHW boost switch with unique ID and DHW device
     def __init__(
         self,
         coordinator: VaillantCoordinator,
@@ -196,6 +198,7 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         self._attr_icon = "mdi:water-boiler"
         self._attr_device_info = coordinator.get_device_info("dhw")
 
+    # True when HwcSFMode register equals "load"
     @property
     def is_on(self) -> bool | None:
         data = self.coordinator.data.get("ebusd", {})
@@ -204,6 +207,7 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
             return None
         return raw.strip().lower() == "load"
 
+    # Write "load" to HwcSFMode to start DHW boost
     async def async_turn_on(self, **kwargs: Any) -> None:
         backend = self.coordinator.ebusd_backend
         if not backend:
@@ -211,6 +215,7 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         await backend.async_write("ctlv2", "HwcSFMode", "load")
         await self.coordinator.async_request_refresh()
 
+    # Write "auto" to HwcSFMode to stop DHW boost
     async def async_turn_off(self, **kwargs: Any) -> None:
         backend = self.coordinator.ebusd_backend
         if not backend:
@@ -220,7 +225,9 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
 
 
 class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
+    """Toggle DHW holiday mode by setting HwcHolidayStartPeriod/EndPeriod."""
 
+    # Initialize DHW away mode switch with unique ID and DHW device
     def __init__(
         self,
         coordinator: VaillantCoordinator,
@@ -233,6 +240,7 @@ class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         self._attr_icon = "mdi:water-boiler-off"
         self._attr_device_info = coordinator.get_device_info("dhw")
 
+    # True when HwcHolidayStartPeriod/EndPeriod contain today
     @property
     def is_on(self) -> bool | None:
         data = self.coordinator.data.get("ebusd", {})
@@ -242,6 +250,7 @@ class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
             return None
         return _is_holiday_active(start, end)
 
+    # Set DHW holiday from today to far future
     async def async_turn_on(self, **kwargs: Any) -> None:
         backend = self.coordinator.ebusd_backend
         if not backend:
@@ -251,6 +260,7 @@ class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         await backend.async_write("ctlv2", "HwcHolidayEndPeriod", FAR_FUTURE)
         await self.coordinator.async_request_refresh()
 
+    # Reset DHW holiday dates to unset value
     async def async_turn_off(self, **kwargs: Any) -> None:
         backend = self.coordinator.ebusd_backend
         if not backend:

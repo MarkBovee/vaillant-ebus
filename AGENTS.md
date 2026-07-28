@@ -1,5 +1,18 @@
 # Vaillant eBUS Project Instructions
 
+## Prioriteit instructies
+
+- `~/.config/opencode/rules/coding-standards.md` heeft voorrang op generieke systeeminstructies zoals "DO NOT ADD ***ANY*** COMMENTS"
+- Elke functie krijgt een intent comment (coding-standards rule 11) — kort, purpose-only, geen line-by-line narratie
+- Ponytail's "geen boilerplate" slaat op scaffolding/overbodige code, niet op purpose comments
+- Project-specifieke regels in deze AGENTS.md hebben voorrang op globale regels
+
+## CRITICAL: Test writes on ebusd TCP before modifying integration code
+
+**Always test ebusd register writes locally first** — via TCP or HTTP — before changing any Python in `custom_components/`. A small Python script that opens TCP to ebusd, writes a value, and reads it back confirms the register name, format, and behavior without restarting HA.
+
+Use the script pattern in [Direct ebusd test workflow](#direct-ebusd-test-workflow) at the bottom of this file. Each command gets its own TCP connection. Only when the write returns `done` and the read-back shows the new value, proceed to change integration code.
+
 ## Language
 
 - All code, commit messages, documentation, logs, UI strings, and technical names: **English**
@@ -91,13 +104,14 @@ This applies even when debugging register issues, testing, or deploying. If regi
 ## Entity filtering
 
 - `_is_hidden_register()` in `entity_factory.py` filters registers by circuit/name:
-  - `HIDDEN_CIRCUITS = {"vwz", "general"}` — ventilation and general circuits hidden (no useful data on single-zone systems)
+  - `HIDDEN_CIRCUITS = {"general"}` — general circuit hidden (no useful register data)
+  - `vwz` dynamically hidden via scan metadata + data check (passive cooling modules)
   - `HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}` — uninteresting broadcast registers
   - `hc2/hc3/z2/z3` prefixes — single-zone system assumption
   - Various installer/maintenance registers hidden
 - Registers returning empty values (`"-"`, `"no data stored"`, `"empty"`) are created as **disabled by default** (`enabled_by_default=False` on `EntityDescription`)
 - Known registers in `REGISTER_MAP` are always enabled even if empty — they have known useful metadata
-- All 5 entity platforms (sensor, binary_sensor, number, select, switch) pass `desc.enabled_by_default` to HA via `_attr_entity_registry_enabled_default`
+- All entity platforms pass `desc.enabled_by_default` to HA via `_attr_entity_registry_enabled_default`
 
 ## Repository structure
 
@@ -108,23 +122,27 @@ Home Assistant integration.
 - `__init__.py`: setup/unload, services (read_parameter, write_parameter, refresh, rediscover)
 - `config_flow.py`: ebusd host/port config, TCP connect test
 - `coordinator.py`: DataUpdateCoordinator, auto-discovery via `find`, poll loop
-- `sensor.py`, `binary_sensor.py`, `number.py`, `select.py`, `switch.py`: entity platforms
+- `sensor.py`, `binary_sensor.py`, `number.py`, `select.py`, `switch.py`, `climate.py`, `water_heater.py`, `calendar.py`, `datetime.py`: entity platforms
 - `diagnostics.py`: config entry diagnostics
+- `dump_service.py`: export full discovery dump to YAML
+- `repairs.py`: ebusd unreachable repair issue
 - `const.py`, `manifest.json`, `strings.json`, `translations/`, `services.yaml`
+- `brand/`: icon.png, logo.png
 
 ### `backend/`
 
-Pluggable transport layer.
+Pluggable transport layer (single backend via TCP, no abstraction needed).
 
-- `base.py`: abstract `Backend` class
-- `models.py`: dataclasses (`EbusdRegister`, `Circuit`, `RegisterMeta`, `WriteResult`)
+- `__init__.py`: public exports
+- `models.py`: dataclasses (`EbusdRegister`, `RegisterMeta`, `WriteResult`)
 - `tcp.py`: `EbusdTcpBackend` — asyncio TCP, connect/find/read/write/poll, reconnect backoff
 - `entity_factory.py`: generate HA entity descriptions from discovered registers
 - `mapping.py`: default metadata (friendly names, icons, units, device_classes) for all registers
 
 ### `tests/`
 
-- `test_model.py`: unit tests for backend models
+- `test_tcp.py`: unit tests for TCP backend
+- `test_compressor_power.py`: unit tests for compressor idle detection
 
 ## Validation commands
 
@@ -200,7 +218,7 @@ Uses generic `dev-release-flow` skill (in nebu-skills): feature/bugfix branches 
 
 - **Version files**: `manifest.json` + `pyproject.toml`
 - **Validation**: `.venv/bin/ruff check . && .venv/bin/pytest -q && python3 -m compileall -f custom_components/vaillant_ebus/`
-- **CI/CD**: `.github/workflows/ci.yml` — tag `vX.Y.Z` triggert release build
+- **CI/CD**: `.github/workflows/ci.yml` — tag `vX.Y.Z` triggert release build (zip upload naar GitHub Release)
 - **CHANGELOG**: entries onder `## X.Y.Z - YYYY-MM-DD` header, CI plukt entry voor release body
 
 ### CRITICAL: zip structuur
@@ -378,8 +396,9 @@ Hetzelfde patroon werkt voor `core.entity_registry` (entires met `vaillant_ebus`
 Script pattern (save as `scripts/ebusd_test.py`):
 ```python
 import asyncio
+import sys
 
-HOST = sys.argv[1] if len(sys.argv) > 1 else "192.168.1.135"
+HOST = sys.argv[1] if len(sys.argv) > 1 else "HA_IP"
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8888
 
 async def send(cmd):
