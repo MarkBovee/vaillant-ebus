@@ -215,19 +215,10 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is None:
             return
-        opmode = (_value(self.coordinator, OPERATION_MODE) or "").lower()
-        if opmode == "day":
-            await self._write("Z1DayTemp", str(temp))
-        elif self.preset_mode == PRESET_BOOST:
+        if self.preset_mode == PRESET_BOOST:
             await self._write("Z1QuickVetoTemp", str(temp))
         else:
             await self._write("Z1DayTemp", str(temp))
-            options = self.coordinator._entry.options
-            veto_duration = options.get("quick_veto_duration", 3)
-            self._quick_veto_until = datetime.now() + timedelta(hours=veto_duration)
-            await self._write("Z1QuickVetoTemp", str(temp))
-            await self._write("Z1QuickVetoDuration", str(veto_duration))
-            self.async_write_ha_state()
 
     async def async_turn_on(self) -> None:
         await self._write("Z1OpMode", "auto")

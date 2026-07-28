@@ -28,7 +28,8 @@ def _redact(value: str | None, name: str) -> str | None:
 
 async def _dump_registers(
     backend, seen_keys: set[str] | None = None
-) -> tuple[list[dict], set[str]]:
+) -> tuple[list[dict], set[str], list[str]]:
+    raw_lines = await backend.async_find_lines()
     discovered = await backend.async_find()
     if seen_keys is None:
         seen_keys = set()
@@ -36,12 +37,19 @@ async def _dump_registers(
 
     for reg in discovered:
         seen_keys.add(reg.key)
+        vals = [_redact(reg.value.get(f), reg.name) for f in reg.fields]
         entry = {
             "circuit": reg.circuit,
             "name": reg.name,
-            "value": _redact(reg.value.get("value"), reg.name),
+            "fields": reg.fields,
+            "values": vals,
             "writable": reg.writable,
+            "has_data": reg.has_data,
         }
+        if reg.message_type:
+            entry["message_type"] = reg.message_type
+        if reg.address:
+            entry["address"] = reg.address
         register_list.append(entry)
 
     for key, meta in REGISTER_MAP.items():
@@ -51,23 +59,28 @@ async def _dump_registers(
         if len(parts) != 2:
             continue
         circuit, name = parts
-        entry = {
+        entry: dict = {
             "circuit": circuit,
             "name": name,
-            "value": None,
+            "fields": ["value"],
+            "values": [None],
             "writable": meta.writable,
-            "disabled": not meta.enabled,
+            "has_data": False,
+            "from_map": True,
         }
+        if not meta.enabled:
+            entry["disabled"] = True
         try:
             val = await backend.async_read(circuit, name)
             if val:
-                entry["value"] = _redact(val, name)
+                entry["values"] = [_redact(val, name)]
+                entry["has_data"] = True
         except Exception:
             pass
         register_list.append(entry)
 
     register_list.sort(key=lambda r: (r["circuit"], r["name"]))
-    return register_list, seen_keys
+    return register_list, seen_keys, raw_lines
 
 
 async def _grab_cmd(host: str, port: int, command: str) -> list[str]:
@@ -124,7 +137,7 @@ async def async_export_discovery_dump(
         _LOGGER.error("Cannot export dump: ebusd not connected")
         return
 
-    before_registers, seen = await _dump_registers(backend)
+    before_registers, seen, raw_find_lines = await _dump_registers(backend)
 
     grab_lines = []
     if grab_duration > 0:
@@ -140,8 +153,9 @@ async def async_export_discovery_dump(
             _LOGGER.warning("Grab failed: %s", exc)
 
     after_registers = []
+    after_raw_lines: list[str] = []
     if grab_duration > 0:
-        after_registers, _ = await _dump_registers(backend)
+        after_registers, _, after_raw_lines = await _dump_registers(backend)
 
     output_dir = hass.config.path(DOMAIN)
     hass.async_add_executor_job(_mkdir, output_dir)
@@ -154,14 +168,16 @@ async def async_export_discovery_dump(
             "ebusd_version": backend.version,
             "register_count": len(after_registers or before_registers),
             "grab_duration": grab_duration,
-            "dump_version": 2,
+            "dump_version": 3,
         },
+        "raw_find_lines": raw_find_lines,
         "before_registers": before_registers,
     }
     if grab_lines:
         dump_data["grab"] = grab_lines
     if after_registers:
         dump_data["after_registers"] = after_registers
+        dump_data["raw_find_lines_after"] = after_raw_lines
 
     await hass.async_add_executor_job(_write_yaml, filepath, dump_data)
     _LOGGER.info("Discovery dump written to %s", filepath)
