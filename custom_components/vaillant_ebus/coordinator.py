@@ -43,7 +43,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._active_zone_circuits: set[str] = set()
         self._started = False
         self._ebusd_connected = False
-        self.heating_circuit = "ctlv2"
+        self._heating_circuit = "ctlv2"
 
         scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL)
         super().__init__(
@@ -127,10 +127,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_find_keys = {r.key for r in discovered}
         for reg in discovered:
             self.registers[reg.key] = reg
-        for reg in discovered:
-            if reg.name == "Z1OpMode" and reg.has_data:
-                self.heating_circuit = reg.circuit
-                break
         _LOGGER.info("Found %d registers across %d circuit(s): %s",
                      len(discovered),
                      len({r.circuit for r in discovered}),
@@ -246,12 +242,94 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 device_id = "general"
             value = reg.value.get("value")
-            if value is not None and value not in ("-", "no data stored", ""):
-                self._scan_metadata.setdefault(device_id, {})[reg.name.upper()] = str(value)
-                self._present_devices.add(device_id)
+            if value is None or value in ("-", "no data stored", ""):
+                continue
+            val = str(value)
+            # Parse model lines: "Vaillant;BASV2;0507;1704" → MF;TYPE;SW;HW
+            if not reg.name:
+                parts = val.split(";")
+                if len(parts) == 4:
+                    meta = self._scan_metadata.setdefault(device_id, {})
+                    meta["MF"] = parts[0]
+                    meta["TYPE"] = parts[1]
+                    meta["SW"] = parts[2]
+                    meta["HW"] = parts[3]
+                    self._present_devices.add(device_id)
+                    continue
+            self._scan_metadata.setdefault(device_id, {})[reg.name.upper()] = val
+            self._present_devices.add(device_id)
         if self._scan_metadata:
             _LOGGER.info("Scan metadata: %s | present devices: %s",
                          self._scan_metadata, self._present_devices)
+
+    # Map circuit prefix → device type. Prefixes match all numeric variants (ctlv1-9, basv2, etc.)
+    CIRCUIT_TYPE_BY_PREFIX: dict[str, str] = {
+        "hmu": "heat_pump",
+        "ctlv": "heating_controller",
+        "basv": "heating_controller",
+        "bai": "heating_controller",
+        "z": "zone",
+        "dhw": "dhw",
+        "Broadcast": "diagnostic",
+        "vwz": "ventilation",
+        "vwzio": "ventilation",
+    }
+    # Map scan TYPE field → circuit type
+    DEVICE_TYPE_TO_CIRCUIT_TYPE: dict[str, str] = {
+        "hmu": "heat_pump", "hmu00": "heat_pump",
+        "basv": "heating_controller", "basv2": "heating_controller",
+        "vwz": "ventilation", "vwzio": "ventilation",
+        "netx2": "diagnostic",
+    }
+
+    # Classify each circuit by device type using scan metadata + circuit prefix
+    def _detect_circuit_types(self) -> None:
+        ctypes: dict[str, str] = {}
+        # Priority 1: scan TYPE field → circuit type + matching circuit
+        type_prefix_ctypes = [("ctlv", "heating_controller"), ("bai", "heating_controller")]
+        for device_id, meta in getattr(self, "_scan_metadata", {}).items():
+            raw_type = meta.get("TYPE", "").lower()
+            if not raw_type:
+                continue
+            ctype = self.DEVICE_TYPE_TO_CIRCUIT_TYPE.get(raw_type)
+            if not ctype:
+                for prefix, t in type_prefix_ctypes:
+                    if raw_type.startswith(prefix):
+                        ctype = t
+                        break
+            if not ctype:
+                continue
+            # Match TYPE to circuit: strip trailing digits (basv2 → basv)
+            ckt_prefix = raw_type.rstrip("0123456789")
+            for circuit in self.registers:
+                if circuit.lower().startswith(ckt_prefix) and not circuit.lower().startswith("scan"):
+                    ctypes[circuit] = ctype
+                    break
+        # Priority 2: circuit prefix heuristic
+        for circuit in self.registers:
+            if circuit in ctypes or circuit.lower().startswith(("scan",)) or "." in circuit:
+                continue
+            for prefix, ctype in self.CIRCUIT_TYPE_BY_PREFIX.items():
+                if circuit.lower().startswith(prefix):
+                    ctypes[circuit] = ctype
+                    break
+        # Priority 3: fallback for heating_controller via Z1OpMode
+        if "heating_controller" not in ctypes.values():
+            for reg in self.registers.values():
+                if reg.name == "Z1OpMode" and reg.has_data:
+                    ctypes[reg.circuit] = "heating_controller"
+                    break
+        self._circuit_types = ctypes
+
+    # Return all circuits matching a device type
+    def circuits_by_type(self, ctype: str) -> list[str]:
+        return [c for c, t in getattr(self, "_circuit_types", {}).items() if t == ctype]
+
+    @property
+    def heating_circuit(self) -> str:
+        # First detected heating_controller circuit, fallback to seed default
+        circuits = self.circuits_by_type("heating_controller")
+        return circuits[0] if circuits else self._heating_circuit
 
     DEVICE_ID_TO_CIRCUIT = {
         "08": "hmu", "15": "ctlv2", "76": "vwz", "f6": "Broadcast",

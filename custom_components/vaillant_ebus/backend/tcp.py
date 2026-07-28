@@ -200,9 +200,12 @@ class EbusdTcpBackend:
             rhs = rhs.strip()
             parts = lhs.split(" ", 1)
             circuit_name = parts[0]
-            if len(parts) <= 1 or not parts[1].strip():
+            reg_name = parts[1].strip() if len(parts) > 1 else ""
+            if not reg_name and circuit_name.lower().startswith("scan"):
+                # Scan circuit metadata line: "scan.XX = MF;TYPE;SW;HW"
+                return circuit_name, reg_name, ["value"], {"value": _strip_suffix(rhs)}, "", ""
+            if not reg_name:
                 return None
-            reg_name = parts[1].strip()
             if rhs in ("-", "no data stored", "") or rhs.startswith(("(empty ", "(ERR")):
                 return circuit_name, reg_name, ["value"], {"value": None}, "", ""
             return circuit_name, reg_name, ["value"], {"value": _strip_suffix(rhs)}, "", ""
