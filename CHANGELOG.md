@@ -1,85 +1,55 @@
 # Changelog
 
-## 1.1.0 - 2026-07-27
+## 1.1.0 - 2026-07-28
 
 ### Config flow — major rewrite
 
-- **Reliable auto-discovery**: probes ebusd via `s` command (state), checks for
-  `"acquired"` substring. Reads all response data in one `read(4096)` call
-  instead of fragile readline loop.
-- **Supervisor API integration**: detect host IP from `http://supervisor/network/info`
-  and use it as discovery candidate — works on HA OS where localhost/127.0.0.1
-  resolve to the core container, not the ebusd addon.
-- **Confirm step**: after successful connection test, show "Connected to
-  *host:port* — signal acquired." message before creating the entry.
+- **Reliable auto-discovery**: probes ebusd via `s` command, checks for
+  `"acquired"` substring. Supervisor API integration detects host IP from
+  `http://supervisor/network/info` for HA OS compatibility.
+- **Confirm step**: shows "Connected to host:port — signal acquired." before
+  creating the entry.
 - **Options flow with host/port**: edit ebusd host, port, scan interval, away
-  duration, quick veto duration, and quick veto temperature in a single form.
-  Host/port changes update the config entry data via `async_update_entry`.
-- **Translations**: options step labels added to `en.json` and `strings.json`.
-- Remove stale `{host}:{port}` placeholders from `cannot_connect` error message.
-- Remove dead `_validate_info()` function — already covered by `_probe_candidate`
-  which only returns on `"acquired"`.
+  duration, quick veto duration and temperature in one form. Host/port changes
+  update the config entry data via `async_update_entry`.
+- Remove stale `{host}:{port}` placeholders from error messages.
+- Remove dead `_validate_info()` — `_probe_candidate` already checks for `"acquired"`.
 
 ### Device detection & circuit filtering
 
 - **Scan metadata parsing**: extract MF/ID/SW/HW from `scan.XX` registers to
   detect which eBUS devices are present on the bus.
-- **Dynamic circuit detection** replaces hardcoded `HIDDEN_CIRCUITS`: `v32` and
-  `vwz` are now auto-detected via scan metadata instead of being always hidden.
-- **Data-based filtering**: circuits without any register with actual data (all
-  return "no data stored" / "-" / empty) get zero entities — even if scan
-  metadata suggests the device exists. This prevents VWZ (passive cooling) and
-  v32 (ventilation) entities on systems without those modules.
-- **Standby device handling**: circuits with scan metadata but no register data
-  do not get entities (was: disabled-by-default entities for standby). Keeps
-  the device list clean for single-zone heat pumps.
+- **Dynamic circuit detection**: VWZ (ventilation) and v32 (passive cooling)
+  modules auto-detected instead of hardcoded hidden circuits.
+- **Data-based filtering**: circuits without actual data get zero entities —
+  prevents ghost entities for missing hardware.
+- **Immediate startup**: entities seeded from `REGISTER_MAP` + cache within
+  milliseconds, before ebusd connects.
+- **Background discovery**: connect, `find`, and `fallback_read` run in a
+  background task without blocking HA startup.
 
-### Entity management
+### Entity improvements
 
-- **Immediate startup**: entities are seeded from `REGISTER_MAP` + cache within
-  milliseconds, before ebusd connects. Only core circuits (`hmu`, `ctlv2`,
-  `Broadcast`) plus circuits with cached data get initial entities — no more
-  speculative v32/vwz entities at startup.
-- **Background discovery**: ebusd connect, `find`, and `fallback_read` run in a
-  background task without blocking HA startup. No more 10-15s timeout delays.
-- **Empty value handling**: registers returning `""`, `"-"`, `"no data stored`,
-  or `"empty"` are now excluded from the coordinator data dict entirely
-  (`_values_from_registers`). Sensor `async_added_to_hass` rejects empty string
-  as cached state. Prevents HA 2026.7+ strict validation warnings.
-- **Known registers without data** (`Hc1CoolingEnabled`, `Hc1DewPointMonitoring`,
-  `Hc1AutoOffMode`, etc.) are now disabled by default after discovery confirms
-  they have no data. Previously always enabled because they are in REGISTER_MAP.
+- **Flow Temperature Range (NEW)**: `EbusdFlowTempRange` climate entity with
+  `TARGET_TEMPERATURE_RANGE` support. Reads min/max flow temp desired, writes
+  via `async_set_temperature`. Placed on z1 (Woonkamer) device.
+- **DHW modes corrected**: `off`, `auto`, `manual`, `boost` (was `day`/`night`).
+  Dead `_saved_op_mode` code removed — heat pump handles mode restoration.
+- **Empty value handling**: registers returning `""`, `"-"`, `"no data stored"`,
+  or `"empty"` excluded from coordinator data and shown as unavailable.
+- **Known registers without data** (`Hc1CoolingEnabled`, etc.) disabled by
+  default after discovery confirms no data.
+- `Hc1ActualFlowTempDesired` made read-only — heat pump manages flow target
+  automatically; use the range entity for min/max overrides.
 
-### Climate — Flow Temperature Range (NEW)
+### Fixes & cleanup
 
-- New `EbusdFlowTempRange` climate entity with `TARGET_TEMPERATURE_RANGE` support.
-  Reads `Hc1MinFlowTempDesired` (low) and `Hc1MaxFlowTempDesired` (high) for
-  the range, `Hc1FlowTemp` for current temperature. Writes min/max via
-  `async_set_temperature`. HVAC action from `RunDataStatuscode`.
-  Placed on the z1 (Woonkamer) device.
-- `Hc1ActualFlowTempDesired` made read-only (`writable=False`) — the heat pump
-  manages flow temperature target automatically; manual override via the range
-  entity's min/max setpoints.
-
-### DHW
-
-- Operation modes: `off`, `auto`, `manual`, `boost` (was: `off`, `auto`,
-  `day`, `night`). Corrected per `15.ctlv2.csv`: 0=off, 1=auto, 2=manual.
-- Remove dead `_saved_op_mode` code — the heat pump handles mode restoration
-  when boost naturally ends. No manual restore needed.
-
-### Boilerplate & validation
-
-- Circuits without any enabled registers get no entities at all (the minimum
-  viable circuit filter).
-- Keep `general` in HIDDEN_CIRCUITS (always hidden).
 - Fix rediscover service crash: `async_start()` did not exist on
-  `VaillantCoordinator` — now resets state flags and triggers background reconnect.
+  `VaillantCoordinator` — now resets state and triggers background reconnect.
 - Add intent comments to all Python functions per coding-standards rule 11.
-- Remove `backend/base.py` from repo (single-backend, no abstraction needed).
-- `AGENTS.md`: update repo structure, fix `HIDDEN_CIRCUITS`, add priority rules.
-- All validation commands pass: `ruff check .`, `pytest -q`,
-  `python3 -m compileall -f custom_components/vaillant_ebus/`.
+- Remove `backend/base.py` (single-backend, no abstraction needed).
+- Update `AGENTS.md`: repo structure, `HIDDEN_CIRCUITS`, priority rules.
+- All validation commands pass.
 
 ## 1.0.9 - 2026-07-24
 
