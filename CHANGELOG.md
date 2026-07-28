@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.1 - 2026-07-28
+
+- Fix: register values with ebusd status suffix (`;ok`, `;err`, etc.)
+  now strip the suffix instead of showing as unavailable. Affects
+  ebusd 26.x where read/find responses include a `;ok` status marker.
+  Stripped at TCP input boundary (`_parse_find_line`, `async_read`)
+  with safety net in `_values_from_registers`.
+
 ## 1.1.0 - 2026-07-28
 
 ### Config flow — major rewrite
