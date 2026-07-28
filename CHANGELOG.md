@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.1.2 - 2026-07-28
+
+### No more hardcoded circuit names
+
+- **Device type detection from eBUS scan metadata**: `_parse_find_line` now
+  captures scan model lines (`scan.15 = Vaillant;BASV2;0507;1704`). The TYPE
+  field (BASV2, CTLV2, HMU00, etc.) is extracted in `_parse_scan_metadata` and
+  used to classify each circuit by function (`heating_controller`, `heat_pump`,
+  `ventilation`, `bus`, `zone`, `dhw`).
+- **Dynamic circuit→type resolution**: `_resolve_type()` maps any scan TYPE
+  (including numeric variants: ctlv1-9, basv1-9) to circuit type. Circuit
+  detection uses three-priority fallback: (1) scan TYPE via known device
+  mapping + TYPE prefix, (2) circuit name prefix heuristic, (3) Z1OpMode
+  register detection.
+- **`heating_circuit` prefers data-rich circuits**: selects circuits with
+  actual HVAC register data (Z1OpMode, HwcOpMode) over no-data circuits.
+- **Dynamic `CIRCUIT_TO_DEVICE_ID`**: `_build_circuit_to_device_id()` builds
+  circuit→scan_device mapping from scan metadata — new circuits (basv, bai,
+  etc.) automatically get SW/HW info in DeviceInfo without hardcoded entries.
+- **`_infer_device_circuit`**: removed `circuit == "ctlv2"` guard — name
+  patterns (Hwc*, Z1*, Hc1*) are heating-controller-specific enough.
+- **`get_meta` fallback**: unknown circuits fall back to `ctlv2.*` REGISTER_MAP
+  entries for metadata.
+- **Services YAML**: circuit dropdowns replaced with text input.
+- **All platforms use `coordinator.heating_circuit`**: climate, water heater,
+  switch, calendar, datetime, binary_sensor — zero hardcoded circuit names
+  remaining.
+
 ## 1.1.1 - 2026-07-28
 
 ### Fix: ebusd status suffix on register values
@@ -9,35 +37,11 @@
   (`_parse_find_line`, `async_read`) before they reach entity data. Previously
   `float("23.50;ok")` would raise `ValueError`, causing all sensors with status
   suffixes to show as `unavailable`. Affects ebusd 26.x (found on v32 ventilation
-  units by @szflo). Safety net in `_values_from_registers` handles cached values
-  from previous versions.
-
-### Refactor: dynamic circuit type detection (removes hardcoded circuit names)
-
-- **Device type detection from eBUS scan metadata**: `_parse_find_line` now
-  captures scan model lines (`scan.15 = Vaillant;BASV2;0507;1704`). The TYPE
-  field (BASV2, CTLV2, HMU00, etc.) is extracted in `_parse_scan_metadata` and
-  used to classify each circuit by function (`heating_controller`, `heat_pump`,
-  `ventilation`, `diagnostic`, `zone`, `dhw`).
-- **Three-priority fallback chain**: (1) scan TYPE → circuit via model prefix
-  matching (any numeric variant: basv1-9, ctlv1-9, z1-9). (2) circuit name
-  prefix heuristic. (3) Z1OpMode register detection (existing behavior).
-- **New coordinator API**: `circuits_by_type("heating_controller")` returns all
-  matching circuits. `heating_circuit` property preserved as backward-compat
-  wrapper around the first result.
-- **All platforms use `coordinator.heating_circuit`** instead of hardcoded
-  `"ctlv2"`. Climate, water heater, switch, calendar, datetime, binary_sensor
-  — zero hardcoded circuit names remaining.
-- **`_infer_device_circuit`**: removed `circuit == "ctlv2"` guard. Name
-  patterns (Hwc*, Z1*, Hc1*) are heating-controller-specific enough to work on
-  any circuit.
-- **`get_meta` fallback**: unknown circuits (e.g. `basv`) fall back to
-  `ctlv2.*` REGISTER_MAP entries for metadata.
-- **Services YAML**: circuit dropdowns replaced with text input (accepts any
-  discovered circuit name).
-- **`PARENT_CIRCUITS` and `CIRCUIT_TO_DEVICE_ID`**: `basv` added alongside
-  `ctlv2` for device ID 15.
-- **`CIRCUIT_NAMES`**: `"basv": "Vaillant BASV2 (Heating Control)"` added.
+  units by @szflo).
+- **Initial BASV2 support**: added `basv` to `CIRCUIT_NAMES`, `PARENT_CIRCUITS`,
+  `CIRCUIT_TO_DEVICE_ID`. `heating_circuit` detection via Z1OpMode register.
+  Replaced hardcoded `"ctlv2"` with `coordinator.heating_circuit` in all
+  platforms.
 
 ## 1.1.0 - 2026-07-28
 

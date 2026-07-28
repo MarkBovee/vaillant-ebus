@@ -160,6 +160,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.info("Active zone circuits: %s", self._active_zone_circuits)
 
         self._parse_scan_metadata()
+        self._build_circuit_to_device_id()
 
         active_present: set[str] = {"hmu", self.heating_circuit, "Broadcast"}
         for reg in self.registers.values():
@@ -270,7 +271,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         "bai": "heating_controller",
         "z": "zone",
         "dhw": "dhw",
-        "Broadcast": "diagnostic",
+        "Broadcast": "bus",
         "vwz": "ventilation",
         "vwzio": "ventilation",
     }
@@ -279,33 +280,51 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         "hmu": "heat_pump", "hmu00": "heat_pump",
         "basv": "heating_controller", "basv2": "heating_controller",
         "vwz": "ventilation", "vwzio": "ventilation",
-        "netx2": "diagnostic",
     }
+    # Map scan TYPE → circuit name when TYPE doesn't match circuit prefix
+    TYPE_TO_CIRCUIT_OVERRIDE: dict[str, str] = {
+        "netx2": "Broadcast",
+    }
+
+    # Determine circuit type from scan TYPE string
+    @classmethod
+    def _resolve_type(cls, raw_type: str) -> str | None:
+        low = raw_type.lower()
+        ctype = cls.DEVICE_TYPE_TO_CIRCUIT_TYPE.get(low)
+        if ctype:
+            return ctype
+        for prefix, t in [("ctlv", "heating_controller"), ("bai", "heating_controller")]:
+            if low.startswith(prefix):
+                return t
+        return None
 
     # Classify each circuit by device type using scan metadata + circuit prefix
     def _detect_circuit_types(self) -> None:
         ctypes: dict[str, str] = {}
-        # Priority 1: scan TYPE field → circuit type + matching circuit
-        type_prefix_ctypes = [("ctlv", "heating_controller"), ("bai", "heating_controller")]
+        # Priority 1: scan TYPE → circuit, using known mapping + TYPE prefix fallback
         for device_id, meta in getattr(self, "_scan_metadata", {}).items():
             raw_type = meta.get("TYPE", "").lower()
-            if not raw_type:
-                continue
-            ctype = self.DEVICE_TYPE_TO_CIRCUIT_TYPE.get(raw_type)
-            if not ctype:
-                for prefix, t in type_prefix_ctypes:
-                    if raw_type.startswith(prefix):
-                        ctype = t
-                        break
+            ctype = self._resolve_type(raw_type)
             if not ctype:
                 continue
-            # Match TYPE to circuit: strip trailing digits (basv2 → basv)
+            # Known circuits from static mapping for this device
+            known_ckt = self.DEVICE_ID_TO_CIRCUIT.get(device_id)
+            if known_ckt and known_ckt in self.registers:
+                ctypes[known_ckt] = ctype
+            # Any additional circuits matching the TYPE prefix (e.g. basv from TYPE=BASV2)
             ckt_prefix = raw_type.rstrip("0123456789")
+            # Handle TYPEs that map to different circuit names
+            if ckt_prefix in ("netx",):
+                circuit_name = self.TYPE_TO_CIRCUIT_OVERRIDE.get(raw_type)
+                if circuit_name and circuit_name in self.registers:
+                    ctypes[circuit_name] = ctype
+                continue
             for circuit in self.registers:
-                if circuit.lower().startswith(ckt_prefix) and not circuit.lower().startswith("scan"):
+                if circuit in ctypes or circuit.lower().startswith(("scan",)) or "." in circuit:
+                    continue
+                if circuit.lower().startswith(ckt_prefix):
                     ctypes[circuit] = ctype
-                    break
-        # Priority 2: circuit prefix heuristic
+        # Priority 2: circuit prefix heuristic (for circuits not in scan data)
         for circuit in self.registers:
             if circuit in ctypes or circuit.lower().startswith(("scan",)) or "." in circuit:
                 continue
@@ -327,9 +346,38 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def heating_circuit(self) -> str:
-        # First detected heating_controller circuit, fallback to seed default
+        # Prefer circuit with actual HVAC register data over no-data circuits
         circuits = self.circuits_by_type("heating_controller")
-        return circuits[0] if circuits else self._heating_circuit
+        if not circuits:
+            return self._heating_circuit
+        if len(circuits) == 1:
+            return circuits[0]
+        for reg in self.registers.values():
+            if reg.name in ("Z1OpMode", "HwcOpMode", "Z1DayTemp") and reg.has_data:
+                if reg.circuit in circuits:
+                    return reg.circuit
+        return circuits[0]
+
+    # Build dynamic circuit→device_id mapping from scan metadata + discovered circuits
+    def _build_circuit_to_device_id(self) -> None:
+        mapping: dict[str, str] = {}
+        for device_id, meta in getattr(self, "_scan_metadata", {}).items():
+            raw_type = meta.get("TYPE", "").lower()
+            # Static mapping first
+            known_ckt = self.DEVICE_ID_TO_CIRCUIT.get(device_id)
+            if known_ckt and known_ckt in self.registers:
+                mapping[known_ckt] = device_id
+            # Also map TYPE-matched circuits (e.g. basv from TYPE=BASV2)
+            if raw_type:
+                ckt_prefix = raw_type.rstrip("0123456789")
+                if ckt_prefix in ("netx",):
+                    continue
+                for circuit in self.registers:
+                    if circuit in mapping or circuit.lower().startswith(("scan",)):
+                        continue
+                    if circuit.lower().startswith(ckt_prefix):
+                        mapping[circuit] = device_id
+        self._dynamic_circuit_to_device_id = mapping
 
     DEVICE_ID_TO_CIRCUIT = {
         "08": "hmu", "15": "ctlv2", "76": "vwz", "f6": "Broadcast",
@@ -467,6 +515,9 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def get_device_info(self, circuit: str) -> DeviceInfo:
         name = CIRCUIT_NAMES.get(circuit, f"Vaillant ({circuit})")
         device_id = self.CIRCUIT_TO_DEVICE_ID.get(circuit)
+        if not device_id:
+            dyn = getattr(self, "_dynamic_circuit_to_device_id", {})
+            device_id = dyn.get(circuit)
         scan = {}
         if hasattr(self, "_scan_metadata") and device_id:
             scan = self._scan_metadata.get(device_id, {})
