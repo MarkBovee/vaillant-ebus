@@ -1,4 +1,4 @@
-"""Datetime platform for quick veto end."""
+"""Datetime platform for quick veto end and holiday periods."""
 
 from __future__ import annotations
 
@@ -18,6 +18,17 @@ DATE_FMT = "%d.%m.%Y"
 TIME_FMT = "%H:%M:%S"
 HOLIDAY_RESET = "01.01.2015"
 
+DEFAULT_TIME = "00:00:00"
+
+HOLIDAY_ENTITIES = [
+    ("Z1 Holiday Start", "Z1HolidayStartPeriod", "mdi:calendar-start", "z1"),
+    ("Z1 Holiday End", "Z1HolidayEndPeriod", "mdi:calendar-end", "z1"),
+    ("DHW Holiday Start", "HwcHolidayStartPeriod", "mdi:calendar-start", "dhw"),
+    ("DHW Holiday End", "HwcHolidayEndPeriod", "mdi:calendar-end", "dhw"),
+]
+
+CIRCUIT = "ctlv2"
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -25,7 +36,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([EbusdQuickVetoEndEntity(coordinator, entry)])
+    entities: list[DateTimeEntity] = [EbusdQuickVetoEndEntity(coordinator, entry)]
+    for name, register, icon, zone in HOLIDAY_ENTITIES:
+        entities.append(EbusdHolidayEntity(coordinator, entry, name, register, icon, zone))
+    async_add_entities(entities)
 
 
 class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity):
@@ -55,3 +69,42 @@ class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEn
             return naive.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
         except (ValueError, TypeError):
             return None
+
+
+class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity):
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: VaillantCoordinator,
+        entry: ConfigEntry,
+        name: str,
+        register: str,
+        icon: str,
+        zone: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._register = register
+        self._attr_name = name
+        self._attr_icon = icon
+        self._attr_unique_id = f"{entry.entry_id}_{register.lower()}"
+        self._attr_device_info = coordinator.get_device_info(zone)
+
+    @property
+    def native_value(self) -> datetime | None:
+        raw = self.coordinator.data.get("ebusd", {}).get(f"{CIRCUIT}.{self._register}.value")
+        if not raw or str(raw) == HOLIDAY_RESET:
+            return None
+        try:
+            naive = datetime.strptime(f"{raw} {DEFAULT_TIME}", f"{DATE_FMT} {TIME_FMT}")
+            return naive.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+        except (ValueError, TypeError):
+            return None
+
+    async def async_set_value(self, value: datetime) -> None:
+        backend = self.coordinator.ebusd_backend
+        if backend:
+            date_str = value.strftime(DATE_FMT)
+            result = await backend.async_write(CIRCUIT, self._register, date_str)
+            if result.success:
+                await self.coordinator.async_request_refresh()

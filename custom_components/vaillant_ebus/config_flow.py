@@ -22,6 +22,7 @@ from .const import (
     DEFAULT_EBUSD_POLL_INTERVAL,
     DEFAULT_EBUSD_PORT,
     DEFAULT_QUICK_VETO_DURATION,
+    DEFAULT_QUICK_VETO_TEMP,
     DISCOVERY_CANDIDATES,
     DISCOVERY_PORT,
     DISCOVERY_TIMEOUT,
@@ -244,8 +245,8 @@ class VaillantOptionsFlow(OptionsFlow):
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
                 vol.Optional(
                     CONF_QUICK_VETO_TEMP,
-                    default=options.get(CONF_QUICK_VETO_TEMP, ""),
-                ): str,
+                    default=options.get(CONF_QUICK_VETO_TEMP, DEFAULT_QUICK_VETO_TEMP),
+                ): vol.Coerce(float),
             }),
         )
 

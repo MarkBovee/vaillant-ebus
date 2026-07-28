@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from homeassistant.components.water_heater import WaterHeaterEntity, WaterHeaterEntityFeature
@@ -11,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONF_AWAY_DURATION, DEFAULT_AWAY_DURATION, DOMAIN
 from .coordinator import VaillantCoordinator
 
 ZONE = "dhw"
@@ -19,17 +20,29 @@ CIRCUIT = "ctlv2"
 CURRENT_TEMPERATURE = f"{CIRCUIT}.HwcStorageTemp.value"
 TARGET_TEMPERATURE = f"{CIRCUIT}.HwcTempDesired.value"
 OPERATION_MODE = f"{CIRCUIT}.HwcOpMode.value"
-OPERATION_MODES = ["off", "auto", "manual", "boost"]
 HWC_SF_MODE = f"{CIRCUIT}.HwcSFMode.value"
+HOLIDAY_START = f"{CIRCUIT}.HwcHolidayStartPeriod.value"
+HOLIDAY_END = f"{CIRCUIT}.HwcHolidayEndPeriod.value"
+
+EBUSD_TO_HA_OPMODE = {
+    "off": "off",
+    "auto": "auto",
+    "day": "manual",
+}
+
+HA_TO_EBUSD_OPMODE = {v: k for k, v in EBUSD_TO_HA_OPMODE.items()}
+
+OPERATION_MODES = ["off", "auto", "manual", "boost"]
+
+DATE_FMT = "%d.%m.%Y"
+HOLIDAY_RESET = "01.01.2015"
 
 
-# Get string value from coordinator data by key
 def _value(coordinator: VaillantCoordinator, key: str) -> str | None:
     value = coordinator.data.get("ebusd", {}).get(key)
     return str(value) if value is not None else None
 
 
-# Safely convert string to float, return None on failure
 def _float(value: str | None) -> float | None:
     try:
         return float(value) if value is not None else None
@@ -37,7 +50,6 @@ def _float(value: str | None) -> float | None:
         return None
 
 
-# Create the DHW water heater entity
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -48,7 +60,6 @@ async def async_setup_entry(
 
 
 class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity):
-    """Aggregated domestic-hot-water control."""
 
     _attr_has_entity_name = True
     _attr_name = "Domestic Hot Water"
@@ -57,10 +68,6 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
     _attr_max_temp = 70
     _attr_target_temperature_step = 1
     _attr_operation_list = OPERATION_MODES
-    _attr_supported_features = (
-        WaterHeaterEntityFeature.TARGET_TEMPERATURE
-        | WaterHeaterEntityFeature.OPERATION_MODE
-    )
 
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -68,13 +75,34 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         self._attr_device_info = coordinator.get_device_info(ZONE)
 
     @property
+    def supported_features(self) -> WaterHeaterEntityFeature:
+        return (
+            WaterHeaterEntityFeature.TARGET_TEMPERATURE
+            | WaterHeaterEntityFeature.OPERATION_MODE
+            | WaterHeaterEntityFeature.AWAY_MODE
+            | WaterHeaterEntityFeature.ON_OFF
+        )
+
+    @property
+    def is_away_mode_on(self) -> bool | None:
+        h_start = _value(self.coordinator, HOLIDAY_START)
+        h_end = _value(self.coordinator, HOLIDAY_END)
+        if not h_start or not h_end:
+            return None
+        try:
+            now = date.today()
+            start = datetime.strptime(h_start, DATE_FMT).date()
+            end = datetime.strptime(h_end, DATE_FMT).date()
+            return start <= now <= end
+        except ValueError:
+            return None
+
+    @property
     def current_temperature(self) -> float | None:
-        # Return current DHW storage temperature
         return _float(_value(self.coordinator, CURRENT_TEMPERATURE))
 
     @property
     def target_temperature(self) -> float | None:
-        # Return DHW setpoint if within valid range
         value = _float(_value(self.coordinator, TARGET_TEMPERATURE))
         return value if value is not None and 30 <= value <= 70 else None
 
@@ -84,14 +112,12 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         if sf == "load":
             return "boost"
         operation = (_value(self.coordinator, OPERATION_MODE) or "").lower()
-        return operation if operation in ("off", "auto", "manual") else None
+        return EBUSD_TO_HA_OPMODE.get(operation)
 
     @property
     def available(self) -> bool:
-        # Entity available when coordinator updates succeed
         return self.coordinator.last_update_success
 
-    # Write DHW target temperature to ebusd
     async def async_set_temperature(self, **kwargs: Any) -> None:
         value = kwargs.get(ATTR_TEMPERATURE)
         if value is not None:
@@ -103,10 +129,27 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         if operation_mode == "boost":
             await self._write("HwcSFMode", "load")
         else:
+            ebusd_mode = HA_TO_EBUSD_OPMODE.get(operation_mode, operation_mode)
             await self._write("HwcSFMode", "auto")
-            await self._write("HwcOpMode", operation_mode)
+            await self._write("HwcOpMode", ebusd_mode)
 
-    # Write a CTLV2 register value and trigger refresh
+    async def async_turn_on(self) -> None:
+        await self.async_set_operation_mode("auto")
+
+    async def async_turn_off(self) -> None:
+        await self.async_set_operation_mode("off")
+
+    async def async_turn_away_mode_on(self) -> None:
+        today = date.today().strftime(DATE_FMT)
+        away_duration = self.coordinator._entry.options.get(CONF_AWAY_DURATION, DEFAULT_AWAY_DURATION)
+        end = (date.today() + timedelta(days=away_duration)).strftime(DATE_FMT)
+        await self._write("HwcHolidayStartPeriod", today)
+        await self._write("HwcHolidayEndPeriod", end)
+
+    async def async_turn_away_mode_off(self) -> None:
+        await self._write("HwcHolidayStartPeriod", HOLIDAY_RESET)
+        await self._write("HwcHolidayEndPeriod", HOLIDAY_RESET)
+
     async def _write(self, name: str, value: str) -> None:
         backend = self.coordinator.ebusd_backend
         if backend:

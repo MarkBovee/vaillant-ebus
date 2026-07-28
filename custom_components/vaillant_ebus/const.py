@@ -16,6 +16,7 @@ DEFAULT_EBUSD_PORT = 8888
 DEFAULT_EBUSD_POLL_INTERVAL = 30
 DEFAULT_AWAY_DURATION = 7
 DEFAULT_QUICK_VETO_DURATION = 3
+DEFAULT_QUICK_VETO_TEMP = 21.0
 DISCOVERY_PORT = 8888
 DISCOVERY_TIMEOUT = 3
 DISCOVERY_CANDIDATES = ["core-ebusd", "localhost", "127.0.0.1", "homeassistant.local"]
@@ -33,6 +34,21 @@ PLATFORMS = [
     Platform.CLIMATE,
     Platform.WATER_HEATER,
     Platform.CALENDAR,
-    Platform.DATE,
     Platform.DATETIME,
 ]
+
+EBUSD_TO_HA_HVAC = {
+    "off": "off",
+    "auto": "auto",
+    "day": "heat",
+    "night": "cool",
+    "heat": "heat",
+    "cool": "cool",
+}
+
+HA_TO_EBUSD_HVAC = {
+    "off": "off",
+    "auto": "auto",
+    "heat": "day",
+    "cool": "night",
+}

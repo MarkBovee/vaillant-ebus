@@ -20,7 +20,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, EBUSD_TO_HA_HVAC, HA_TO_EBUSD_HVAC
 from .coordinator import VaillantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,14 +37,6 @@ COMPRESSOR_STATUS = "hmu.RunDataStatuscode.value"
 QUICK_VETO_TEMP = f"{CIRCUIT}.Z1QuickVetoTemp.value"
 HOLIDAY_START = f"{CIRCUIT}.Z1HolidayStartPeriod.value"
 HOLIDAY_END = f"{CIRCUIT}.Z1HolidayEndPeriod.value"
-
-EBUSD_TO_HA_HVAC = {
-    "off": "off",
-    "auto": "auto",
-    "day": "heat",
-    "night": "heat",
-}
-HA_TO_EBUSD_HVAC = {v: k for k, v in EBUSD_TO_HA_HVAC.items()}
 
 HEATING_STATES = frozenset({
     "heat_compressor_active",
@@ -123,7 +115,12 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     @property
     def supported_features(self) -> ClimateEntityFeature:
-        return ClimateEntityFeature.PRESET_MODE | ClimateEntityFeature.TARGET_TEMPERATURE
+        return (
+            ClimateEntityFeature.PRESET_MODE
+            | ClimateEntityFeature.TARGET_TEMPERATURE
+            | ClimateEntityFeature.TURN_ON
+            | ClimateEntityFeature.TURN_OFF
+        )
 
     @property
     def hvac_mode(self) -> HVACMode | None:
@@ -300,7 +297,7 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     _attr_has_entity_name = True
     _attr_name = "Flow Temperature Range"
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO]
+    _attr_hvac_modes = [HVACMode.AUTO]
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = 5
     _attr_max_temp = 75
