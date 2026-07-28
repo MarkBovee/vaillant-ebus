@@ -198,6 +198,10 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     translated = value
                     if reg.key == "hmu.RunDataStatuscode":
                         translated = COMPRESSOR_STATUS_LABELS.get(value, value)
+                    for suffix in (";ok", ";err", ";inv", ";too_small", ";too_big", ";nan", ";unknown"):
+                        if translated.endswith(suffix):
+                            translated = translated[:-len(suffix)]
+                            break
                     values[f"{reg.circuit}.{reg.name}.{field}"] = translated
         self._save_cache(values)
         return values
