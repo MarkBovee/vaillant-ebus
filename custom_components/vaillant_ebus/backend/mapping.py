@@ -1154,4 +1154,11 @@ def get_meta(circuit: str, name: str, field: str = "value") -> RegisterMeta:
     key = f"{circuit}.{name}"
     if field != "value":
         key += f".{field}"
-    return REGISTER_MAP.get(key, RegisterMeta())
+    meta = REGISTER_MAP.get(key)
+    # ponytail: fallback for heating controller variants (basv → ctlv2). Add if new variants appear.
+    if meta is None and circuit != "ctlv2":
+        alt = f"ctlv2.{name}"
+        if field != "value":
+            alt += f".{field}"
+        meta = REGISTER_MAP.get(alt)
+    return meta or RegisterMeta()

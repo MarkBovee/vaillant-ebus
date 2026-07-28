@@ -43,6 +43,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._active_zone_circuits: set[str] = set()
         self._started = False
         self._ebusd_connected = False
+        self.heating_circuit = "ctlv2"
 
         scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL)
         super().__init__(
@@ -73,7 +74,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 value={"value": cached} if cached else {"value": None},
                 has_data=cached is not None,
             )
-        core_circuits: set[str] = {"hmu", "ctlv2", "Broadcast"}
+        core_circuits: set[str] = {"hmu", self.heating_circuit, "Broadcast"}
         active: set[str] = set(core_circuits)
         for reg in self.registers.values():
             if reg.has_data:
@@ -126,6 +127,10 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_find_keys = {r.key for r in discovered}
         for reg in discovered:
             self.registers[reg.key] = reg
+        for reg in discovered:
+            if reg.name == "Z1OpMode" and reg.has_data:
+                self.heating_circuit = reg.circuit
+                break
         _LOGGER.info("Found %d registers across %d circuit(s): %s",
                      len(discovered),
                      len({r.circuit for r in discovered}),
@@ -160,7 +165,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self._parse_scan_metadata()
 
-        active_present: set[str] = {"hmu", "ctlv2", "Broadcast"}
+        active_present: set[str] = {"hmu", self.heating_circuit, "Broadcast"}
         for reg in self.registers.values():
             if reg.has_data:
                 active_present.add(reg.circuit)
@@ -324,7 +329,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._active_zone_circuits = _detect_active_circuits(
                 list(self.registers.values())
             )
-            fp_present: set[str] = {"hmu", "ctlv2", "Broadcast"}
+            fp_present: set[str] = {"hmu", self.heating_circuit, "Broadcast"}
             for reg in self.registers.values():
                 if reg.has_data:
                     fp_present.add(reg.circuit)
@@ -374,10 +379,10 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.ebusd_backend.async_disconnect()
 
     PARENT_CIRCUITS: dict[str, str] = {
-        "ctlv2": "hmu", "z1": "ctlv2", "dhw": "ctlv2", "Broadcast": "hmu",
+        "ctlv2": "hmu", "basv": "hmu", "z1": "ctlv2", "dhw": "ctlv2", "Broadcast": "hmu",
     }
     CIRCUIT_TO_DEVICE_ID: dict[str, str] = {
-        "hmu": "08", "ctlv2": "15", "vwz": "76", "Broadcast": "f6",
+        "hmu": "08", "ctlv2": "15", "basv": "15", "vwz": "76", "Broadcast": "f6",
     }
 
     # Build HA DeviceInfo for a circuit, using scan metadata (SW/HW) when available
