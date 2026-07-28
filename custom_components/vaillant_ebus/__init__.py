@@ -9,8 +9,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
+from . import repairs  # noqa: F401 — registers issue translation keys
 from .const import DOMAIN, PLATFORMS
 from .coordinator import VaillantCoordinator
+from .dump_service import async_export_discovery_dump
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,7 +25,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = VaillantCoordinator(hass, entry)
     hass.data[DOMAIN][entry.entry_id] = coordinator
     await coordinator.async_config_entry_first_refresh()
-
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Read a single register by circuit and name.
@@ -55,7 +56,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def svc_rediscover(call: ServiceCall) -> None:
         if coordinator.ebusd_backend:
             await coordinator.ebusd_backend.async_disconnect()
-            await coordinator.async_start()
+        coordinator.ebusd_backend = None
+        coordinator._ebusd_connected = False
+        coordinator._started = False
+        await coordinator.async_request_refresh()
 
     hass.services.async_register(
         DOMAIN, "read_parameter", svc_read_parameter,
@@ -76,13 +80,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(DOMAIN, "refresh", svc_refresh, schema=vol.Schema({}))
     hass.services.async_register(DOMAIN, "rediscover", svc_rediscover, schema=vol.Schema({}))
 
-    _LOGGER.info("vaillant_ebus setup complete")
+    # Export full discovery dump to YAML, optionally with raw grab.
+    async def svc_export_discovery_dump(call: ServiceCall) -> None:
+        raw = call.data.get("grab_duration", 0)
+        grab_duration = min(max(int(raw), 0), 300)
+        await async_export_discovery_dump(hass, coordinator, grab_duration)
+
+    hass.services.async_register(
+        DOMAIN, "export_discovery_dump", svc_export_discovery_dump,
+        schema=vol.Schema({
+            vol.Optional("grab_duration"): vol.Coerce(int),
+        }),
+    )
+
     return True
 
 
 # Tear down coordinator and unregister services.
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    for service in ("read_parameter", "write_parameter", "refresh", "rediscover"):
+    for service in ("read_parameter", "write_parameter", "refresh", "rediscover", "export_discovery_dump"):
         hass.services.async_remove(DOMAIN, service)
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:

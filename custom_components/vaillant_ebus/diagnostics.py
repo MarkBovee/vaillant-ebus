@@ -25,6 +25,7 @@ async def async_get_config_entry_diagnostics(
             "register_count": len(coordinator.registers),
             "entity_count": len(coordinator.entities),
             "circuits": _circuit_summary(coordinator),
+            "circuit_names": sorted({r.circuit for r in coordinator.registers.values()}),
         }
 
     return result

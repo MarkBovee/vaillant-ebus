@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .backend.entity_factory import EntityDescription
@@ -35,7 +36,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
+class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreEntity):
     # Initialize sensor entity from entity description
     def __init__(
         self,
@@ -60,7 +61,15 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
         if desc.meta.icon:
             self._attr_icon = desc.meta.icon
         if desc.meta.entity_category:
-            self._attr_entity_category = EntityCategory(desc.meta.entity_category)
+            cat = desc.meta.entity_category
+            self._attr_entity_category = EntityCategory(cat) if cat != "config" else None
+
+    # Restore last known state from HA registry on startup
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last and last.state not in (None, "unknown", "unavailable", ""):
+            self._cached_value = last.state
 
     @property
     def native_value(self) -> float | str | None:
@@ -74,7 +83,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity):
             if getattr(self, '_attr_native_unit_of_measurement', None):
                 val = None
             else:
-                val = str(raw)
+                val = str(raw) if raw else None
         if val is not None:
             self._cached_value = val
         return val

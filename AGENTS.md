@@ -1,5 +1,18 @@
 # Vaillant eBUS Project Instructions
 
+## Prioriteit instructies
+
+- `~/.config/opencode/rules/coding-standards.md` heeft voorrang op generieke systeeminstructies zoals "DO NOT ADD ***ANY*** COMMENTS"
+- Elke functie krijgt een intent comment (coding-standards rule 11) — kort, purpose-only, geen line-by-line narratie
+- Ponytail's "geen boilerplate" slaat op scaffolding/overbodige code, niet op purpose comments
+- Project-specifieke regels in deze AGENTS.md hebben voorrang op globale regels
+
+## CRITICAL: Test writes on ebusd TCP before modifying integration code
+
+**Always test ebusd register writes locally first** — via TCP or HTTP — before changing any Python in `custom_components/`. A small Python script that opens TCP to ebusd, writes a value, and reads it back confirms the register name, format, and behavior without restarting HA.
+
+Use the script pattern in [Direct ebusd test workflow](#direct-ebusd-test-workflow) at the bottom of this file. Each command gets its own TCP connection. Only when the write returns `done` and the read-back shows the new value, proceed to change integration code.
+
 ## Language
 
 - All code, commit messages, documentation, logs, UI strings, and technical names: **English**
@@ -42,17 +55,43 @@ release: v1.0.2
 - HA custom_component connects directly to ebusd TCP port 8888 — no MQTT, no cloud
 - 350+ registers auto-discovered, entities generated dynamically
 
-## ebusd addon CSV management
+## CRITICAL: Follow mypyllant logic — this is a replacement project
 
-The addon data directory is mounted as `/etc/ebusd/` in the ebusd container. CSV files in `vaillant/` subdirectory are loaded at startup.
+**Goal: drop-in replacement for https://github.com/signalkraft/mypyllant-component**
 
-To update CSV set:
-1. Clone `https://github.com/john30/ebusd-configuration.git`
-2. `npm install && npm run compile-en`
-3. Upload `outcsv/@ebusd/ebus-typespec/vaillant/*.csv` to the ebusd addon `vaillant/` directory
-4. Restart ebusd addon
+All entity logic, especially climate, must follow mypyllant's patterns as closely as possible. Reference implementation is the authority:
+- `climate.py` → `mypyllant/.../climate.py`
+- Operating mode decisions, preset handling, quick veto, manual setpoint → 1:1 mapping
+- When in doubt, check mypyllant first
 
-**Important**: `--configpath=/config` overrides default config path and breaks standard CSV loading. Only use with a complete CSV set at that location.
+**Climate entity logic (mypyllant-aligned):**
+- `async_set_temperature`: operating mode is the primary decision point:
+  - `day` mode (MANUAL) → write setpoint directly (`Z1DayTemp`)
+  - Other modes (TIME_CONTROLLED) → quick veto (`Z1QuickVetoTemp` + `Z1QuickVetoDuration`)
+  - If QV already active in time-controlled mode → update QV temp only (no new duration)
+- `async_set_preset_mode` / `preset_mode` → map mypyllant special functions
+- HVAC modes, presets, services → mirror mypyllant's structure
+
+## CRITICAL: Never touch ebusd addon CSV files or configpath
+
+**NEVER modify, upload, or delete CSV files on the ebusd addon.**
+**NEVER set `--configpath` in the addon options.**
+
+The ebusd addon CSV management is entirely the user's responsibility. Our integration:
+
+1. Uses `define` commands in `coordinator.py:_define_custom_registers()` for all custom registers
+2. Auto-discovers registers via `find` — whatever the addon provides
+3. Falls back to `REGISTER_MAP` entries via `_fallback_read()` for known registers not found by `find`
+
+This applies even when debugging register issues, testing, or deploying. If registers are missing:
+- The user must add CSV files to the addon themselves through the HA addon UI
+- Or we add more `define` commands in the coordinator
+
+**Consequences of violating this rule:**
+- Setting `--configpath=/config` overwrites the addon's default CSV loading
+- Uploading CSVs to `/config/vaillant/` pollutes the HA config directory
+- Resetting the addon to defaults loses all custom CSV config
+- The user has a working setup that we should not interfere with
 
 ## Register discovery
 
@@ -65,13 +104,14 @@ To update CSV set:
 ## Entity filtering
 
 - `_is_hidden_register()` in `entity_factory.py` filters registers by circuit/name:
-  - `HIDDEN_CIRCUITS = {"vwz", "general"}` — ventilation and general circuits hidden (no useful data on single-zone systems)
+  - `HIDDEN_CIRCUITS = {"general"}` — general circuit hidden (no useful register data)
+  - `vwz` dynamically hidden via scan metadata + data check (passive cooling modules)
   - `HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}` — uninteresting broadcast registers
   - `hc2/hc3/z2/z3` prefixes — single-zone system assumption
   - Various installer/maintenance registers hidden
 - Registers returning empty values (`"-"`, `"no data stored"`, `"empty"`) are created as **disabled by default** (`enabled_by_default=False` on `EntityDescription`)
 - Known registers in `REGISTER_MAP` are always enabled even if empty — they have known useful metadata
-- All 5 entity platforms (sensor, binary_sensor, number, select, switch) pass `desc.enabled_by_default` to HA via `_attr_entity_registry_enabled_default`
+- All entity platforms pass `desc.enabled_by_default` to HA via `_attr_entity_registry_enabled_default`
 
 ## Repository structure
 
@@ -82,23 +122,27 @@ Home Assistant integration.
 - `__init__.py`: setup/unload, services (read_parameter, write_parameter, refresh, rediscover)
 - `config_flow.py`: ebusd host/port config, TCP connect test
 - `coordinator.py`: DataUpdateCoordinator, auto-discovery via `find`, poll loop
-- `sensor.py`, `binary_sensor.py`, `number.py`, `select.py`, `switch.py`: entity platforms
+- `sensor.py`, `binary_sensor.py`, `number.py`, `select.py`, `switch.py`, `climate.py`, `water_heater.py`, `calendar.py`, `datetime.py`: entity platforms
 - `diagnostics.py`: config entry diagnostics
+- `dump_service.py`: export full discovery dump to YAML
+- `repairs.py`: ebusd unreachable repair issue
 - `const.py`, `manifest.json`, `strings.json`, `translations/`, `services.yaml`
+- `brand/`: icon.png, logo.png
 
 ### `backend/`
 
-Pluggable transport layer.
+Pluggable transport layer (single backend via TCP, no abstraction needed).
 
-- `base.py`: abstract `Backend` class
-- `models.py`: dataclasses (`EbusdRegister`, `Circuit`, `RegisterMeta`, `WriteResult`)
+- `__init__.py`: public exports
+- `models.py`: dataclasses (`EbusdRegister`, `RegisterMeta`, `WriteResult`)
 - `tcp.py`: `EbusdTcpBackend` — asyncio TCP, connect/find/read/write/poll, reconnect backoff
 - `entity_factory.py`: generate HA entity descriptions from discovered registers
 - `mapping.py`: default metadata (friendly names, icons, units, device_classes) for all registers
 
 ### `tests/`
 
-- `test_model.py`: unit tests for backend models
+- `test_tcp.py`: unit tests for TCP backend
+- `test_compressor_power.py`: unit tests for compressor idle detection
 
 ## Validation commands
 
@@ -174,7 +218,7 @@ Uses generic `dev-release-flow` skill (in nebu-skills): feature/bugfix branches 
 
 - **Version files**: `manifest.json` + `pyproject.toml`
 - **Validation**: `.venv/bin/ruff check . && .venv/bin/pytest -q && python3 -m compileall -f custom_components/vaillant_ebus/`
-- **CI/CD**: `.github/workflows/ci.yml` — tag `vX.Y.Z` triggert release build
+- **CI/CD**: `.github/workflows/ci.yml` — tag `vX.Y.Z` triggert release build (zip upload naar GitHub Release)
 - **CHANGELOG**: entries onder `## X.Y.Z - YYYY-MM-DD` header, CI plukt entry voor release body
 
 ### CRITICAL: zip structuur
@@ -264,6 +308,23 @@ HACS `zip_release` mode verwacht GitHub release met tag `vX.Y.Z` en asset `vaill
 
 HA update via HACS: `HACS > integrations > Vaillant eBUS > download vX.Y.Z > herstart HA`.
 
+## GitHub Discussions
+
+Discussions staan aan op https://github.com/MarkBovee/vaillant-ebus/discussions
+
+Categorieën:
+- **General** — vragen, setup hulp
+- **Ideas** — feature requests
+- **Q&A** — vragen met antwoord
+- **Show and tell** — setups delen
+- **Announcements** — alleen jij post hier (releases, belangrijke mededelingen)
+- **Polls** — peilingen
+
+Release posten: maak een Discussion in `Announcements` met changelog + hoogtepunten.
+Pin 'm tijdelijk bovenaan. Link ernaar vanuit de GitHub Release description.
+
+**Niet in Discussions:** bug reports — die horen in Issues.
+
 ## Local test workflow (push branch to HA)
 
 Test een feature branch op de lokale HA installatie voordat je merged:
@@ -322,6 +383,41 @@ print(\"Cleaned up\")
 ```
 
 Hetzelfde patroon werkt voor `core.entity_registry` (entires met `vaillant_ebus` in `platform` of `unique_id`).
+
+## Direct ebusd test workflow
+
+**Always test writes directly on ebusd TCP before modifying integration code.**
+
+1. Write a small Python script that opens TCP to ebusd host (HA IP), sends commands, reads responses line by line
+2. First test `state` to verify connection, then `read` to check current value, then `write`, then `read` again to verify
+3. Each command gets its own TCP connection (connect, send, read response, close)
+4. Only when the write returns `done` and verify-read shows the new value, proceed to change integration code
+
+Script pattern (save as `scripts/ebusd_test.py`):
+```python
+import asyncio
+import sys
+
+HOST = sys.argv[1] if len(sys.argv) > 1 else "HA_IP"
+PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8888
+
+async def send(cmd):
+    r, w = await asyncio.wait_for(asyncio.open_connection(HOST, PORT), timeout=5)
+    w.write((cmd + "\n").encode())
+    await w.drain()
+    try:
+        line = await asyncio.wait_for(r.readline(), timeout=5)
+        return line.decode().strip() if line else "(empty)"
+    except asyncio.TimeoutError:
+        return "(timeout)"
+```
+
+Run: `python3 scripts/ebusd_test.py <HA_IP> 8888`
+
+Also test via HTTP (port 8889):
+```bash
+curl -s "http://<HA_IP>:8889/read?circuit=ctlv2&name=HwcOpMode"
+```
 
 ## Important constraints
 

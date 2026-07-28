@@ -8,15 +8,57 @@
           "ebusd_port": "Port",
           "scan_interval": "Update interval (seconds)"
         }
+      },
+      "confirm": {
+        "title": "Vaillant eBUS (ebusd)",
+        "description": "ebusd found on your home network.\n\n{info}"
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to ebusd",
+      "cannot_connect": "Cannot connect to ebusd. Check the host and port.",
+      "no_bus_signal": "Connected to ebusd but no eBUS signal detected. Check the adapter connection to the heat pump.",
+      "no_vaillant_device": "ebusd running but no Vaillant device found on the bus.",
       "unknown": "Unexpected error"
     },
     "abort": {
       "cannot_connect": "Cannot connect to ebusd",
       "unknown": "Unexpected error"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Vaillant eBUS Options",
+        "menu_options": {
+          "settings": "Settings",
+          "export_dump": "Export Discovery Dump"
+        }
+      },
+      "settings": {
+        "title": "Settings",
+        "description": "Configure connection and heating options.",
+        "data": {
+          "ebusd_host": "ebusd host",
+          "ebusd_port": "ebusd port",
+          "scan_interval": "Poll interval (seconds)",
+          "away_duration": "Default away duration (days)",
+          "quick_veto_duration": "Default quick veto duration (hours)",
+          "quick_veto_temp": "Default quick veto temperature"
+        }
+      },
+      "export_dump": {
+        "title": "Export Discovery Dump",
+        "description": "Export register dump + optional raw eBUS traffic capture to a YAML file for debugging.",
+        "data": {
+          "grab_duration": "Raw traffic capture (seconds)"
+        }
+      }
+    }
+  },
+  "issues": {
+    "ebusd_unreachable": {
+      "title": "ebusd is unreachable",
+      "description": "The integration cannot reach the ebusd daemon. Ensure ebusd is running and restart Home Assistant to retry."
     }
   }
 }

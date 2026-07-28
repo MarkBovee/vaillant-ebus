@@ -39,6 +39,8 @@ async def async_setup_entry(
         entities.append(EbusdSwitch(coordinator, desc, uid, entry))
 
     entities.append(AwayModeSwitch(coordinator, entry))
+    entities.append(HwcBoostSwitch(coordinator, entry))
+    entities.append(HwcAwayModeSwitch(coordinator, entry))
 
     async_add_entities(entities)
 
@@ -71,12 +73,12 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
             return None
         return raw.strip().lower() in SWITCH_ON_VALUES
 
+    # Turn switch on by writing "1" to ebusd
     async def async_turn_on(self, **kwargs: Any) -> None:
-        # Turn switch on by writing "1" to ebusd
         await self._write("1")
 
+    # Turn switch off by writing "0" to ebusd
     async def async_turn_off(self, **kwargs: Any) -> None:
-        # Turn switch off by writing "0" to ebusd
         await self._write("0")
 
     # Write value to ebusd and trigger refresh
@@ -177,4 +179,92 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         for circuit, name, value in writes:
             await backend.async_write(circuit, name, value)
         await backend.async_write("ctlv2", "Z1HolidayTemp", "15")
+        await self.coordinator.async_request_refresh()
+
+
+class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
+    """Toggle DHW boost mode via HwcSFMode register."""
+
+    # Initialize DHW boost switch with unique ID and DHW device
+    def __init__(
+        self,
+        coordinator: VaillantCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_hwc_boost"
+        self._attr_has_entity_name = True
+        self._attr_name = "DHW Boost"
+        self._attr_icon = "mdi:water-boiler"
+        self._attr_device_info = coordinator.get_device_info("dhw")
+
+    # True when HwcSFMode register equals "load"
+    @property
+    def is_on(self) -> bool | None:
+        data = self.coordinator.data.get("ebusd", {})
+        raw = data.get("ctlv2.HwcSFMode.value")
+        if raw is None:
+            return None
+        return raw.strip().lower() == "load"
+
+    # Write "load" to HwcSFMode to start DHW boost
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        backend = self.coordinator.ebusd_backend
+        if not backend:
+            return
+        await backend.async_write("ctlv2", "HwcSFMode", "load")
+        await self.coordinator.async_request_refresh()
+
+    # Write "auto" to HwcSFMode to stop DHW boost
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        backend = self.coordinator.ebusd_backend
+        if not backend:
+            return
+        await backend.async_write("ctlv2", "HwcSFMode", "auto")
+        await self.coordinator.async_request_refresh()
+
+
+class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
+    """Toggle DHW holiday mode by setting HwcHolidayStartPeriod/EndPeriod."""
+
+    # Initialize DHW away mode switch with unique ID and DHW device
+    def __init__(
+        self,
+        coordinator: VaillantCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_hwc_away_mode"
+        self._attr_has_entity_name = True
+        self._attr_name = "DHW Away Mode"
+        self._attr_icon = "mdi:water-boiler-off"
+        self._attr_device_info = coordinator.get_device_info("dhw")
+
+    # True when HwcHolidayStartPeriod/EndPeriod contain today
+    @property
+    def is_on(self) -> bool | None:
+        data = self.coordinator.data.get("ebusd", {})
+        start = data.get("ctlv2.HwcHolidayStartPeriod.value")
+        end = data.get("ctlv2.HwcHolidayEndPeriod.value")
+        if start is None or end is None:
+            return None
+        return _is_holiday_active(start, end)
+
+    # Set DHW holiday from today to far future
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        backend = self.coordinator.ebusd_backend
+        if not backend:
+            return
+        today = _today_str()
+        await backend.async_write("ctlv2", "HwcHolidayStartPeriod", today)
+        await backend.async_write("ctlv2", "HwcHolidayEndPeriod", FAR_FUTURE)
+        await self.coordinator.async_request_refresh()
+
+    # Reset DHW holiday dates to unset value
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        backend = self.coordinator.ebusd_backend
+        if not backend:
+            return
+        await backend.async_write("ctlv2", "HwcHolidayStartPeriod", UNSET_DATE)
+        await backend.async_write("ctlv2", "HwcHolidayEndPeriod", UNSET_DATE)
         await self.coordinator.async_request_refresh()

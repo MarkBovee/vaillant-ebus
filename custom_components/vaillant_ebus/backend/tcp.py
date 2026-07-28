@@ -4,20 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+import time
+from collections import deque
 
-from .models import EbusdRegister, WriteResult
+from .models import EbusdRegister, SendResult, WriteResult
 
 # ponytail: single-backend, no ABC abstraction needed. Add if a second transport variant materializes.
+# ponytail: global lock on async_send_raw serializes all TCP ops.
+# Per-circuit or connection-pool locks if throughput matters.
 
 _LOGGER = logging.getLogger(__name__)
 
 MAX_RECONNECT_DELAY = 60
 INITIAL_RECONNECT_DELAY = 1
 READ_TIMEOUT = 10
-WRITE_TIMEOUT = 10
-FIND_TIMEOUT = 30
-ERR_PREFIX = "ERR:"
 DONE_STR = "done"
 
 
@@ -32,6 +32,7 @@ class EbusdTcpBackend:
         self._reconnect_delay = INITIAL_RECONNECT_DELAY
         self._reconnect_count = 0
         self._lock = asyncio.Lock()
+        self._command_log: deque[dict] = deque(maxlen=20)
 
     @property
     def connected(self) -> bool:
@@ -43,25 +44,40 @@ class EbusdTcpBackend:
         # Return cached ebusd daemon version string
         return self._version
 
+    @property
+    def debug_info(self) -> dict:
+        # Return command log and connection state for diagnostics
+        return {
+            "connected": self._writer is not None,
+            "reconnect_count": self._reconnect_count,
+            "command_log": list(self._command_log),
+        }
+
     # Open TCP connection to ebusd, raise ConnectionError on failure
     async def async_connect(self) -> None:
-        if self.connected:
-            return
-        try:
-            self._reader, self._writer = await asyncio.wait_for(
-                asyncio.open_connection(self._host, self._port),
-                timeout=READ_TIMEOUT,
-            )
-            self._reconnect_delay = INITIAL_RECONNECT_DELAY
-            self._reconnect_count = 0
-            _LOGGER.info("Connected to ebusd at %s:%s", self._host, self._port)
-        except Exception as exc:
-            self._writer = None
-            self._reader = None
-            raise ConnectionError(f"Failed to connect to {self._host}:{self._port}: {exc}")
+        async with self._lock:
+            if self._writer:
+                return
+            try:
+                self._reader, self._writer = await asyncio.wait_for(
+                    asyncio.open_connection(self._host, self._port),
+                    timeout=READ_TIMEOUT,
+                )
+                self._reconnect_delay = INITIAL_RECONNECT_DELAY
+                self._reconnect_count = 0
+                _LOGGER.info("Connected to ebusd at %s:%s", self._host, self._port)
+            except Exception as exc:
+                self._writer = None
+                self._reader = None
+                raise ConnectionError(f"Failed to connect to {self._host}:{self._port}: {exc}")
 
     # Close TCP connection cleanly
     async def async_disconnect(self) -> None:
+        async with self._lock:
+            await self._disconnect_nolock()
+
+    # Disconnect without acquiring the lock (caller must hold _lock)
+    async def _disconnect_nolock(self) -> None:
         if self._writer:
             try:
                 self._writer.close()
@@ -71,42 +87,69 @@ class EbusdTcpBackend:
             self._writer = None
             self._reader = None
 
-    # Send raw command string to ebusd, return response line
-    async def async_send_raw(self, command: str) -> str:
-        if not self._writer or not self._reader:
-            raise ConnectionError("Not connected")
-        data = (command + "\n").encode("utf-8")
-        self._writer.write(data)
-        await self._writer.drain()
-        response = await asyncio.wait_for(self._reader.readline(), timeout=READ_TIMEOUT)
-        res = response.decode("utf-8").rstrip("\n\r")
-        try:
-            await asyncio.wait_for(self._reader.readline(), timeout=0.1)
-        except (TimeoutError, ConnectionError):
-            pass
-        return res
-
-    # Send 'f' command, return raw response lines
-    # ponytail: ebusd sends no end marker after f output. Use per-line
-    # timeout instead of one long FIND_TIMEOUT to avoid blocking the
-    # coordinator poll cycle. Bump FIND_TIMEOUT if lines arrive slowly.
-    async def _send_find(self) -> list[str]:
-        if not self._writer or not self._reader:
-            raise ConnectionError("Not connected")
-        command = "f\n"
-        self._writer.write(command.encode("utf-8"))
-        await self._writer.drain()
-        lines: list[str] = []
+    # Drain stale data from socket to prevent polluting next response
+    async def _drain_stale(self) -> None:
         while True:
             try:
-                line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
-                decoded = line.decode("utf-8").rstrip("\n\r")
-                if not decoded:
+                stale = await asyncio.wait_for(self._reader.readline(), timeout=0.05)
+                if not stale:
                     break
-                lines.append(decoded)
             except TimeoutError:
                 break
+
+    # Send raw command string to ebusd, return SendResult
+    async def async_send_raw(self, command: str) -> SendResult:
+        async with self._lock:
+            if not self._writer or not self._reader:
+                return self._log_cmd(command, SendResult(data="", error="not_connected"))
+            await self._drain_stale()
+            t0 = time.monotonic()
+            data = (command + "\n").encode("utf-8")
+            self._writer.write(data)
+            await self._writer.drain()
+            try:
+                response = await asyncio.wait_for(self._reader.readline(), timeout=READ_TIMEOUT)
+            except TimeoutError:
+                return self._log_cmd(command, SendResult(data="", error="timeout"), t0)
+            if not response:
+                return self._log_cmd(command, SendResult(data="", error="connection_closed"), t0)
+            res = response.decode("utf-8").rstrip("\n\r")
+            return self._log_cmd(command, SendResult(data=res), t0)
+
+    # Record command in ring-buffer log with duration for diagnostics
+    def _log_cmd(self, command: str, result: SendResult, t0: float | None = None) -> SendResult:
+        duration = int((time.monotonic() - t0) * 1000) if t0 else 0
+        self._command_log.append({
+            "cmd": command,
+            "data": result.data,
+            "error": result.error,
+            "duration_ms": duration,
+        })
+        return result
+
+    # Send 'f' command, return raw response lines (multi-line)
+    async def _send_find(self) -> list[str]:
+        result = await self.async_send_raw("f")
+        if result.error:
+            return []
+        async with self._lock:
+            lines: list[str] = []
+            if result.data.strip():
+                lines.append(result.data)
+            while True:
+                try:
+                    line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
+                except TimeoutError:
+                    break
+                if not line:
+                    break
+                decoded = line.decode("utf-8").rstrip("\n\r")
+                lines.append(decoded)
         return lines
+
+    # Return raw find response lines
+    async def async_find_lines(self) -> list[str]:
+        return await self._send_find()
 
     # Discover all registers from ebusd via find command
     async def async_find(self) -> list[EbusdRegister]:
@@ -116,7 +159,7 @@ class EbusdTcpBackend:
             parsed = self._parse_find_line(line)
             if parsed is None:
                 continue
-            circuit_name, reg_name, fields, values = parsed
+            circuit_name, reg_name, fields, values, msg_type, address = parsed
             if circuit_name not in circuits:
                 circuits[circuit_name] = {}
             reg = EbusdRegister(
@@ -125,6 +168,8 @@ class EbusdTcpBackend:
                 fields=fields,
                 value=values,
                 has_data=any(v is not None for v in values.values()),
+                message_type=msg_type,
+                address=address,
             )
             circuits[circuit_name][reg_name] = reg
         result: list[EbusdRegister] = []
@@ -132,65 +177,99 @@ class EbusdTcpBackend:
             result.extend(sorted(circuits[circuit_name].values(), key=lambda r: r.name))
         return result
 
-    # Parse a single find response line into circuit, name, fields, values
+    # Parse a single find response line into circuit, name, fields, values, msg_type, address
     @staticmethod
-    def _parse_find_line(line: str) -> tuple[str, str, list[str], dict[str, str | None]] | None:
+    def _parse_find_line(line: str) -> tuple[str, str, list[str], dict[str, str | None], str, str] | None:
         line = line.strip()
-        if not line or "=" not in line:
+        if not line:
             return None
-        lhs, rhs = line.split("=", 1)
-        lhs = lhs.strip()
-        rhs = rhs.strip()
-        parts = lhs.split(" ", 1)
+        # Simple register: "circuit name = value"
+        if "=" in line and not line.startswith("#"):
+            lhs, rhs = line.split("=", 1)
+            lhs = lhs.strip()
+            rhs = rhs.strip()
+            parts = lhs.split(" ", 1)
+            circuit_name = parts[0]
+            if len(parts) <= 1 or not parts[1].strip():
+                return None
+            reg_name = parts[1].strip()
+            if rhs in ("-", "no data stored", "") or rhs.startswith(("(empty ", "(ERR")):
+                return circuit_name, reg_name, ["value"], {"value": None}, "", ""
+            return circuit_name, reg_name, ["value"], {"value": rhs}, "", ""
+        # Multi-field register: "circuit type name QQ:ZZ:MSG:FIELDS: field=val field=val"
+        if line.startswith("#"):
+            return None
+        parts = line.split(None, 3)
+        if len(parts) < 4:
+            return None
         circuit_name = parts[0]
-        reg_name = parts[1].strip() if len(parts) > 1 else ""
-        # Skip empty register names (scan.* lines with no name)
-        if reg_name == "":
+        msg_type = parts[1]
+        reg_name = parts[2]
+        rest = parts[3]
+        # rest format: "QQ:ZZ:MSG:FIELDS: field1=val1 field2=val2"
+        addr_end = rest.find(": ")
+        if addr_end == -1:
             return None
-        if rhs in ("-", "no data stored", "") or rhs.startswith(("(empty ", "(ERR")):
-            return circuit_name, reg_name, ["value"], {"value": None}
-        return circuit_name, reg_name, ["value"], {"value": rhs}
+        address = rest[:addr_end]
+        field_part = rest[addr_end + 2:]
+        fields: list[str] = []
+        values: dict[str, str | None] = {}
+        for pair in field_part.split():
+            if "=" not in pair:
+                continue
+            fname, fval = pair.split("=", 1)
+            fields.append(fname)
+            values[fname] = fval if fval not in ("-", "no data stored", "") else None
+        if not fields:
+            fields = ["value"]
+            values = {"value": None}
+        return circuit_name, reg_name, fields, values, msg_type, address
 
     # Read a single register value from ebusd
     async def async_read(self, circuit: str, name: str, field: str = "") -> str | None:
         cmd = f"read -c {circuit} {name}"
         if field:
             cmd += f" {field}"
-        response = await self.async_send_raw(cmd)
-        if response.startswith(ERR_PREFIX):
-            _LOGGER.debug("Read error %s.%s: %s", circuit, name, response)
+        result = await self.async_send_raw(cmd)
+        if result.error:
+            _LOGGER.debug("Read error %s.%s: %s", circuit, name, result.error)
             return None
-        return response.strip() or None
+        return result.data.strip() or None
 
     # Write a value to an ebusd register, verify by read-back
     async def async_write(self, circuit: str, name: str, value: str) -> WriteResult:
         cmd = f"write -c {circuit} {name} {value}"
-        response = await self.async_send_raw(cmd)
-        if response.startswith(ERR_PREFIX):
-            return WriteResult(success=False, error_message=response)
-        if response.strip() == DONE_STR:
-            verified = await self.async_read(circuit, name)
-            return WriteResult(success=True, verified_value=verified)
-        return WriteResult(success=False, error_message=f"Unexpected response: {response}")
-
-    # Bulk-read multiple register fields from ebusd
-    async def async_poll(self, registers: list[tuple[str, str, str]]) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        for circuit, name, field in registers:
-            try:
-                value = await self.async_read(circuit, name, field)
-                if value is not None:
-                    result[f"{circuit}.{name}.{field}"] = value
-            except Exception as exc:
-                _LOGGER.debug("Poll error %s.%s: %s", circuit, name, exc)
-        return result
+        result = await self.async_send_raw(cmd)
+        if result.error:
+            return WriteResult(success=False, error_message=result.error)
+        data = result.data.strip()
+        if data and data != DONE_STR:
+            return WriteResult(success=False, error_message=f"Unexpected response: {data}")
+        verified = await self.async_read(circuit, name)
+        if not data and not verified:
+            return WriteResult(success=False, error_message="Write verification returned empty")
+        if verified and verified.startswith("ERR:"):
+            return WriteResult(success=False, error_message=f"Write verification failed: {verified}")
+        return WriteResult(success=True, verified_value=verified)
 
     # Disconnect, backoff-sleep, then reconnect to ebusd
     async def async_reconnect(self) -> None:
-        await self.async_disconnect()
-        delay = min(self._reconnect_delay, MAX_RECONNECT_DELAY)
-        _LOGGER.info("Reconnecting in %ds (attempt %d)", delay, self._reconnect_count + 1)
-        await asyncio.sleep(delay)
-        self._reconnect_delay = min(self._reconnect_delay * 2, MAX_RECONNECT_DELAY)
-        self._reconnect_count += 1
-        await self.async_connect()
+        async with self._lock:
+            await self._disconnect_nolock()
+            delay = min(self._reconnect_delay, MAX_RECONNECT_DELAY)
+            _LOGGER.info("Reconnecting in %ds (attempt %d)", delay, self._reconnect_count + 1)
+            await asyncio.sleep(delay)
+            self._reconnect_delay = min(self._reconnect_delay * 2, MAX_RECONNECT_DELAY)
+            self._reconnect_count += 1
+            try:
+                self._reader, self._writer = await asyncio.wait_for(
+                    asyncio.open_connection(self._host, self._port),
+                    timeout=READ_TIMEOUT,
+                )
+                self._reconnect_delay = INITIAL_RECONNECT_DELAY
+                self._reconnect_count = 0
+                _LOGGER.info("Reconnected to ebusd at %s:%s", self._host, self._port)
+            except Exception as exc:
+                self._writer = None
+                self._reader = None
+                raise ConnectionError(f"Failed to reconnect to {self._host}:{self._port}: {exc}")

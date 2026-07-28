@@ -1,3 +1,7 @@
+"""Unit tests for compressor idle detection and zeroing."""
+
+from __future__ import annotations
+
 import importlib.util
 import sys
 from pathlib import Path
@@ -15,6 +19,7 @@ zero_idle_registers = MODELS.zero_idle_registers
 COMPRESSOR_ZERO_REGISTERS = MODELS.COMPRESSOR_ZERO_REGISTERS
 
 
+# Build a register dict entry with given key and string value
 def _register(key: str, value: str) -> tuple[str, EbusdRegister]:
     circuit, name = key.split(".", 1)
     return key, EbusdRegister(
@@ -26,6 +31,7 @@ def _register(key: str, value: str) -> tuple[str, EbusdRegister]:
     )
 
 
+# Idle detection from status code + speed values
 def test_compressor_is_idle_from_status_and_values() -> None:
     stopped = dict(
         [
@@ -51,6 +57,7 @@ def test_compressor_is_idle_from_status_and_values() -> None:
     assert compressor_is_idle(idle_from_values)
 
 
+# All compressor-dependent registers are zeroed when compressor is idle
 def test_zero_idle_registers_clears_all() -> None:
     regs = dict([
         _register("hmu.CurrentConsumedPower", "2.4"),
@@ -68,6 +75,7 @@ def test_zero_idle_registers_clears_all() -> None:
         assert regs[key].has_data, f"{key} has_data not set"
 
 
+# Registers are NOT zeroed when compressor status is active
 def test_zero_idle_registers_skips_when_compressor_active() -> None:
     regs = dict([
         _register("hmu.CurrentConsumedPower", "2.7"),
@@ -77,6 +85,7 @@ def test_zero_idle_registers_skips_when_compressor_active() -> None:
     assert regs["hmu.CurrentConsumedPower"].value["value"] == "2.7"
 
 
+# String status "standby" is correctly detected as idle
 def test_compressor_is_idle_string_status_standby() -> None:
     regs = dict([
         _register("hmu.RunDataStatuscode", "standby"),
@@ -85,6 +94,7 @@ def test_compressor_is_idle_string_status_standby() -> None:
     assert compressor_is_idle(regs)
 
 
+# String status "hwc_compressor_active" is correctly detected as NOT idle
 def test_compressor_is_idle_string_status_hwc_active() -> None:
     regs = dict([
         _register("hmu.RunDataStatuscode", "hwc_compressor_active"),
@@ -93,6 +103,7 @@ def test_compressor_is_idle_string_status_hwc_active() -> None:
     assert not compressor_is_idle(regs)
 
 
+# Registers preserved when string status indicates active compressor
 def test_zero_idle_registers_skips_on_hwc_active_string() -> None:
     regs = dict([
         _register("hmu.CurrentConsumedPower", "1.8"),

@@ -8,9 +8,23 @@ DOMAIN = "vaillant_ebus"
 CONF_EBUSD_HOST = "ebusd_host"
 CONF_EBUSD_PORT = "ebusd_port"
 CONF_SCAN_INTERVAL = "scan_interval"
-DEFAULT_EBUSD_HOST = "192.168.1.100"
+CONF_AWAY_DURATION = "away_duration"
+CONF_QUICK_VETO_DURATION = "quick_veto_duration"
+CONF_QUICK_VETO_TEMP = "quick_veto_temp"
+DEFAULT_EBUSD_HOST = ""
 DEFAULT_EBUSD_PORT = 8888
-DEFAULT_EBUSD_POLL_INTERVAL = 60
+DEFAULT_EBUSD_POLL_INTERVAL = 30
+DEFAULT_AWAY_DURATION = 7
+DEFAULT_QUICK_VETO_DURATION = 3
+DEFAULT_QUICK_VETO_TEMP = 21.0
+DISCOVERY_PORT = 8888
+DISCOVERY_TIMEOUT = 3
+DISCOVERY_CANDIDATES = ["core-ebusd", "localhost", "127.0.0.1", "homeassistant.local"]
+SENSITIVE_FIELDS: set[str] = {
+    "serial", "keycode", "installer", "bc", "code",
+    "password", "secret", "token", "pin",
+}
+
 PLATFORMS = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -20,5 +34,21 @@ PLATFORMS = [
     Platform.CLIMATE,
     Platform.WATER_HEATER,
     Platform.CALENDAR,
-    Platform.DATE,
+    Platform.DATETIME,
 ]
+
+EBUSD_TO_HA_HVAC = {
+    "off": "off",
+    "auto": "auto",
+    "day": "heat",
+    "night": "cool",
+    "heat": "heat",
+    "cool": "cool",
+}
+
+HA_TO_EBUSD_HVAC = {
+    "off": "off",
+    "auto": "auto",
+    "heat": "day",
+    "cool": "night",
+}

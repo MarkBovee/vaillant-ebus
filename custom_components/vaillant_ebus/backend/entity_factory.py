@@ -8,8 +8,10 @@ from .mapping import REGISTER_MAP, RegisterMeta, get_meta
 from .models import EbusdRegister
 
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
-HIDDEN_CIRCUITS = {"vwz", "general"}
+HIDDEN_CIRCUITS = {"general"}  # v32/vwz: circuit detection via scan metadata + data check
 HIDDEN_REGISTERS = {"hmu.FlowTemperature", "Broadcast.FlowTemp"}
+
+ALWAYS_HIDDEN = {"memory"}
 
 
 # Map circuit/name to logical device (hmu, dhw, z1)
@@ -38,7 +40,7 @@ def _is_hidden_register(
         return True
     if circuit.lower().startswith("scan"):
         return True
-    if circuit.lower() in ("memory",) or circuit.lower() in HIDDEN_CIRCUITS:
+    if circuit.lower() in ALWAYS_HIDDEN or circuit.lower() in HIDDEN_CIRCUITS:
         return True
     if name.startswith(("cctimer_", "hwctimer_", "z1timer_", "z2timer_", "z3timer_")):
         return True
@@ -52,7 +54,28 @@ def _is_hidden_register(
         return True
     if circuit in SECONDARY_ZONE_CIRCUITS and not (active_zone_circuits and circuit in active_zone_circuits):
         return True
+    for suffix in SECONDARY_ZONE_CIRCUITS:
+        if not (active_zone_circuits and suffix in active_zone_circuits):
+            if name.startswith(suffix) or name.endswith(f"_{suffix}"):
+                return True
     return False
+
+
+PLACEHOLDER_VALUES = frozenset({"-", "no data stored", "empty", "", "unknown", "unavailable"})
+
+
+# Determine which eBUS circuits have active data
+def _detect_active_circuits(registers: list[EbusdRegister]) -> set[str]:
+    circuit_data: dict[str, bool] = {}
+    for reg in registers:
+        if reg.circuit not in circuit_data:
+            circuit_data[reg.circuit] = False
+        if reg.has_data and any(
+            v is not None and v.strip().lower() not in PLACEHOLDER_VALUES
+            for v in reg.value.values()
+        ):
+            circuit_data[reg.circuit] = True
+    return {c for c, active in circuit_data.items() if active}
 
 
 class EntityDescription:
@@ -132,6 +155,8 @@ def _classify_register(
     if low in ("on", "off", "true", "false"):
         return "binary_sensor" if not register.writable else "switch"
     if low in ("0", "1", "yes", "no"):
+        if meta.unit or meta.device_class:
+            return "sensor"
         if register.writable:
             return "switch"
         return "binary_sensor"
@@ -149,13 +174,20 @@ def generate_entity_descriptions(
     registers: list[EbusdRegister],
     yaml_overrides: dict[str, dict[str, Any]] | None = None,
     active_zone_circuits: set[str] | None = None,
+    skip_active_check: bool = False,
+    present_circuits: set[str] | None = None,
 ) -> list[EntityDescription]:
     overrides = yaml_overrides or {}
     seen: set[str] = set()
     entities: list[EntityDescription] = []
 
+    active_circuits = _detect_active_circuits(registers)
+
     for reg in registers:
         if _is_hidden_register(reg, active_zone_circuits):
+            continue
+        in_present = present_circuits and reg.circuit in present_circuits
+        if not skip_active_check and not in_present and reg.circuit not in active_circuits:
             continue
 
         for field in reg.fields:
@@ -215,6 +247,9 @@ def generate_entity_descriptions(
         )
         merged = _merge_overrides(meta, overrides.get(map_key) or {})
         if not merged.enabled:
+            continue
+        in_present = present_circuits and circuit in present_circuits
+        if not skip_active_check and not in_present and circuit not in active_circuits:
             continue
         entity = EntityDescription(
             circuit=circuit,

@@ -2,18 +2,28 @@
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.components.climate import ClimateEntity, ClimateEntityFeature
-from homeassistant.components.climate.const import HVACAction, HVACMode
+from homeassistant.components.climate.const import (
+    PRESET_AWAY,
+    PRESET_BOOST,
+    PRESET_NONE,
+    HVACAction,
+    HVACMode,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, EBUSD_TO_HA_HVAC, HA_TO_EBUSD_HVAC
 from .coordinator import VaillantCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 ZONE = "z1"
 CIRCUIT = "ctlv2"
@@ -22,16 +32,35 @@ TARGET_TEMPERATURE = f"{CIRCUIT}.Z1ActualRoomTempDesired.value"
 OPERATION_MODE = f"{CIRCUIT}.Z1OpMode.value"
 DAY_TEMPERATURE = f"{CIRCUIT}.Z1DayTemp.value"
 NIGHT_TEMPERATURE = f"{CIRCUIT}.Z1NightTemp.value"
-PUMP_STATUS = f"{CIRCUIT}.Hc1PumpStatus.value"
+HC_STATUS = f"{CIRCUIT}.Hc1Status.value"
+COMPRESSOR_STATUS = "hmu.RunDataStatuscode.value"
+QUICK_VETO_TEMP = f"{CIRCUIT}.Z1QuickVetoTemp.value"
+HOLIDAY_START = f"{CIRCUIT}.Z1HolidayStartPeriod.value"
+HOLIDAY_END = f"{CIRCUIT}.Z1HolidayEndPeriod.value"
+
+HEATING_STATES = frozenset({
+    "heat_compressor_active",
+    "heat_prerun",
+    "heat_overrun",
+    "heat_immersion_heater_active",
+})
+COOLING_STATES = frozenset({
+    "cool_compressor_active",
+    "cool_prerun",
+    "cool_overrun",
+})
+
+DATE_FMT = "%d.%m.%Y"
+HOLIDAY_RESET = "01.01.2015"
 
 
-# Get string value from coordinator data by key
+# Look up a string value from coordinator ebusd data by key
 def _value(coordinator: VaillantCoordinator, key: str) -> str | None:
     value = coordinator.data.get("ebusd", {}).get(key)
     return str(value) if value is not None else None
 
 
-# Safely convert string to float, return None on failure
+# Parse string value to float, return None on failure
 def _float(value: str | None) -> float | None:
     try:
         return float(value) if value is not None else None
@@ -39,122 +68,331 @@ def _float(value: str | None) -> float | None:
         return None
 
 
-# Map Vaillant operation mode to HA HVACMode
+# Map ebusd operation mode string to HA HVACMode
 def _hvac_mode(value: str | None) -> HVACMode | None:
-    return {
-        "off": HVACMode.OFF,
-        "auto": HVACMode.AUTO,
-        "day": HVACMode.HEAT,
-        "night": HVACMode.HEAT,
-    }.get((value or "").lower())
+    ha = EBUSD_TO_HA_HVAC.get((value or "").lower())
+    return HVACMode(ha) if ha else None
 
 
-# Create the Z1 climate entity
+# Create climate entities: zone thermostat and flow temperature range
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([EbusdClimate(coordinator, entry)])
+    async_add_entities([EbusdClimate(coordinator, entry), EbusdFlowTempRange(coordinator, entry)])
 
 
 class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
-    """Aggregated climate control for primary zone Z1."""
 
     _attr_has_entity_name = True
     _attr_name = "Home"
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO]
-    _attr_preset_modes = ["day", "night"]
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO]
+    _attr_preset_modes = [PRESET_NONE, PRESET_BOOST, PRESET_AWAY]
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = 5
     _attr_max_temp = 30
     _attr_target_temperature_step = 0.5
 
-    # Initialize Z1 climate entity
+    # Initialize zone climate entity with device info and optimistic state tracking
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_climate_z1"
         self._attr_device_info = coordinator.get_device_info(ZONE)
+        self._optimistic_hvac_mode: HVACMode | None = None
+        self._quick_veto_until: datetime | None = None
 
+    # Current room temperature from Z1RoomTemp
     @property
     def current_temperature(self) -> float | None:
-        # Return current room temperature
         return _float(_value(self.coordinator, ROOM_TEMPERATURE))
 
+    # Target temperature: quick veto temp (boost) or actual/target, filtered to valid range
     @property
     def target_temperature(self) -> float | None:
-        # Return target temperature, falling back to day/night setpoint
+        if self.preset_mode == PRESET_BOOST:
+            qv = _float(_value(self.coordinator, QUICK_VETO_TEMP))
+            if qv is not None and 5 <= qv <= 30:
+                return qv
         value = _float(_value(self.coordinator, TARGET_TEMPERATURE))
         if value is not None and 5 <= value <= 30:
             return value
-        if self.preset_mode == "night":
-            return _float(_value(self.coordinator, NIGHT_TEMPERATURE))
         return _float(_value(self.coordinator, DAY_TEMPERATURE))
 
-    @property
-    def target_temperature_step(self) -> float:
-        # Return fixed 0.5C step for temperature adjustment
-        return 0.5
-
+    # Supported features: preset mode, target temp, turn on/off
     @property
     def supported_features(self) -> ClimateEntityFeature:
-        # Return PRESET_MODE and TARGET_TEMPERATURE when setpoint known
-        features = ClimateEntityFeature.PRESET_MODE
-        if self.target_temperature is not None:
-            features |= ClimateEntityFeature.TARGET_TEMPERATURE
-        return features
+        return (
+            ClimateEntityFeature.PRESET_MODE
+            | ClimateEntityFeature.TARGET_TEMPERATURE
+            | ClimateEntityFeature.TURN_ON
+            | ClimateEntityFeature.TURN_OFF
+        )
 
+    # Current HVAC mode: optimistic value or ebusd Z1OpMode
     @property
     def hvac_mode(self) -> HVACMode | None:
-        # Return current HVAC mode from operation register
+        if self._optimistic_hvac_mode is not None:
+            return self._optimistic_hvac_mode
         return _hvac_mode(_value(self.coordinator, OPERATION_MODE))
 
+    # HVAC action derived from HC1 status, pump, and compressor state
     @property
     def hvac_action(self) -> HVACAction | None:
-        # Return HEATING when pump is on, IDLE otherwise
-        value = (_value(self.coordinator, PUMP_STATUS) or "").lower()
-        if value in {"on", "1", "true"}:
+        hc = _float(_value(self.coordinator, HC_STATUS))
+        zone_active = hc is not None and hc > 0
+        if hc is None:
+            pump = _value(self.coordinator, f"{CIRCUIT}.Hc1PumpStatus.value")
+            zone_active = (pump or "").lower() in ("on", "1", "true", "yes", "running")
+        comp = (_value(self.coordinator, COMPRESSOR_STATUS) or "").lower()
+        global_heat = comp in HEATING_STATES
+        global_cool = comp in COOLING_STATES
+        if zone_active:
+            if global_heat:
+                return HVACAction.HEATING
+            if global_cool:
+                return HVACAction.COOLING
+            if global_heat or global_cool:
+                return HVACAction.IDLE
+        mode = self.hvac_mode
+        if mode == HVACMode.OFF:
+            return HVACAction.OFF
+        if global_heat:
             return HVACAction.HEATING
-        return HVACAction.IDLE if value else None
+        if global_cool:
+            return HVACAction.COOLING
+        return HVACAction.IDLE
 
+    # Current preset: boost (QV active), away (holiday period), or none
     @property
     def preset_mode(self) -> str | None:
-        # Return day/night preset from operation mode
-        mode = (_value(self.coordinator, OPERATION_MODE) or "").lower()
-        return mode if mode in self.preset_modes else None
+        if self._quick_veto_until and self._quick_veto_until > datetime.now():
+            return PRESET_BOOST
+        h_start = _value(self.coordinator, HOLIDAY_START)
+        h_end = _value(self.coordinator, HOLIDAY_END)
+        if h_start and h_end and h_start != HOLIDAY_RESET:
+            try:
+                now = datetime.now().date()
+                start = datetime.strptime(h_start, DATE_FMT).date()
+                end = datetime.strptime(h_end, DATE_FMT).date()
+                if start <= now <= end:
+                    return PRESET_AWAY
+            except ValueError:
+                pass
+        return PRESET_NONE
 
     @property
     def available(self) -> bool:
-        # Entity available when coordinator updates succeed
         return self.coordinator.last_update_success
 
-    # Write day/night setpoint to ebusd based on preset
-    async def async_set_temperature(self, **kwargs: Any) -> None:
-        value = kwargs.get(ATTR_TEMPERATURE)
-        if value is not None:
-            name = "Z1NightTemp" if self.preset_mode == "night" else "Z1DayTemp"
-            await self._write(name, str(value))
-
-    # Write HVAC mode (off/heat/auto) to ebusd
+    # Set HVAC mode: cancel boost first, then write ebusd op mode
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        values = {
-            HVACMode.OFF: "off",
-            HVACMode.HEAT: "day",
-            HVACMode.AUTO: "auto",
-        }
-        await self._write("Z1OpMode", values[hvac_mode])
+        self._optimistic_hvac_mode = hvac_mode
+        self.async_write_ha_state()
+        if self.preset_mode == PRESET_BOOST:
+            await self._cancel_quick_veto()
+        ebusd_mode = HA_TO_EBUSD_HVAC.get(hvac_mode.value)
+        if ebusd_mode is None:
+            self._optimistic_hvac_mode = None
+            self.async_write_ha_state()
+            return
+        ok = True
+        try:
+            ok = await self._write("Z1OpMode", ebusd_mode)
+        except Exception as exc:
+            _LOGGER.exception("set_hvac_mode failed: %s", exc)
+            ok = False
+        if not ok:
+            self._optimistic_hvac_mode = None
+            self.async_write_ha_state()
 
-    # Write day/night preset mode to ebusd
+    # Set preset: boost (quick veto), away (holiday), or cancel
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        if preset_mode not in self.preset_modes:
+        if preset_mode not in self._attr_preset_modes:
             raise ValueError(f"Unsupported preset: {preset_mode}")
-        await self._write("Z1OpMode", preset_mode)
+        current = self.preset_mode
+        if current == PRESET_BOOST and preset_mode != PRESET_BOOST:
+            await self._cancel_quick_veto()
+        if preset_mode == PRESET_BOOST and current != PRESET_BOOST:
+            await self._start_quick_veto()
+        if preset_mode == PRESET_AWAY and current != PRESET_AWAY:
+            await self._start_holiday()
+        elif preset_mode != PRESET_AWAY and current == PRESET_AWAY:
+            await self._cancel_holiday()
 
-    # Write a CTLV2 register value and trigger refresh
-    async def _write(self, name: str, value: str) -> None:
+    # Set target temperature: write Z1DayTemp (manual) or Z1QuickVetoTemp (boost)
+    async def async_set_temperature(self, **kwargs: Any) -> None:
+        temp = kwargs.get(ATTR_TEMPERATURE)
+        if temp is None:
+            return
+        if self.preset_mode == PRESET_BOOST:
+            await self._write("Z1QuickVetoTemp", str(temp))
+        else:
+            await self._write("Z1DayTemp", str(temp))
+
+    # Turn on by setting operation mode to auto
+    async def async_turn_on(self) -> None:
+        await self._write("Z1OpMode", "auto")
+
+    # Turn off
+    async def async_turn_off(self) -> None:
+        await self._write("Z1OpMode", "off")
+
+    # Clear optimistic mode when ebusd confirms, expire quick veto timer
+    def _handle_coordinator_update(self) -> None:
+        if self._quick_veto_until and self._quick_veto_until <= datetime.now():
+            self._quick_veto_until = None
+        if self._optimistic_hvac_mode is not None:
+            confirmed = _hvac_mode(_value(self.coordinator, OPERATION_MODE))
+            if confirmed == self._optimistic_hvac_mode:
+                self._optimistic_hvac_mode = None
+        super()._handle_coordinator_update()
+
+    # Cancel quick veto: restore day temp, set duration to 0
+    async def _cancel_quick_veto(self) -> None:
+        self._quick_veto_until = None
+        self.async_write_ha_state()
+        day_temp = _float(_value(self.coordinator, DAY_TEMPERATURE))
+        if day_temp is not None:
+            await self._write("Z1QuickVetoTemp", str(day_temp))
+        await self._write("Z1QuickVetoDuration", "0")
+
+    # Start quick veto with specified temp or config-based default for N hours
+    async def _start_quick_veto(self, temp_override: float | None = None) -> None:
+        if temp_override is not None:
+            veto_temp = temp_override
+        else:
+            temp = _float(_value(self.coordinator, ROOM_TEMPERATURE))
+            options = self.coordinator._entry.options
+            veto_temp = options.get("quick_veto_temp")
+            if veto_temp is None and temp is not None:
+                veto_temp = round(temp, 1)
+        if veto_temp is None:
+            return
+        options = self.coordinator._entry.options
+        veto_duration = options.get("quick_veto_duration", 3)
+        self._quick_veto_until = datetime.now() + timedelta(hours=veto_duration)
+        await self._write("Z1QuickVetoTemp", str(veto_temp))
+        await self._write("Z1QuickVetoDuration", str(veto_duration))
+        self.async_write_ha_state()
+
+    # Start holiday period: set Z1HolidayStartPeriod/EndPeriod from today
+    async def _start_holiday(self) -> None:
+        today = datetime.now().date()
+        away_duration = self.coordinator._entry.options.get("away_duration", 7)
+        await self._write("Z1HolidayStartPeriod", today.strftime(DATE_FMT))
+        await self._write("Z1HolidayEndPeriod", (today + timedelta(days=away_duration)).strftime(DATE_FMT))
+        ht = _float(_value(self.coordinator, f"{CIRCUIT}.Z1HolidayTemp.value"))
+        if ht is None:
+            await self._write("Z1HolidayTemp", "15.0")
+
+    # Cancel holiday: reset dates to unset value
+    async def _cancel_holiday(self) -> None:
+        await self._write("Z1HolidayStartPeriod", HOLIDAY_RESET)
+        await self._write("Z1HolidayEndPeriod", HOLIDAY_RESET)
+
+    # Write register to CTLV2 circuit via backend
+    async def _write(self, name: str, value: str) -> bool:
+        return await self._write_raw(CIRCUIT, name, value)
+
+    # Write register to arbitrary circuit via backend, trigger refresh on success
+    async def _write_raw(self, circuit: str, name: str, value: str) -> bool:
         backend = self.coordinator.ebusd_backend
-        if backend:
+        if not backend:
+            return False
+        try:
+            result = await backend.async_write(circuit, name, value)
+            if result.success:
+                await self.coordinator.async_request_refresh()
+            return result.success
+        except Exception:
+            return False
+
+
+CIRCUIT_HMU = "hmu"
+MIN_FLOW_TEMP = f"{CIRCUIT}.Hc1MinFlowTempDesired.value"
+MAX_FLOW_TEMP = f"{CIRCUIT}.Hc1MaxFlowTempDesired.value"
+CURRENT_FLOW_TEMP = f"{CIRCUIT}.Hc1FlowTemp.value"
+
+
+class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
+
+    _attr_has_entity_name = True
+    _attr_name = "Flow Temperature Range"
+    _attr_hvac_modes = [HVACMode.AUTO]
+    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_min_temp = 5
+    _attr_max_temp = 75
+    _attr_target_temperature_step = 1
+
+    # Initialize flow temp range entity on z1 device
+    def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_climate_flow_temp_range"
+        self._attr_device_info = coordinator.get_device_info("z1")
+
+    # Supports target temperature range (min/max flow temp)
+    @property
+    def supported_features(self) -> ClimateEntityFeature:
+        return ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
+
+    # Current flow temperature from Hc1FlowTemp
+    @property
+    def current_temperature(self) -> float | None:
+        return _float(_value(self.coordinator, CURRENT_FLOW_TEMP))
+
+    # Minimum flow temperature target from Hc1MinFlowTempDesired
+    @property
+    def target_temperature_low(self) -> float | None:
+        return _float(_value(self.coordinator, MIN_FLOW_TEMP))
+
+    # Maximum flow temperature target from Hc1MaxFlowTempDesired
+    @property
+    def target_temperature_high(self) -> float | None:
+        return _float(_value(self.coordinator, MAX_FLOW_TEMP))
+
+    # HVAC action from compressor status (heating/cooling/idle/off)
+    @property
+    def hvac_action(self) -> HVACAction | None:
+        comp = (_value(self.coordinator, COMPRESSOR_STATUS) or "").lower()
+        if comp in HEATING_STATES:
+            return HVACAction.HEATING
+        if comp in COOLING_STATES:
+            return HVACAction.COOLING
+        if self.hvac_mode == HVACMode.OFF:
+            return HVACAction.OFF
+        if comp:
+            return HVACAction.IDLE
+        return HVACAction.OFF
+
+    # HVAC mode from Z1OpMode
+    @property
+    def hvac_mode(self) -> HVACMode | None:
+        return _hvac_mode(_value(self.coordinator, OPERATION_MODE))
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    # Set min/max flow temperature range via Hc1Min/MaxFlowTempDesired
+    async def async_set_temperature(self, **kwargs: Any) -> None:
+        low = kwargs.get("target_temp_low")
+        high = kwargs.get("target_temp_high")
+        if low is not None:
+            await self._write("Hc1MinFlowTempDesired", str(int(low)))
+        if high is not None:
+            await self._write("Hc1MaxFlowTempDesired", str(int(high)))
+
+    # Write register to CTLV2 circuit, trigger refresh on success
+    async def _write(self, name: str, value: str) -> bool:
+        backend = self.coordinator.ebusd_backend
+        if not backend:
+            return False
+        try:
             result = await backend.async_write(CIRCUIT, name, value)
             if result.success:
                 await self.coordinator.async_request_refresh()
+            return result.success
+        except Exception:
+            return False

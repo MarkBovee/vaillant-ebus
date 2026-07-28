@@ -1,23 +1,44 @@
+# Python bytecode and compiled extensions
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+
+# Local environment and packaging metadata
 .env
-.venv
+.venv/
 venv/
 *.egg-info/
+
+# Build artifacts
 dist/
 build/
+
+# Test, type-checking, and lint caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Coverage reports
 .coverage
 htmlcov/
+
+# Local certificates and keys
 *.pem
 *.key
 *.cert
+
+# Test fixtures captured locally
 tests/fixtures/capture_*.jsonl
+
+# Local Home Assistant logs
 home-assistant.log
+
+# Generated and tool-specific files
 openspec/
+.openspec/
+.opencode/
 captures/
 /scripts/
+strings.json
+data-dump/

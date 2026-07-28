@@ -1,5 +1,56 @@
 # Changelog
 
+## 1.1.0 - 2026-07-28
+
+### Config flow — major rewrite
+
+- **Reliable auto-discovery**: probes ebusd via `s` command, checks for
+  `"acquired"` substring. Supervisor API integration detects host IP from
+  `http://supervisor/network/info` for HA OS compatibility.
+- **Confirm step**: shows "Connected to host:port — signal acquired." before
+  creating the entry.
+- **Options flow with host/port**: edit ebusd host, port, scan interval, away
+  duration, quick veto duration and temperature in one form. Host/port changes
+  update the config entry data via `async_update_entry`.
+- Remove stale `{host}:{port}` placeholders from error messages.
+- Remove dead `_validate_info()` — `_probe_candidate` already checks for `"acquired"`.
+
+### Device detection & circuit filtering
+
+- **Scan metadata parsing**: extract MF/ID/SW/HW from `scan.XX` registers to
+  detect which eBUS devices are present on the bus.
+- **Dynamic circuit detection**: VWZ (ventilation) and v32 (passive cooling)
+  modules auto-detected instead of hardcoded hidden circuits.
+- **Data-based filtering**: circuits without actual data get zero entities —
+  prevents ghost entities for missing hardware.
+- **Immediate startup**: entities seeded from `REGISTER_MAP` + cache within
+  milliseconds, before ebusd connects.
+- **Background discovery**: connect, `find`, and `fallback_read` run in a
+  background task without blocking HA startup.
+
+### Entity improvements
+
+- **Flow Temperature Range (NEW)**: `EbusdFlowTempRange` climate entity with
+  `TARGET_TEMPERATURE_RANGE` support. Reads min/max flow temp desired, writes
+  via `async_set_temperature`. Placed on z1 (Woonkamer) device.
+- **DHW modes corrected**: `off`, `auto`, `manual`, `boost` (was `day`/`night`).
+  Dead `_saved_op_mode` code removed — heat pump handles mode restoration.
+- **Empty value handling**: registers returning `""`, `"-"`, `"no data stored"`,
+  or `"empty"` excluded from coordinator data and shown as unavailable.
+- **Known registers without data** (`Hc1CoolingEnabled`, etc.) disabled by
+  default after discovery confirms no data.
+- `Hc1ActualFlowTempDesired` made read-only — heat pump manages flow target
+  automatically; use the range entity for min/max overrides.
+
+### Fixes & cleanup
+
+- Fix rediscover service crash: `async_start()` did not exist on
+  `VaillantCoordinator` — now resets state and triggers background reconnect.
+- Add intent comments to all Python functions per coding-standards rule 11.
+- Remove `backend/base.py` (single-backend, no abstraction needed).
+- Update `AGENTS.md`: repo structure, `HIDDEN_CIRCUITS`, priority rules.
+- All validation commands pass.
+
 ## 1.0.9 - 2026-07-24
 
 - Auto-detect active secondary zones (hc2/hc3/z2/z3) instead of hardcoded filter

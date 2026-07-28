@@ -68,6 +68,8 @@ class EbusdRegister:
     value: dict[str, str | None] = field(default_factory=dict)
     has_data: bool = False
     writable: bool = False
+    message_type: str = ""
+    address: str = ""
 
     @property
     def key(self) -> str:
@@ -80,6 +82,7 @@ _COMPRESSOR_ACTIVE_STATUS_STRINGS: set[str] = {
     "hwc_compressor_active",
     "heat_compressor_active",
     "cooling_compressor_active",
+    "cool_compressor_active",
     "defrost",
 }
 
@@ -94,6 +97,7 @@ COMPRESSOR_STATUS_LABELS: dict[str, str] = {
     "hwc_compressor_active": "Active (DHW)",
     "heat_compressor_active": "Active (Heating)",
     "cooling_compressor_active": "Active (Cooling)",
+    "cool_compressor_active": "Active (Cooling)",
     "heat_compressor_shutdown": "Shutdown (Heating)",
     "defrost": "Defrost",
 }
@@ -179,6 +183,12 @@ class RegisterMeta:
     enabled: bool = True
     entity_type: str = ""
     device_circuit: str | None = None
+
+
+@dataclass
+class SendResult:
+    data: str
+    error: str | None = None
 
 
 @dataclass
