@@ -68,6 +68,8 @@ class EbusdRegister:
     value: dict[str, str | None] = field(default_factory=dict)
     has_data: bool = False
     writable: bool = False
+    message_type: str = ""
+    address: str = ""
 
     @property
     def key(self) -> str:

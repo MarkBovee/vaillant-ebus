@@ -146,6 +146,10 @@ class EbusdTcpBackend:
                 lines.append(decoded)
         return lines
 
+    # Return raw find response lines
+    async def async_find_lines(self) -> list[str]:
+        return await self._send_find()
+
     # Discover all registers from ebusd via find command
     async def async_find(self) -> list[EbusdRegister]:
         raw_lines = await self._send_find()
@@ -154,7 +158,7 @@ class EbusdTcpBackend:
             parsed = self._parse_find_line(line)
             if parsed is None:
                 continue
-            circuit_name, reg_name, fields, values = parsed
+            circuit_name, reg_name, fields, values, msg_type, address = parsed
             if circuit_name not in circuits:
                 circuits[circuit_name] = {}
             reg = EbusdRegister(
@@ -163,6 +167,8 @@ class EbusdTcpBackend:
                 fields=fields,
                 value=values,
                 has_data=any(v is not None for v in values.values()),
+                message_type=msg_type,
+                address=address,
             )
             circuits[circuit_name][reg_name] = reg
         result: list[EbusdRegister] = []
@@ -170,24 +176,53 @@ class EbusdTcpBackend:
             result.extend(sorted(circuits[circuit_name].values(), key=lambda r: r.name))
         return result
 
-    # Parse a single find response line into circuit, name, fields, values
+    # Parse a single find response line into circuit, name, fields, values, msg_type, address
     @staticmethod
-    def _parse_find_line(line: str) -> tuple[str, str, list[str], dict[str, str | None]] | None:
+    def _parse_find_line(line: str) -> tuple[str, str, list[str], dict[str, str | None], str, str] | None:
         line = line.strip()
-        if not line or "=" not in line:
+        if not line:
             return None
-        lhs, rhs = line.split("=", 1)
-        lhs = lhs.strip()
-        rhs = rhs.strip()
-        parts = lhs.split(" ", 1)
+        # Simple register: "circuit name = value"
+        if "=" in line and not line.startswith("#"):
+            lhs, rhs = line.split("=", 1)
+            lhs = lhs.strip()
+            rhs = rhs.strip()
+            parts = lhs.split(" ", 1)
+            circuit_name = parts[0]
+            if len(parts) <= 1 or not parts[1].strip():
+                return None
+            reg_name = parts[1].strip()
+            if rhs in ("-", "no data stored", "") or rhs.startswith(("(empty ", "(ERR")):
+                return circuit_name, reg_name, ["value"], {"value": None}, "", ""
+            return circuit_name, reg_name, ["value"], {"value": rhs}, "", ""
+        # Multi-field register: "circuit type name QQ:ZZ:MSG:FIELDS: field=val field=val"
+        if line.startswith("#"):
+            return None
+        parts = line.split(None, 3)
+        if len(parts) < 4:
+            return None
         circuit_name = parts[0]
-        reg_name = parts[1].strip() if len(parts) > 1 else ""
-        # Skip empty register names (scan.* lines with no name)
-        if reg_name == "":
+        msg_type = parts[1]
+        reg_name = parts[2]
+        rest = parts[3]
+        # rest format: "QQ:ZZ:MSG:FIELDS: field1=val1 field2=val2"
+        addr_end = rest.find(": ")
+        if addr_end == -1:
             return None
-        if rhs in ("-", "no data stored", "") or rhs.startswith(("(empty ", "(ERR")):
-            return circuit_name, reg_name, ["value"], {"value": None}
-        return circuit_name, reg_name, ["value"], {"value": rhs}
+        address = rest[:addr_end]
+        field_part = rest[addr_end + 2:]
+        fields: list[str] = []
+        values: dict[str, str | None] = {}
+        for pair in field_part.split():
+            if "=" not in pair:
+                continue
+            fname, fval = pair.split("=", 1)
+            fields.append(fname)
+            values[fname] = fval if fval not in ("-", "no data stored", "") else None
+        if not fields:
+            fields = ["value"]
+            values = {"value": None}
+        return circuit_name, reg_name, fields, values, msg_type, address
 
     # Read a single register value from ebusd
     async def async_read(self, circuit: str, name: str, field: str = "") -> str | None:

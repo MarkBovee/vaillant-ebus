@@ -194,8 +194,17 @@ class VaillantOptionsFlow(OptionsFlow):
     def __init__(self, config_entry: dict[str, Any]) -> None:
         self._config_entry = config_entry
 
-    # Handle options flow init step (scan interval config)
+    # Menu: choose between settings and export dump
     async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["settings", "export_dump"],
+        )
+
+    # Settings form (host, port, scan interval, away, quick veto)
+    async def async_step_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         if user_input is not None:
@@ -211,7 +220,7 @@ class VaillantOptionsFlow(OptionsFlow):
         data = self._config_entry.data if hasattr(self._config_entry, "data") else self._config_entry
         options = self._config_entry.options if hasattr(self._config_entry, "options") else {}
         return self.async_show_form(
-            step_id="init",
+            step_id="settings",
             data_schema=vol.Schema({
                 vol.Optional(
                     CONF_EBUSD_HOST,
@@ -237,6 +246,27 @@ class VaillantOptionsFlow(OptionsFlow):
                     CONF_QUICK_VETO_TEMP,
                     default=options.get(CONF_QUICK_VETO_TEMP, ""),
                 ): str,
+            }),
+        )
+
+    # Export dump: confirm + grab_duration
+    async def async_step_export_dump(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        if user_input is not None:
+            coordinator = self.hass.data[DOMAIN].get(self._config_entry.entry_id)
+            if coordinator:
+                grab_duration = user_input.get("grab_duration", 10)
+                from .dump_service import async_export_discovery_dump
+                await async_export_discovery_dump(self.hass, coordinator, grab_duration)
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="export_dump",
+            data_schema=vol.Schema({
+                vol.Optional("grab_duration", default=10): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=300)
+                ),
             }),
         )
 

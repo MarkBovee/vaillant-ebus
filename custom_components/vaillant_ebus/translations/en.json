@@ -29,11 +29,28 @@
     "step": {
       "init": {
         "title": "Vaillant eBUS Options",
+        "menu_options": {
+          "settings": "Settings",
+          "export_dump": "Export Discovery Dump"
+        }
+      },
+      "settings": {
+        "title": "Settings",
+        "description": "Configure connection and heating options.",
         "data": {
+          "ebusd_host": "ebusd host",
+          "ebusd_port": "ebusd port",
           "scan_interval": "Poll interval (seconds)",
           "away_duration": "Default away duration (days)",
           "quick_veto_duration": "Default quick veto duration (hours)",
           "quick_veto_temp": "Default quick veto temperature"
+        }
+      },
+      "export_dump": {
+        "title": "Export Discovery Dump",
+        "description": "Export register dump + optional raw eBUS traffic capture to a YAML file for debugging.",
+        "data": {
+          "grab_duration": "Raw traffic capture (seconds)"
         }
       }
     }
