@@ -28,8 +28,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -88,7 +86,7 @@ def load_find_lines(name: str) -> list[str]:
     path = Path(name) if name.startswith("/") else FIXTURES_DIR / name
     if not path.exists():
         raise FileNotFoundError(f"Fixture not found: {path}")
-    return [l.rstrip("\n\r") for l in path.read_text().splitlines() if l.strip()]
+    return [ln.rstrip("\n\r") for ln in path.read_text().splitlines() if ln.strip()]
 
 
 class FakeEbusdServer:
@@ -202,7 +200,7 @@ class FakeEbusdServer:
                 response = self._handle_command(raw)
                 writer.write((response + "\n").encode())
                 await writer.drain()
-        except (asyncio.TimeoutError, ConnectionError, OSError):
+        except (TimeoutError, ConnectionError, OSError):
             pass
         finally:
             writer.close()

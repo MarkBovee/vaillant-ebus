@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .ebus_service import EbusService
 from .discovery_service import DiscoveryService
+from .ebus_service import EbusService
 from .entity_factory import EntityDescription, EntityFactoryService
 from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister, RegisterMeta, WriteResult
 from .register_service import ParsedValue, RegisterService, RegisterValue, Writeability

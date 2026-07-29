@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.fake_ebusd import FakeEbusdServer, load_find_lines, _parse_find_line_register
+from tests.fake_ebusd import FakeEbusdServer
 
 # Load tcp module same pattern as test_tcp.py
 TCP_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend/tcp.py"
@@ -115,7 +115,7 @@ async def test_find_multi_line() -> None:
                 if not line:
                     break
                 count += 1
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
         assert count > 50, f"Expected >50 find lines, got {count}"
         # Next command still works
