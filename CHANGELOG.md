@@ -43,9 +43,9 @@ before adding any special handling.
 - **RegisterService** — value parsing (DATA1b, EXP, BCD, IGN, STR),
   sentinel detection ("Open", "no data stored"), writeability from
   ebusd CSV metadata, read-after-write verification.
-- **DiscoveryService** — 100% dynamic device graph from `find` output:
-  scan TYPE → circuit prefix → register patterns → UNKNOWN. No hardcoded
-  device list. Zone→heating-circuit mapping, device relationships.
+- **DiscoveryService** — data-driven device graph from `find` output:
+  scan TYPE → circuit prefix → register patterns → UNKNOWN. No static device
+  inventory. Zone→heating-circuit mapping, device relationships.
 - **EntityFactoryService** — pure mapper from DeviceGraph to HA
   EntityDescriptions. No inline discovery, no REGISTER_MAP fallback.
 - **Coordinator** — thin orchestration (577 → 371 lines). No inline
@@ -83,12 +83,14 @@ before adding any special handling.
 
 ### Tests
 
-- 210 total (was 41) — 184 new tests
+- 212 total (was 41) — 171 new tests
 - Raw discovery-dump coverage from three real systems: aroTHERM, community
   flexoCOMPACT/BASV2 with vwzIO, and community recoVAIR/V32.
 - FakeEbusdServer for integration tests
 - Community fixtures verify BASV2 controller, passive-cooling, and ventilation
   classification; unknown circuits still produce safe `UNKNOWN` nodes.
+- Synthetic unknown-scan coverage verifies that unclassified devices retain
+  their ebusd scan type, SW/HW versions, entities, and HA DeviceInfo.
 - All services tested with mocked dependencies
 - Entity-routing tests cover single-zone, active/inactive secondary-zone,
   DHW, YAML override, and dynamic `ctlv0`/`ctlv2`/`ctlv9` naming behavior.
