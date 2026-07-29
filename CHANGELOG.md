@@ -1,5 +1,50 @@
 # Changelog
 
+## 2.0.0 - 2026-07-29
+
+### Refactored to service architecture
+
+Monolithic coordinator split into 5 independent services with dedicated
+test fixtures from 3 real systems (aroTHERM, flexoCOMPACT/BASV2, recoVAIR/V32).
+
+- **EbusService** — TCP transport only, no register semantics.
+- **RegisterService** — value parsing (DATA1b, EXP, BCD, IGN, STR),
+  sentinel detection ("Open", "no data stored"), writeability from
+  ebusd CSV metadata, read-after-write verification.
+- **DiscoveryService** — 100% dynamic device graph from `find` output:
+  scan TYPE → circuit prefix → register patterns → UNKNOWN. No hardcoded
+  device list. Zone→heating-circuit mapping, device relationships.
+- **EntityFactoryService** — pure mapper from DeviceGraph to HA
+  EntityDescriptions. No inline discovery, no REGISTER_MAP fallback.
+- **Coordinator** — thin orchestration (577 → 371 lines). No inline
+  parsing, discovery, or categorization logic.
+
+### Breaking changes
+
+- `backend/tcp.py` removed — use `EbusService` instead.
+- `generate_entity_descriptions()` removed — use
+  `EntityFactoryService.generate(graph)`.
+- No REGISTER_MAP fallback entities — entity existence from discovery only.
+- YAML overrides API unchanged.
+
+### Device management
+
+- `HIDDEN_DEVICE_KEYWORDS` — circuits matching "broadcast", "scan",
+  or "general" are not created as devices. Register data preserved
+  for diagnostics.
+- BUS type devices (Broadcast) grouped under parent (hmu).
+- Orphan circuits (no data, no parent) fully suppressed.
+- Device naming: cleaner fallback for zones (ZN→"Zone N"),
+  heating circuits (HcN→"Heating Circuit N").
+
+### Tests
+
+- 205 total (was 41) — 179 new tests
+- 3-system fixture coverage: aroTHERM, BASV2, V32
+- FakeEbusdServer for integration tests
+- Community fixtures validate non-aroTHERM hardware
+- All services tested with mocked dependencies
+
 ## 1.1.2 - 2026-07-28
 
 ### No more hardcoded circuit names
