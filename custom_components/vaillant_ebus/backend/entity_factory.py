@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from .mapping import REGISTER_MAP, RegisterMeta, get_meta
-from .models import DeviceGraph, DeviceNode, EbusdRegister
+from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister
 
 _LOGGER = logging.getLogger("vaillant_ebus.entity")
 
@@ -160,6 +160,8 @@ def _resolve_device_circuit(
     Returns None when the entity should be suppressed (no-data orphan circuit).
     """
     parent = node.parent
+    if node.device_type == DeviceType.BUS:
+        return parent or node.circuit
     if node.has_data:
         return node.circuit
     if parent:
@@ -231,49 +233,6 @@ class EntityFactoryService:
                     device_circuit=dc,
                 )
                 entities.append(entity)
-
-        for map_key, meta in REGISTER_MAP.items():
-            if map_key in seen:
-                continue
-            if map_key.count(".") != 1:
-                continue
-            if not meta.enabled:
-                continue
-            seen.add(map_key)
-
-            circuit, name = map_key.split(".", 1)
-
-            # Skip fallback entities for orphan circuits (not in graph or no-data-no-parent)
-            if circuit in graph.nodes:
-                dc = _resolve_device_circuit(map_key, graph.nodes[circuit], graph)
-                if dc is None:
-                    continue
-            else:
-                dc = circuit
-
-            override = overrides.get(map_key) or {}
-            meta = _merge_overrides(meta, override)
-
-            dummy_reg = EbusdRegister(
-                circuit=circuit,
-                name=name,
-                fields=["value"],
-                value={},
-                has_data=False,
-                writable=meta.writable,
-            )
-
-            entity = EntityDescription(
-                circuit=circuit,
-                name=name,
-                field="value",
-                meta=meta,
-                register=dummy_reg,
-                raw_value=None,
-                enabled_by_default=meta.enabled,
-                device_circuit=dc,
-            )
-            entities.append(entity)
 
         _LOGGER.info("Generated %d entity descriptions from device graph", len(entities))
         return entities

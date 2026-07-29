@@ -266,21 +266,20 @@ class TestYamlOverrides:
 
 
 class TestRegisterMapFallback:
-    """REGISTER_MAP fallback entities."""
+    """No REGISTER_MAP fallback — entity existence from graph only."""
 
-    def test_registermap_fallback_generates_entity(self):
+    def test_graph_only_no_fallback(self):
         graph = _build_graph()
         svc = EntityFactoryService()
         result = svc.generate(graph)
         keys = {e.key for e in result}
-        assert "hmu.RunDataCompressorSpeed.value" in keys, "Expected fallback entity"
+        assert "hmu.RunDataCompressorSpeed.value" not in keys, "No fallback — only graph registers exist"
 
-    def test_registermap_fallback_disabled_entry(self):
-        graph = _build_graph()
+    def test_empty_graph_no_fallback(self):
+        graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
         svc = EntityFactoryService()
         result = svc.generate(graph)
-        keys = {e.key for e in result}
-        assert "hmu.RunDataLowPressure.value" not in keys, "Disabled entry should be excluded"
+        assert len(result) == 0, "Empty graph → no entities"
 
 
 class TestBackwardCompatibility:
@@ -388,7 +387,7 @@ class TestGenerateFromFixtureGraphs:
         assert matches, "Expected ctlv2.Z1DayTemp entity"
         assert matches[0].entity_type == "number"
 
-    def test_virtual_register_from_registermap(self):
+    def test_empty_graph_generates_no_entities(self):
         graph = DeviceGraph(
             nodes={},
             raw_registers={},
@@ -396,5 +395,4 @@ class TestGenerateFromFixtureGraphs:
         )
         svc = EntityFactoryService()
         entities = svc.generate(graph)
-        assert len(entities) > 0, "Expected fallback entities from REGISTER_MAP"
-        assert all(e.register.has_data is False for e in entities)
+        assert len(entities) == 0, "No fallbacks — empty graph produces no entities"

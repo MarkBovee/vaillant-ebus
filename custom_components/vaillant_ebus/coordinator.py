@@ -89,30 +89,43 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _seed_entities_from_cache(self) -> None:
         cache = self._load_cache()
         raw_registers: dict[str, str] = {}
-        for key, meta in REGISTER_MAP.items():
-            if not meta.enabled:
+        nodes: dict[str, DeviceNode] = {}
+        regs_by_circuit: dict[str, list[str]] = {}
+
+        for cache_key, cached_value in cache.items():
+            if cached_value is None or not cached_value.strip():
                 continue
-            parts = key.split(".", 1)
-            if len(parts) != 2:
+            parts = cache_key.split(".")
+            if len(parts) < 2:
                 continue
-            cached = cache.get(f"{key}.value")
-            raw_registers[key] = cached if cached else ""
-            self.registers[key] = EbusdRegister(
-                circuit=parts[0],
-                name=parts[1],
+            circuit, name = parts[0], parts[1]
+            rk = f"{circuit}.{name}"
+            raw_registers[rk] = cached_value
+            regs_by_circuit.setdefault(circuit, []).append(rk)
+            self.registers[rk] = EbusdRegister(
+                circuit=circuit,
+                name=name,
                 fields=["value"],
-                value={"value": cached} if cached else {"value": None},
-                has_data=cached is not None,
-                writable=meta.writable,
+                value={"value": cached_value},
+                has_data=True,
+            )
+
+        for circuit, rks in regs_by_circuit.items():
+            nodes[circuit] = DeviceNode(
+                circuit=circuit,
+                device_type=DeviceType.UNKNOWN,
+                registers=rks,
+                has_data=True,
             )
 
         graph = DeviceGraph(
-            nodes={},
+            nodes=nodes,
             raw_registers=raw_registers,
             placeholder_registers=set(),
         )
         self.entities = self.entity_factory.generate(graph)
-        _LOGGER.info("Seeded %d entities from REGISTER_MAP + cache", len(self.entities))
+        _LOGGER.info("Seeded %d entities from %d cache entries (%d circuits)",
+                     len(self.entities), len(cache), len(nodes))
 
     async def _ebusd_connect_and_discover(self) -> None:
         host = self.ebusd_host

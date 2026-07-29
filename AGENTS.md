@@ -7,6 +7,11 @@
 - Ponytail's "geen boilerplate" slaat op scaffolding/overbodige code, niet op purpose comments
 - Project-specifieke regels in deze AGENTS.md hebben voorrang op globale regels
 
+## CRITICAL: No hardcoded values (except descriptions) and no fallbacks
+
+1. **Geen hardcoded lijsten** — device types, circuit names, register lijsten worden ALLEMAAL dynamisch bepaald uit ebusd discovery data. Alleen `CIRCUIT_NAMES` mag hardcoded circuit→label mappings bevatten (beschrijvingen voor HA UI).
+2. **Geen fallbacks** — `REGISTER_MAP` is puur metadata (friendly names, icons, units). Entity-existence wordt ALLEEN bepaald door wat DiscoveryService vindt, niet door wat in REGISTER_MAP staat. Geen virtuele entities, geen "create entity omdat-ie in de map staat". Als `find` hem niet ziet, bestaat hij niet.
+
 ## CRITICAL: Test writes on ebusd TCP before modifying integration code
 
 **Always test ebusd register writes locally first** — via TCP or HTTP — before changing any Python in `custom_components/`. A small Python script that opens TCP to ebusd, writes a value, and reads it back confirms the register name, format, and behavior without restarting HA.

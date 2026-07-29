@@ -202,8 +202,7 @@ async def test_coordinator_creates_entity_factory() -> None:
 async def test_coordinator_seeds_from_cache() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
-        assert len(c.entities) > 0
-        assert any(e.circuit == "hmu" for e in c.entities)
+        assert len(c.entities) == 0
 
 
 async def test_coordinator_seeds_from_cache_with_cached_values() -> None:
