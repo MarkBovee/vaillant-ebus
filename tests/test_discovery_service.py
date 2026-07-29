@@ -1,0 +1,546 @@
+"""Tests for DiscoveryService — device graph construction from ebusd find output."""
+
+from __future__ import annotations
+
+import importlib.machinery
+import importlib.util
+import sys
+from pathlib import Path
+
+import pytest
+
+from tests.fake_ebusd import FakeEbusdServer, load_find_lines
+
+BACKEND_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend"
+COMPONENT_PATH = BACKEND_PATH.parent
+
+for name in ("vaillant_ebus", "vaillant_ebus.backend"):
+    pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None))
+    pkg.__path__ = [str(COMPONENT_PATH)] if name == "vaillant_ebus" else [str(BACKEND_PATH)]
+    sys.modules[name] = pkg
+
+MODELS_SPEC = importlib.util.spec_from_file_location(
+    "vaillant_ebus.backend.models", BACKEND_PATH / "models.py"
+)
+assert MODELS_SPEC and MODELS_SPEC.loader
+MODELS = importlib.util.module_from_spec(MODELS_SPEC)
+sys.modules["vaillant_ebus.backend.models"] = MODELS
+MODELS_SPEC.loader.exec_module(MODELS)
+
+EBUS_SPEC = importlib.util.spec_from_file_location(
+    "vaillant_ebus.backend.ebus_service", BACKEND_PATH / "ebus_service.py"
+)
+assert EBUS_SPEC and EBUS_SPEC.loader
+EBUS_MOD = importlib.util.module_from_spec(EBUS_SPEC)
+sys.modules["vaillant_ebus.backend.ebus_service"] = EBUS_MOD
+EBUS_SPEC.loader.exec_module(EBUS_MOD)
+EbusService = EBUS_MOD.EbusService
+
+DISCOVERY_SPEC = importlib.util.spec_from_file_location(
+    "vaillant_ebus.backend.discovery_service", BACKEND_PATH / "discovery_service.py"
+)
+assert DISCOVERY_SPEC and DISCOVERY_SPEC.loader
+DISCOVERY = importlib.util.module_from_spec(DISCOVERY_SPEC)
+sys.modules["vaillant_ebus.backend.discovery_service"] = DISCOVERY
+DISCOVERY_SPEC.loader.exec_module(DISCOVERY)
+
+DiscoveryService = DISCOVERY.DiscoveryService
+DeviceGraph = DISCOVERY.DeviceGraph
+DeviceNode = DISCOVERY.DeviceNode
+DeviceType = DISCOVERY.DeviceType
+
+AROTHERM_LINES = load_find_lines("arotherm_find.txt")
+COMMUNITY_BASV = load_find_lines("community/basv_find.txt")
+COMMUNITY_V32 = load_find_lines("community/v32_find.txt")
+
+
+def _arotherm_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(AROTHERM_LINES)
+
+
+def _basv_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(COMMUNITY_BASV)
+
+
+def _v32_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(COMMUNITY_V32)
+
+
+# =============================================================================
+# A. Scan metadata parsing (unit tests, no ebusd needed)
+# =============================================================================
+
+
+def test_parse_scan_metadata_hmu() -> None:
+    result = DiscoveryService._parse_scan("scan.08  = Vaillant;HMU00;0522;5103")
+    assert result is not None
+    assert result[1] == "HMU00"
+    assert result[2] == "0522"
+    assert result[3] == "5103"
+
+
+def test_parse_scan_metadata_ctlv2() -> None:
+    result = DiscoveryService._parse_scan("scan.15  = Vaillant;CTLV2;0514;1104")
+    assert result is not None
+    assert result[1] == "CTLV2"
+    assert result[2] == "0514"
+    assert result[3] == "1104"
+
+
+def test_parse_scan_metadata_vwz() -> None:
+    result = DiscoveryService._parse_scan("scan.76  = Vaillant;VWZ00;0522;5103")
+    assert result is not None
+    assert result[1] == "VWZ00"
+
+
+def test_parse_scan_metadata_netx2() -> None:
+    result = DiscoveryService._parse_scan("scan.04 = Vaillant;NETX2;4039;5703")
+    assert result is not None
+    assert result[1] == "NETX2"
+
+
+def test_parse_scan_metadata_no_data() -> None:
+    result = DiscoveryService._parse_scan("scan.f6 = no data stored")
+    assert result is None
+
+
+def test_parse_scan_metadata_vwzio() -> None:
+    for line in COMMUNITY_BASV:
+        result = DiscoveryService._parse_scan(line)
+        if result and result[1] == "VWZIO":
+            assert result[2] == "0902"
+            assert result[3] == "5103"
+            return
+    pytest.fail("VWZIO scan line not found in basv fixture")
+
+
+# =============================================================================
+# B. Device categorization (unit tests)
+# =============================================================================
+
+
+def test_categorize_hmu() -> None:
+    result = DiscoveryService.categorize_circuit("hmu", [], "HMU00")
+    assert result == DeviceType.HEAT_PUMP
+
+
+def test_categorize_ctlv2() -> None:
+    result = DiscoveryService.categorize_circuit("ctlv2", [], "CTLV2")
+    assert result == DeviceType.HEATING_CONTROLLER
+
+
+def test_categorize_basv() -> None:
+    result = DiscoveryService.categorize_circuit("basv", [], "BASV2")
+    assert result == DeviceType.HEATING_CONTROLLER
+
+
+def test_categorize_vwz() -> None:
+    result = DiscoveryService.categorize_circuit("vwz", [], "VWZ00")
+    assert result == DeviceType.PASSIVE_COOLING
+
+
+def test_categorize_vwz_no_scan() -> None:
+    result = DiscoveryService.categorize_circuit("vwz", [], "")
+    assert result == DeviceType.PASSIVE_COOLING
+
+
+def test_categorize_v32() -> None:
+    result = DiscoveryService.categorize_circuit("v32", [], "V32")
+    assert result == DeviceType.VENTILATION
+
+
+def test_categorize_v32_no_scan() -> None:
+    result = DiscoveryService.categorize_circuit("v32", [], "")
+    assert result == DeviceType.VENTILATION
+
+
+def test_categorize_broadcast() -> None:
+    result = DiscoveryService.categorize_circuit("Broadcast", [], "NETX2")
+    assert result == DeviceType.BUS
+
+
+def test_categorize_broadcast_by_prefix() -> None:
+    result = DiscoveryService.categorize_circuit("Broadcast", [], "")
+    assert result == DeviceType.BUS
+
+
+def test_categorize_unknown_circuit() -> None:
+    result = DiscoveryService.categorize_circuit("xyz", [], "")
+    assert result == DeviceType.UNKNOWN
+
+
+def test_categorize_by_register_z1opmode() -> None:
+    result = DiscoveryService.categorize_circuit("unknown_ckt", ["unknown_ckt.Z1OpMode"], "")
+    assert result == DeviceType.HEATING_CONTROLLER
+
+
+def test_categorize_bai_by_scan() -> None:
+    result = DiscoveryService.categorize_circuit("bai", [], "BAI")
+    assert result == DeviceType.HEATING_CONTROLLER
+
+
+# =============================================================================
+# C. Device graph construction (integration tests using fixture data)
+# =============================================================================
+
+
+def test_build_graph_arotherm() -> None:
+    graph = _arotherm_graph()
+    circuits = {n: node.device_type for n, node in graph.nodes.items()}
+    assert "hmu" in circuits
+    assert "ctlv2" in circuits
+    assert "hc1" in circuits
+    assert "z1" in circuits
+    assert "dhw" in circuits
+    assert circuits["hmu"] == DeviceType.HEAT_PUMP
+    assert circuits["ctlv2"] == DeviceType.HEATING_CONTROLLER
+    assert circuits["z1"] == DeviceType.ZONE
+    assert circuits["dhw"] == DeviceType.DHW
+
+
+def test_build_graph_categorization() -> None:
+    graph = _arotherm_graph()
+    for node in graph.nodes.values():
+        assert isinstance(node.device_type, DeviceType)
+        assert node.device_type != DeviceType.UNKNOWN, f"Circuit {node.circuit} is UNKNOWN"
+
+
+def test_build_graph_has_data() -> None:
+    graph = _arotherm_graph()
+    assert graph.nodes["hmu"].has_data is True
+    assert graph.nodes["ctlv2"].has_data is True
+    assert graph.nodes["z1"].has_data is True
+    assert graph.nodes["dhw"].has_data is True
+    assert graph.nodes["vwz"].has_data is False
+
+
+def test_build_graph_zone_mapping() -> None:
+    graph = _arotherm_graph()
+    ctlv2 = graph.nodes["ctlv2"]
+    assert "z1" in ctlv2.zone_circuits
+    assert "hc1" in ctlv2.heating_circuits
+
+
+def test_build_graph_raw_registers_count() -> None:
+    graph = _arotherm_graph()
+    assert len(graph.raw_registers) > 50
+    assert "ctlv2.Z1DayTemp" in graph.raw_registers
+    assert "hmu.RunDataStatuscode" in graph.raw_registers
+
+
+def test_build_graph_placeholder_registers() -> None:
+    graph = _arotherm_graph()
+    assert len(graph.placeholder_registers) > 100
+    assert "hmu.CopCooling" in graph.placeholder_registers
+
+
+# =============================================================================
+# D. Community fixture tests
+# =============================================================================
+
+
+def test_categorize_basv_from_community() -> None:
+    graph = _basv_graph()
+    assert "basv" in graph.nodes
+    assert graph.nodes["basv"].device_type == DeviceType.HEATING_CONTROLLER
+
+
+def test_categorize_vwzio_from_community() -> None:
+    graph = _basv_graph()
+    assert "vwzio" in graph.nodes
+    assert graph.nodes["vwzio"].device_type == DeviceType.PASSIVE_COOLING
+
+
+def test_categorize_v32_from_community() -> None:
+    graph = _v32_graph()
+    assert "v32" in graph.nodes
+    assert graph.nodes["v32"].device_type == DeviceType.VENTILATION
+
+
+def test_community_unknown_circuits() -> None:
+    for graph in (_basv_graph(), _v32_graph()):
+        for node in graph.nodes.values():
+            assert node.device_type in DeviceType, f"Invalid device type for {node.circuit}"
+
+
+# =============================================================================
+# E. Zone-to-circuit mapping
+# =============================================================================
+
+
+def test_zone_hc_mapping_z1() -> None:
+    graph = _arotherm_graph()
+    assert "z1" in graph.nodes
+    assert "hc1" in graph.nodes
+    z1_regs = graph.nodes["z1"].registers
+    hc1_regs = graph.nodes["hc1"].registers
+    assert any("Z1" in r for r in z1_regs)
+    assert all("Hc1" in r for r in hc1_regs)
+    assert "z1" in graph.nodes["ctlv2"].zone_circuits
+    assert "hc1" in graph.nodes["ctlv2"].heating_circuits
+
+
+def test_zone_hc_mapping_z2() -> None:
+    graph = _arotherm_graph()
+    assert "z2" in graph.nodes
+    assert "hc2" in graph.nodes
+    z2_regs = graph.nodes["z2"].registers
+    assert all("Z2" in r for r in z2_regs)
+
+
+def test_no_pair_when_no_data() -> None:
+    graph = _arotherm_graph()
+    assert "z2" in graph.nodes
+    assert graph.nodes["z2"].has_data is False
+    assert "hc2" in graph.nodes
+    assert graph.nodes["hc2"].has_data is False
+
+
+# =============================================================================
+# F. Hidden register filtering
+# =============================================================================
+
+
+def test_hidden_broadcast_registers() -> None:
+    assert DiscoveryService._is_hidden("Broadcast.id") is True
+    assert DiscoveryService._is_hidden("broadcast.signoflife") is True
+    assert DiscoveryService._is_hidden("Broadcast.IdAnswer") is True
+    assert DiscoveryService._is_hidden("Broadcast.Load") is True
+
+
+def test_hidden_timer_registers() -> None:
+    assert DiscoveryService._is_hidden("ctlv2.cctimer_Config") is True
+    assert DiscoveryService._is_hidden("ctlv2.HwcTimer_Monday0") is True
+    assert DiscoveryService._is_hidden("ctlv2.Z1Timer_Friday0") is True
+
+
+def test_known_register_not_hidden() -> None:
+    assert DiscoveryService._is_hidden("hmu.Status01") is False
+    assert DiscoveryService._is_hidden("ctlv2.Z1DayTemp") is False
+    assert DiscoveryService._is_hidden("ctlv2.HwcOpMode") is False
+
+
+def test_hidden_specific_registers() -> None:
+    assert DiscoveryService._is_hidden("hmu.FlowTemperature") is True
+    assert DiscoveryService._is_hidden("Broadcast.FlowTemp") is True
+
+
+def test_hidden_memory_circuit() -> None:
+    assert DiscoveryService._is_hidden("memory.eeprom") is True
+    assert DiscoveryService._is_hidden("Memory.Ram") is True
+
+
+def test_hidden_general_circuit() -> None:
+    assert DiscoveryService._is_hidden("general.whatever") is True
+
+
+def test_hidden_scan_lines() -> None:
+    assert DiscoveryService._is_hidden("scan.08.x") is True
+
+
+def test_hidden_installer_registers() -> None:
+    assert DiscoveryService._is_hidden("ctlv2.Installer1") is True
+    assert DiscoveryService._is_hidden("ctlv2.PhoneNumber1") is True
+    assert DiscoveryService._is_hidden("ctlv2.KeyCodeforConfigMenu") is True
+    assert DiscoveryService._is_hidden("ctlv2.MaintenanceDate") is True
+
+
+def test_hidden_prfuelsum() -> None:
+    assert DiscoveryService._is_hidden("ctlv2.PrFuelSumHc") is True
+
+
+def test_broadcast_not_hidden_outside_broadcast() -> None:
+    assert DiscoveryService._is_hidden("ctlv2.id") is False
+
+
+# =============================================================================
+# G. Relationship determination
+# =============================================================================
+
+
+def test_relationships_controller_parent() -> None:
+    graph = _arotherm_graph()
+    assert graph.nodes["ctlv2"].parent == "hmu"
+
+
+def test_relationships_zone_parent() -> None:
+    graph = _arotherm_graph()
+    assert graph.nodes["z1"].parent == "ctlv2"
+
+
+def test_relationships_dhw_parent() -> None:
+    graph = _arotherm_graph()
+    assert graph.nodes["dhw"].parent == "ctlv2"
+
+
+def test_relationships_hc_parent() -> None:
+    graph = _arotherm_graph()
+    assert graph.nodes["hc1"].parent == "ctlv2"
+
+
+def test_relationships_vwz_independent() -> None:
+    graph = _arotherm_graph()
+    assert graph.nodes["vwz"].parent is None
+
+
+def test_relationships_broadcast_parent() -> None:
+    graph = _arotherm_graph()
+    assert "Broadcast" not in graph.nodes
+
+
+def test_relationships_hmu_is_root() -> None:
+    graph = _arotherm_graph()
+    assert graph.nodes["hmu"].parent is None
+
+
+def test_relationships_vwzio_independent() -> None:
+    graph = _basv_graph()
+    assert graph.nodes["vwzio"].parent is None
+
+
+def test_relationships_v32_independent() -> None:
+    graph = _v32_graph()
+    assert graph.nodes["v32"].parent is None
+
+
+# =============================================================================
+# Additional edge case tests
+# =============================================================================
+
+
+def test_parse_register_simple() -> None:
+    c, n, v = DiscoveryService._parse_register("hmu Status01 = 58.0")
+    assert c == "hmu"
+    assert n == "Status01"
+    assert v == "58.0"
+
+
+def test_parse_register_no_data() -> None:
+    c, n, v = DiscoveryService._parse_register("hmu CopCooling = no data stored")
+    assert c == "hmu"
+    assert n == "CopCooling"
+    assert v is None
+
+
+def test_parse_register_empty_with_meta() -> None:
+    c, n, v = DiscoveryService._parse_register(
+        "ctlv2 HcStorageTempBottom =  (empty for f115b5240602000000a000 / 080000a000ffffff7f)"
+    )
+    assert v is None
+
+
+def test_scan_metadata_present_in_nodes() -> None:
+    graph = _arotherm_graph()
+    hmu = graph.nodes["hmu"]
+    assert hmu.scan_type == "HMU00"
+    assert hmu.scan_sw == "0522"
+    assert hmu.scan_hw == "5103"
+    ctlv2 = graph.nodes["ctlv2"]
+    assert ctlv2.scan_type == "CTLV2"
+
+
+def test_scan_metadata_in_basv_graph() -> None:
+    graph = _basv_graph()
+    assert graph.nodes["hmu"].scan_type == "HMU00"
+    assert graph.nodes["basv"].scan_type == "BASV2"
+    assert graph.nodes["vwzio"].scan_type == "VWZIO"
+
+
+# =============================================================================
+# H. Integration tests with FakeEbusdServer
+# =============================================================================
+
+
+async def test_integration_arotherm_discover_device_types() -> None:
+    async with FakeEbusdServer("arotherm_find.txt") as fake:
+        svc = DiscoveryService(
+            EbusService(host=fake.host, port=fake.port)
+        )
+        await svc._ebus.connect()
+        graph = await svc.discover()
+        await svc._ebus.disconnect()
+
+        assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+        assert graph.nodes["ctlv2"].device_type == DeviceType.HEATING_CONTROLLER
+        assert "Broadcast" not in graph.nodes
+
+
+async def test_integration_arotherm_parent_relationships() -> None:
+    async with FakeEbusdServer("arotherm_find.txt") as fake:
+        svc = DiscoveryService(
+            EbusService(host=fake.host, port=fake.port)
+        )
+        await svc._ebus.connect()
+        graph = await svc.discover()
+        await svc._ebus.disconnect()
+
+        assert graph.nodes["ctlv2"].parent == "hmu"
+        assert graph.nodes["z1"].parent == "ctlv2"
+        assert graph.nodes["hc1"].parent == "ctlv2"
+        assert graph.nodes["dhw"].parent == "ctlv2"
+        assert "Broadcast" not in graph.nodes
+
+
+async def test_integration_arotherm_has_data() -> None:
+    async with FakeEbusdServer("arotherm_find.txt") as fake:
+        svc = DiscoveryService(
+            EbusService(host=fake.host, port=fake.port)
+        )
+        await svc._ebus.connect()
+        graph = await svc.discover()
+        await svc._ebus.disconnect()
+
+        assert graph.nodes["hmu"].has_data is True
+        assert graph.nodes["ctlv2"].has_data is True
+        assert graph.nodes["z1"].has_data is True
+        assert graph.nodes["dhw"].has_data is True
+        assert graph.nodes["vwz"].has_data is False
+        assert graph.nodes["z2"].has_data is False
+        assert graph.nodes["z3"].has_data is False
+        assert graph.nodes["hc2"].has_data is False
+        assert graph.nodes["hc3"].has_data is False
+        assert len(graph.raw_registers) == 77
+
+
+async def test_integration_basv_controller_type() -> None:
+    async with FakeEbusdServer("community/basv_find.txt") as fake:
+        svc = DiscoveryService(
+            EbusService(host=fake.host, port=fake.port)
+        )
+        await svc._ebus.connect()
+        graph = await svc.discover()
+        await svc._ebus.disconnect()
+
+        assert "basv" in graph.nodes
+        assert graph.nodes["basv"].device_type == DeviceType.HEATING_CONTROLLER
+        assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+
+
+async def test_integration_v32_ventilation_type() -> None:
+    async with FakeEbusdServer("community/v32_find.txt") as fake:
+        svc = DiscoveryService(
+            EbusService(host=fake.host, port=fake.port)
+        )
+        await svc._ebus.connect()
+        graph = await svc.discover()
+        await svc._ebus.disconnect()
+
+        assert "v32" in graph.nodes
+        assert graph.nodes["v32"].device_type == DeviceType.VENTILATION
+        assert graph.nodes["v32"].has_data is True
+
+
+async def test_integration_arotherm_zone_mapping() -> None:
+    async with FakeEbusdServer("arotherm_find.txt") as fake:
+        svc = DiscoveryService(
+            EbusService(host=fake.host, port=fake.port)
+        )
+        await svc._ebus.connect()
+        graph = await svc.discover()
+        await svc._ebus.disconnect()
+
+        ctlv2 = graph.nodes["ctlv2"]
+        assert "z1" in ctlv2.zone_circuits
+        assert "hc1" in ctlv2.heating_circuits
+        z1_node = graph.nodes["z1"]
+        assert any("Z1" in r for r in z1_node.registers)

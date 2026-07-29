@@ -289,11 +289,11 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Write register to arbitrary circuit via backend, trigger refresh on success
     async def _write_raw(self, circuit: str, name: str, value: str) -> bool:
-        backend = self.coordinator.ebusd_backend
-        if not backend:
+        ebus = self.coordinator.ebus
+        if not ebus:
             return False
         try:
-            result = await backend.async_write(circuit, name, value)
+            result = await ebus.write_register(circuit, name, value)
             if result.success:
                 await self.coordinator.async_request_refresh()
             return result.success
@@ -371,11 +371,11 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Write register to heating circuit, trigger refresh on success
     async def _write(self, name: str, value: str) -> bool:
-        backend = self.coordinator.ebusd_backend
-        if not backend:
+        ebus = self.coordinator.ebus
+        if not ebus:
             return False
         try:
-            result = await backend.async_write(self.coordinator.heating_circuit, name, value)
+            result = await ebus.write_register(self.coordinator.heating_circuit, name, value)
             if result.success:
                 await self.coordinator.async_request_refresh()
             return result.success

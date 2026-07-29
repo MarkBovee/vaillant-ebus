@@ -1,4 +1,4 @@
-"""Coordinator for Vaillant eBUS."""
+"""Coordinator for Vaillant eBUS — thin orchestration layer."""
 
 from __future__ import annotations
 
@@ -14,14 +14,20 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from . import repairs
-from .backend.entity_factory import (
-    EntityDescription,
-    _detect_active_circuits,
-    generate_entity_descriptions,
-)
+from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService
+from .backend.ebus_service import EbusService
+from .backend.entity_factory import EntityDescription, EntityFactoryService
 from .backend.mapping import REGISTER_MAP
-from .backend.models import CIRCUIT_NAMES, COMPRESSOR_STATUS_LABELS, EbusdRegister, zero_idle_registers
-from .backend.tcp import EbusdTcpBackend
+from .backend.models import (
+    CIRCUIT_NAMES,
+    COMPRESSOR_STATUS_LABELS,
+    DeviceGraph,
+    DeviceNode,
+    DeviceType,
+    EbusdRegister,
+    zero_idle_registers,
+)
+from .backend.register_service import RegisterService
 from .const import (
     CONF_EBUSD_HOST,
     CONF_EBUSD_PORT,
@@ -32,18 +38,27 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+
+EBUSD_STATUS_SUFFIXES: tuple[str, ...] = (
+    ";ok", ";err", ";inv", ";too_small", ";too_big", ";nan", ";unknown",
+)
+
+
 class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    # Initialize coordinator with HA instance and config entry
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._entry = entry
-
-        self.ebusd_backend: EbusdTcpBackend | None = None
-        self.registers: dict[str, EbusdRegister] = {}
-        self.entities: list[EntityDescription] = []
-        self._active_zone_circuits: set[str] = set()
         self._started = False
         self._ebusd_connected = False
         self._heating_circuit = "ctlv2"
+
+        self.ebus: EbusService | None = None
+        self.register: RegisterService | None = None
+        self.discovery: DiscoveryService | None = None
+        self.entity_factory = EntityFactoryService()
+        self.registers: dict[str, EbusdRegister] = {}
+        self.entities: list[EntityDescription] = []
+        self._graph: DeviceGraph | None = None
+        self._last_find_keys: set[str] = set()
 
         scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL)
         super().__init__(
@@ -53,39 +68,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=scan_interval),
         )
 
-        # Immediately seed entities from REGISTER_MAP + cache (no ebusd needed)
         self._seed_entities_from_cache()
-
-    # Seed register dict + entities from REGISTER_MAP and local cache before ebusd connects
-    def _seed_entities_from_cache(self) -> None:
-        cache = self._load_cache()
-        known_circuits: set[str] = set()
-        for key, meta in REGISTER_MAP.items():
-            if not meta.enabled:
-                continue
-            parts = key.split(".", 1)
-            if len(parts) != 2:
-                continue
-            known_circuits.add(parts[0])
-            cached = cache.get(f"{key}.value")
-            self.registers[key] = EbusdRegister(
-                circuit=parts[0], name=parts[1],
-                fields=["value"],
-                value={"value": cached} if cached else {"value": None},
-                has_data=cached is not None,
-            )
-        core_circuits: set[str] = {"hmu", self.heating_circuit, "Broadcast"}
-        active: set[str] = set(core_circuits)
-        for reg in self.registers.values():
-            if reg.has_data:
-                active.add(reg.circuit)
-        self.entities = generate_entity_descriptions(
-            list(self.registers.values()),
-            active_zone_circuits=known_circuits,
-            present_circuits=active,
-        )
-        _LOGGER.info("Seeded %d entities from REGISTER_MAP + cache (%d circuits present)",
-                     len(self.entities), len(active))
 
     @property
     def ebusd_host(self) -> str:
@@ -95,87 +78,114 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def ebusd_port(self) -> int:
         return self._entry.data.get(CONF_EBUSD_PORT, 8888)
 
-    # Connect backend, define custom registers, discover all registers
+    @property
+    def heating_circuit(self) -> str:
+        if self._graph:
+            for node in self._graph.nodes.values():
+                if node.device_type == DeviceType.HEATING_CONTROLLER:
+                    return node.circuit
+        return self._heating_circuit
+
+    def _seed_entities_from_cache(self) -> None:
+        cache = self._load_cache()
+        raw_registers: dict[str, str] = {}
+        nodes: dict[str, DeviceNode] = {}
+        regs_by_circuit: dict[str, list[str]] = {}
+
+        for cache_key, cached_value in cache.items():
+            if cached_value is None or not cached_value.strip():
+                continue
+            parts = cache_key.split(".")
+            if len(parts) < 2:
+                continue
+            circuit, name = parts[0], parts[1]
+            if any(kw in circuit.lower() for kw in HIDDEN_DEVICE_KEYWORDS):
+                continue
+            rk = f"{circuit}.{name}"
+            raw_registers[rk] = cached_value
+            regs_by_circuit.setdefault(circuit, []).append(rk)
+            self.registers[rk] = EbusdRegister(
+                circuit=circuit,
+                name=name,
+                fields=["value"],
+                value={"value": cached_value},
+                has_data=True,
+            )
+
+        for circuit, rks in regs_by_circuit.items():
+            nodes[circuit] = DeviceNode(
+                circuit=circuit,
+                device_type=DeviceType.UNKNOWN,
+                registers=rks,
+                has_data=True,
+            )
+
+        graph = DeviceGraph(
+            nodes=nodes,
+            raw_registers=raw_registers,
+            placeholder_registers=set(),
+        )
+        self.entities = self.entity_factory.generate(graph)
+        _LOGGER.info("Seeded %d entities from %d cache entries (%d circuits)",
+                     len(self.entities), len(cache), len(nodes))
+
     async def _ebusd_connect_and_discover(self) -> None:
-        host = self._entry.data.get(CONF_EBUSD_HOST)
-        port = self._entry.data.get(CONF_EBUSD_PORT, 8888)
+        host = self.ebusd_host
         if not host:
             return
-        _LOGGER.info("Connecting to ebusd at %s:%s", host, port)
-        backend = EbusdTcpBackend(host=host, port=port)
+        ebus = EbusService(host=host, port=self.ebusd_port)
         try:
-            await backend.async_connect()
+            await ebus.connect()
         except Exception as exc:
             _LOGGER.warning("ebusd connect failed, will retry: %s", exc)
             return
-        self.ebusd_backend = backend
+        self.ebus = ebus
+        self.register = RegisterService(ebus)
+        self.discovery = DiscoveryService(ebus)
         self._ebusd_connected = True
 
-        version = backend.version
+        version = ebus.version
         if version:
             _LOGGER.info("ebusd version: %s", version)
-        try:
-            await self._define_custom_registers()
-        except Exception as exc:
-            _LOGGER.warning("define_custom_registers failed: %s", exc)
+
+        await self._define_custom_registers()
 
         try:
-            discovered = await backend.async_find()
+            graph = await self.discovery.discover()
         except Exception as exc:
-            _LOGGER.warning("ebusd find failed: %s", exc)
+            _LOGGER.warning("ebusd discovery failed: %s", exc)
             return
-        self._last_find_keys = {r.key for r in discovered}
-        for reg in discovered:
-            self.registers[reg.key] = reg
-        _LOGGER.info("Found %d registers across %d circuit(s): %s",
-                     len(discovered),
-                     len({r.circuit for r in discovered}),
-                     sorted({r.circuit for r in discovered}))
+        self._graph = graph
 
-        cache = self._load_cache()
-        for key, meta in REGISTER_MAP.items():
-            if key in self.registers or not meta.enabled:
+        for rk, raw in graph.raw_registers.items():
+            if "." not in rk:
                 continue
-            cached = cache.get(f"{key}.value")
-            parts = key.split(".", 1)
-            if len(parts) != 2:
-                continue
-            self.registers[key] = EbusdRegister(
-                circuit=parts[0], name=parts[1],
-                fields=["value"],
-                value={"value": cached} if cached else {"value": None},
-                has_data=cached is not None,
-            )
+            circuit, name = rk.split(".", 1)
+            if rk not in self.registers:
+                self.registers[rk] = EbusdRegister(
+                    circuit=circuit,
+                    name=name,
+                    fields=["value"],
+                    value={"value": raw},
+                    has_data=True,
+                )
+            else:
+                self.registers[rk].value["value"] = raw
+                self.registers[rk].has_data = True
+
+        self._last_find_keys = set(graph.raw_registers.keys())
 
         try:
             await self._fallback_read()
         except Exception as exc:
             _LOGGER.warning("Initial fallback read failed: %s", exc)
 
-        self._active_zone_circuits = {
-            reg.circuit for reg in discovered
-            if reg.circuit in {"hc2", "hc3", "z2", "z3"} and reg.has_data
-        }
-        if self._active_zone_circuits:
-            _LOGGER.info("Active zone circuits: %s", self._active_zone_circuits)
-
-        self._parse_scan_metadata()
-
-        active_present: set[str] = {"hmu", self.heating_circuit, "Broadcast"}
-        for reg in self.registers.values():
-            if reg.has_data:
-                active_present.add(reg.circuit)
-        self.entities = generate_entity_descriptions(
-            list(self.registers.values()),
-            active_zone_circuits=self._active_zone_circuits,
-            present_circuits=active_present,
-        )
+        self.entities = self.entity_factory.generate(graph)
         _LOGGER.info("Generated %d entity descriptions after ebusd discovery", len(self.entities))
         self.async_update_listeners()
 
-    # Define runtime registers (z1RoomHumidity) via ebusd define command
     async def _define_custom_registers(self) -> None:
-        if not self.ebusd_backend:
+        if not self.ebus or not self.ebus.is_connected:
             return
         defines = [
             "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800"
@@ -183,12 +193,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ]
         for definition in defines:
             try:
-                resp = await self.ebusd_backend.async_send_raw(f'define -r "{definition}"')
+                resp = await self.ebus.define_register(definition)
                 _LOGGER.debug("Define %s: %s", definition.split(",")[2], resp)
             except Exception as exc:
                 _LOGGER.warning("Failed to define register: %s", exc)
 
-    # Flatten register values into circuit.name.field -> value dict
     def _values_from_registers(
         self, registers: list[EbusdRegister] | None = None
     ) -> dict[str, str]:
@@ -199,7 +208,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     translated = value
                     if reg.key == "hmu.RunDataStatuscode":
                         translated = COMPRESSOR_STATUS_LABELS.get(value, value)
-                    for suffix in (";ok", ";err", ";inv", ";too_small", ";too_big", ";nan", ";unknown"):
+                    for suffix in EBUSD_STATUS_SUFFIXES:
                         if translated.endswith(suffix):
                             translated = translated[:-len(suffix)]
                             break
@@ -211,7 +220,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _cache_path(self) -> str:
         return self.hass.config.path(DOMAIN, "register_cache.json")
 
-    # Persist register values to JSON cache for fast startup on next HA boot
     def _save_cache(self, values: dict[str, str]) -> None:
         cache_dir = os.path.dirname(self._cache_path)
         try:
@@ -221,7 +229,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception:
             pass
 
-    # Load previously cached register values from JSON file
     def _load_cache(self) -> dict[str, str]:
         try:
             with open(self._cache_path) as f:
@@ -229,135 +236,60 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception:
             return {}
 
-    # Store device metadata (makes, models, versions) from scan.* registers.
-    # Scan registers use circuit names like "Scan.08" (HMU), "Scan.15" (CTLV2), etc.
-    def _parse_scan_metadata(self) -> None:
-        self._scan_metadata: dict[str, dict[str, str]] = {}
-        self._present_devices: set[str] = set()
-        for key, reg in self.registers.items():
-            if not reg.circuit.lower().startswith("scan"):
-                continue
-            if "." in reg.circuit:
-                device_id = reg.circuit.split(".")[1].lower()
-            else:
-                device_id = "general"
-            value = reg.value.get("value")
-            if value is None or value in ("-", "no data stored", ""):
-                continue
-            val = str(value)
-            # Parse model lines: "Vaillant;BASV2;0507;1704" → MF;TYPE;SW;HW
-            if not reg.name:
-                parts = val.split(";")
-                if len(parts) == 4:
-                    meta = self._scan_metadata.setdefault(device_id, {})
-                    meta["MF"] = parts[0]
-                    meta["TYPE"] = parts[1]
-                    meta["SW"] = parts[2]
-                    meta["HW"] = parts[3]
-                    self._present_devices.add(device_id)
-                    continue
-            self._scan_metadata.setdefault(device_id, {})[reg.name.upper()] = val
-            self._present_devices.add(device_id)
-        if self._scan_metadata:
-            _LOGGER.info("Scan metadata: %s | present devices: %s",
-                         self._scan_metadata, self._present_devices)
+    def get_device_info(self, circuit: str) -> DeviceInfo:
+        scan_type = ""
+        scan_sw = ""
+        scan_hw = ""
+        parent: str | None = None
+        node: DeviceNode | None = None
 
-    # Map circuit prefix → device type. Prefixes match all numeric variants (ctlv1-9, basv2, etc.)
-    CIRCUIT_TYPE_BY_PREFIX: dict[str, str] = {
-        "hmu": "heat_pump",
-        "ctlv": "heating_controller",
-        "basv": "heating_controller",
-        "bai": "heating_controller",
-        "z": "zone",
-        "dhw": "dhw",
-        "Broadcast": "diagnostic",
-        "vwz": "ventilation",
-        "vwzio": "ventilation",
-    }
-    # Map scan TYPE field → circuit type
-    DEVICE_TYPE_TO_CIRCUIT_TYPE: dict[str, str] = {
-        "hmu": "heat_pump", "hmu00": "heat_pump",
-        "basv": "heating_controller", "basv2": "heating_controller",
-        "vwz": "ventilation", "vwzio": "ventilation",
-        "netx2": "diagnostic",
-    }
+        if self._graph:
+            node = self._graph.nodes.get(circuit)
 
-    # Classify each circuit by device type using scan metadata + circuit prefix
-    def _detect_circuit_types(self) -> None:
-        ctypes: dict[str, str] = {}
-        # Priority 1: scan TYPE field → circuit type + matching circuit
-        type_prefix_ctypes = [("ctlv", "heating_controller"), ("bai", "heating_controller")]
-        for device_id, meta in getattr(self, "_scan_metadata", {}).items():
-            raw_type = meta.get("TYPE", "").lower()
-            if not raw_type:
-                continue
-            ctype = self.DEVICE_TYPE_TO_CIRCUIT_TYPE.get(raw_type)
-            if not ctype:
-                for prefix, t in type_prefix_ctypes:
-                    if raw_type.startswith(prefix):
-                        ctype = t
-                        break
-            if not ctype:
-                continue
-            # Match TYPE to circuit: strip trailing digits (basv2 → basv)
-            ckt_prefix = raw_type.rstrip("0123456789")
-            for circuit in self.registers:
-                if circuit.lower().startswith(ckt_prefix) and not circuit.lower().startswith("scan"):
-                    ctypes[circuit] = ctype
-                    break
-        # Priority 2: circuit prefix heuristic
-        for circuit in self.registers:
-            if circuit in ctypes or circuit.lower().startswith(("scan",)) or "." in circuit:
-                continue
-            for prefix, ctype in self.CIRCUIT_TYPE_BY_PREFIX.items():
-                if circuit.lower().startswith(prefix):
-                    ctypes[circuit] = ctype
-                    break
-        # Priority 3: fallback for heating_controller via Z1OpMode
-        if "heating_controller" not in ctypes.values():
-            for reg in self.registers.values():
-                if reg.name == "Z1OpMode" and reg.has_data:
-                    ctypes[reg.circuit] = "heating_controller"
-                    break
-        self._circuit_types = ctypes
+        if node:
+            scan_type = node.scan_type
+            scan_sw = node.scan_sw
+            scan_hw = node.scan_hw
+            parent = node.parent
 
-    # Return all circuits matching a device type
-    def circuits_by_type(self, ctype: str) -> list[str]:
-        return [c for c, t in getattr(self, "_circuit_types", {}).items() if t == ctype]
+        circuit_lower = circuit.lower()
+        if circuit_lower in CIRCUIT_NAMES:
+            name = CIRCUIT_NAMES[circuit_lower]
+        elif (
+            len(circuit_lower) == 5
+            and circuit_lower.startswith("ctlv")
+            and circuit_lower[-1].isdigit()
+        ):
+            name = "Vaillant sensoCOMFORT Control"
+        elif scan_type:
+            name = f"Vaillant {scan_type}"
+        elif circuit_lower.startswith("z"):
+            name = f"Zone {circuit[1:]}"
+        elif circuit_lower.startswith("hc"):
+            name = f"Heating Circuit {circuit[2:]}"
+        else:
+            name = f"Vaillant {circuit}"
 
-    @property
-    def heating_circuit(self) -> str:
-        # First detected heating_controller circuit, fallback to seed default
-        circuits = self.circuits_by_type("heating_controller")
-        return circuits[0] if circuits else self._heating_circuit
+        via_device: tuple[str, str] | None = None
+        if parent:
+            via_device = (DOMAIN, parent)
 
-    DEVICE_ID_TO_CIRCUIT = {
-        "08": "hmu", "15": "ctlv2", "76": "vwz", "f6": "Broadcast",
-    }
+        ebusd_version = self.ebus.version if self.ebus else None
+        return DeviceInfo(
+            identifiers={(DOMAIN, circuit)},
+            name=name,
+            manufacturer="Vaillant",
+            model=name,
+            sw_version=scan_sw or ebusd_version,
+            hw_version=scan_hw,
+            via_device=via_device,
+        )
 
-    # Map scan-detected device IDs to known circuit names
-    @property
-    def _present_circuits(self) -> set[str]:
-        devices = getattr(self, "_present_devices", set())
-        result: set[str] = set()
-        for did in devices:
-            ckt = self.DEVICE_ID_TO_CIRCUIT.get(did)
-            if ckt:
-                result.add(ckt)
-        return result
-
-    # Read REGISTER_MAP entries that find missed, add entities if new
     async def _fallback_read(self) -> None:
-        if not self.ebusd_backend:
+        if not self.ebus or not self.ebus.is_connected:
             return
-        need_read = [
-            key for key in REGISTER_MAP
-            if REGISTER_MAP[key].enabled
-        ]
-        if not need_read:
-            return
-        find_keys = getattr(self, "_last_find_keys", set())
-        to_read = [k for k in need_read if k not in find_keys]
+        graph_keys = self._last_find_keys
+        to_read = [k for k in REGISTER_MAP if REGISTER_MAP[k].enabled and k not in graph_keys]
         if not to_read:
             return
         _LOGGER.debug("Fallback reading %d known register(s)", len(to_read))
@@ -368,7 +300,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
             circuit, name = parts
             try:
-                value = await self.ebusd_backend.async_read(circuit, name)
+                value = await self.ebus.read_register(circuit, name)
                 was_new = key not in self.registers
                 if value and (value.startswith(("or:", "ERR:")) or "read [-" in value):
                     value = None
@@ -403,47 +335,57 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.debug("Fallback added empty %s (will populate on poll)", key)
             except Exception as exc:
                 _LOGGER.warning("Fallback read failed: %s (%s)", key, exc)
-        if added:
-            self._active_zone_circuits = _detect_active_circuits(
-                list(self.registers.values())
-            )
-            fp_present: set[str] = {"hmu", self.heating_circuit, "Broadcast"}
-            for reg in self.registers.values():
-                if reg.has_data:
-                    fp_present.add(reg.circuit)
-            self.entities = generate_entity_descriptions(
-                list(self.registers.values()),
-                active_zone_circuits=self._active_zone_circuits,
-                present_circuits=fp_present,
-            )
-        _LOGGER.info("Fallback: %d/%d known registers checked",
-                     len(need_read), len(REGISTER_MAP))
+        if added and self._graph:
+            self.entities = self.entity_factory.generate(self._graph)
+            _LOGGER.info("Regenerated entities after fallback: added %d new", added)
 
-    # Poll ebusd for register values, called by HA update loop
     async def _async_update_data(self) -> dict[str, Any]:
         if not self._ebusd_connected:
-            # First poll: return cached data immediately, connect in background
             if not self._started:
                 self._started = True
                 self.hass.async_create_task(self._ebusd_connect_and_discover())
             return {"ebusd": self._values_from_registers()}
 
-        if self.ebusd_backend and self.ebusd_backend.connected:
+        if self.ebus and self.ebus.is_connected:
             try:
-                discovered = await self.ebusd_backend.async_find()
-                self._last_find_keys = {r.key for r in discovered}
-                for reg in discovered:
-                    if reg.has_data:
-                        self.registers[reg.key] = reg
-                    elif reg.key not in self.registers:
-                        self.registers[reg.key] = reg
+                lines = await self.ebus.find_registers()
+                updated = 0
+                for line in lines:
+                    line = line.strip()
+                    if not line or "=" not in line:
+                        continue
+                    lhs, rhs = line.split("=", 1)
+                    parts = lhs.strip().split(" ", 1)
+                    circuit = parts[0]
+                    name = parts[1].strip() if len(parts) > 1 else ""
+                    if not circuit or not name:
+                        continue
+                    val = rhs.strip()
+                    key = f"{circuit}.{name}"
+                    if val in ("-", "no data stored", "") or val.startswith(("(empty ", "(ERR")):
+                        continue
+                    if key not in self.registers:
+                        self.registers[key] = EbusdRegister(
+                            circuit=circuit, name=name,
+                            fields=["value"], value={"value": val},
+                            has_data=True,
+                        )
+                        updated += 1
+                    else:
+                        self.registers[key].value["value"] = val
+                        self.registers[key].has_data = True
+                        updated += 1
+                self._last_find_keys = {k for k in self.registers}
                 await self._fallback_read()
                 zero_idle_registers(self.registers)
+                if updated:
+                    _LOGGER.debug("Poll updated %d registers", updated)
                 return {"ebusd": self._values_from_registers()}
             except (ConnectionError, TimeoutError, OSError):
                 _LOGGER.warning("ebusd connection lost, reconnecting")
                 try:
-                    await self.ebusd_backend.async_reconnect()
+                    if self.ebus:
+                        await self.ebus._reconnect()
                     await repairs.async_dismiss_ebusd_unreachable(self.hass)
                 except Exception as exc:
                     _LOGGER.error("ebusd reconnect failed: %s", exc)
@@ -451,39 +393,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return {"ebusd": self._values_from_registers()}
 
-    # Disconnect ebusd backend on integration unload
     async def async_stop(self) -> None:
-        if self.ebusd_backend:
-            await self.ebusd_backend.async_disconnect()
-
-    PARENT_CIRCUITS: dict[str, str] = {
-        "ctlv2": "hmu", "basv": "hmu", "z1": "ctlv2", "dhw": "ctlv2", "Broadcast": "hmu",
-    }
-    CIRCUIT_TO_DEVICE_ID: dict[str, str] = {
-        "hmu": "08", "ctlv2": "15", "basv": "15", "vwz": "76", "Broadcast": "f6",
-    }
-
-    # Build HA DeviceInfo for a circuit, using scan metadata (SW/HW) when available
-    def get_device_info(self, circuit: str) -> DeviceInfo:
-        name = CIRCUIT_NAMES.get(circuit, f"Vaillant ({circuit})")
-        device_id = self.CIRCUIT_TO_DEVICE_ID.get(circuit)
-        scan = {}
-        if hasattr(self, "_scan_metadata") and device_id:
-            scan = self._scan_metadata.get(device_id, {})
-        model = scan.get("ID") or name
-        manufacturer = "Vaillant"
-        sw_version = scan.get("SW")
-        hw_version = scan.get("HW")
-        via_device: tuple[str, str] | None = None
-        parent = self.PARENT_CIRCUITS.get(circuit)
-        if parent:
-            via_device = (DOMAIN, parent)
-        return DeviceInfo(
-            identifiers={(DOMAIN, circuit)},
-            name=name,
-            manufacturer=manufacturer,
-            model=model,
-            sw_version=sw_version or (self.ebusd_backend.version if self.ebusd_backend else None),
-            hw_version=hw_version,
-            via_device=via_device,
-        )
+        if self.ebus:
+            await self.ebus.disconnect()
+        self.ebus = None

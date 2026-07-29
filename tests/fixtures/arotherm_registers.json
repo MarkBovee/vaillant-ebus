@@ -1,0 +1,4777 @@
+[
+  {
+    "circuit": "Broadcast",
+    "name": "Datetime",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "Broadcast",
+    "name": "Error",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "Broadcast",
+    "name": "FlowTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "Broadcast",
+    "name": "HwcStatus",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "Broadcast",
+    "name": "Id",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "Broadcast",
+    "name": "IdAnswer",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "Broadcast",
+    "name": "Load",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "Broadcast",
+    "name": "Outsidetemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "28.598"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "Broadcast",
+    "name": "Signoflife",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "Broadcast",
+    "name": "Vdatetime",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "11:52:57;29.07.2026"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "Broadcast",
+    "name": "WaterPressure",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "General",
+    "name": "Valuerange",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "Memory",
+    "name": "Eeprom",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "Memory",
+    "name": "Ram",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "Scan",
+    "name": "Id",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "Scan.08",
+    "name": "Id",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "21;22;29;0010021619;0001;006576;N8"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "Scan.15",
+    "name": "Id",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "21;22;23;0020260913;0953;017572;N2"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "AdaptHeatCurve",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "yes"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Config",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Friday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "08:30;22:00"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Friday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Friday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Monday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "08:30;22:00"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Monday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Monday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Saturday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "08:30;22:00"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Saturday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Saturday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Sunday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "08:30;22:00"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Sunday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Sunday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Thursday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "08:30;22:00"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Thursday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Thursday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Timeframes",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "1;1;1;1;1;1;1"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Tuesday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "08:30;22:00"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Tuesday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Tuesday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Wednesday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "08:30;22:00"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Wednesday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CcTimer_Wednesday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "ContinuousHeating",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "-26"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Currenterror",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "-;-;-;-;-"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CylinderChargeHyst",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "5"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "CylinderChargeOffset",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "8"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Date",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "29.07.2026"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "DisplayedOutsideTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "28.5977"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Errorhistory",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "FrostOverRideTime",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1ActualFlowTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "0.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1AutoOffMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1CircuitType",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1CoolingEnabled",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": true,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1CoolingFlowTempMin",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": true,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1DewPointMonitoring",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": true,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1DewPointOffset",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": true,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1ExcessTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "0.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1FlowTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "58"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1HeatCurve",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1HeatCurveAdaption",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "0.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1MaxFlowTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "45"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1MinCoolingTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "17"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1MinFlowTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "20"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1MixerMovement",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "0.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1PumpStatus",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1RoomTempModulation",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1RoomTempSwitchOn",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1Status",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc1SummerTempLimit",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "19"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2ActualFlowTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2AutoOffMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2CircuitType",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2ExcessTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2FlowTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2HeatCurve",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2HeatCurveAdaption",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2MaxFlowTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2MinCoolingTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2MinFlowTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2MixerMovement",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2PumpStatus",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2RoomTempSwitchOn",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2Status",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc2SummerTempLimit",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3ActualFlowTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3AutoOffMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3CircuitType",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3ExcessTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3FlowTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3HeatCurve",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3HeatCurveAdaption",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3MaxFlowTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3MinCoolingTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3MinFlowTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3MixerMovement",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3PumpStatus",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3RoomTempSwitchOn",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3Status",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Hc3SummerTempLimit",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HcStorageTempBottom",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HcStorageTempTop",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcBankHolidayEndPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcBankHolidayStartPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcFlowTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcHolidayEndPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "01.01.2015"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcHolidayStartPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "01.01.2015"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcLockTime",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "30"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcMaxFlowTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "80"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcOpMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "day"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcParallelLoading",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "off"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcSFMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "auto"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcSfMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "auto"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcStorageTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "45.5"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcStorageTempBottom",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcStorageTempTop",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "58"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Config",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Friday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "13:30;15:00;35.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Friday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Friday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Monday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "13:30;15:00;35.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Monday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Monday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Saturday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "13:30;15:00;35.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Saturday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Saturday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Sunday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "13:30;15:00;35.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Sunday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Sunday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Thursday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "13:30;15:00;35.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Thursday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Thursday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Timeframes",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "1;1;1;1;1;1;1"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Tuesday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "13:30;15:00;35.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Tuesday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Tuesday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Wednesday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "13:30;15:00;35.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Wednesday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HwcTimer_Wednesday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "HydraulicScheme",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "8"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Installer1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Installer2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "KeyCodeforConfigMenu",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "MaintenanceDate",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "MaintenanceDue",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "MaxCylinderChargeTime",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "120"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "MaxRoomHumidity",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "MultiRelaySetting",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "4"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "OutsideTempAvg",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PhoneNumber1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PhoneNumber2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrEnergySum",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrEnergySumHc",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrEnergySumHcLastMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrEnergySumHcThisMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrEnergySumHwc",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrEnergySumHwcLastMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrEnergySumHwcThisMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrFuelSum",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrFuelSumHc",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrFuelSumHcLastMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrFuelSumHcThisMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrFuelSumHwc",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrFuelSumHwcLastMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PrFuelSumHwcThisMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "PumpAdditionalTime",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "SolarYieldTotal",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "SystemFlowTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Time",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "10:53:38"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "WaterPressure",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "1.6"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "YieldTotal",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1ActualRoomTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "0.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1BankHolidayEndPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1BankHolidayStartPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1CoolingManualTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": true,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1CoolingOpMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": true,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1CoolingSetbackTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": true,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1CoolingTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "20"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1CoolingTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1DayTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "20"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1HolidayEndPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "01.01.2015"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1HolidayStartPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "01.01.2015"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1HolidayTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "15"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Name1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Name2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1NightTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "18"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1OpMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "auto"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1QuickVetoDuration",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1QuickVetoEndDate",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1QuickVetoEndTime",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1QuickVetoTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1RoomTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "22.9125"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1RoomZoneMapping",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1SFMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Shortname",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Config",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Friday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "06:00;22:00;20.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Friday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Friday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Monday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "06:00;22:00;20.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Monday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Monday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Saturday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "06:00;22:00;20.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Saturday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Saturday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Sunday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "06:00;22:00;20.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Sunday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Sunday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Thursday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "06:00;22:00;20.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Thursday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Thursday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Timeframes",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "1;1;1;1;1;1;1"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Tuesday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "06:00;22:00;20.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Tuesday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Tuesday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Wednesday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "06:00;22:00;20.0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Wednesday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1Timer_Wednesday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z1ValveStatus",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2ActualRoomTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2BankHolidayEndPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2BankHolidayStartPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2CoolingTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2DayTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2HolidayEndPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2HolidayStartPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2HolidayTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Name1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Name2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2NightTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2OpMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2QuickVetoDuration",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2QuickVetoEndDate",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2QuickVetoEndTime",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2QuickVetoTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2RoomTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2RoomZoneMapping",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2SFMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Shortname",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Config",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Friday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Friday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Friday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Monday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Monday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Monday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Saturday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Saturday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Saturday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Sunday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Sunday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Sunday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Thursday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Thursday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Thursday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Timeframes",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Tuesday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Tuesday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Tuesday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Wednesday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Wednesday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2Timer_Wednesday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z2ValveStatus",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3ActualRoomTempDesired",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3BankHolidayEndPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3BankHolidayStartPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3DayTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3HolidayEndPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3HolidayStartPeriod",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3HolidayTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Name1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Name2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3NightTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3OpMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3QuickVetoDuration",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3QuickVetoEndDate",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3QuickVetoEndTime",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3QuickVetoTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3RoomTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3RoomZoneMapping",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3SFMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Shortname",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Config",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Friday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Friday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Friday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Monday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Monday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Monday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Saturday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Saturday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Saturday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Sunday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Sunday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Sunday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Thursday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Thursday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Thursday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Timeframes",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Tuesday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Tuesday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Tuesday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Wednesday0",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Wednesday1",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3Timer_Wednesday2",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "Z3ValveStatus",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "ctlv2",
+    "name": "z1RoomHumidity",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "51"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "BuildingCircuitFlow",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "CompressorBlocktime",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "CopCooling",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "CopCoolingMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "CopHc",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "CopHcMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "CopHwc",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "CopHwcMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "CurrentCompressorUtil",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "CurrentConsumedPower",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "CurrentYieldPower",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "Currenterror",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "-;-;-;-;-"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "DateTime",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "EnergyIntegral",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "Errorhistory",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "FlowTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "FlowTemperature",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "HoursCool",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "PowerConsumptionHmu",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataAirInletTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "28.5922"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataBuildingCPumpPower",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "65"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataCompressorInletTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataCompressorOutletTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataCompressorSpeed",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "49.9967"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataEEVOutletTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataEEVPositionAbs",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataFan1Speed",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataFan2Speed",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataHighPressure",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataLowPressure",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true,
+    "disabled": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunDataStatuscode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "<redacted>"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStats4PortValveHours",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStats4PortValveSwitches",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStatsBuildingCPumpStarts",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStatsBuildingPumpHours",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStatsCompressorHours",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStatsCompressorStarts",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStatsFan1Hours",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStatsFan1Starts",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStatsFan2Hours",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStatsFan2Starts",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStatsHMUHours",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStatsHcHours",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "RunStatsHwcHours",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "SetMode",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "water;-;-;132;1;1;1;1;0;0"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "StatElectricEnergySumCool",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "StatEnvironmentEnergySumCool",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "Status",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "Status01",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "58.0;54.5;-;-;-;hwc"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "Status02",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "Status16",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "StatusCirPump",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "on"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "hmu",
+    "name": "SupplyTempWeighted",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "TotalEnergyUsage",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "YieldCoolDay",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "YieldCooling",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "YieldCoolingMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "YieldHc",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "YieldHcDay",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "YieldHcMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "YieldHwc",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "YieldHwcDay",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "hmu",
+    "name": "YieldHwcMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "scan.04",
+    "name": "",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "Vaillant;NETX2;4039;5703"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "scan.08",
+    "name": "",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "Vaillant;HMU00;0522;5103"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "scan.15",
+    "name": "",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "Vaillant;CTLV2;0514;1104"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "scan.76",
+    "name": "",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "Vaillant;VWZ00;0522;5103"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "scan.f6",
+    "name": "",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "no data stored"
+    ],
+    "writable": false,
+    "has_data": true
+  },
+  {
+    "circuit": "v32",
+    "name": "BypassPosition",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "ExhaustAirHumidity",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "ExhaustAirTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "ExitAirTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "FrostProtection",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "HeatRecovery",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "MaxAirHumidity",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "MinAirHumidity",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "OutsideAirTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "SupplyAirTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "SupplyFlowActual",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "VentilationLevelDay",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "VentilationLevelNight",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "YieldMonth",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "YieldToday",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "YieldTotal",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "v32",
+    "name": "YieldYear",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      "ERR: element not found"
+    ],
+    "writable": false,
+    "has_data": true,
+    "from_map": true
+  },
+  {
+    "circuit": "vwz",
+    "name": "TestHwcTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "vwz",
+    "name": "TestOutdoorTemp",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  },
+  {
+    "circuit": "vwz",
+    "name": "TestThreeWayValve",
+    "fields": [
+      "value"
+    ],
+    "values": [
+      null
+    ],
+    "writable": false,
+    "has_data": false
+  }
+]

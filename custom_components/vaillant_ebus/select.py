@@ -68,9 +68,9 @@ class EbusdSelect(CoordinatorEntity[VaillantCoordinator], SelectEntity):
             raise ValueError(
                 f"Option '{option}' not valid for {self._desc.key}. Valid options: {self._attr_options}"
             )
-        if not self.coordinator.ebusd_backend:
+        if not self.coordinator.ebus:
             return
-        result = await self.coordinator.ebusd_backend.async_write(
+        result = await self.coordinator.ebus.write_register(
             self._desc.circuit,
             self._desc.name,
             option,

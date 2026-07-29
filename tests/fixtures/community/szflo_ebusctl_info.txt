@@ -1,0 +1,34 @@
+> ebusctl i
+version: ebusd 26.1.p20260503
+update check: revision 26.1 available, device firmware v5 1[6704] up to date, broadcast.csv: different version available, memory.csv: different version available, vaillant/08.hmu.csv: different version available, vaillant/15.ctlv2.csv: different version available, vaillant/broadcast.csv: different version available, vaillant/general.csv: different version available, vaillant/scan.csv: different version available
+device: 10.10.0.110:9999, TCP, enhanced, firmware 1.1[6704].1[6704]
+signal: acquired
+symbol rate: 23
+max symbol rate: 166
+min arbitration micros: 2
+max arbitration micros: 520
+min symbol latency: 0
+max symbol latency: 60
+scan: finished
+reconnects: 0
+masters: 8
+messages: 994
+conditional: 379
+poll: 315
+update: 33
+address 00: master #1
+address 03: master #11
+address 08: slave #11, scanned "MF=Vaillant;ID=HMU00;SW=0308;HW=0403", loaded "vaillant/08.hmu.csv"
+address 10: master #2
+address 13: master #12
+address 15: slave #2, scanned "MF=Vaillant;ID=CTLV2;SW=0514;HW=1104", loaded "vaillant/15.ctlv2.csv"
+address 18: slave #12, scanned "MF=Vaillant;ID=V32;SW=0117;HW=9802", loaded "vaillant/18.v32.csv"
+address 30: master #3
+address 31: master #8, ebusd
+address 36: slave #8, ebusd
+address 71: master #9
+address 76: slave #9, scanned "MF=Vaillant;ID=VWZ00;SW=0308;HW=0403", loaded "vaillant/76.vwz.csv"
+address b5: slave
+address f1: master #10
+address f6: slave #10, scanned "MF=Vaillant;ID=NETX2;SW=4039;HW=5703"
+

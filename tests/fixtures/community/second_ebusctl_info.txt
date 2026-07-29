@@ -1,0 +1,29 @@
+root@2ad9b828-ebusd:/# ebusctl i
+version: ebusd 26.1.26.1
+device: 192.168.11.44, TCP, enhanced, firmware 1.1[6704].1[6704]
+access: *
+signal: acquired
+symbol rate: 47
+max symbol rate: 208
+min arbitration micros: 0
+max arbitration micros: 158
+min symbol latency: 0
+max symbol latency: 50
+scan: finished
+reconnects: 0
+masters: 6
+messages: 561
+conditional: 3
+poll: 1
+update: 10
+address 00: master #1
+address 03: master #11
+address 08: slave #11, scanned "MF=Vaillant;ID=HMU00;SW=0901;HW=5103", loaded "vaillant/08.hmu.HW5103.csv"
+address 10: master #2
+address 15: slave #2, scanned "MF=Vaillant;ID=BASV2;SW=0507;HW=1704", loaded "vaillant/15.basv.csv"
+address 31: master #8, ebusd
+address 36: slave #8, ebusd
+address 71: master #9
+address 76: slave #9, scanned "MF=Vaillant;ID=VWZIO;SW=0902;HW=5103", loaded "vaillant/76.vwzio.csv"
+address f1: master #10
+address f6: slave #10, scanned "MF=Vaillant;ID=NETX2;SW=4039;HW=5703"
