@@ -363,6 +363,29 @@ async def test_get_device_info_prefers_circuit_names() -> None:
             assert c.get_device_info("hmu")["identifiers"] == {("vaillant_ebus", "hmu")}
 
 
+# Intent: expose unclassified devices using their ebusd scan metadata.
+async def test_get_device_info_for_unknown_scan_type() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+            c = VaillantCoordinator(_hass(tmpdir), _entry())
+            graph = _make_graph()
+            graph.nodes["xyz"] = DeviceNode(
+                circuit="xyz",
+                device_type=DeviceType.UNKNOWN,
+                scan_type="XYZ01",
+                scan_sw="1234",
+                scan_hw="5678",
+            )
+            c._graph = graph
+            c.ebus = MagicMock()
+            c.ebus.version = "23.2"
+
+            info = c.get_device_info("xyz")
+            assert info["name"] == "Vaillant XYZ01"
+            assert info["sw_version"] == "1234"
+            assert info["hw_version"] == "5678"
+            assert info["identifiers"] == {("vaillant_ebus", "xyz")}
+
+
 async def test_entities_generated_after_discovery() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
