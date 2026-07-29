@@ -32,8 +32,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         circuit = call.data["circuit"]
         name = call.data["name"]
         field = call.data.get("field", "")
-        if coordinator.ebusd_backend:
-            value = await coordinator.ebusd_backend.async_read(circuit, name, field)
+        if coordinator.ebus:
+            value = await coordinator.ebus.read_register(circuit, name, field)
             _LOGGER.info("read_parameter %s.%s = %s", circuit, name, value)
 
     # Write a value with read-after-write verification.
@@ -41,8 +41,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         circuit = call.data["circuit"]
         name = call.data["name"]
         value = call.data["value"]
-        if coordinator.ebusd_backend:
-            result = await coordinator.ebusd_backend.async_write(circuit, name, value)
+        if coordinator.ebus:
+            result = await coordinator.ebus.write_register(circuit, name, value)
             _LOGGER.info(
                 "write_parameter %s.%s=%s: success=%s, verified=%s",
                 circuit, name, value, result.success, result.verified_value,
@@ -54,9 +54,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Re-run entity discovery from scratch.
     async def svc_rediscover(call: ServiceCall) -> None:
-        if coordinator.ebusd_backend:
-            await coordinator.ebusd_backend.async_disconnect()
-        coordinator.ebusd_backend = None
+        if coordinator.ebus:
+            await coordinator.ebus.disconnect()
+        coordinator.ebus = None
         coordinator._ebusd_connected = False
         coordinator._started = False
         await coordinator.async_request_refresh()

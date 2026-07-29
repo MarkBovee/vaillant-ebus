@@ -11,20 +11,20 @@ import pytest
 
 from tests.fake_ebusd import FakeEbusdServer
 
-# Load tcp module same pattern as test_tcp.py
-TCP_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend/tcp.py"
+# Load ebus_service module
+EBUS_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend/ebus_service.py"
 for name in ("vaillant_ebus", "vaillant_ebus.backend"):
     pkg = importlib.util.module_from_spec(
         importlib.machinery.ModuleSpec(name, None)
     )
-    pkg.__path__ = [str(TCP_PATH.parents[1])] if name == "vaillant_ebus" else [str(TCP_PATH.parent)]
+    pkg.__path__ = [str(EBUS_PATH.parents[1])] if name == "vaillant_ebus" else [str(EBUS_PATH.parent)]
     sys.modules[name] = pkg
-SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.tcp", TCP_PATH)
+SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.ebus_service", EBUS_PATH)
 assert SPEC and SPEC.loader
-TCP = importlib.util.module_from_spec(SPEC)
-sys.modules["vaillant_ebus.backend.tcp"] = TCP
-SPEC.loader.exec_module(TCP)
-EbusdTcpBackend = TCP.EbusdTcpBackend
+EBUS = importlib.util.module_from_spec(SPEC)
+sys.modules["vaillant_ebus.backend.ebus_service"] = EBUS
+SPEC.loader.exec_module(EBUS)
+EbusService = EBUS.EbusService
 
 
 # Fixture loads aroTHERM data
@@ -135,30 +135,55 @@ async def test_define_command() -> None:
         w.close()
 
 
-# The fake server works with the real EbusdTcpBackend
-async def test_with_real_tcp_backend() -> None:
+# The fake server works with the real EbusService
+async def test_with_real_ebus_service() -> None:
     async with FakeEbusdServer() as fake:
-        backend = EbusdTcpBackend(host="127.0.0.1", port=fake.port)
-        await backend.async_connect()
+        ebus = EbusService(host="127.0.0.1", port=fake.port)
+        await ebus.connect()
 
-        regs = await backend.async_find()
+        regs = await ebus.find_registers()
         assert len(regs) > 0
 
-        val = await backend.async_read("Broadcast", "Outsidetemp")
+        val = await ebus.read_register("Broadcast", "Outsidetemp")
         assert val is not None
 
-        result = await backend.async_write("hmu", "SetMode", "auto 17")
+        result = await ebus.write_register("hmu", "SetMode", "auto 17")
         assert result.success
 
-        await backend.async_disconnect()
+        await ebus.disconnect()
 
 
-# Community basv system works with ebusd backend
-async def test_basv_with_tcp_backend() -> None:
+# Field-level read for known multi-field register
+async def test_field_level_read_releasecooling() -> None:
+    async with FakeEbusdServer() as fake:
+        ebus = EbusService(host="127.0.0.1", port=fake.port)
+        await ebus.connect()
+        val = await ebus.read_register("hmu", "SetMode", "releaseCooling")
+        assert val == "0"
+        val = await ebus.read_register("hmu", "SetMode", "hcmode")
+        assert val is not None
+        val = await ebus.read_register("hmu", "SetMode", "nonexistent")
+        assert val == "water;-;-;132;1;1;1;1;0;0"  # falls back to full value
+        await ebus.disconnect()
+
+
+# Field-level read for non-existent register returns None
+async def test_field_level_read_nonexistent() -> None:
+    async with FakeEbusdServer() as fake:
+        ebus = EbusService(host="127.0.0.1", port=fake.port)
+        await ebus.connect()
+        val = await ebus.read_register("hmu", "Status00", "defrost")
+        assert val is None
+        await ebus.disconnect()
+
+
+# Community basv system works with ebus service
+async def test_basv_with_ebus_service() -> None:
     async with FakeEbusdServer("community/basv_find.txt") as fake:
-        backend = EbusdTcpBackend(host="127.0.0.1", port=fake.port)
-        await backend.async_connect()
-        regs = await backend.async_find()
-        circuits = {r.circuit for r in regs}
-        assert "basv" in circuits
-        await backend.async_disconnect()
+        ebus = EbusService(host="127.0.0.1", port=fake.port)
+        await ebus.connect()
+        regs = await ebus.find_registers()
+        # Check that basv circuit appears in find output
+        has_basv = any("basv" in line for line in regs)
+        assert has_basv
+        await ebus.disconnect()

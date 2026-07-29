@@ -107,9 +107,9 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity)
 
     # Write holiday date to ebusd register and trigger refresh
     async def async_set_value(self, value: datetime) -> None:
-        backend = self.coordinator.ebusd_backend
-        if backend:
+        ebus = self.coordinator.ebus
+        if ebus:
             date_str = value.strftime(DATE_FMT)
-            result = await backend.async_write(self.coordinator.heating_circuit, self._register, date_str)
+            result = await ebus.write_register(self.coordinator.heating_circuit, self._register, date_str)
             if result.success:
                 await self.coordinator.async_request_refresh()

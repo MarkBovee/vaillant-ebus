@@ -132,15 +132,15 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
     async def async_set_operation_mode(self, operation_mode: str) -> None:
         if operation_mode not in OPERATION_MODES:
             raise ValueError(f"Unsupported DHW operation: {operation_mode}")
-        backend = self.coordinator.ebusd_backend
-        if not backend:
+        ebus = self.coordinator.ebus
+        if not ebus:
             return
         if operation_mode == "boost":
-            await backend.async_write(self.coordinator.heating_circuit, "HwcSFMode", "load")
+            await ebus.write_register(self.coordinator.heating_circuit, "HwcSFMode", "load")
         else:
             ebusd_mode = HA_TO_EBUSD_OPMODE.get(operation_mode, operation_mode)
-            await backend.async_write(self.coordinator.heating_circuit, "HwcSFMode", "auto")
-            await backend.async_write(self.coordinator.heating_circuit, "HwcOpMode", ebusd_mode)
+            await ebus.write_register(self.coordinator.heating_circuit, "HwcSFMode", "auto")
+            await ebus.write_register(self.coordinator.heating_circuit, "HwcOpMode", ebusd_mode)
         await self.coordinator.async_request_refresh()
 
     # Turn DHW on by setting operation mode to auto
@@ -166,8 +166,8 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
 
     # Write value to a DHW register and trigger coordinator refresh
     async def _write(self, name: str, value: str) -> None:
-        backend = self.coordinator.ebusd_backend
-        if backend:
-            result = await backend.async_write(self.coordinator.heating_circuit, name, value)
+        ebus = self.coordinator.ebus
+        if ebus:
+            result = await ebus.write_register(self.coordinator.heating_circuit, name, value)
             if result.success:
                 await self.coordinator.async_request_refresh()

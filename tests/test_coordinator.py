@@ -136,13 +136,7 @@ COORDINATOR = importlib.util.module_from_spec(COORDINATOR_SPEC)
 sys.modules["vaillant_ebus.coordinator"] = COORDINATOR
 COORDINATOR_SPEC.loader.exec_module(COORDINATOR)
 
-from vaillant_ebus.coordinator import (  # noqa: E402
-    VaillantCoordinator,
-    _EbusdBackendCompat,
-    _parse_find_line,
-    _parse_find_lines,
-    _strip_suffix,
-)
+from vaillant_ebus.coordinator import VaillantCoordinator  # noqa: E402
 
 
 def _hass(cache_dir: str) -> MagicMock:
@@ -379,86 +373,6 @@ async def test_heating_circuit_fallback_no_graph() -> None:
         assert c.heating_circuit == "ctlv2"
 
 
-async def test_ebusd_backend_compat_connected() -> None:
-    mock_ebus = MagicMock(spec=EbusService)
-    mock_ebus.is_connected = True
-    compat = _EbusdBackendCompat(mock_ebus)
-    assert compat.connected is True
-
-
-async def test_ebusd_backend_compat_version() -> None:
-    mock_ebus = MagicMock(spec=EbusService)
-    mock_ebus.version = "23.2"
-    compat = _EbusdBackendCompat(mock_ebus)
-    assert compat.version == "23.2"
-
-
-async def test_ebusd_backend_compat_read() -> None:
-    mock_ebus = MagicMock(spec=EbusService)
-    mock_ebus.read_register = AsyncMock(return_value="22.5")
-    compat = _EbusdBackendCompat(mock_ebus)
-    result = await compat.async_read("ctlv2", "Z1DayTemp")
-    assert result == "22.5"
-    mock_ebus.read_register.assert_called_once_with("ctlv2", "Z1DayTemp", "")
-
-
-async def test_ebusd_backend_compat_write() -> None:
-    mock_ebus = MagicMock(spec=EbusService)
-    mock_ebus.write_register = AsyncMock(return_value=MagicMock(success=True))
-    compat = _EbusdBackendCompat(mock_ebus)
-    result = await compat.async_write("ctlv2", "Z1DayTemp", "21")
-    assert result.success is True
-
-
-async def test_ebusd_backend_compat_disconnect() -> None:
-    mock_ebus = MagicMock(spec=EbusService)
-    mock_ebus.disconnect = AsyncMock()
-    compat = _EbusdBackendCompat(mock_ebus)
-    await compat.async_disconnect()
-    mock_ebus.disconnect.assert_called_once()
-
-
-async def test_ebusd_backend_compat_send_raw() -> None:
-    mock_ebus = MagicMock(spec=EbusService)
-    mock_ebus.send_command = AsyncMock(return_value=MagicMock(data="standby"))
-    compat = _EbusdBackendCompat(mock_ebus)
-    result = await compat.async_send_raw("state")
-    assert result.data == "standby"
-
-
-async def test_parse_find_line_simple() -> None:
-    result = _parse_find_line("hmu OutsideTemp = 18.5")
-    assert result is not None
-    assert result[0] == "hmu"
-    assert result[1] == "OutsideTemp"
-    assert result[3] == {"value": "18.5"}
-
-
-async def test_parse_find_line_placeholder() -> None:
-    result = _parse_find_line("hmu SomeReg = no data stored")
-    assert result is not None
-    assert result[3] == {"value": None}
-
-
-async def test_parse_find_line_empty_string() -> None:
-    result = _parse_find_line("")
-    assert result is None
-
-
-async def test_parse_find_lines_basic() -> None:
-    lines = ["hmu OutsideTemp = 18.5", "hmu RunDataStatuscode = standby"]
-    result = _parse_find_lines(lines)
-    assert len(result) == 2
-    assert result[0].circuit == "hmu"
-    assert result[1].circuit == "hmu"
-
-
-async def test_strip_suffix() -> None:
-    assert _strip_suffix("22.50;ok") == "22.50"
-    assert _strip_suffix("3.14;err") == "3.14"
-    assert _strip_suffix("no_suffix") == "no_suffix"
-
-
 async def test_values_from_registers_includes_suffix_stripped() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
@@ -474,20 +388,20 @@ async def test_values_from_registers_includes_suffix_stripped() -> None:
         assert values["test.Example.value"] == "22.50"
 
 
-async def test_ebusd_backend_none_when_no_ebus() -> None:
+async def test_ebus_none_when_not_connected() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
-        assert c.ebusd_backend is None
+        assert c.ebus is None
 
 
-async def test_ebusd_backend_settable() -> None:
+async def test_ebus_settable() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
-        compat = MagicMock()
-        c.ebusd_backend = compat
-        assert c.ebusd_backend is compat
-        c.ebusd_backend = None
-        assert c.ebusd_backend is None
+        mock = MagicMock(spec=EbusService)
+        c.ebus = mock
+        assert c.ebus is mock
+        c.ebus = None
+        assert c.ebus is None
 
 
 async def test_get_device_info_with_parent() -> None:

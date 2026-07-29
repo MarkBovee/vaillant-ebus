@@ -25,8 +25,6 @@ from .backend.models import (
     DeviceNode,
     DeviceType,
     EbusdRegister,
-    SendResult,
-    WriteResult,
     zero_idle_registers,
 )
 from .backend.register_service import RegisterService
@@ -41,130 +39,9 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class _EbusdBackendCompat:
-    """Make EbusService look like old EbusdTcpBackend for platform backward compat.
-
-    ponytail: layer removed when platform files switch to EbusService directly.
-    """
-
-    def __init__(self, ebus: EbusService) -> None:
-        self._ebus = ebus
-
-    @property
-    def connected(self) -> bool:
-        return self._ebus.is_connected
-
-    @property
-    def version(self) -> str | None:
-        return self._ebus.version
-
-    async def async_connect(self) -> None:
-        await self._ebus.connect()
-
-    async def async_disconnect(self) -> None:
-        await self._ebus.disconnect()
-
-    async def async_send_raw(self, command: str) -> SendResult:
-        return await self._ebus.send_command(command)
-
-    async def async_find_lines(self) -> list[str]:
-        return await self._ebus.find_registers()
-
-    async def async_find(self) -> list[EbusdRegister]:
-        lines = await self._ebus.find_registers()
-        return _parse_find_lines(lines)
-
-    async def async_read(self, circuit: str, name: str, field: str = "") -> str | None:
-        return await self._ebus.read_register(circuit, name, field)
-
-    async def async_write(self, circuit: str, name: str, value: str) -> WriteResult:
-        return await self._ebus.write_register(circuit, name, value)
-
-    async def async_reconnect(self) -> None:
-        await self._ebus._reconnect()
-
-
 EBUSD_STATUS_SUFFIXES: tuple[str, ...] = (
     ";ok", ";err", ";inv", ";too_small", ";too_big", ";nan", ";unknown",
 )
-
-
-def _strip_suffix(value: str) -> str:
-    for suffix in EBUSD_STATUS_SUFFIXES:
-        if value.endswith(suffix):
-            return value[:-len(suffix)]
-    return value
-
-
-def _parse_find_line(line: str) -> tuple[str, str, list[str], dict[str, str | None], str, str] | None:
-    line = line.strip()
-    if not line:
-        return None
-    if "=" in line and not line.startswith("#"):
-        lhs, rhs = line.split("=", 1)
-        lhs = lhs.strip()
-        rhs = rhs.strip()
-        parts = lhs.split(" ", 1)
-        circuit_name = parts[0]
-        reg_name = parts[1].strip() if len(parts) > 1 else ""
-        if not reg_name and circuit_name.lower().startswith("scan"):
-            return circuit_name, reg_name, ["value"], {"value": _strip_suffix(rhs)}, "", ""
-        if not reg_name:
-            return None
-        if rhs in ("-", "no data stored", "") or rhs.startswith(("(empty ", "(ERR")):
-            return circuit_name, reg_name, ["value"], {"value": None}, "", ""
-        return circuit_name, reg_name, ["value"], {"value": _strip_suffix(rhs)}, "", ""
-    if line.startswith("#"):
-        return None
-    parts = line.split(None, 3)
-    if len(parts) < 4:
-        return None
-    circuit_name = parts[0]
-    msg_type = parts[1]
-    reg_name = parts[2]
-    rest = parts[3]
-    addr_end = rest.find(": ")
-    if addr_end == -1:
-        return None
-    address = rest[:addr_end]
-    field_part = rest[addr_end + 2:]
-    fields: list[str] = []
-    values: dict[str, str | None] = {}
-    for pair in field_part.split():
-        if "=" not in pair:
-            continue
-        fname, fval = pair.split("=", 1)
-        fields.append(fname)
-        values[fname] = _strip_suffix(fval) if fval not in ("-", "no data stored", "") else None
-    if not fields:
-        fields = ["value"]
-        values = {"value": None}
-    return circuit_name, reg_name, fields, values, msg_type, address
-
-
-def _parse_find_lines(raw_lines: list[str]) -> list[EbusdRegister]:
-    circuits: dict[str, dict[str, EbusdRegister]] = {}
-    for line in raw_lines:
-        parsed = _parse_find_line(line)
-        if parsed is None:
-            continue
-        circuit_name, reg_name, fields, values, msg_type, address = parsed
-        if circuit_name not in circuits:
-            circuits[circuit_name] = {}
-        reg = EbusdRegister(
-            circuit=circuit_name,
-            name=reg_name,
-            fields=fields,
-            value=values,
-            has_data=any(v is not None for v in values.values()),
-            message_type=msg_type,
-            address=address,
-        )
-        circuits[circuit_name][reg_name] = reg
-    result: list[EbusdRegister] = []
-    for circuit_name in sorted(circuits):
-        result.extend(sorted(circuits[circuit_name].values(), key=lambda r: r.name))
-    return result
 
 
 class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -178,8 +55,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.register: RegisterService | None = None
         self.discovery: DiscoveryService | None = None
         self.entity_factory = EntityFactoryService()
-
-        self.ebusd_backend: _EbusdBackendCompat | None = None
         self.registers: dict[str, EbusdRegister] = {}
         self.entities: list[EntityDescription] = []
         self._graph: DeviceGraph | None = None
@@ -252,7 +127,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.ebus = ebus
         self.register = RegisterService(ebus)
         self.discovery = DiscoveryService(ebus)
-        self.ebusd_backend = _EbusdBackendCompat(ebus)
         self._ebusd_connected = True
 
         version = ebus.version
@@ -444,23 +318,46 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.hass.async_create_task(self._ebusd_connect_and_discover())
             return {"ebusd": self._values_from_registers()}
 
-        if self.ebusd_backend and self.ebusd_backend.connected:
+        if self.ebus and self.ebus.is_connected:
             try:
-                discovered = await self.ebusd_backend.async_find()
-                self._last_find_keys = {r.key for r in discovered}
-                for reg in discovered:
-                    if reg.has_data:
-                        self.registers[reg.key] = reg
-                    elif reg.key not in self.registers:
-                        self.registers[reg.key] = reg
+                lines = await self.ebus.find_registers()
+                updated = 0
+                for line in lines:
+                    line = line.strip()
+                    if not line or "=" not in line:
+                        continue
+                    lhs, rhs = line.split("=", 1)
+                    parts = lhs.strip().split(" ", 1)
+                    circuit = parts[0]
+                    name = parts[1].strip() if len(parts) > 1 else ""
+                    if not circuit or not name:
+                        continue
+                    val = rhs.strip()
+                    key = f"{circuit}.{name}"
+                    if val in ("-", "no data stored", "") or val.startswith(("(empty ", "(ERR")):
+                        continue
+                    if key not in self.registers:
+                        self.registers[key] = EbusdRegister(
+                            circuit=circuit, name=name,
+                            fields=["value"], value={"value": val},
+                            has_data=True,
+                        )
+                        updated += 1
+                    else:
+                        self.registers[key].value["value"] = val
+                        self.registers[key].has_data = True
+                        updated += 1
+                self._last_find_keys = {k for k in self.registers}
                 await self._fallback_read()
                 zero_idle_registers(self.registers)
+                if updated:
+                    _LOGGER.debug("Poll updated %d registers", updated)
                 return {"ebusd": self._values_from_registers()}
             except (ConnectionError, TimeoutError, OSError):
                 _LOGGER.warning("ebusd connection lost, reconnecting")
                 try:
-                    if self.ebusd_backend:
-                        await self.ebusd_backend.async_reconnect()
+                    if self.ebus:
+                        await self.ebus._reconnect()
                     await repairs.async_dismiss_ebusd_unreachable(self.hass)
                 except Exception as exc:
                     _LOGGER.error("ebusd reconnect failed: %s", exc)
@@ -471,4 +368,4 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_stop(self) -> None:
         if self.ebus:
             await self.ebus.disconnect()
-        self.ebusd_backend = None
+        self.ebus = None

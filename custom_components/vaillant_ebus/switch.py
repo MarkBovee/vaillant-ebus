@@ -83,9 +83,9 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
 
     # Write value to ebusd and trigger refresh
     async def _write(self, value: str) -> None:
-        if not self.coordinator.ebusd_backend:
+        if not self.coordinator.ebus:
             return
-        result = await self.coordinator.ebusd_backend.async_write(
+        result = await self.coordinator.ebus.write_register(
             self._desc.circuit,
             self._desc.name,
             value,
@@ -147,8 +147,8 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
 
     # Set holiday dates from today to far future, enable away mode
     async def async_turn_on(self, **kwargs: Any) -> None:
-        backend = self.coordinator.ebusd_backend
-        if not backend:
+        ebus = self.coordinator.ebus
+        if not ebus:
             return
         today = _today_str()
         data = self.coordinator.data.get("ebusd", {})
@@ -160,15 +160,15 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
             (self.coordinator.heating_circuit, "HwcHolidayEndPeriod", FAR_FUTURE),
         ]
         for circuit, name, value in writes:
-            await backend.async_write(circuit, name, value)
+            await ebus.write_register(circuit, name, value)
         if holiday_temp:
-            await backend.async_write(self.coordinator.heating_circuit, "Z1HolidayTemp", holiday_temp)
+            await ebus.write_register(self.coordinator.heating_circuit, "Z1HolidayTemp", holiday_temp)
         await self.coordinator.async_request_refresh()
 
     # Reset holiday dates to unset, disable away mode
     async def async_turn_off(self, **kwargs: Any) -> None:
-        backend = self.coordinator.ebusd_backend
-        if not backend:
+        ebus = self.coordinator.ebus
+        if not ebus:
             return
         writes = [
             (self.coordinator.heating_circuit, "Z1HolidayStartPeriod", UNSET_DATE),
@@ -177,8 +177,8 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
             (self.coordinator.heating_circuit, "HwcHolidayEndPeriod", UNSET_DATE),
         ]
         for circuit, name, value in writes:
-            await backend.async_write(circuit, name, value)
-        await backend.async_write(self.coordinator.heating_circuit, "Z1HolidayTemp", "15")
+            await ebus.write_register(circuit, name, value)
+        await ebus.write_register(self.coordinator.heating_circuit, "Z1HolidayTemp", "15")
         await self.coordinator.async_request_refresh()
 
 
@@ -209,18 +209,18 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
 
     # Write "load" to HwcSFMode to start DHW boost
     async def async_turn_on(self, **kwargs: Any) -> None:
-        backend = self.coordinator.ebusd_backend
-        if not backend:
+        ebus = self.coordinator.ebus
+        if not ebus:
             return
-        await backend.async_write(self.coordinator.heating_circuit, "HwcSFMode", "load")
+        await ebus.write_register(self.coordinator.heating_circuit, "HwcSFMode", "load")
         await self.coordinator.async_request_refresh()
 
     # Write "auto" to HwcSFMode to stop DHW boost
     async def async_turn_off(self, **kwargs: Any) -> None:
-        backend = self.coordinator.ebusd_backend
-        if not backend:
+        ebus = self.coordinator.ebus
+        if not ebus:
             return
-        await backend.async_write(self.coordinator.heating_circuit, "HwcSFMode", "auto")
+        await ebus.write_register(self.coordinator.heating_circuit, "HwcSFMode", "auto")
         await self.coordinator.async_request_refresh()
 
 
@@ -252,19 +252,19 @@ class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
 
     # Set DHW holiday from today to far future
     async def async_turn_on(self, **kwargs: Any) -> None:
-        backend = self.coordinator.ebusd_backend
-        if not backend:
+        ebus = self.coordinator.ebus
+        if not ebus:
             return
         today = _today_str()
-        await backend.async_write(self.coordinator.heating_circuit, "HwcHolidayStartPeriod", today)
-        await backend.async_write(self.coordinator.heating_circuit, "HwcHolidayEndPeriod", FAR_FUTURE)
+        await ebus.write_register(self.coordinator.heating_circuit, "HwcHolidayStartPeriod", today)
+        await ebus.write_register(self.coordinator.heating_circuit, "HwcHolidayEndPeriod", FAR_FUTURE)
         await self.coordinator.async_request_refresh()
 
     # Reset DHW holiday dates to unset value
     async def async_turn_off(self, **kwargs: Any) -> None:
-        backend = self.coordinator.ebusd_backend
-        if not backend:
+        ebus = self.coordinator.ebus
+        if not ebus:
             return
-        await backend.async_write(self.coordinator.heating_circuit, "HwcHolidayStartPeriod", UNSET_DATE)
-        await backend.async_write(self.coordinator.heating_circuit, "HwcHolidayEndPeriod", UNSET_DATE)
+        await ebus.write_register(self.coordinator.heating_circuit, "HwcHolidayStartPeriod", UNSET_DATE)
+        await ebus.write_register(self.coordinator.heating_circuit, "HwcHolidayEndPeriod", UNSET_DATE)
         await self.coordinator.async_request_refresh()

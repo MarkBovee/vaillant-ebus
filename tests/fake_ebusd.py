@@ -40,6 +40,19 @@ SENTINELS = {"-", "no data stored", "no data stored (message not available due t
 
 SIGNAL_ACQUIRED = "signal acquired: ebusd test fixture v1.0"
 
+# Known multi-field register field names (field order = semicolon order in raw value).
+# Source: dumpvalues.json from live ebusd dumps.
+MULTI_FIELD_MAP: dict[tuple[str, str], list[str]] = {
+    ("hmu", "SetMode"): [
+        "hcmode", "flowtempdesired", "hwctempdesired", "hwcflowtempdesired",
+        "disablehc", "disablehwctapping", "disablehwcload",
+        "remoteControlHcPump", "releaseBackup", "releaseCooling",
+    ],
+    ("hmu", "DateTime"): ["dcfstate", "btime", "bdate", "temp2"],
+    ("hmu", "RunStatsCompressorHc"): ["runtime", "cycles"],
+    ("hmu", "RunStatsCompressorHwc"): ["runtime", "cycles"],
+}
+
 
 def _last_real_value(lines: list[str]) -> str | None:
     """Return the last non-sentinel value from find output lines."""
@@ -248,30 +261,55 @@ class FakeEbusdServer:
         rest = parts[1:] if len(parts) > 1 else []
         circuit = ""
         name = ""
-        field = ""
+        field: str | None = None
 
         idx = 0
         while idx < len(rest):
             if rest[idx] == "-c" and idx + 1 < len(rest):
                 circuit = rest[idx + 1]
                 idx += 2
+            elif field is None and name and not circuit:
+                name = rest[idx]
+                idx += 1
+            elif name:
+                field = rest[idx]
+                idx += 1
             else:
                 name = rest[idx]
                 idx += 1
-        if not circuit and "_" in name:
-            circuit, name = name.split(".", 1)
+
+        if not circuit:
+            if "." in name:
+                circuit, name = name.split(".", 1)
+            elif not circuit:
+                circuit = parts[1] if len(parts) > 1 else ""
 
         if not circuit or not name:
             return "ERR: missing circuit or name"
-        if field:
-            key = (circuit, name)
-        else:
-            key = (circuit, name)
 
+        key = (circuit, name)
         val = self._registers.get(key)
         if val is None:
             return ""
+
+        if field:
+            return self._extract_field(val, circuit, name, field)
         return val
+
+    @staticmethod
+    def _extract_field(raw_val: str, circuit: str, name: str, field: str) -> str:
+        """Extract a named field from a multi-field semicolon-separated value."""
+        field_names = MULTI_FIELD_MAP.get((circuit, name))
+        if field_names is None:
+            return raw_val
+        parts_val = raw_val.split(";")
+        try:
+            idx = field_names.index(field)
+        except ValueError:
+            return raw_val
+        if idx >= len(parts_val):
+            return ""
+        return parts_val[idx]
 
     def _handle_write(self, parts: list[str]) -> str:
         """Handle ``write [-c circuit] name value...``."""

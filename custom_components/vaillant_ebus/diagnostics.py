@@ -18,10 +18,10 @@ async def async_get_config_entry_diagnostics(
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
     result: dict[str, Any] = {"entry_data": dict(entry.data)}
 
-    if coordinator.ebusd_backend:
+    if coordinator.ebus:
         result["ebusd"] = {
-            "connected": coordinator.ebusd_backend.connected,
-            "version": coordinator.ebusd_backend.version,
+            "connected": coordinator.ebus.is_connected,
+            "version": coordinator.ebus.version,
             "register_count": len(coordinator.registers),
             "entity_count": len(coordinator.entities),
             "circuits": _circuit_summary(coordinator),

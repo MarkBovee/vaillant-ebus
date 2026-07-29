@@ -27,31 +27,56 @@ def _redact(value: str | None, name: str) -> str | None:
     return value
 
 
+# Parse raw find lines into register dicts for dump serialization
+def _parse_find_lines(raw_lines: list[str]) -> list[dict]:
+    result: list[dict] = []
+    for line in raw_lines:
+        line = line.strip()
+        if not line or "=" not in line:
+            continue
+        lhs, rhs = line.split("=", 1)
+        lhs = lhs.strip()
+        rhs = rhs.strip()
+        parts = lhs.split(" ", 1)
+        circuit = parts[0]
+        name = parts[1].strip() if len(parts) > 1 else ""
+        if not name:
+            continue
+        val = rhs
+        key = f"{circuit}.{name}"
+        result.append({
+            "circuit": circuit,
+            "name": name,
+            "key": key,
+            "fields": ["value"],
+            "values": [val],
+            "writable": False,
+            "has_data": val not in ("-", "no data stored", "") and not val.startswith(("(empty ", "(ERR")),
+        })
+    return result
+
+
 # Collect discovered + REGISTER_MAP registers into serializable dicts
 async def _dump_registers(
-    backend, seen_keys: set[str] | None = None
+    ebus, seen_keys: set[str] | None = None
 ) -> tuple[list[dict], set[str], list[str]]:
-    raw_lines = await backend.async_find_lines()
-    discovered = await backend.async_find()
+    raw_lines = await ebus.find_registers()
+    discovered = _parse_find_lines(raw_lines)
     if seen_keys is None:
         seen_keys = set()
     register_list: list[dict] = []
 
     for reg in discovered:
-        seen_keys.add(reg.key)
-        vals = [_redact(reg.value.get(f), reg.name) for f in reg.fields]
+        seen_keys.add(reg["key"])
+        vals = [_redact(v, reg["name"]) for v in reg["values"]]
         entry = {
-            "circuit": reg.circuit,
-            "name": reg.name,
-            "fields": reg.fields,
+            "circuit": reg["circuit"],
+            "name": reg["name"],
+            "fields": reg["fields"],
             "values": vals,
-            "writable": reg.writable,
-            "has_data": reg.has_data,
+            "writable": reg["writable"],
+            "has_data": reg["has_data"],
         }
-        if reg.message_type:
-            entry["message_type"] = reg.message_type
-        if reg.address:
-            entry["address"] = reg.address
         register_list.append(entry)
 
     for key, meta in REGISTER_MAP.items():
@@ -73,7 +98,7 @@ async def _dump_registers(
         if not meta.enabled:
             entry["disabled"] = True
         try:
-            val = await backend.async_read(circuit, name)
+            val = await ebus.read_register(circuit, name)
             if val:
                 entry["values"] = [_redact(val, name)]
                 entry["has_data"] = True
@@ -133,12 +158,12 @@ async def async_export_discovery_dump(
     coordinator: VaillantCoordinator,
     grab_duration: int = 0,
 ) -> None:
-    backend = coordinator.ebusd_backend
-    if not backend or not backend.connected:
+    ebus = coordinator.ebus
+    if not ebus or not ebus.is_connected:
         _LOGGER.error("Cannot export dump: ebusd not connected")
         return
 
-    before_registers, seen, raw_find_lines = await _dump_registers(backend)
+    before_registers, seen, raw_find_lines = await _dump_registers(ebus)
 
     grab_lines = []
     if grab_duration > 0:
@@ -156,7 +181,7 @@ async def async_export_discovery_dump(
     after_registers = []
     after_raw_lines: list[str] = []
     if grab_duration > 0:
-        after_registers, _, after_raw_lines = await _dump_registers(backend)
+        after_registers, _, after_raw_lines = await _dump_registers(ebus)
 
     output_dir = hass.config.path(DOMAIN)
     hass.async_add_executor_job(_mkdir, output_dir)
@@ -166,7 +191,7 @@ async def async_export_discovery_dump(
     dump_data: dict = {
         "metadata": {
             "timestamp": datetime.now().isoformat(),
-            "ebusd_version": backend.version,
+            "ebusd_version": ebus.version,
             "register_count": len(after_registers or before_registers),
             "grab_duration": grab_duration,
             "dump_version": 3,
