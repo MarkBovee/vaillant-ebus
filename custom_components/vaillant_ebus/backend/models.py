@@ -158,7 +158,7 @@ def zero_idle_registers(registers: Mapping[str, EbusdRegister]) -> None:
 
 CIRCUIT_NAMES: dict[str, str] = {
     "hmu": "Vaillant aroTHERM Heat Pump",
-    "ctlv2": "Vaillant CTLV2 Heating Control",
+    "ctlv2": "Vaillant Heating Control",
     "basv": "Vaillant BASV2 Heating Control",
     "z1": "Zone 1",
     "dhw": "Boiler (DHW)",
