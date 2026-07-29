@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 - 2026-07-29
+## 1.2.0 - 2026-07-29
 
 ### Refactored to service architecture
 
