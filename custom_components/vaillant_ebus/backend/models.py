@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from enum import Enum
 
 COMPRESSOR_ACTIVE_STATUS_CODES = {104, 114, 134}
 COMPRESSOR_STATUS_CODES = {
@@ -197,3 +198,35 @@ class WriteResult:
     success: bool
     error_message: str = ""
     verified_value: str | None = None
+
+
+class DeviceType(Enum):
+    HEAT_PUMP = "heat_pump"
+    HEATING_CONTROLLER = "controller"
+    ZONE = "zone"
+    DHW = "dhw"
+    VENTILATION = "ventilation"
+    PASSIVE_COOLING = "cooling"
+    BUS = "bus"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class DeviceNode:
+    circuit: str
+    device_type: DeviceType
+    registers: list[str] = field(default_factory=list)
+    parent: str | None = None
+    zone_circuits: list[str] = field(default_factory=list)
+    heating_circuits: list[str] = field(default_factory=list)
+    has_data: bool = False
+    scan_type: str = ""
+    scan_sw: str = ""
+    scan_hw: str = ""
+
+
+@dataclass
+class DeviceGraph:
+    nodes: dict[str, DeviceNode]
+    raw_registers: dict[str, str]
+    placeholder_registers: set[str]

@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from .ebus_service import EbusService
-from .models import EbusdRegister, RegisterMeta, WriteResult
+from .discovery_service import DiscoveryService
+from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister, RegisterMeta, WriteResult
 from .register_service import ParsedValue, RegisterService, RegisterValue, Writeability
 
 __all__ = [
+    "DeviceGraph",
+    "DeviceNode",
+    "DeviceType",
+    "DiscoveryService",
     "EbusService",
     "EbusdRegister",
     "ParsedValue",
