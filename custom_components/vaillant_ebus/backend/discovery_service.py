@@ -13,8 +13,9 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger("vaillant_ebus.discovery")
 
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
-HIDDEN_CIRCUITS = {"general", "broadcast", "scan"}
+HIDDEN_CIRCUITS = {"general"}
 ALWAYS_HIDDEN = {"memory"}
+HIDDEN_DEVICE_KEYWORDS = {"broadcast", "scan"}
 HIDDEN_REGISTERS = frozenset({"hmu.FlowTemperature", "Broadcast.FlowTemp"})
 SECONDARY_ZONE_CIRCUITS = frozenset({"hc2", "hc3", "z2", "z3"})
 
@@ -213,6 +214,7 @@ class DiscoveryService:
                 device_type=DiscoveryService.categorize_circuit(circuit, regs, scan_type),
                 registers=regs,
                 has_data=any(raw_registers.get(rk) is not None for rk in regs),
+                hidden=any(kw in circuit.lower() for kw in HIDDEN_DEVICE_KEYWORDS),
                 scan_type=scan_type,
                 scan_sw=scan_sw,
                 scan_hw=scan_hw,

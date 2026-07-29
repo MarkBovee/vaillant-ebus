@@ -209,6 +209,8 @@ class EntityFactoryService:
                     dc = override["device_circuit"]
 
                 entity_enabled = _determine_enabled_by_default(rk, raw, node.has_data, meta)
+                if node.hidden:
+                    entity_enabled = False
 
                 dummy_reg = EbusdRegister(
                     circuit=circuit,
