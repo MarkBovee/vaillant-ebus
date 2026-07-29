@@ -7,6 +7,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+from tests.fake_ebusd import load_find_lines
+
 BACKEND_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend"
 COMPONENT_PATH = BACKEND_PATH.parent
 
@@ -30,6 +32,24 @@ assert MAPPING_SPEC and MAPPING_SPEC.loader
 MAPPING = importlib.util.module_from_spec(MAPPING_SPEC)
 sys.modules["vaillant_ebus.backend.mapping"] = MAPPING
 MAPPING_SPEC.loader.exec_module(MAPPING)
+
+EBUS_SPEC = importlib.util.spec_from_file_location(
+    "vaillant_ebus.backend.ebus_service", BACKEND_PATH / "ebus_service.py"
+)
+assert EBUS_SPEC and EBUS_SPEC.loader
+EBUS_MOD = importlib.util.module_from_spec(EBUS_SPEC)
+sys.modules["vaillant_ebus.backend.ebus_service"] = EBUS_MOD
+EBUS_SPEC.loader.exec_module(EBUS_MOD)
+EbusService = EBUS_MOD.EbusService
+
+DISCOVERY_SPEC = importlib.util.spec_from_file_location(
+    "vaillant_ebus.backend.discovery_service", BACKEND_PATH / "discovery_service.py"
+)
+assert DISCOVERY_SPEC and DISCOVERY_SPEC.loader
+DISCOVERY = importlib.util.module_from_spec(DISCOVERY_SPEC)
+sys.modules["vaillant_ebus.backend.discovery_service"] = DISCOVERY
+DISCOVERY_SPEC.loader.exec_module(DISCOVERY)
+DiscoveryService = DISCOVERY.DiscoveryService
 
 FACTORY_SPEC = importlib.util.spec_from_file_location(
     "vaillant_ebus.backend.entity_factory", BACKEND_PATH / "entity_factory.py"
@@ -317,3 +337,64 @@ class TestLegacyWrapper:
             assert False, "Should have raised NotImplementedError"
         except NotImplementedError:
             pass
+
+
+# =============================================================================
+# Integration tests with real fixture data
+# =============================================================================
+
+
+class TestGenerateFromFixtureGraphs:
+    """Entity generation from real fixture DeviceGraphs."""
+
+    def test_generate_from_arotherm_graph(self):
+        lines = load_find_lines("arotherm_find.txt")
+        graph = DiscoveryService.build_device_graph(lines)
+        svc = EntityFactoryService()
+        entities = svc.generate(graph)
+        assert len(entities) > 50
+        assert any(e.circuit == "hmu" for e in entities)
+        assert any(e.circuit == "ctlv2" for e in entities)
+        for e in entities:
+            assert isinstance(e.unique_id, str)
+            assert isinstance(e.key, str)
+        assert any(e.enabled_by_default for e in entities)
+
+    def test_generate_from_basv_graph(self):
+        lines = load_find_lines("community/basv_find.txt")
+        graph = DiscoveryService.build_device_graph(lines)
+        svc = EntityFactoryService()
+        entities = svc.generate(graph)
+        assert len(entities) > 0
+        assert any(e.circuit == "basv" for e in entities), "Expected entities from basv circuit"
+
+    def test_yaml_override_icon(self):
+        lines = load_find_lines("arotherm_find.txt")
+        graph = DiscoveryService.build_device_graph(lines)
+        svc = EntityFactoryService()
+        yaml = {"hmu.CurrentConsumedPower": {"icon": "mdi:flash"}}
+        entities = svc.generate(graph, yaml_overrides=yaml)
+        matches = [e for e in entities if e.key == "hmu.CurrentConsumedPower.value"]
+        assert matches, "Expected hmu.CurrentConsumedPower entity"
+        assert matches[0].meta.icon == "mdi:flash"
+
+    def test_yaml_override_entity_type(self):
+        lines = load_find_lines("arotherm_find.txt")
+        graph = DiscoveryService.build_device_graph(lines)
+        svc = EntityFactoryService()
+        yaml = {"ctlv2.Z1DayTemp": {"entity_type": "number"}}
+        entities = svc.generate(graph, yaml_overrides=yaml)
+        matches = [e for e in entities if e.key == "ctlv2.Z1DayTemp.value"]
+        assert matches, "Expected ctlv2.Z1DayTemp entity"
+        assert matches[0].entity_type == "number"
+
+    def test_virtual_register_from_registermap(self):
+        graph = DeviceGraph(
+            nodes={},
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+        svc = EntityFactoryService()
+        entities = svc.generate(graph)
+        assert len(entities) > 0, "Expected fallback entities from REGISTER_MAP"
+        assert all(e.register.has_data is False for e in entities)

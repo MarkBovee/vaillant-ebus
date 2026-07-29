@@ -373,3 +373,39 @@ async def test_hydrate_from_cache_caches_ebusd_result() -> None:
     result2 = await svc.read("hmu", "Status")
     assert result2.raw == "first_read"
     assert ebus.read_register.call_count == 1
+
+
+# =============================================================================
+# G. Edge case parsing tests
+# =============================================================================
+
+
+def test_parse_bcd_datetime_with_semicolons() -> None:
+    svc = _service()
+    result = svc.parse_value("12:07:57;26.07.2026", "BCD")
+    assert result.value is not None
+    assert result.is_placeholder is False
+
+
+async def test_read_caches_subsequent_calls() -> None:
+    ebus = _mock_ebus()
+    ebus.read_register.return_value = "22.0"
+    svc = RegisterService(ebus)
+    result1 = await svc.read("hmu", "Status", "DATA1b")
+    assert result1.raw == "22.0"
+    result2 = await svc.read("hmu", "Status", "DATA1b")
+    assert result2.raw == "22.0"
+    assert ebus.read_register.call_count == 1
+
+
+async def test_write_readability_check_called() -> None:
+    ebus = _mock_ebus()
+    ebus.send_command.return_value = SendResult(
+        data="name=HwcTempDesired, circuit=ctlv2, value=45, writable=true"
+    )
+    ebus.write_register.return_value = WriteResult(success=True, verified_value="45")
+    svc = RegisterService(ebus)
+    result = await svc.write("ctlv2", "HwcTempDesired", "45")
+    assert result.success is True
+    assert ebus.send_command.called
+    assert ebus.write_register.called

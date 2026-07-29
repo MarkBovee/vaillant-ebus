@@ -10,6 +10,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+from tests.fake_ebusd import FakeEbusdServer, load_find_lines
+
 PROJECT_ROOT = Path(__file__).parents[1]
 COMPONENT_PATH = PROJECT_ROOT / "custom_components/vaillant_ebus"
 BACKEND_PATH = COMPONENT_PATH / "backend"
@@ -424,3 +426,106 @@ async def test_get_device_info_no_graph_fallback() -> None:
 
         info = c.get_device_info("hmu")
         assert "hmu" in str(info["identifiers"])
+
+
+async def test_orchestration_order() -> None:
+    call_log: list[str] = []
+
+    class LoggingEbus(MagicMock):
+        pass
+
+    mock_ebus = LoggingEbus(spec=EbusService)
+    mock_ebus.is_connected = True
+    mock_ebus.version = "23.2"
+
+    async def connect():
+        call_log.append("connect")
+    mock_ebus.connect = connect
+
+    async def define_register(defn):
+        call_log.append("define")
+        return "done"
+    mock_ebus.define_register = define_register
+
+    async def find_registers():
+        call_log.append("find")
+        return ["hmu Status01 = standby"]
+    mock_ebus.find_registers = find_registers
+
+    async def read_register(circuit, name):
+        return None
+    mock_ebus.read_register = read_register
+
+    module = sys.modules["vaillant_ebus.coordinator"]
+    orig_ebus = module.EbusService
+    module.EbusService = MagicMock(return_value=mock_ebus)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            c = VaillantCoordinator(_hass(tmpdir), _entry())
+            await c._ebusd_connect_and_discover()
+
+            assert "connect" in call_log
+            assert "define" in call_log
+            assert "find" in call_log
+            assert call_log.index("connect") < call_log.index("define") < call_log.index("find")
+            assert len(c.entities) > 0
+    finally:
+        module.EbusService = orig_ebus
+
+
+async def test_connect_failure_repair_issue() -> None:
+    mock_ebus = MagicMock(spec=EbusService)
+    mock_ebus.connect = AsyncMock(side_effect=ConnectionError("refused"))
+
+    module = sys.modules["vaillant_ebus.coordinator"]
+    orig_ebus = module.EbusService
+    module.EbusService = MagicMock(return_value=mock_ebus)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            c = VaillantCoordinator(_hass(tmpdir), _entry())
+            entities_before = len(c.entities)
+            await c._ebusd_connect_and_discover()
+            assert c._ebusd_connected is False
+            assert len(c.entities) >= entities_before
+    finally:
+        module.EbusService = orig_ebus
+
+
+async def test_entities_regenerated_with_fresh_graph() -> None:
+    async with FakeEbusdServer("arotherm_find.txt") as _:
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.version = "23.2"
+        mock_ebus.connect = AsyncMock()
+
+        async def dfn(d):
+            return "defined"
+        mock_ebus.define_register = dfn
+
+        find_lines = load_find_lines("arotherm_find.txt")
+
+        async def find_regs():
+            return find_lines
+        mock_ebus.find_registers = find_regs
+
+        async def read_reg(circuit, name):
+            return None
+        mock_ebus.read_register = read_reg
+
+        mock_factory = MagicMock()
+        mock_factory.generate = MagicMock(return_value=[MagicMock() for _ in range(5)])
+
+        module = sys.modules["vaillant_ebus.coordinator"]
+        orig_ebus = module.EbusService
+        module.EbusService = MagicMock(return_value=mock_ebus)
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                c = VaillantCoordinator(_hass(tmpdir), _entry())
+                c.entity_factory = mock_factory
+                await c._ebusd_connect_and_discover()
+
+                mock_factory.generate.assert_called()
+                assert len(c.entities) == 5
+                assert c._graph is not None
+        finally:
+            module.EbusService = orig_ebus

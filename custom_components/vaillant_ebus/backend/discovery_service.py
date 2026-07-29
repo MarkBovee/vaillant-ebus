@@ -390,12 +390,8 @@ def _apply_relationships(
         sub_name = _sub_name(sub_key)
         if sub_name not in nodes:
             continue
-        if sub_name.startswith("hc") and sub_name[2:].isdigit():
-            if heat_pump:
-                nodes[sub_name].parent = heat_pump.circuit
-        else:
-            if parent_circuit in nodes:
-                nodes[sub_name].parent = parent_circuit
+        if parent_circuit in nodes:
+            nodes[sub_name].parent = parent_circuit
 
 
 _SCAN_TO_DEVICE: dict[str, DeviceType] = {
