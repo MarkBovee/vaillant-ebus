@@ -385,8 +385,7 @@ def test_relationships_vwz_independent() -> None:
 
 def test_relationships_broadcast_parent() -> None:
     graph = _arotherm_graph()
-    assert graph.nodes["Broadcast"].hidden is True
-    assert graph.nodes["Broadcast"].parent == "hmu"
+    assert "Broadcast" not in graph.nodes
 
 
 def test_relationships_hmu_is_root() -> None:
@@ -463,7 +462,7 @@ async def test_integration_arotherm_discover_device_types() -> None:
 
         assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
         assert graph.nodes["ctlv2"].device_type == DeviceType.HEATING_CONTROLLER
-        assert graph.nodes["Broadcast"].hidden is True
+        assert "Broadcast" not in graph.nodes
 
 
 async def test_integration_arotherm_parent_relationships() -> None:
@@ -479,7 +478,7 @@ async def test_integration_arotherm_parent_relationships() -> None:
         assert graph.nodes["z1"].parent == "ctlv2"
         assert graph.nodes["hc1"].parent == "ctlv2"
         assert graph.nodes["dhw"].parent == "ctlv2"
-        assert graph.nodes["Broadcast"].hidden is True
+        assert "Broadcast" not in graph.nodes
 
 
 async def test_integration_arotherm_has_data() -> None:

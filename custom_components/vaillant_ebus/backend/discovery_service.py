@@ -13,9 +13,8 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger("vaillant_ebus.discovery")
 
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
-HIDDEN_CIRCUITS = {"general"}
 ALWAYS_HIDDEN = {"memory"}
-HIDDEN_DEVICE_KEYWORDS = {"broadcast", "scan"}
+HIDDEN_DEVICE_KEYWORDS = {"broadcast", "scan", "general"}
 HIDDEN_REGISTERS = frozenset({"hmu.FlowTemperature", "Broadcast.FlowTemp"})
 SECONDARY_ZONE_CIRCUITS = frozenset({"hc2", "hc3", "z2", "z3"})
 
@@ -100,7 +99,7 @@ class DiscoveryService:
         n_lower = name.lower()
         if c_lower.startswith("scan"):
             return True
-        if c_lower in ALWAYS_HIDDEN or c_lower in HIDDEN_CIRCUITS:
+        if c_lower in ALWAYS_HIDDEN or any(kw in c_lower for kw in HIDDEN_DEVICE_KEYWORDS):
             return True
         if n_lower.startswith(("cctimer_", "hwctimer_", "z1timer_", "z2timer_", "z3timer_")):
             return True
@@ -193,7 +192,7 @@ class DiscoveryService:
             c_lower = circuit.lower()
             if c_lower.startswith("scan"):
                 continue
-            if c_lower in ALWAYS_HIDDEN or c_lower in HIDDEN_CIRCUITS:
+            if c_lower in ALWAYS_HIDDEN or any(kw in c_lower for kw in HIDDEN_DEVICE_KEYWORDS):
                 continue
 
             scan_info = scan_by_circuit.get(circuit)
@@ -209,12 +208,13 @@ class DiscoveryService:
                     continue
                 regs.append(rk)
 
+            if any(kw in circuit.lower() for kw in HIDDEN_DEVICE_KEYWORDS):
+                continue
             node = DeviceNode(
                 circuit=circuit,
                 device_type=DiscoveryService.categorize_circuit(circuit, regs, scan_type),
                 registers=regs,
                 has_data=any(raw_registers.get(rk) is not None for rk in regs),
-                hidden=any(kw in circuit.lower() for kw in HIDDEN_DEVICE_KEYWORDS),
                 scan_type=scan_type,
                 scan_sw=scan_sw,
                 scan_hw=scan_hw,
@@ -268,7 +268,7 @@ def _detect_sub_devices(
     result: dict[str, tuple[str, DeviceType]] = {}
     for circuit, reg_keys in regs_by_circuit.items():
         c_lower = circuit.lower()
-        if c_lower.startswith(("scan", "broadcast")) or c_lower in ALWAYS_HIDDEN | HIDDEN_CIRCUITS:
+        if any(kw in c_lower for kw in HIDDEN_DEVICE_KEYWORDS) or c_lower in ALWAYS_HIDDEN:
             continue
         reg_names = {rk.split(".", 1)[1] for rk in reg_keys if "." in rk}
         hwc_seen = any(

@@ -220,7 +220,6 @@ class DeviceNode:
     zone_circuits: list[str] = field(default_factory=list)
     heating_circuits: list[str] = field(default_factory=list)
     has_data: bool = False
-    hidden: bool = False
     scan_type: str = ""
     scan_sw: str = ""
     scan_hw: str = ""
