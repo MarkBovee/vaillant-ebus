@@ -154,14 +154,17 @@ def _resolve_device_circuit(
     register_key: str,
     node: DeviceNode,
     graph: DeviceGraph,
-) -> str:
-    """Determine which HA device group this entity belongs to from the device graph."""
+) -> str | None:
+    """Determine which HA device group this entity belongs to from the device graph.
+
+    Returns None when the entity should be suppressed (no-data orphan circuit).
+    """
     parent = node.parent
     if node.has_data:
         return node.circuit
     if parent:
         return parent
-    return node.circuit
+    return None
 
 
 class EntityFactoryService:
@@ -198,6 +201,8 @@ class EntityFactoryService:
                 meta = _merge_overrides(base_meta, override)
 
                 dc = _resolve_device_circuit(rk, node, graph)
+                if dc is None:
+                    continue
                 if override.get("device_circuit"):
                     dc = override["device_circuit"]
 
@@ -238,10 +243,16 @@ class EntityFactoryService:
 
             circuit, name = map_key.split(".", 1)
 
+            # Skip fallback entities for orphan circuits (not in graph or no-data-no-parent)
+            if circuit in graph.nodes:
+                dc = _resolve_device_circuit(map_key, graph.nodes[circuit], graph)
+                if dc is None:
+                    continue
+            else:
+                dc = circuit
+
             override = overrides.get(map_key) or {}
             meta = _merge_overrides(meta, override)
-
-            dc = circuit
 
             dummy_reg = EbusdRegister(
                 circuit=circuit,

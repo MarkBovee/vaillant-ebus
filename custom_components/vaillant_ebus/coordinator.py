@@ -239,8 +239,14 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if scan_type:
             name = f"Vaillant {scan_type}"
+        elif circuit in CIRCUIT_NAMES:
+            name = CIRCUIT_NAMES[circuit]
+        elif circuit.startswith("z"):
+            name = f"Zone {circuit[1:]}"
+        elif circuit.startswith("hc"):
+            name = f"Heating Circuit {circuit[2:]}"
         else:
-            name = CIRCUIT_NAMES.get(circuit, f"Vaillant ({circuit})")
+            name = f"Vaillant {circuit}"
 
         via_device: tuple[str, str] | None = None
         if parent:
