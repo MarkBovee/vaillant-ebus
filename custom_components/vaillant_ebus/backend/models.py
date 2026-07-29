@@ -160,7 +160,7 @@ CIRCUIT_NAMES: dict[str, str] = {
     "hmu": "Vaillant aroTHERM Heat Pump",
     "ctlv2": "Vaillant CTLV2 Heating Control",
     "basv": "Vaillant BASV2 Heating Control",
-    "z1": "Zone 1 (Woonkamer)",
+    "z1": "Zone 1",
     "dhw": "Boiler (DHW)",
     "hc1": "Heating Circuit 1",
     "Broadcast": "Vaillant eBUS (Diagnostic)",
