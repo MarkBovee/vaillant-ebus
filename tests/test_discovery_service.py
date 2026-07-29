@@ -189,13 +189,11 @@ def test_build_graph_arotherm() -> None:
     circuits = {n: node.device_type for n, node in graph.nodes.items()}
     assert "hmu" in circuits
     assert "ctlv2" in circuits
-    assert "Broadcast" in circuits
     assert "hc1" in circuits
     assert "z1" in circuits
     assert "dhw" in circuits
     assert circuits["hmu"] == DeviceType.HEAT_PUMP
     assert circuits["ctlv2"] == DeviceType.HEATING_CONTROLLER
-    assert circuits["Broadcast"] == DeviceType.BUS
     assert circuits["z1"] == DeviceType.ZONE
     assert circuits["dhw"] == DeviceType.DHW
 
@@ -387,7 +385,7 @@ def test_relationships_vwz_independent() -> None:
 
 def test_relationships_broadcast_parent() -> None:
     graph = _arotherm_graph()
-    assert graph.nodes["Broadcast"].parent == "hmu"
+    assert "Broadcast" not in graph.nodes
 
 
 def test_relationships_hmu_is_root() -> None:
@@ -464,7 +462,7 @@ async def test_integration_arotherm_discover_device_types() -> None:
 
         assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
         assert graph.nodes["ctlv2"].device_type == DeviceType.HEATING_CONTROLLER
-        assert graph.nodes["Broadcast"].device_type == DeviceType.BUS
+        assert "Broadcast" not in graph.nodes
 
 
 async def test_integration_arotherm_parent_relationships() -> None:
@@ -480,7 +478,7 @@ async def test_integration_arotherm_parent_relationships() -> None:
         assert graph.nodes["z1"].parent == "ctlv2"
         assert graph.nodes["hc1"].parent == "ctlv2"
         assert graph.nodes["dhw"].parent == "ctlv2"
-        assert graph.nodes["Broadcast"].parent == "hmu"
+        assert "Broadcast" not in graph.nodes
 
 
 async def test_integration_arotherm_has_data() -> None:
@@ -494,7 +492,6 @@ async def test_integration_arotherm_has_data() -> None:
 
         assert graph.nodes["hmu"].has_data is True
         assert graph.nodes["ctlv2"].has_data is True
-        assert graph.nodes["Broadcast"].has_data is True
         assert graph.nodes["z1"].has_data is True
         assert graph.nodes["dhw"].has_data is True
         assert graph.nodes["vwz"].has_data is False

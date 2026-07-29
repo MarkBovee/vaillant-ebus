@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger("vaillant_ebus.discovery")
 
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
-HIDDEN_CIRCUITS = {"general"}
+HIDDEN_CIRCUITS = {"general", "broadcast", "scan"}
 ALWAYS_HIDDEN = {"memory"}
 HIDDEN_REGISTERS = frozenset({"hmu.FlowTemperature", "Broadcast.FlowTemp"})
 SECONDARY_ZONE_CIRCUITS = frozenset({"hc2", "hc3", "z2", "z3"})
