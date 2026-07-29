@@ -7,6 +7,38 @@
 Monolithic coordinator split into 5 independent services with dedicated
 test fixtures from 3 real systems (aroTHERM, flexoCOMPACT/BASV2, recoVAIR/V32).
 
+### Technical rationale and discovery contract
+
+The previous coordinator coupled TCP I/O, raw-value parsing, register
+existence, device topology, entity generation, and HA registry state. This
+made an installation-specific assumption in any layer difficult to isolate or
+test.
+
+The 1.2.0 pipeline is:
+
+```text
+ebusd find + scan metadata
+  -> DiscoveryService: DeviceGraph
+  -> EntityFactoryService: EntityDescriptions
+  -> Home Assistant platforms
+```
+
+- The graph is derived from discovered circuits and register names. There is no
+  static inventory of entities, devices, zones, or registers.
+- `REGISTER_MAP` supplies presentation metadata only (name, icon, unit, and
+  platform hints); it cannot create an entity for a register absent from
+  discovery.
+- Scan metadata and generic register-prefix rules classify known hardware.
+  An unrecognized type becomes an `UNKNOWN` graph node, but retains its ebusd
+  circuit, scan type, SW/HW versions, and discovered entities. Home Assistant
+  can therefore expose it as `Vaillant <scan type>` without an allowlist.
+- `CIRCUIT_NAMES` remains the narrow exception: it contains display labels
+  only, not topology or entity-existence decisions.
+
+New hardware support now starts with a raw `find`/scan dump: add it as a
+fixture, exercise the same discovery pipeline, and assert the resulting graph
+before adding any special handling.
+
 - **EbusService** — TCP transport only, no register semantics.
 - **RegisterService** — value parsing (DATA1b, EXP, BCD, IGN, STR),
   sentinel detection ("Open", "no data stored"), writeability from
@@ -52,9 +84,11 @@ test fixtures from 3 real systems (aroTHERM, flexoCOMPACT/BASV2, recoVAIR/V32).
 ### Tests
 
 - 210 total (was 41) — 184 new tests
-- 3-system fixture coverage: aroTHERM, BASV2, V32
+- Raw discovery-dump coverage from three real systems: aroTHERM, community
+  flexoCOMPACT/BASV2 with vwzIO, and community recoVAIR/V32.
 - FakeEbusdServer for integration tests
-- Community fixtures validate non-aroTHERM hardware
+- Community fixtures verify BASV2 controller, passive-cooling, and ventilation
+  classification; unknown circuits still produce safe `UNKNOWN` nodes.
 - All services tested with mocked dependencies
 - Entity-routing tests cover single-zone, active/inactive secondary-zone,
   DHW, YAML override, and dynamic `ctlv0`/`ctlv2`/`ctlv9` naming behavior.

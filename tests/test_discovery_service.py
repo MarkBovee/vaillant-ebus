@@ -169,6 +169,22 @@ def test_categorize_unknown_circuit() -> None:
     assert result == DeviceType.UNKNOWN
 
 
+# Intent: retain scan metadata and entities for an unclassified ebusd device.
+def test_unknown_scan_type_retains_ebusd_metadata() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.01 = Vaillant;XYZ01;1234;5678",
+            "xyz Status = ready",
+        ]
+    )
+    node = graph.nodes["xyz"]
+    assert node.device_type == DeviceType.UNKNOWN
+    assert node.scan_type == "XYZ01"
+    assert node.scan_sw == "1234"
+    assert node.scan_hw == "5678"
+    assert node.registers == ["xyz.Status"]
+
+
 def test_categorize_by_register_z1opmode() -> None:
     result = DiscoveryService.categorize_circuit("unknown_ckt", ["unknown_ckt.Z1OpMode"], "")
     assert result == DeviceType.HEATING_CONTROLLER
