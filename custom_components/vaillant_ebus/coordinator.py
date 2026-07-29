@@ -14,7 +14,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from . import repairs
-from .backend.discovery_service import DiscoveryService
+from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService
 from .backend.ebus_service import EbusService
 from .backend.entity_factory import EntityDescription, EntityFactoryService
 from .backend.mapping import REGISTER_MAP
@@ -99,6 +99,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if len(parts) < 2:
                 continue
             circuit, name = parts[0], parts[1]
+            if any(kw in circuit.lower() for kw in HIDDEN_DEVICE_KEYWORDS):
+                continue
             rk = f"{circuit}.{name}"
             raw_registers[rk] = cached_value
             regs_by_circuit.setdefault(circuit, []).append(rk)
