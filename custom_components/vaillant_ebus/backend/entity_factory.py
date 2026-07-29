@@ -11,6 +11,7 @@ from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister
 _LOGGER = logging.getLogger("vaillant_ebus.entity")
 
 _PLACEHOLDER_VALUES = frozenset({"-", "no data stored", "empty", "", "unknown", "unavailable"})
+_DHW_PREFIXES = ("dhw", "hwc", "cylinder", "maxcylinder", "solar")
 
 
 class EntityDescription:
@@ -169,6 +170,56 @@ def _resolve_device_circuit(
     return None
 
 
+# Intent: return a zone or heating-circuit number from a register name.
+def _extract_prefixed_number(name: str, prefix: str) -> str:
+    suffix = name[len(prefix) :]
+    digits = ""
+    for character in suffix:
+        if not character.isdigit():
+            break
+        digits += character
+    return digits
+
+
+# Intent: place controller-owned sub-device registers on their logical devices.
+def _redistribute_device_assignments(
+    entities: list[EntityDescription],
+    graph: DeviceGraph,
+    yaml_overrides: dict[str, dict[str, Any]],
+) -> list[EntityDescription]:
+    active_zones = {
+        node.circuit
+        for node in graph.nodes.values()
+        if node.device_type == DeviceType.ZONE and node.has_data
+    }
+    redistributed: list[EntityDescription] = []
+
+    for entity in entities:
+        override = yaml_overrides.get(f"{entity.circuit}.{entity.name}", {})
+        if override.get("device_circuit"):
+            redistributed.append(entity)
+            continue
+
+        name_lower = entity.name.lower()
+        zone_number = _extract_prefixed_number(name_lower, "z") if name_lower.startswith("z") else ""
+        heating_circuit_number = (
+            _extract_prefixed_number(name_lower, "hc") if name_lower.startswith("hc") else ""
+        )
+        target_zone = f"z{zone_number or heating_circuit_number}"
+
+        if zone_number or heating_circuit_number:
+            if target_zone in active_zones:
+                entity._device_circuit = target_zone
+            elif target_zone != "z1":
+                continue
+        elif name_lower.startswith(_DHW_PREFIXES) and "dhw" in graph.nodes:
+            entity._device_circuit = "dhw"
+
+        redistributed.append(entity)
+
+    return redistributed
+
+
 class EntityFactoryService:
     """Pure mapper: device graph + REGISTER_MAP → EntityDescription list."""
 
@@ -234,6 +285,7 @@ class EntityFactoryService:
                 )
                 entities.append(entity)
 
+        entities = _redistribute_device_assignments(entities, graph, overrides)
         _LOGGER.info("Generated %d entity descriptions from device graph", len(entities))
         return entities
 

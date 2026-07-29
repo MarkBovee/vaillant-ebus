@@ -252,13 +252,20 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             scan_hw = node.scan_hw
             parent = node.parent
 
-        if scan_type:
+        circuit_lower = circuit.lower()
+        if circuit_lower in CIRCUIT_NAMES:
+            name = CIRCUIT_NAMES[circuit_lower]
+        elif (
+            len(circuit_lower) == 5
+            and circuit_lower.startswith("ctlv")
+            and circuit_lower[-1].isdigit()
+        ):
+            name = "Vaillant sensoCOMFORT Control"
+        elif scan_type:
             name = f"Vaillant {scan_type}"
-        elif circuit in CIRCUIT_NAMES:
-            name = CIRCUIT_NAMES[circuit]
-        elif circuit.startswith("z"):
+        elif circuit_lower.startswith("z"):
             name = f"Zone {circuit[1:]}"
-        elif circuit.startswith("hc"):
+        elif circuit_lower.startswith("hc"):
             name = f"Heating Circuit {circuit[2:]}"
         else:
             name = f"Vaillant {circuit}"

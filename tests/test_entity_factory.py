@@ -81,7 +81,12 @@ def _build_graph(overrides: dict | None = None) -> DeviceGraph:
         "ctlv2": DeviceNode(
             circuit="ctlv2",
             device_type=DeviceType.HEATING_CONTROLLER,
-            registers=[],
+            registers=[
+                "ctlv2.Date",
+                "ctlv2.Hc1FlowTemp",
+                "ctlv2.Hc2FlowTemp",
+                "ctlv2.DhwFlowTemp",
+            ],
             has_data=True,
             zone_circuits=["z1"],
             heating_circuits=["hc1"],
@@ -109,6 +114,8 @@ def _build_graph(overrides: dict | None = None) -> DeviceGraph:
             parent="ctlv2",
             has_data=ov.get("z2_has_data", False),
         )
+        nodes["ctlv2"].zone_circuits.append("z2")
+        nodes["ctlv2"].heating_circuits.append("hc2")
     return DeviceGraph(
         nodes=nodes,
         raw_registers={
@@ -119,6 +126,10 @@ def _build_graph(overrides: dict | None = None) -> DeviceGraph:
             "ctlv2.Z1OpMode": "day",
             "ctlv2.HwcTempDesired": "45",
             "ctlv2.HwcOpMode": "day",
+            "ctlv2.Date": "29.07.2026",
+            "ctlv2.Hc1FlowTemp": "35.5",
+            "ctlv2.Hc2FlowTemp": "30.5",
+            "ctlv2.DhwFlowTemp": "45.0",
         },
         placeholder_registers=set(),
     )
@@ -176,13 +187,13 @@ class TestDeviceCircuitResolution:
         assert z1_entities, "Expected Z1DayTemp entity"
         assert z1_entities[0].device_circuit == "ctlv2", f"Expected ctlv2, got {z1_entities[0].device_circuit}"
 
-    def test_device_circuit_z2_without_data(self):
+    # Intent: exclude an inactive secondary zone instead of folding it into ctlv2.
+    def test_inactive_z2_is_suppressed(self):
         graph = _build_graph({"include_z2": True, "z2_has_data": False})
         svc = EntityFactoryService()
         result = svc.generate(graph)
         z2_entities = [e for e in result if e.name == "Z2DayTemp"]
-        assert z2_entities, "Expected Z2DayTemp entity"
-        assert z2_entities[0].device_circuit == "ctlv2", f"Expected ctlv2, got {z2_entities[0].device_circuit}"
+        assert not z2_entities, "Inactive secondary zones must not create entities"
 
     def test_device_circuit_dhw(self):
         graph = _build_graph()
@@ -199,6 +210,38 @@ class TestDeviceCircuitResolution:
         hmu_entities = [e for e in result if e.name == "FlowTemp"]
         assert hmu_entities, "Expected FlowTemp entity"
         assert hmu_entities[0].device_circuit == "hmu", f"Expected hmu, got {hmu_entities[0].device_circuit}"
+
+    # Intent: route controller-owned HC and DHW registers to logical devices.
+    def test_controller_owned_registers_route_to_logical_devices(self):
+        graph = _build_graph()
+        result = EntityFactoryService().generate(graph)
+        circuits = {entity.name: entity.device_circuit for entity in result}
+        assert circuits["Hc1FlowTemp"] == "z1"
+        assert circuits["DhwFlowTemp"] == "dhw"
+        assert circuits["Date"] == "ctlv2"
+
+    # Intent: ensure an inactive HC2 does not leak onto the controller device.
+    def test_inactive_secondary_zone_register_is_suppressed(self):
+        graph = _build_graph({"include_z2": True, "z2_has_data": False})
+        result = EntityFactoryService().generate(graph)
+        assert all(entity.name != "Hc2FlowTemp" for entity in result)
+
+    # Intent: route an active secondary heating circuit to its matching zone.
+    def test_active_secondary_zone_register_routes_to_zone(self):
+        graph = _build_graph({"include_z2": True, "z2_has_data": True})
+        result = EntityFactoryService().generate(graph)
+        circuits = {entity.name: entity.device_circuit for entity in result}
+        assert circuits["Hc2FlowTemp"] == "z2"
+
+    # Intent: preserve explicit user-selected device routing.
+    def test_device_circuit_override_wins_over_redistribution(self):
+        graph = _build_graph()
+        result = EntityFactoryService().generate(
+            graph,
+            yaml_overrides={"ctlv2.Hc1FlowTemp": {"device_circuit": "custom"}},
+        )
+        entity = next(entity for entity in result if entity.name == "Hc1FlowTemp")
+        assert entity.device_circuit == "custom"
 
 
 class TestEnabledByDefault:

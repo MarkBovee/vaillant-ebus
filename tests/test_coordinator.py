@@ -344,7 +344,23 @@ async def test_get_device_info_uses_graph() -> None:
         c.ebus.version = "23.2"
 
         info = c.get_device_info("hmu")
-        assert "HMU00" in info.get("name", "")
+        assert info.get("name") == "Vaillant aroTHERM heat pump"
+
+
+# Intent: prefer configured names without changing stable circuit identifiers.
+async def test_get_device_info_prefers_circuit_names() -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            c = VaillantCoordinator(_hass(tmpdir), _entry())
+            c._graph = _make_graph()
+            c.ebus = MagicMock()
+            c.ebus.version = "23.2"
+
+            for circuit in ("ctlv0", "ctlv2", "ctlv9"):
+                info = c.get_device_info(circuit)
+                assert info.get("name") == "Vaillant sensoCOMFORT Control"
+                assert info["identifiers"] == {("vaillant_ebus", circuit)}
+            assert c.get_device_info("z1").get("name") == "Zone 1"
+            assert c.get_device_info("hmu")["identifiers"] == {("vaillant_ebus", "hmu")}
 
 
 async def test_entities_generated_after_discovery() -> None:

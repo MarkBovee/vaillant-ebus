@@ -34,16 +34,30 @@ test fixtures from 3 real systems (aroTHERM, flexoCOMPACT/BASV2, recoVAIR/V32).
   for diagnostics.
 - BUS type devices (Broadcast) grouped under parent (hmu).
 - Orphan circuits (no data, no parent) fully suppressed.
-- Device naming: cleaner fallback for zones (ZN→"Zone N"),
-  heating circuits (HcN→"Heating Circuit N").
+- **Logical entity grouping restored**: controller-owned `Z<n>*` and
+  `Hc<n>*` registers are assigned to active `z<n>` devices; `Dhw*`, `Hwc*`,
+  cylinder, and solar registers are assigned to the DHW device. This prevents
+  no-data child nodes from folding useful entities back onto the controller.
+- **Inactive secondary zones suppressed**: `z2+`/`hc2+` entities are omitted
+  when their matching zone has no data, preventing ghost devices and entities.
+  Explicit YAML `device_circuit` overrides continue to take precedence, and
+  entity unique IDs and data keys are unchanged.
+- **Stable device names**: `hmu` is shown as "Vaillant aroTHERM heat pump",
+  `z1` as "Zone 1", and every `ctlv0` through `ctlv9` controller as
+  "Vaillant sensoCOMFORT Control". Fixed names take precedence over scan
+  metadata so existing device identifiers retain a consistent display name.
+- Fallback names remain dynamic for zones (`ZN` → "Zone N") and heating
+  circuits (`HcN` → "Heating Circuit N").
 
 ### Tests
 
-- 205 total (was 41) — 179 new tests
+- 210 total (was 41) — 184 new tests
 - 3-system fixture coverage: aroTHERM, BASV2, V32
 - FakeEbusdServer for integration tests
 - Community fixtures validate non-aroTHERM hardware
 - All services tested with mocked dependencies
+- Entity-routing tests cover single-zone, active/inactive secondary-zone,
+  DHW, YAML override, and dynamic `ctlv0`/`ctlv2`/`ctlv9` naming behavior.
 
 ## 1.1.2 - 2026-07-28
 
@@ -207,4 +221,3 @@ test fixtures from 3 real systems (aroTHERM, flexoCOMPACT/BASV2, recoVAIR/V32).
 
 - Fix compressor power remaining at its last non-zero value after the
   compressor stops.
-
