@@ -357,19 +357,6 @@ class TestResolveDeviceCircuit:
         assert _resolve_device_circuit("ctlv2.Z1DayTemp", node, graph) == "z1"
 
 
-class TestLegacyWrapper:
-    """Legacy generate_entity_descriptions raises NotImplementedError."""
-
-    def test_legacy_wrapper_raises(self) -> None:
-        from vaillant_ebus.backend.entity_factory import generate_entity_descriptions
-
-        try:
-            generate_entity_descriptions([])
-            assert False, "Should have raised NotImplementedError"
-        except NotImplementedError:
-            pass
-
-
 # =============================================================================
 # Integration tests with real fixture data
 # =============================================================================

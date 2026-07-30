@@ -16,6 +16,14 @@
   and `no data stored`, discovery preserves the live value regardless of line
   order.
 
+### Cleaned up
+
+- Removed the unused `generate_entity_descriptions()` compatibility wrapper.
+- Removed the obsolete `ebus_cli.py` script, which depended on the deleted
+  `EbusdTcpBackend` transport.
+- Updated the developer architecture and TCP command reference to the current
+  service-based implementation.
+
 ## 1.2.0 - 2026-07-29
 
 ### Refactored to service architecture
