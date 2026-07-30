@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
+import asyncio
 import json
 import sys
 import tempfile
@@ -141,6 +142,10 @@ def _hass(cache_dir: str) -> MagicMock:
     h = MagicMock()
     h.config.path.return_value = str(Path(cache_dir) / "vaillant_ebus" / "register_cache.json")
     h.async_create_task = MagicMock()
+    async def _executor(func, *args):
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, func, *args)
+    h.async_add_executor_job = _executor
     return h
 
 
@@ -212,6 +217,7 @@ async def test_coordinator_seeds_from_cache_with_cached_values() -> None:
         hass.config.path.return_value = str(cache_path)
 
         c = VaillantCoordinator(hass, _entry())
+        await c._async_seed_entities_from_cache()
         assert c.registers.get("ctlv2.Z1DayTemp")
         assert c.registers["ctlv2.Z1DayTemp"].value.get("value") == "21.0"
         assert c.registers["ctlv2.Z1DayTemp"].has_data is True
@@ -239,6 +245,7 @@ async def test_coordinator_cache_seed_creates_active_z2_entities() -> None:
         hass = _hass(tmpdir)
         hass.config.path.return_value = str(cache_path)
         coordinator = VaillantCoordinator(hass, _entry())
+        await coordinator._async_seed_entities_from_cache()
 
         z2_entities = [entity for entity in coordinator.entities if entity.name.startswith("Z2")]
         assert {entity.name for entity in z2_entities} == {
@@ -529,7 +536,7 @@ async def test_values_from_registers_includes_suffix_stripped() -> None:
             value={"value": "22.50;ok"},
             has_data=True,
         )
-        values = c._values_from_registers()
+        values = await c._async_values_from_registers()
         assert values["test.Example.value"] == "22.50"
 
 

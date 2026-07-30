@@ -110,7 +110,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=scan_interval),
         )
 
-        self._seed_entities_from_cache()
+        self._cache_seeded = False
 
     @property
     def ebusd_host(self) -> str:
@@ -128,8 +128,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     return node.circuit
         return self._heating_circuit
 
-    def _seed_entities_from_cache(self) -> None:
-        cache = self._load_cache()
+    async def _async_seed_entities_from_cache(self) -> None:
+        cache = await self._async_load_cache()
         find_lines: list[str] = []
 
         for cache_key, cached_value in cache.items():
@@ -270,7 +270,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except Exception as exc:
                 _LOGGER.warning("Failed to define register: %s", exc)
 
-    def _values_from_registers(self, registers: list[EbusdRegister] | None = None) -> dict[str, str]:
+    async def _async_values_from_registers(self, registers: list[EbusdRegister] | None = None) -> dict[str, str]:
         values: dict[str, str] = {}
         for reg in registers or list(self.registers.values()):
             for field, value in reg.value.items():
@@ -283,26 +283,30 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             translated = translated[: -len(suffix)]
                             break
                     values[f"{reg.circuit}.{reg.name}.{field}"] = translated
-        self._save_cache(values)
+        await self._async_save_cache(values)
         return values
 
     @property
     def _cache_path(self) -> str:
         return self.hass.config.path(DOMAIN, "register_cache.json")
 
-    def _save_cache(self, values: dict[str, str]) -> None:
+    async def _async_save_cache(self, values: dict[str, str]) -> None:
         cache_dir = os.path.dirname(self._cache_path)
         try:
             os.makedirs(cache_dir, exist_ok=True)
-            with open(self._cache_path, "w") as f:
-                json.dump(values, f)
+            def _write():
+                with open(self._cache_path, "w") as f:
+                    json.dump(values, f)
+            await self.hass.async_add_executor_job(_write)
         except Exception:
             pass
 
-    def _load_cache(self) -> dict[str, str]:
+    async def _async_load_cache(self) -> dict[str, str]:
         try:
-            with open(self._cache_path) as f:
-                return json.load(f)
+            def _read():
+                with open(self._cache_path) as f:
+                    return json.load(f)
+            return await self.hass.async_add_executor_job(_read)
         except Exception:
             return {}
 
@@ -371,7 +375,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if value and (value.startswith(("or:", "ERR:")) or "read [-" in value):
                     value = None
                 if value is None:
-                    cache = self._load_cache()
+                    cache = await self._async_load_cache()
                     cached = cache.get(f"{circuit}.{name}.value")
                     if cached is not None:
                         value = cached
@@ -406,11 +410,15 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.info("Regenerated entities after fallback: added %d new", added)
 
     async def _async_update_data(self) -> dict[str, Any]:
+        if not self._cache_seeded:
+            self._cache_seeded = True
+            await self._async_seed_entities_from_cache()
+
         if not self._ebusd_connected:
             if not self._started:
                 self._started = True
                 self.hass.async_create_task(self._ebusd_connect_and_discover())
-            return {"ebusd": self._values_from_registers()}
+            return {"ebusd": await self._async_values_from_registers()}
 
         if self.ebus and self.ebus.is_connected:
             try:
@@ -448,7 +456,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 zero_idle_registers(self.registers)
                 if updated:
                     _LOGGER.debug("Poll updated %d registers", updated)
-                return {"ebusd": self._values_from_registers()}
+                return {"ebusd": await self._async_values_from_registers()}
             except ConnectionError, TimeoutError, OSError:
                 _LOGGER.warning("ebusd connection lost, reconnecting")
                 try:
@@ -459,7 +467,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.error("ebusd reconnect failed: %s", exc)
                     await repairs.async_create_ebusd_unreachable(self.hass)
 
-        return {"ebusd": self._values_from_registers()}
+        return {"ebusd": await self._async_values_from_registers()}
 
     async def async_stop(self) -> None:
         if self._cancel_delayed_rediscovery:

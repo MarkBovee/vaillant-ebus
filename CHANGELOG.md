@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- **Blocking file I/O in event loop:** `open()` calls in `_load_cache` and
+  `_save_cache` now run via `hass.async_add_executor_job` to avoid HA warnings
+  about blocking the event loop during setup and poll cycles.
 - **Multi-zone cache seeding (#41):** cached controller registers now use the
   same `DiscoveryService` graph builder as live ebusd output. Active `Z2*`
   and higher-zone registers therefore create their logical zone devices and
