@@ -15,11 +15,11 @@ A **1-on-1 replacement for the mypyllant API integration** — climate entities 
 ## Architecture
 
 ```mermaid
-flowchart LR
-    HP[Vaillant Heat Pump<br/>eBUS two-wire]
-    C6[C6 eBUS Adapter<br/>TCP enhanced mode<br/>192.168.x.x:9999]
-    E[ebusd Addon<br/>:8888]
-    I[Vaillant eBUS Integration<br/>in Home Assistant]
+graph LR
+    HP[Vaillant Heat Pump eBUS two-wire]
+    C6[C6 eBUS Adapter TCP enhanced mode 192.168.x.x:9999]
+    E[ebusd Addon :8888]
+    I[Vaillant eBUS Integration in Home Assistant]
 
     HP --- C6
     C6 -- eBUS data over TCP --> E
@@ -35,15 +35,15 @@ The C6 adapter converts the eBUS two-wire signal to TCP. ebusd runs as a Home As
 The integration separates transport, discovery, register semantics, and Home Assistant entity creation:
 
 ```mermaid
-flowchart TD
+graph TD
   HA[Home Assistant]
-  C[VaillantCoordinator<br/>lifecycle, polling, cache]
-  E[EbusService<br/>TCP transport and ebusd commands]
-  D[DiscoveryService<br/>find output to DeviceGraph]
-  R[RegisterService<br/>parsing, cache, writeability]
-  F[EntityFactoryService<br/>DeviceGraph to entity descriptions]
-  P[HA platform modules<br/>sensor, number, climate, etc.]
-  B[ebusd TCP API<br/>port 8888]
+  C[VaillantCoordinator lifecycle polling cache]
+  E[EbusService TCP transport ebusd commands]
+  D[DiscoveryService find output to DeviceGraph]
+  R[RegisterService parsing cache writeability]
+  F[EntityFactoryService DeviceGraph to entities]
+  P[HA platform modules sensor number climate etc]
+  B[ebusd TCP API port 8888]
 
   HA --> C
   C --> E
