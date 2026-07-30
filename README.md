@@ -30,12 +30,49 @@ The C6 adapter converts the eBUS two-wire signal to TCP. ebusd runs as a Home As
 
 **Important:** When adding the integration, point it to **Home Assistant's own address** (or `localhost`), not the C6 adapter's IP. Port is always `8888` (ebusd's TCP API), never `9999` (C6 adapter port).
 
+### Service architecture
+
+The integration separates transport, discovery, register semantics, and Home Assistant entity creation:
+
+```mermaid
+flowchart TD
+  HA[Home Assistant]
+  C[VaillantCoordinator<br/>lifecycle, polling, cache]
+  E[EbusService<br/>TCP transport and ebusd commands]
+  D[DiscoveryService<br/>find output to DeviceGraph]
+  R[RegisterService<br/>parsing, cache, writeability]
+  F[EntityFactoryService<br/>DeviceGraph to entity descriptions]
+  P[HA platform modules<br/>sensor, number, climate, etc.]
+  B[ebusd TCP API<br/>port 8888]
+
+  HA --> C
+  C --> E
+  C --> D
+  C --> R
+  C --> F
+  E <--> B
+  D --> E
+  R --> E
+  F --> P
+```
+
+| Service | Responsibility |
+|---------|----------------|
+| `VaillantCoordinator` | Orchestrates the connection lifecycle, runtime definitions, discovery, polling, cache, and entity refreshes. |
+| `EbusService` | Maintains the asyncio TCP connection and executes raw ebusd commands such as `find`, `read`, `write`, and `define`. |
+| `DiscoveryService` | Parses `find` output, filters unsupported data, and builds the discovered `DeviceGraph`. |
+| `RegisterService` | Parses register values, handles placeholders and cache hydration, and verifies writeability before writes. |
+| `EntityFactoryService` | Converts the discovered graph plus `REGISTER_MAP` metadata into Home Assistant entity descriptions. |
+| HA platform modules | Turn entity descriptions into native `sensor`, `number`, `select`, `switch`, `climate`, `water_heater`, `calendar`, and `datetime` entities. |
+
+The normal data flow is: connect to ebusd, define any runtime-only registers, discover the device graph, generate entity descriptions, and then poll/read registers through the coordinator. Entity existence comes from discovery; `REGISTER_MAP` supplies metadata and defaults rather than a hardcoded device inventory.
+
 ## Features
 
 - Drop-in replacement for mypyllant API integration — same entities, no cloud
 - Direct TCP connection to ebusd — zero MQTT setup required
-- Auto-discovers all registers on connect
-- 60+ entity types generated: sensor, binary_sensor, number, select, switch, climate, water_heater, calendar
+- Dynamically discovers available circuits and registers on connect
+- Generates native Home Assistant entities for sensors, controls, climate, water heating, calendars, and dates
 - Climate entities with quick veto and away mode (calendar-based scheduling)
 - Water heater entities with DHW boost and temperature control
 - Room humidity (CTLV2) — not available via standard ebusd MQTT
@@ -132,21 +169,23 @@ If you see `ERR: element not found` for some registers, that is normal — your 
 
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **"Vaillant eBUS"**
-3. The integration tries to discover ebusd automatically on `localhost` and `homeassistant.local`. If it succeeds, no further input is needed.
+3. The integration tries to discover ebusd automatically on `core-ebusd`, `localhost`, `127.0.0.1`, and `homeassistant.local`. If it succeeds, no further input is needed.
 4. If auto-discovery fails, enter the ebusd host and port manually:
    - **Host**: Home Assistant's own IP address (or `localhost`)
    - **Port**: `8888` (ebusd TCP API, not the C6 adapter port)
    - Do **not** enter the C6 adapter's IP. The integration talks to ebusd inside HA, not to the adapter.
 5. Devices appear within 30 seconds.
 
-### Expected devices
+### Discovered devices
 
-| Device | Circuit | Description |
-|--------|---------|-------------|
-| Vaillant aroTHERM heat pump | `hmu` | Heat pump telemetry |
-| Vaillant CTLV2 heating control | `ctlv2` | Heating controller (zone, DHW) |
-| Vaillant VWZ00 ventilation | `vwz00` | Ventilation unit |
-| Vaillant system | `Broadcast` | eBUS broadcast values |
+Devices depend on the hardware and the registers exposed by ebusd. Common logical circuits include:
+
+| Circuit | Description |
+|---------|-------------|
+| `hmu` | Heat pump telemetry and energy data |
+| `ctlv2` | Heating controller registers |
+| `z1` | Zone 1 entities derived from controller registers |
+| `dhw` | Domestic hot water entities when exposed by discovery |
 
 ### YAML entity overrides
 
