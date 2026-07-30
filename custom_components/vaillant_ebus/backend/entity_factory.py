@@ -10,7 +10,7 @@ from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister
 
 _LOGGER = logging.getLogger("vaillant_ebus.entity")
 
-_PLACEHOLDER_VALUES = frozenset({"-", "no data stored", "empty", "", "unknown", "unavailable"})
+_PLACEHOLDER_VALUES = frozenset({"-", "empty", "", "unknown", "unavailable"})
 _DHW_PREFIXES = ("dhw", "hwc", "cylinder", "maxcylinder", "solar")
 
 
@@ -146,8 +146,10 @@ def _determine_enabled_by_default(
         return True
     if node_has_data:
         return True
-    if raw_value is not None and raw_value.strip().lower() not in _PLACEHOLDER_VALUES:
-        return True
+    if raw_value is not None:
+        rv = raw_value.strip().lower()
+        if rv not in _PLACEHOLDER_VALUES and "no data" not in rv:
+            return True
     return False
 
 

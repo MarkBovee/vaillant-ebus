@@ -75,7 +75,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
     def native_value(self) -> float | str | None:
         data = self.coordinator.data.get("ebusd", {})
         raw = data.get(self._desc.key)
-        if raw is None or raw in ("-", "no data stored", "empty", ""):
+        if raw is None or raw in ("-", "empty", "") or (raw and "no data stored" in raw):
             return getattr(self, "_cached_value", None)
         try:
             val = float(raw)
