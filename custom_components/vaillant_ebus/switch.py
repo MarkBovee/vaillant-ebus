@@ -98,7 +98,7 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
 
 # Parse Vaillant date string to date object
 def _parse_date(raw: str | None) -> date | None:
-    if not raw or raw in ("no data stored", "-", ""):
+    if not raw or "-" in raw or "no data" in raw:
         return None
     try:
         return datetime.strptime(raw.strip(), "%d.%m.%Y").date()

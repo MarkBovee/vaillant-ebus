@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.2 - 2026-07-30
+
+### Fixed
+
+- **Placeholder value detection:** ebusd returns `"no data stored (message not
+  available due to condition)"` for registers whose hardware condition is unmet
+  (e.g. `FlowPressure` when the pump is idle). The integration now treats any
+  value starting with `"no data stored"` as a placeholder — consistent across
+  discovery, polling, fallback reads, and sensor/switch `native_value`.
+- **Building circulation pump unit:** `RunDataBuildingCPumpPower` changed from
+  Watts to Percent as the ebusd value represents pump speed, not power. Added
+  `BuildingCircuitPumpSpeed` with Percent unit for systems that expose it.
+
 ## 1.2.1 - 2026-07-30
 
 ### Fixed

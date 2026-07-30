@@ -372,7 +372,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 value = await self.ebus.read_register(circuit, name)
                 was_new = key not in self.registers
-                if value and (value.startswith(("or:", "ERR:")) or "read [-" in value):
+                if value and (value.startswith(("or:", "ERR:", "no data stored")) or "read [-" in value):
                     value = None
                 if value is None:
                     cache = await self._async_load_cache()
@@ -436,7 +436,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         continue
                     val = rhs.strip()
                     key = f"{circuit}.{name}"
-                    if val in ("-", "no data stored", "") or val.startswith(("(empty ", "(ERR")):
+                    if val in ("-", "") or val.startswith(("(empty ", "(ERR", "no data stored")):
                         continue
                     if key not in self.registers:
                         self.registers[key] = EbusdRegister(

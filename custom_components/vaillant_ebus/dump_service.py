@@ -52,7 +52,7 @@ def _parse_find_lines(raw_lines: list[str]) -> list[dict]:
                 "fields": ["value"],
                 "values": [val],
                 "writable": False,
-                "has_data": val not in ("-", "no data stored", "") and not val.startswith(("(empty ", "(ERR")),
+                "has_data": val not in ("-", "") and not val.startswith(("(empty ", "(ERR", "no data stored")),
             }
         )
     return result
