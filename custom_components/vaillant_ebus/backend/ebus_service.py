@@ -23,7 +23,7 @@ EBUSD_STATUS_SUFFIXES = (";ok", ";err", ";inv", ";too_small", ";too_big", ";nan"
 def _strip_suffix(value: str) -> str:
     for suffix in EBUSD_STATUS_SUFFIXES:
         if value.endswith(suffix):
-            return value[:-len(suffix)]
+            return value[: -len(suffix)]
     return value
 
 
@@ -125,17 +125,19 @@ class EbusService:
     # Record command in ring-buffer log with duration for diagnostics
     def _log_cmd(self, command: str, result: SendResult, t0: float | None = None) -> SendResult:
         duration = int((time.monotonic() - t0) * 1000) if t0 else 0
-        self._command_log.append({
-            "cmd": command,
-            "data": result.data,
-            "error": result.error,
-            "duration_ms": duration,
-        })
+        self._command_log.append(
+            {
+                "cmd": command,
+                "data": result.data,
+                "error": result.error,
+                "duration_ms": duration,
+            }
+        )
         return result
 
-    # Send 'f' command, return raw response lines (multi-line)
+    # Send a complete find command, including conditional and write messages.
     async def _send_find(self) -> list[str]:
-        result = await self.send_command("f")
+        result = await self.send_command("f -a")
         if result.error:
             return []
         async with self._lock:

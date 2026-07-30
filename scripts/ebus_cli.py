@@ -213,7 +213,7 @@ async def amain(args) -> int:
     return 0
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="ebusd TCP CLI tool")
     parser.add_argument("host", help="ebusd hostname or IP")
     parser.add_argument("-p", "--port", type=int, default=8888, help="ebusd TCP port")

@@ -12,9 +12,7 @@ from .coordinator import VaillantCoordinator
 
 
 # Return diagnostics data for config entry
-async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> dict[str, Any]:
+async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
     result: dict[str, Any] = {"entry_data": dict(entry.data)}
 

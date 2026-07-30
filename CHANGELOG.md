@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.1 - 2026-07-30
+
+### Fixed
+
+- **Multi-zone cache seeding (#41):** cached controller registers now use the
+  same `DiscoveryService` graph builder as live ebusd output. Active `Z2*`
+  and higher-zone registers therefore create their logical zone devices and
+  entities before live discovery completes.
+- **Ventilation startup discovery (#38):** discovery now uses `find -a`, which
+  includes ebusd write and conditional messages, and performs one additional
+  full discovery pass five minutes after startup. This recovers values that
+  ebusd has not populated during the initial pass without continuous rescans.
+- **Duplicate find output:** when ebusd returns a register both with live data
+  and `no data stored`, discovery preserves the live value regardless of line
+  order.
+
 ## 1.2.0 - 2026-07-29
 
 ### Refactored to service architecture

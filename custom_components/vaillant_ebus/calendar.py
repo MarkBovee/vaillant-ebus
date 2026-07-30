@@ -29,10 +29,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        EbusdCalendar(coordinator, entry, name, prefix)
-        for name, prefix in SCHEDULES.items()
-    )
+    async_add_entities(EbusdCalendar(coordinator, entry, name, prefix) for name, prefix in SCHEDULES.items())
 
 
 class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):

@@ -17,17 +17,13 @@ for name in ("vaillant_ebus", "vaillant_ebus.backend"):
     pkg.__path__ = [str(COMPONENT_PATH)] if name == "vaillant_ebus" else [str(BACKEND_PATH)]
     sys.modules[name] = pkg
 
-MODELS_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.models", BACKEND_PATH / "models.py"
-)
+MODELS_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.models", BACKEND_PATH / "models.py")
 assert MODELS_SPEC and MODELS_SPEC.loader
 MODELS = importlib.util.module_from_spec(MODELS_SPEC)
 sys.modules["vaillant_ebus.backend.models"] = MODELS
 MODELS_SPEC.loader.exec_module(MODELS)
 
-MAPPING_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.mapping", BACKEND_PATH / "mapping.py"
-)
+MAPPING_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.mapping", BACKEND_PATH / "mapping.py")
 assert MAPPING_SPEC and MAPPING_SPEC.loader
 MAPPING = importlib.util.module_from_spec(MAPPING_SPEC)
 sys.modules["vaillant_ebus.backend.mapping"] = MAPPING
@@ -138,13 +134,13 @@ def _build_graph(overrides: dict | None = None) -> DeviceGraph:
 class TestEntityGeneration:
     """Entity generation from DeviceGraph."""
 
-    def test_generate_returns_entities(self):
+    def test_generate_returns_entities(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         result = svc.generate(graph)
         assert result, "Expected non-empty entity list"
 
-    def test_generate_count(self):
+    def test_generate_count(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         result = svc.generate(graph)
@@ -152,14 +148,14 @@ class TestEntityGeneration:
         # hmu.RunDataLowPressure has enabled=False, excluded
         assert len(result) >= 7, f"Expected at least 7 entities, got {len(result)}"
 
-    def test_entities_have_unique_keys(self):
+    def test_entities_have_unique_keys(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         result = svc.generate(graph)
         keys = [e.key for e in result]
         assert len(keys) == len(set(keys)), f"Duplicate keys: {keys}"
 
-    def test_entities_have_keys(self):
+    def test_entities_have_keys(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         result = svc.generate(graph)
@@ -171,7 +167,7 @@ class TestEntityGeneration:
 class TestDeviceCircuitResolution:
     """Device circuit assignment from device graph."""
 
-    def test_device_circuit_zone_with_data(self):
+    def test_device_circuit_zone_with_data(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         result = svc.generate(graph)
@@ -179,7 +175,7 @@ class TestDeviceCircuitResolution:
         assert z1_entities, "Expected Z1DayTemp entity"
         assert z1_entities[0].device_circuit == "z1", f"Expected z1, got {z1_entities[0].device_circuit}"
 
-    def test_device_circuit_zone_without_data(self):
+    def test_device_circuit_zone_without_data(self) -> None:
         graph = _build_graph({"z1_has_data": False})
         svc = EntityFactoryService()
         result = svc.generate(graph)
@@ -188,14 +184,14 @@ class TestDeviceCircuitResolution:
         assert z1_entities[0].device_circuit == "ctlv2", f"Expected ctlv2, got {z1_entities[0].device_circuit}"
 
     # Intent: exclude an inactive secondary zone instead of folding it into ctlv2.
-    def test_inactive_z2_is_suppressed(self):
+    def test_inactive_z2_is_suppressed(self) -> None:
         graph = _build_graph({"include_z2": True, "z2_has_data": False})
         svc = EntityFactoryService()
         result = svc.generate(graph)
         z2_entities = [e for e in result if e.name == "Z2DayTemp"]
         assert not z2_entities, "Inactive secondary zones must not create entities"
 
-    def test_device_circuit_dhw(self):
+    def test_device_circuit_dhw(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         result = svc.generate(graph)
@@ -203,7 +199,7 @@ class TestDeviceCircuitResolution:
         assert dhw_entities, "Expected HwcTempDesired entity"
         assert dhw_entities[0].device_circuit == "dhw", f"Expected dhw, got {dhw_entities[0].device_circuit}"
 
-    def test_device_circuit_hmu(self):
+    def test_device_circuit_hmu(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         result = svc.generate(graph)
@@ -212,7 +208,7 @@ class TestDeviceCircuitResolution:
         assert hmu_entities[0].device_circuit == "hmu", f"Expected hmu, got {hmu_entities[0].device_circuit}"
 
     # Intent: route controller-owned HC and DHW registers to logical devices.
-    def test_controller_owned_registers_route_to_logical_devices(self):
+    def test_controller_owned_registers_route_to_logical_devices(self) -> None:
         graph = _build_graph()
         result = EntityFactoryService().generate(graph)
         circuits = {entity.name: entity.device_circuit for entity in result}
@@ -221,20 +217,20 @@ class TestDeviceCircuitResolution:
         assert circuits["Date"] == "ctlv2"
 
     # Intent: ensure an inactive HC2 does not leak onto the controller device.
-    def test_inactive_secondary_zone_register_is_suppressed(self):
+    def test_inactive_secondary_zone_register_is_suppressed(self) -> None:
         graph = _build_graph({"include_z2": True, "z2_has_data": False})
         result = EntityFactoryService().generate(graph)
         assert all(entity.name != "Hc2FlowTemp" for entity in result)
 
     # Intent: route an active secondary heating circuit to its matching zone.
-    def test_active_secondary_zone_register_routes_to_zone(self):
+    def test_active_secondary_zone_register_routes_to_zone(self) -> None:
         graph = _build_graph({"include_z2": True, "z2_has_data": True})
         result = EntityFactoryService().generate(graph)
         circuits = {entity.name: entity.device_circuit for entity in result}
         assert circuits["Hc2FlowTemp"] == "z2"
 
     # Intent: preserve explicit user-selected device routing.
-    def test_device_circuit_override_wins_over_redistribution(self):
+    def test_device_circuit_override_wins_over_redistribution(self) -> None:
         graph = _build_graph()
         result = EntityFactoryService().generate(
             graph,
@@ -247,31 +243,23 @@ class TestDeviceCircuitResolution:
 class TestEnabledByDefault:
     """Entity enabled_by_default determination."""
 
-    def test_enabled_by_default_known_register(self):
-        result = _determine_enabled_by_default(
-            "hmu.Status01", "Standby", True, RegisterMeta(enabled=True)
-        )
+    def test_enabled_by_default_known_register(self) -> None:
+        result = _determine_enabled_by_default("hmu.Status01", "Standby", True, RegisterMeta(enabled=True))
         assert result is True
 
-    def test_enabled_by_default_has_data(self):
-        result = _determine_enabled_by_default(
-            "unknown.RegName", "42", True, RegisterMeta(enabled=True)
-        )
+    def test_enabled_by_default_has_data(self) -> None:
+        result = _determine_enabled_by_default("unknown.RegName", "42", True, RegisterMeta(enabled=True))
         assert result is True
 
-    def test_enabled_by_default_placeholder_not_known(self):
-        result = _determine_enabled_by_default(
-            "unknown.RegName", "-", False, RegisterMeta(enabled=True)
-        )
+    def test_enabled_by_default_placeholder_not_known(self) -> None:
+        result = _determine_enabled_by_default("unknown.RegName", "-", False, RegisterMeta(enabled=True))
         assert result is False
 
-    def test_enabled_by_default_placeholder_known(self):
-        result = _determine_enabled_by_default(
-            "hmu.Status01", "-", False, REGISTER_MAP["hmu.Status01"]
-        )
+    def test_enabled_by_default_placeholder_known(self) -> None:
+        result = _determine_enabled_by_default("hmu.Status01", "-", False, REGISTER_MAP["hmu.Status01"])
         assert result is True
 
-    def test_enabled_by_default_meta_disabled(self):
+    def test_enabled_by_default_meta_disabled(self) -> None:
         result = _determine_enabled_by_default(
             "hmu.RunDataLowPressure", "-", False, REGISTER_MAP["hmu.RunDataLowPressure"]
         )
@@ -281,7 +269,7 @@ class TestEnabledByDefault:
 class TestYamlOverrides:
     """YAML override handling."""
 
-    def test_yaml_override_changes_entity_type(self):
+    def test_yaml_override_changes_entity_type(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         yaml = {"hmu.Status01": {"entity_type": "number"}}
@@ -289,7 +277,7 @@ class TestYamlOverrides:
         entity = [e for e in result if e.key == "hmu.Status01.value"][0]
         assert entity.entity_type == "number", f"Expected number, got {entity.entity_type}"
 
-    def test_yaml_override_force_enabled(self):
+    def test_yaml_override_force_enabled(self) -> None:
         graph = _build_graph()
         graph.nodes["z1"].has_data = False
         graph.raw_registers["ctlv2.Z1OpMode"] = "-"
@@ -299,7 +287,7 @@ class TestYamlOverrides:
         entity = [e for e in result if e.key == "ctlv2.Z1OpMode.value"][0]
         assert entity.enabled_by_default is True
 
-    def test_yaml_override_device_class(self):
+    def test_yaml_override_device_class(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         yaml = {"hmu.FlowTemp": {"device_class": "temperature_new"}}
@@ -311,14 +299,14 @@ class TestYamlOverrides:
 class TestRegisterMapFallback:
     """No REGISTER_MAP fallback — entity existence from graph only."""
 
-    def test_graph_only_no_fallback(self):
+    def test_graph_only_no_fallback(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         result = svc.generate(graph)
         keys = {e.key for e in result}
         assert "hmu.RunDataCompressorSpeed.value" not in keys, "No fallback — only graph registers exist"
 
-    def test_empty_graph_no_fallback(self):
+    def test_empty_graph_no_fallback(self) -> None:
         graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
         svc = EntityFactoryService()
         result = svc.generate(graph)
@@ -328,7 +316,7 @@ class TestRegisterMapFallback:
 class TestBackwardCompatibility:
     """EntityDescription structure compatibility."""
 
-    def test_entity_description_structure(self):
+    def test_entity_description_structure(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         result = svc.generate(graph)
@@ -347,22 +335,22 @@ class TestBackwardCompatibility:
 class TestResolveDeviceCircuit:
     """Unit tests for _resolve_device_circuit helper."""
 
-    def test_sub_device_with_data_returns_own(self):
+    def test_sub_device_with_data_returns_own(self) -> None:
         graph = _build_graph()
         node = graph.nodes["z1"]
         assert _resolve_device_circuit("ctlv2.Z1DayTemp", node, graph) == "z1"
 
-    def test_sub_device_without_data_returns_parent(self):
+    def test_sub_device_without_data_returns_parent(self) -> None:
         graph = _build_graph({"z1_has_data": False})
         node = graph.nodes["z1"]
         assert _resolve_device_circuit("ctlv2.Z1DayTemp", node, graph) == "ctlv2"
 
-    def test_top_level_returns_own(self):
+    def test_top_level_returns_own(self) -> None:
         graph = _build_graph()
         node = graph.nodes["hmu"]
         assert _resolve_device_circuit("hmu.Status01", node, graph) == "hmu"
 
-    def test_no_parent_returns_own(self):
+    def test_no_parent_returns_own(self) -> None:
         graph = _build_graph()
         node = graph.nodes["z1"]
         node.parent = None
@@ -372,8 +360,9 @@ class TestResolveDeviceCircuit:
 class TestLegacyWrapper:
     """Legacy generate_entity_descriptions raises NotImplementedError."""
 
-    def test_legacy_wrapper_raises(self):
+    def test_legacy_wrapper_raises(self) -> None:
         from vaillant_ebus.backend.entity_factory import generate_entity_descriptions
+
         try:
             generate_entity_descriptions([])
             assert False, "Should have raised NotImplementedError"
@@ -389,7 +378,7 @@ class TestLegacyWrapper:
 class TestGenerateFromFixtureGraphs:
     """Entity generation from real fixture DeviceGraphs."""
 
-    def test_generate_from_arotherm_graph(self):
+    def test_generate_from_arotherm_graph(self) -> None:
         lines = load_find_lines("arotherm_find.txt")
         graph = DiscoveryService.build_device_graph(lines)
         svc = EntityFactoryService()
@@ -402,7 +391,7 @@ class TestGenerateFromFixtureGraphs:
             assert isinstance(e.key, str)
         assert any(e.enabled_by_default for e in entities)
 
-    def test_generate_from_basv_graph(self):
+    def test_generate_from_basv_graph(self) -> None:
         lines = load_find_lines("community/basv_find.txt")
         graph = DiscoveryService.build_device_graph(lines)
         svc = EntityFactoryService()
@@ -410,7 +399,21 @@ class TestGenerateFromFixtureGraphs:
         assert len(entities) > 0
         assert any(e.circuit == "basv" for e in entities), "Expected entities from basv circuit"
 
-    def test_yaml_override_icon(self):
+    # Intent: preserve active Z2 entities that share the ctlv2 source circuit with Z1.
+    def test_generate_active_z2_entities_from_single_circuit_fixture(self) -> None:
+        lines = load_find_lines("community/multizone_single_circuit_find.txt")
+        graph = DiscoveryService.build_device_graph(lines)
+        entities = EntityFactoryService().generate(graph)
+        z2_entities = [entity for entity in entities if entity.name.startswith("Z2")]
+        assert {entity.name for entity in z2_entities} == {
+            "Z2RoomTemp",
+            "Z2DayTemp",
+            "Z2OpMode",
+            "Z2ActualRoomTempDesired",
+        }
+        assert {entity.device_circuit for entity in z2_entities} == {"z2"}
+
+    def test_yaml_override_icon(self) -> None:
         lines = load_find_lines("arotherm_find.txt")
         graph = DiscoveryService.build_device_graph(lines)
         svc = EntityFactoryService()
@@ -420,7 +423,7 @@ class TestGenerateFromFixtureGraphs:
         assert matches, "Expected hmu.CurrentConsumedPower entity"
         assert matches[0].meta.icon == "mdi:flash"
 
-    def test_yaml_override_entity_type(self):
+    def test_yaml_override_entity_type(self) -> None:
         lines = load_find_lines("arotherm_find.txt")
         graph = DiscoveryService.build_device_graph(lines)
         svc = EntityFactoryService()
@@ -430,7 +433,7 @@ class TestGenerateFromFixtureGraphs:
         assert matches, "Expected ctlv2.Z1DayTemp entity"
         assert matches[0].entity_type == "number"
 
-    def test_empty_graph_generates_no_entities(self):
+    def test_empty_graph_generates_no_entities(self) -> None:
         graph = DeviceGraph(
             nodes={},
             raw_registers={},

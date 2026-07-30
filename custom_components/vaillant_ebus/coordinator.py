@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import timedelta
+from collections.abc import Callable
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from . import repairs
@@ -40,8 +42,46 @@ _LOGGER = logging.getLogger(__name__)
 
 
 EBUSD_STATUS_SUFFIXES: tuple[str, ...] = (
-    ";ok", ";err", ";inv", ";too_small", ";too_big", ";nan", ";unknown",
+    ";ok",
+    ";err",
+    ";inv",
+    ";too_small",
+    ";too_big",
+    ";nan",
+    ";unknown",
 )
+DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
+
+
+# Merge a delayed graph without removing devices that initial discovery found.
+def _merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> DeviceGraph:
+    nodes = dict(existing.nodes)
+    for circuit, node in discovered.nodes.items():
+        previous = nodes.get(circuit)
+        if previous is None:
+            nodes[circuit] = node
+            continue
+        nodes[circuit] = DeviceNode(
+            circuit=circuit,
+            device_type=(node.device_type if node.device_type != DeviceType.UNKNOWN else previous.device_type),
+            registers=list(dict.fromkeys(previous.registers + node.registers)),
+            parent=node.parent or previous.parent,
+            zone_circuits=list(dict.fromkeys(previous.zone_circuits + node.zone_circuits)),
+            heating_circuits=list(dict.fromkeys(previous.heating_circuits + node.heating_circuits)),
+            has_data=previous.has_data or node.has_data,
+            scan_type=node.scan_type or previous.scan_type,
+            scan_sw=node.scan_sw or previous.scan_sw,
+            scan_hw=node.scan_hw or previous.scan_hw,
+        )
+
+    raw_registers = dict(existing.raw_registers)
+    raw_registers.update(discovered.raw_registers)
+    placeholder_registers = (existing.placeholder_registers | discovered.placeholder_registers) - set(raw_registers)
+    return DeviceGraph(
+        nodes=nodes,
+        raw_registers=raw_registers,
+        placeholder_registers=placeholder_registers,
+    )
 
 
 class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -59,6 +99,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entities: list[EntityDescription] = []
         self._graph: DeviceGraph | None = None
         self._last_find_keys: set[str] = set()
+        self._cancel_delayed_rediscovery: Callable[[], None] | None = None
+        self._delayed_rediscovery_scheduled = False
 
         scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL)
         super().__init__(
@@ -88,9 +130,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _seed_entities_from_cache(self) -> None:
         cache = self._load_cache()
-        raw_registers: dict[str, str] = {}
-        nodes: dict[str, DeviceNode] = {}
-        regs_by_circuit: dict[str, list[str]] = {}
+        find_lines: list[str] = []
 
         for cache_key, cached_value in cache.items():
             if cached_value is None or not cached_value.strip():
@@ -102,8 +142,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if any(kw in circuit.lower() for kw in HIDDEN_DEVICE_KEYWORDS):
                 continue
             rk = f"{circuit}.{name}"
-            raw_registers[rk] = cached_value
-            regs_by_circuit.setdefault(circuit, []).append(rk)
+            find_lines.append(f"{circuit} {name} = {cached_value}")
             self.registers[rk] = EbusdRegister(
                 circuit=circuit,
                 name=name,
@@ -112,22 +151,14 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 has_data=True,
             )
 
-        for circuit, rks in regs_by_circuit.items():
-            nodes[circuit] = DeviceNode(
-                circuit=circuit,
-                device_type=DeviceType.UNKNOWN,
-                registers=rks,
-                has_data=True,
-            )
-
-        graph = DeviceGraph(
-            nodes=nodes,
-            raw_registers=raw_registers,
-            placeholder_registers=set(),
-        )
+        # Reuse live discovery so cached ZN and HcN registers form logical devices.
+        graph = DiscoveryService.build_device_graph(find_lines)
+        if graph.nodes:
+            self._graph = graph
         self.entities = self.entity_factory.generate(graph)
-        _LOGGER.info("Seeded %d entities from %d cache entries (%d circuits)",
-                     len(self.entities), len(cache), len(nodes))
+        _LOGGER.info(
+            "Seeded %d entities from %d cache entries (%d circuits)", len(self.entities), len(cache), len(graph.nodes)
+        )
 
     async def _ebusd_connect_and_discover(self) -> None:
         host = self.ebusd_host
@@ -155,6 +186,15 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as exc:
             _LOGGER.warning("ebusd discovery failed: %s", exc)
             return
+
+        await self._apply_discovery_graph(graph, "initial")
+        self._schedule_delayed_rediscovery()
+
+    # Apply a complete device graph from initial or delayed discovery.
+    async def _apply_discovery_graph(self, graph: DeviceGraph, source: str) -> None:
+        is_delayed = source == "delayed" and self._graph is not None
+        if is_delayed:
+            graph = _merge_device_graphs(self._graph, graph)
         self._graph = graph
 
         for rk, raw in graph.raw_registers.items():
@@ -173,16 +213,48 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.registers[rk].value["value"] = raw
                 self.registers[rk].has_data = True
 
-        self._last_find_keys = set(graph.raw_registers.keys())
+        self._last_find_keys.update(graph.raw_registers)
 
         try:
             await self._fallback_read()
         except Exception as exc:
-            _LOGGER.warning("Initial fallback read failed: %s", exc)
+            _LOGGER.warning("%s fallback read failed: %s", source.capitalize(), exc)
 
-        self.entities = self.entity_factory.generate(graph)
-        _LOGGER.info("Generated %d entity descriptions after ebusd discovery", len(self.entities))
+        generated_entities = self.entity_factory.generate(graph)
+        if is_delayed:
+            existing_entity_keys = {entity.key for entity in self.entities}
+            self.entities.extend(entity for entity in generated_entities if entity.key not in existing_entity_keys)
+        else:
+            self.entities = generated_entities
+        _LOGGER.info(
+            "Generated %d entity descriptions after %s ebusd discovery",
+            len(self.entities),
+            source,
+        )
         self.async_update_listeners()
+
+    # Schedule exactly one delayed pass for ebusd values unavailable at startup.
+    def _schedule_delayed_rediscovery(self) -> None:
+        if self._delayed_rediscovery_scheduled:
+            return
+        self._delayed_rediscovery_scheduled = True
+        self._cancel_delayed_rediscovery = async_call_later(
+            self.hass,
+            DELAYED_REDISCOVERY_DELAY,
+            self._async_delayed_rediscover,
+        )
+
+    # Refresh the full graph once after the initial ebusd startup window.
+    async def _async_delayed_rediscover(self, _: datetime) -> None:
+        self._cancel_delayed_rediscovery = None
+        if not self.ebus or not self.ebus.is_connected or not self.discovery:
+            return
+        try:
+            graph = await self.discovery.discover()
+        except Exception as exc:
+            _LOGGER.warning("Delayed ebusd discovery failed: %s", exc)
+            return
+        await self._apply_discovery_graph(graph, "delayed")
 
     async def _define_custom_registers(self) -> None:
         if not self.ebus or not self.ebus.is_connected:
@@ -198,9 +270,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except Exception as exc:
                 _LOGGER.warning("Failed to define register: %s", exc)
 
-    def _values_from_registers(
-        self, registers: list[EbusdRegister] | None = None
-    ) -> dict[str, str]:
+    def _values_from_registers(self, registers: list[EbusdRegister] | None = None) -> dict[str, str]:
         values: dict[str, str] = {}
         for reg in registers or list(self.registers.values()):
             for field, value in reg.value.items():
@@ -210,7 +280,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         translated = COMPRESSOR_STATUS_LABELS.get(value, value)
                     for suffix in EBUSD_STATUS_SUFFIXES:
                         if translated.endswith(suffix):
-                            translated = translated[:-len(suffix)]
+                            translated = translated[: -len(suffix)]
                             break
                     values[f"{reg.circuit}.{reg.name}.{field}"] = translated
         self._save_cache(values)
@@ -255,11 +325,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         circuit_lower = circuit.lower()
         if circuit_lower in CIRCUIT_NAMES:
             name = CIRCUIT_NAMES[circuit_lower]
-        elif (
-            len(circuit_lower) == 5
-            and circuit_lower.startswith("ctlv")
-            and circuit_lower[-1].isdigit()
-        ):
+        elif len(circuit_lower) == 5 and circuit_lower.startswith("ctlv") and circuit_lower[-1].isdigit():
             name = "Vaillant sensoCOMFORT Control"
         elif scan_type:
             name = f"Vaillant {scan_type}"
@@ -366,8 +432,10 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         continue
                     if key not in self.registers:
                         self.registers[key] = EbusdRegister(
-                            circuit=circuit, name=name,
-                            fields=["value"], value={"value": val},
+                            circuit=circuit,
+                            name=name,
+                            fields=["value"],
+                            value={"value": val},
                             has_data=True,
                         )
                         updated += 1
@@ -381,7 +449,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if updated:
                     _LOGGER.debug("Poll updated %d registers", updated)
                 return {"ebusd": self._values_from_registers()}
-            except (ConnectionError, TimeoutError, OSError):
+            except ConnectionError, TimeoutError, OSError:
                 _LOGGER.warning("ebusd connection lost, reconnecting")
                 try:
                     if self.ebus:
@@ -394,6 +462,9 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return {"ebusd": self._values_from_registers()}
 
     async def async_stop(self) -> None:
+        if self._cancel_delayed_rediscovery:
+            self._cancel_delayed_rediscovery()
+            self._cancel_delayed_rediscovery = None
         if self.ebus:
             await self.ebus.disconnect()
         self.ebus = None

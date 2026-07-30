@@ -242,10 +242,12 @@ class DiscoveryService:
         )
 
 
+# Extract the logical sub-device name from its parent-qualified key.
 def _sub_name(sub_key: str) -> str:
     return sub_key.split("/", 1)[1]
 
 
+# Determine whether each source circuit contains at least one live value.
 def _compute_has_data(
     regs_by_circuit: dict[str, list[str]],
     raw_registers: dict[str, str],
@@ -255,13 +257,12 @@ def _compute_has_data(
         c_lower = circuit.lower()
         broadcast_hidden = HIDDEN_BROADCAST if c_lower == "broadcast" else set()
         result[circuit] = any(
-            raw_registers.get(rk) is not None
-            for rk in reg_keys
-            if rk.split(".", 1)[1].lower() not in broadcast_hidden
+            raw_registers.get(rk) is not None for rk in reg_keys if rk.split(".", 1)[1].lower() not in broadcast_hidden
         )
     return result
 
 
+# Detect logical DHW, zone, and heating-circuit devices within each source circuit.
 def _detect_sub_devices(
     regs_by_circuit: dict[str, list[str]],
 ) -> dict[str, tuple[str, DeviceType]]:
@@ -271,10 +272,7 @@ def _detect_sub_devices(
         if any(kw in c_lower for kw in HIDDEN_DEVICE_KEYWORDS) or c_lower in ALWAYS_HIDDEN:
             continue
         reg_names = {rk.split(".", 1)[1] for rk in reg_keys if "." in rk}
-        hwc_seen = any(
-            n.lower().startswith(("hwc", "cylinder", "maxcylinder", "dhw", "solar"))
-            for n in reg_names
-        )
+        hwc_seen = any(n.lower().startswith(("hwc", "cylinder", "maxcylinder", "dhw", "solar")) for n in reg_names)
         if hwc_seen:
             result[f"{circuit}/dhw"] = (circuit, DeviceType.DHW)
         for n in reg_names:
@@ -320,6 +318,7 @@ def _extract_hcn(name: str) -> str:
     return hcn
 
 
+# Gather the visible source-circuit registers that belong to one logical device.
 def _collect_sub_regs(
     sub_name: str,
     parent_circuit: str,
@@ -336,6 +335,7 @@ def _collect_sub_regs(
     return result
 
 
+# Match a register name to a logical zone, heating circuit, or DHW device.
 def _name_belongs_to_sub(name: str, sub_name: str) -> bool:
     if sub_name.startswith("z") and sub_name[1:].isdigit():
         zn = sub_name[1:]
@@ -348,6 +348,7 @@ def _name_belongs_to_sub(name: str, sub_name: str) -> bool:
     return False
 
 
+# Associate ebusd scan metadata with the discovered circuits it describes.
 def _match_scan_to_circuits(
     scan_entries: list[tuple[str, str, str, str]],
     regs_by_circuit: dict[str, list[str]],
@@ -367,16 +368,13 @@ def _match_scan_to_circuits(
     return result
 
 
+# Link discovered logical devices to their source circuit and heat-pump parents.
 def _apply_relationships(
     nodes: dict[str, DeviceNode],
     sub_devices: dict[str, tuple[str, DeviceType]],
 ) -> None:
-    heat_pump = next(
-        (n for n in nodes.values() if n.device_type == DeviceType.HEAT_PUMP), None
-    )
-    controller = next(
-        (n for n in nodes.values() if n.device_type == DeviceType.HEATING_CONTROLLER), None
-    )
+    heat_pump = next((n for n in nodes.values() if n.device_type == DeviceType.HEAT_PUMP), None)
+    controller = next((n for n in nodes.values() if n.device_type == DeviceType.HEATING_CONTROLLER), None)
 
     if not heat_pump and not controller:
         return
@@ -425,6 +423,7 @@ _PREFIX_TO_DEVICE: dict[str, DeviceType] = {
 }
 
 
+# Classify a circuit from the ebusd scan TYPE and its numeric-family prefix.
 def _categorize_by_scan_type(circuit: str, scan_type: str) -> DeviceType | None:
     low = scan_type.lower()
     if low in _SCAN_TO_DEVICE:
@@ -439,6 +438,7 @@ def _categorize_by_scan_type(circuit: str, scan_type: str) -> DeviceType | None:
     return None
 
 
+# Classify a circuit from its stable ebusd circuit-name prefix.
 def _categorize_by_prefix(circuit: str) -> DeviceType | None:
     c_lower = circuit.lower()
     for prefix, d_type in _PREFIX_TO_DEVICE.items():
@@ -448,6 +448,7 @@ def _categorize_by_prefix(circuit: str) -> DeviceType | None:
     return None
 
 
+# Classify a controller from characteristic heating or DHW register names.
 def _categorize_by_registers(circuit: str, registers: list[str]) -> DeviceType | None:
     for rk in registers:
         name = rk.split(".", 1)[-1] if "." in rk else ""
