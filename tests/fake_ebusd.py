@@ -44,9 +44,16 @@ SIGNAL_ACQUIRED = "signal acquired: ebusd test fixture v1.0"
 # Source: dumpvalues.json from live ebusd dumps.
 MULTI_FIELD_MAP: dict[tuple[str, str], list[str]] = {
     ("hmu", "SetMode"): [
-        "hcmode", "flowtempdesired", "hwctempdesired", "hwcflowtempdesired",
-        "disablehc", "disablehwctapping", "disablehwcload",
-        "remoteControlHcPump", "releaseBackup", "releaseCooling",
+        "hcmode",
+        "flowtempdesired",
+        "hwctempdesired",
+        "hwcflowtempdesired",
+        "disablehc",
+        "disablehwctapping",
+        "disablehwcload",
+        "remoteControlHcPump",
+        "releaseBackup",
+        "releaseCooling",
     ],
     ("hmu", "DateTime"): ["dcfstate", "btime", "bdate", "temp2"],
     ("hmu", "RunStatsCompressorHc"): ["runtime", "cycles"],
@@ -128,7 +135,7 @@ class FakeEbusdServer:
         fixture: str | list[str] = "arotherm_find.txt",
         host: str = "127.0.0.1",
         port: int = 0,
-    ):
+    ) -> None:
         self._host = host
         self._port = port
         self._find_lines = fixture if isinstance(fixture, list) else load_find_lines(fixture)
@@ -163,9 +170,7 @@ class FakeEbusdServer:
 
     async def start(self) -> None:
         """Start the TCP server on the configured host:port."""
-        self._server = await asyncio.start_server(
-            self._handle_client, host=self._host, port=self._port
-        )
+        self._server = await asyncio.start_server(self._handle_client, host=self._host, port=self._port)
         if self._server.sockets:
             self._port = self._server.sockets[0].getsockname()[1]
         _LOGGER.debug("Fake ebusd listening on %s:%s", self._host, self._port)
@@ -203,7 +208,7 @@ class FakeEbusdServer:
 
                 # find/f command: dump all fixture lines directly
                 # Client reads them line by line with timeout loop
-                if raw in ("f", "find", "find -a"):
+                if raw in ("f", "find", "f -a", "find -a"):
                     for fline in self._find_lines:
                         writer.write((fline + "\n").encode())
                     await writer.drain()
@@ -213,7 +218,7 @@ class FakeEbusdServer:
                 response = self._handle_command(raw)
                 writer.write((response + "\n").encode())
                 await writer.drain()
-        except (TimeoutError, ConnectionError, OSError):
+        except TimeoutError, ConnectionError, OSError:
             pass
         finally:
             writer.close()

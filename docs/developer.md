@@ -31,14 +31,15 @@ custom_components/vaillant_ebus/
 ├── climate.py          # Climate entity (heating zone thermostat)
 ├── water_heater.py     # Water heater entity (DHW)
 ├── calendar.py         # Read-only schedule entities
-├── date.py             # Date entities (holiday)
+├── datetime.py         # Datetime entities
 ├── diagnostics.py      # HA diagnostics provider
 ├── backend/
-│   ├── base.py         # Abstract Backend class
-│   ├── tcp.py          # EbusdTcpBackend — asyncio TCP transport
+│   ├── ebus_service.py # EbusService — asyncio TCP transport
+│   ├── discovery_service.py # DeviceGraph construction from ebusd find output
+│   ├── register_service.py # Register parsing, reads, writes, and writeability
 │   ├── models.py       # Dataclasses (EbusdRegister, RegisterMeta, etc.)
 │   ├── mapping.py      # Register metadata (friendly names, icons, units)
-│   └── entity_factory.py  # Dynamic entity generation from discovery
+│   └── entity_factory.py # Dynamic entity generation from DeviceGraph
 ├── brand/
 │   ├── logo.png        # HACS branding
 │   └── icon.png        # HACS branding
@@ -57,8 +58,8 @@ Ebusd raw TCP uses text commands terminated by `\n`. Responses end with `\n`.
 | Command | Purpose | Example response |
 |---------|---------|-----------------|
 | `i` | ebusd version | `version: ebusd 26.1.26.1` |
-| `f` | Find all registers + values | `hmu.Hc1Temp: 32.5 °C | ...` |
-| `r <circuit> <name>` | Read single register | `32.5 °C` |
+| `f -a` | Find all message types and values | `hmu Hc1Temp = 32.5` |
+| `read -c <circuit> <name>` | Read a single register | `32.5` |
 | `write -c <circuit> <name> <value>` | Write register | `done` |
 | `define -r "<definition>"` | Define a temporary register | `done` |
 

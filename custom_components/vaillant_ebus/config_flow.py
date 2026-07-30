@@ -49,11 +49,10 @@ async def _get_host_ip() -> str:
 
 _LOGGER = logging.getLogger(__name__)
 
+
 # Attempt a TCP connect + state command against one ebusd candidate.
 # Returns (host, port, "acquired") on success, None on failure.
-async def _probe_candidate(
-    host: str, port: int = DISCOVERY_PORT
-) -> tuple[str, int, str] | None:
+async def _probe_candidate(host: str, port: int = DISCOVERY_PORT) -> tuple[str, int, str] | None:
     try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(host, port),
@@ -71,13 +70,12 @@ async def _probe_candidate(
         _LOGGER.debug("Probe failed for %s:%s: %s", host, port, e)
     return None
 
+
 class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     # User-facing config step: probe host or auto-discover, then confirm
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -113,25 +111,23 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     # Confirm step: show connection info and accept scan interval
-    async def async_step_confirm(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
-            return self._create_entry(
-                self._discovered_host, self._discovered_port, user_input
-            )
+            return self._create_entry(self._discovered_host, self._discovered_port, user_input)
 
         return self.async_show_form(
             step_id="confirm",
             description_placeholders={
                 "info": f"Connected to **{self._discovered_host}:{self._discovered_port}** — signal acquired."
             },
-            data_schema=vol.Schema({
-                vol.Optional(
-                    CONF_SCAN_INTERVAL,
-                    default=DEFAULT_EBUSD_POLL_INTERVAL,
-                ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_SCAN_INTERVAL,
+                        default=DEFAULT_EBUSD_POLL_INTERVAL,
+                    ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+                }
+            ),
         )
 
     # Try all discovery candidates, return first ebusd with acquired signal
@@ -169,7 +165,8 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_EBUSD_HOST: host,
                 CONF_EBUSD_PORT: port,
                 CONF_SCAN_INTERVAL: user_input.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL)
-                if user_input else DEFAULT_EBUSD_POLL_INTERVAL,
+                if user_input
+                else DEFAULT_EBUSD_POLL_INTERVAL,
             },
         )
 
@@ -185,18 +182,14 @@ class VaillantOptionsFlow(OptionsFlow):
         self._config_entry = config_entry
 
     # Menu: choose between settings and export dump
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         return self.async_show_menu(
             step_id="init",
             menu_options=["settings", "export_dump"],
         )
 
     # Settings form (host, port, scan interval, away, quick veto)
-    async def async_step_settings(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
             host = user_input.get(CONF_EBUSD_HOST)
             port = user_input.get(CONF_EBUSD_PORT)
@@ -211,53 +204,54 @@ class VaillantOptionsFlow(OptionsFlow):
         options = self._config_entry.options if hasattr(self._config_entry, "options") else {}
         return self.async_show_form(
             step_id="settings",
-            data_schema=vol.Schema({
-                vol.Optional(
-                    CONF_EBUSD_HOST,
-                    default=data.get(CONF_EBUSD_HOST, ""),
-                ): str,
-                vol.Optional(
-                    CONF_EBUSD_PORT,
-                    default=data.get(CONF_EBUSD_PORT, DEFAULT_EBUSD_PORT),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
-                vol.Optional(
-                    CONF_SCAN_INTERVAL,
-                    default=data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL),
-                ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
-                vol.Optional(
-                    CONF_AWAY_DURATION,
-                    default=options.get(CONF_AWAY_DURATION, DEFAULT_AWAY_DURATION),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=365)),
-                vol.Optional(
-                    CONF_QUICK_VETO_DURATION,
-                    default=options.get(CONF_QUICK_VETO_DURATION, DEFAULT_QUICK_VETO_DURATION),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
-                vol.Optional(
-                    CONF_QUICK_VETO_TEMP,
-                    default=options.get(CONF_QUICK_VETO_TEMP, DEFAULT_QUICK_VETO_TEMP),
-                ): vol.Coerce(float),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_EBUSD_HOST,
+                        default=data.get(CONF_EBUSD_HOST, ""),
+                    ): str,
+                    vol.Optional(
+                        CONF_EBUSD_PORT,
+                        default=data.get(CONF_EBUSD_PORT, DEFAULT_EBUSD_PORT),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+                    vol.Optional(
+                        CONF_SCAN_INTERVAL,
+                        default=data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+                    vol.Optional(
+                        CONF_AWAY_DURATION,
+                        default=options.get(CONF_AWAY_DURATION, DEFAULT_AWAY_DURATION),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=365)),
+                    vol.Optional(
+                        CONF_QUICK_VETO_DURATION,
+                        default=options.get(CONF_QUICK_VETO_DURATION, DEFAULT_QUICK_VETO_DURATION),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
+                    vol.Optional(
+                        CONF_QUICK_VETO_TEMP,
+                        default=options.get(CONF_QUICK_VETO_TEMP, DEFAULT_QUICK_VETO_TEMP),
+                    ): vol.Coerce(float),
+                }
+            ),
         )
 
     # Export dump: confirm + grab_duration
-    async def async_step_export_dump(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_export_dump(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
             coordinator = self.hass.data[DOMAIN].get(self._config_entry.entry_id)
             if coordinator:
                 grab_duration = user_input.get("grab_duration", 10)
                 from .dump_service import async_export_discovery_dump
+
                 await async_export_discovery_dump(self.hass, coordinator, grab_duration)
             return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
             step_id="export_dump",
-            data_schema=vol.Schema({
-                vol.Optional("grab_duration", default=10): vol.All(
-                    vol.Coerce(int), vol.Range(min=0, max=300)
-                ),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Optional("grab_duration", default=10): vol.All(vol.Coerce(int), vol.Range(min=0, max=300)),
+                }
+            ),
         )
 
 

@@ -43,7 +43,7 @@ def _value(coordinator: VaillantCoordinator, register: str) -> str | None:
 def _float(value: str | None) -> float | None:
     try:
         return float(value) if value is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -58,7 +58,6 @@ async def async_setup_entry(
 
 
 class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity):
-
     _attr_has_entity_name = True
     _attr_name = "Domestic Hot Water"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS

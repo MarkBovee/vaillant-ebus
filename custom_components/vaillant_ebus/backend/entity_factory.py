@@ -74,7 +74,7 @@ def _is_numeric(value: str) -> bool:
     try:
         float(value)
         return True
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return False
 
 
@@ -188,9 +188,7 @@ def _redistribute_device_assignments(
     yaml_overrides: dict[str, dict[str, Any]],
 ) -> list[EntityDescription]:
     active_zones = {
-        node.circuit
-        for node in graph.nodes.values()
-        if node.device_type == DeviceType.ZONE and node.has_data
+        node.circuit for node in graph.nodes.values() if node.device_type == DeviceType.ZONE and node.has_data
     }
     redistributed: list[EntityDescription] = []
 
@@ -202,9 +200,7 @@ def _redistribute_device_assignments(
 
         name_lower = entity.name.lower()
         zone_number = _extract_prefixed_number(name_lower, "z") if name_lower.startswith("z") else ""
-        heating_circuit_number = (
-            _extract_prefixed_number(name_lower, "hc") if name_lower.startswith("hc") else ""
-        )
+        heating_circuit_number = _extract_prefixed_number(name_lower, "hc") if name_lower.startswith("hc") else ""
         target_zone = f"z{zone_number or heating_circuit_number}"
 
         if zone_number or heating_circuit_number:
@@ -288,17 +284,3 @@ class EntityFactoryService:
         entities = _redistribute_device_assignments(entities, graph, overrides)
         _LOGGER.info("Generated %d entity descriptions from device graph", len(entities))
         return entities
-
-
-def generate_entity_descriptions(
-    registers: Any,
-    yaml_overrides: dict[str, dict[str, Any]] | None = None,
-    active_zone_circuits: set[str] | None = None,
-    skip_active_check: bool = False,
-    present_circuits: set[str] | None = None,
-) -> list[EntityDescription]:
-    """Legacy wrapper — removed in Step 5. Use EntityFactoryService.generate() instead."""
-    raise NotImplementedError(
-        "generate_entity_descriptions() has been replaced by EntityFactoryService.generate(). "
-        "Pass a DeviceGraph from DiscoveryService instead of raw registers."
-    )

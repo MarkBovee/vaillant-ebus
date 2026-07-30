@@ -14,9 +14,7 @@ from tests.fake_ebusd import FakeEbusdServer
 # Load ebus_service module
 EBUS_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend/ebus_service.py"
 for name in ("vaillant_ebus", "vaillant_ebus.backend"):
-    pkg = importlib.util.module_from_spec(
-        importlib.machinery.ModuleSpec(name, None)
-    )
+    pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None))
     pkg.__path__ = [str(EBUS_PATH.parents[1])] if name == "vaillant_ebus" else [str(EBUS_PATH.parent)]
     sys.modules[name] = pkg
 SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.ebus_service", EBUS_PATH)
@@ -35,11 +33,14 @@ async def test_arotherm_fixture_loads() -> None:
 
 
 # All three fixtures load without error
-@pytest.mark.parametrize("fixture,min_registers", [
-    ("arotherm_find.txt", 50),
-    ("community/basv_find.txt", 50),
-    ("community/v32_find.txt", 5),
-])
+@pytest.mark.parametrize(
+    "fixture,min_registers",
+    [
+        ("arotherm_find.txt", 50),
+        ("community/basv_find.txt", 50),
+        ("community/v32_find.txt", 5),
+    ],
+)
 async def test_all_fixtures_load(fixture: str, min_registers: int) -> None:
     async with FakeEbusdServer(fixture) as server:
         assert server.register_count >= min_registers, f"{fixture}: got {server.register_count} registers"

@@ -103,6 +103,7 @@ COMPRESSOR_STATUS_LABELS: dict[str, str] = {
     "defrost": "Defrost",
 }
 
+
 # Return whether current compressor state explicitly indicates idle.
 def compressor_is_idle(registers: Mapping[str, EbusdRegister]) -> bool:
     status = registers.get("hmu.RunDataStatuscode")
@@ -110,7 +111,7 @@ def compressor_is_idle(registers: Mapping[str, EbusdRegister]) -> bool:
     if raw_status is not None:
         try:
             status_code = int(raw_status)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             if raw_status in _COMPRESSOR_ACTIVE_STATUS_STRINGS:
                 return False
             if raw_status in _COMPRESSOR_IDLE_STATUS_STRINGS:
@@ -129,7 +130,7 @@ def compressor_is_idle(registers: Mapping[str, EbusdRegister]) -> bool:
         raw_value = register.value.get("value") if register else None
         try:
             signals.append(float(raw_value))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
     return bool(signals) and all(value == 0 for value in signals)
 
@@ -144,6 +145,7 @@ COMPRESSOR_ZERO_REGISTERS: set[str] = {
     "hmu.RunDataFan2Speed",
     "hmu.RunDataEEVPositionAbs",
 }
+
 
 # Zero stale compressor-dependent registers when compressor is idle.
 def zero_idle_registers(registers: Mapping[str, EbusdRegister]) -> None:

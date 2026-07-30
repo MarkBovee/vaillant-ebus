@@ -90,7 +90,10 @@ class RegisterService:
         if result.success:
             _LOGGER.info(
                 "Write %s.%s = %s succeeded (verified=%s)",
-                circuit, name, value, result.verified_value,
+                circuit,
+                name,
+                value,
+                result.verified_value,
             )
         return result
 
@@ -117,7 +120,7 @@ class RegisterService:
         if ft in ("DATA1B", "DATA2C", "EXP"):
             try:
                 return ParsedValue(value=float(raw), field_type=field_type)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return ParsedValue(value=None, field_type=field_type, is_placeholder=True)
 
         if ft == "BCD":
@@ -129,7 +132,7 @@ class RegisterService:
                     m = int(parts[1])
                     y = int(parts[2])
                     return ParsedValue(value=datetime.date(y, m, d), field_type=field_type)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 pass
             return ParsedValue(value=raw, field_type=field_type)
 

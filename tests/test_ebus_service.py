@@ -14,9 +14,7 @@ from tests.fake_ebusd import FakeEbusdServer
 SERVICE_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend/ebus_service.py"
 
 for name in ("vaillant_ebus", "vaillant_ebus.backend"):
-    pkg = importlib.util.module_from_spec(
-        importlib.machinery.ModuleSpec(name, None)
-    )
+    pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None))
     pkg.__path__ = [str(SERVICE_PATH.parents[1])] if name == "vaillant_ebus" else [str(SERVICE_PATH.parent)]
     sys.modules[name] = pkg
 
@@ -135,9 +133,9 @@ async def test_write_register_success() -> None:
     s._reader.readline = AsyncMock(
         side_effect=[
             TimeoutError(),  # drain for write
-            b"done\n",       # write response
+            b"done\n",  # write response
             TimeoutError(),  # drain for read-back
-            b"1\n",          # read-back
+            b"1\n",  # read-back
         ]
     )
     result = await s.write_register("hmu", "SetMode", "auto 17 - - 1 1 1 0 0 1")
@@ -182,9 +180,7 @@ async def test_write_register_empty_response_verified() -> None:
 # write_register: empty write + empty read-back = failure
 async def test_write_register_empty_both() -> None:
     s = _service()
-    s._reader.readline = AsyncMock(
-        side_effect=[TimeoutError(), b"\n", TimeoutError(), b"\n"]
-    )
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"\n", TimeoutError(), b"\n"])
     result = await s.write_register("hmu", "SetMode", "auto")
     assert not result.success
     assert "Write verification returned empty" in result.error_message
@@ -211,14 +207,15 @@ async def test_find_registers_returns_lines() -> None:
     s = _service()
     s._reader.readline = AsyncMock(
         side_effect=[
-            TimeoutError(),                  # drain
-            b"hmu Status = Standby\n",       # first find line
-            b"ctlv2 Temp = 25.5\n",          # second find line
-            TimeoutError(),                  # end
+            TimeoutError(),  # drain
+            b"hmu Status = Standby\n",  # first find line
+            b"ctlv2 Temp = 25.5\n",  # second find line
+            TimeoutError(),  # end
         ]
     )
     lines = await s.find_registers()
     assert lines == ["hmu Status = Standby", "ctlv2 Temp = 25.5"]
+    s._writer.write.assert_called_once_with(b"f -a\n")
 
 
 # find_registers: not connected returns empty list
@@ -231,9 +228,7 @@ async def test_find_registers_not_connected_returns_empty() -> None:
 # get_info: parse info command response into dict
 async def test_get_info_returns_dict() -> None:
     s = _service()
-    s._reader.readline = AsyncMock(
-        side_effect=[TimeoutError(), b"version: ebusd 1.0, signal: acquired\n"]
-    )
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"version: ebusd 1.0, signal: acquired\n"])
     info = await s.get_info()
     assert info == {"version": "ebusd 1.0", "signal": "acquired"}
 
@@ -298,9 +293,7 @@ def test_version_returns_value() -> None:
 # stale socket data is drained before each command
 async def test_stale_data_drained_before_command() -> None:
     s = _service()
-    s._reader.readline = AsyncMock(
-        side_effect=[b"stale\n", TimeoutError(), b"Standby\n"]
-    )
+    s._reader.readline = AsyncMock(side_effect=[b"stale\n", TimeoutError(), b"Standby\n"])
     result = await s.send_command("read -c hmu Status")
     assert result.data == "Standby"
     assert result.error is None

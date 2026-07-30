@@ -19,9 +19,7 @@ for name in ("vaillant_ebus", "vaillant_ebus.backend"):
     pkg.__path__ = [str(COMPONENT_PATH)] if name == "vaillant_ebus" else [str(BACKEND_PATH)]
     sys.modules[name] = pkg
 
-MODELS_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.models", BACKEND_PATH / "models.py"
-)
+MODELS_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.models", BACKEND_PATH / "models.py")
 assert MODELS_SPEC and MODELS_SPEC.loader
 MODELS = importlib.util.module_from_spec(MODELS_SPEC)
 sys.modules["vaillant_ebus.backend.models"] = MODELS
@@ -52,6 +50,7 @@ DeviceType = DISCOVERY.DeviceType
 AROTHERM_LINES = load_find_lines("arotherm_find.txt")
 COMMUNITY_BASV = load_find_lines("community/basv_find.txt")
 COMMUNITY_V32 = load_find_lines("community/v32_find.txt")
+COMMUNITY_MULTIZONE_SINGLE_CIRCUIT = load_find_lines("community/multizone_single_circuit_find.txt")
 
 
 def _arotherm_graph() -> DeviceGraph:
@@ -64,6 +63,10 @@ def _basv_graph() -> DeviceGraph:
 
 def _v32_graph() -> DeviceGraph:
     return DiscoveryService.build_device_graph(COMMUNITY_V32)
+
+
+def _multizone_single_circuit_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(COMMUNITY_MULTIZONE_SINGLE_CIRCUIT)
 
 
 # =============================================================================
@@ -250,6 +253,21 @@ def test_build_graph_placeholder_registers() -> None:
     assert "hmu.CopCooling" in graph.placeholder_registers
 
 
+@pytest.mark.parametrize(
+    "find_lines",
+    [
+        ["v32 SupplyAirTemp = 20.75;ok", "v32 SupplyAirTemp = no data stored"],
+        ["v32 SupplyAirTemp = no data stored", "v32 SupplyAirTemp = 20.75;ok"],
+    ],
+)
+def test_duplicate_find_lines_preserve_live_value_regardless_of_order(
+    find_lines: list[str],
+) -> None:
+    graph = DiscoveryService.build_device_graph(find_lines)
+    assert graph.raw_registers["v32.SupplyAirTemp"] == "20.75;ok"
+    assert graph.nodes["v32"].has_data is True
+
+
 # =============================================================================
 # D. Community fixture tests
 # =============================================================================
@@ -310,6 +328,21 @@ def test_no_pair_when_no_data() -> None:
     assert graph.nodes["z2"].has_data is False
     assert "hc2" in graph.nodes
     assert graph.nodes["hc2"].has_data is False
+
+
+# Intent: retain active Z2 registers when both zones are owned by ctlv2.
+def test_multizone_single_circuit_creates_active_z2_node() -> None:
+    graph = _multizone_single_circuit_graph()
+    z2 = graph.nodes["z2"]
+    assert z2.device_type == DeviceType.ZONE
+    assert z2.has_data is True
+    assert set(z2.registers) == {
+        "ctlv2.Z2RoomTemp",
+        "ctlv2.Z2DayTemp",
+        "ctlv2.Z2OpMode",
+        "ctlv2.Z2ActualRoomTempDesired",
+    }
+    assert "z2" in graph.nodes["ctlv2"].zone_circuits
 
 
 # =============================================================================
@@ -469,9 +502,7 @@ def test_scan_metadata_in_basv_graph() -> None:
 
 async def test_integration_arotherm_discover_device_types() -> None:
     async with FakeEbusdServer("arotherm_find.txt") as fake:
-        svc = DiscoveryService(
-            EbusService(host=fake.host, port=fake.port)
-        )
+        svc = DiscoveryService(EbusService(host=fake.host, port=fake.port))
         await svc._ebus.connect()
         graph = await svc.discover()
         await svc._ebus.disconnect()
@@ -483,9 +514,7 @@ async def test_integration_arotherm_discover_device_types() -> None:
 
 async def test_integration_arotherm_parent_relationships() -> None:
     async with FakeEbusdServer("arotherm_find.txt") as fake:
-        svc = DiscoveryService(
-            EbusService(host=fake.host, port=fake.port)
-        )
+        svc = DiscoveryService(EbusService(host=fake.host, port=fake.port))
         await svc._ebus.connect()
         graph = await svc.discover()
         await svc._ebus.disconnect()
@@ -499,9 +528,7 @@ async def test_integration_arotherm_parent_relationships() -> None:
 
 async def test_integration_arotherm_has_data() -> None:
     async with FakeEbusdServer("arotherm_find.txt") as fake:
-        svc = DiscoveryService(
-            EbusService(host=fake.host, port=fake.port)
-        )
+        svc = DiscoveryService(EbusService(host=fake.host, port=fake.port))
         await svc._ebus.connect()
         graph = await svc.discover()
         await svc._ebus.disconnect()
@@ -520,9 +547,7 @@ async def test_integration_arotherm_has_data() -> None:
 
 async def test_integration_basv_controller_type() -> None:
     async with FakeEbusdServer("community/basv_find.txt") as fake:
-        svc = DiscoveryService(
-            EbusService(host=fake.host, port=fake.port)
-        )
+        svc = DiscoveryService(EbusService(host=fake.host, port=fake.port))
         await svc._ebus.connect()
         graph = await svc.discover()
         await svc._ebus.disconnect()
@@ -534,9 +559,7 @@ async def test_integration_basv_controller_type() -> None:
 
 async def test_integration_v32_ventilation_type() -> None:
     async with FakeEbusdServer("community/v32_find.txt") as fake:
-        svc = DiscoveryService(
-            EbusService(host=fake.host, port=fake.port)
-        )
+        svc = DiscoveryService(EbusService(host=fake.host, port=fake.port))
         await svc._ebus.connect()
         graph = await svc.discover()
         await svc._ebus.disconnect()
@@ -548,9 +571,7 @@ async def test_integration_v32_ventilation_type() -> None:
 
 async def test_integration_arotherm_zone_mapping() -> None:
     async with FakeEbusdServer("arotherm_find.txt") as fake:
-        svc = DiscoveryService(
-            EbusService(host=fake.host, port=fake.port)
-        )
+        svc = DiscoveryService(EbusService(host=fake.host, port=fake.port))
         await svc._ebus.connect()
         graph = await svc.discover()
         await svc._ebus.disconnect()

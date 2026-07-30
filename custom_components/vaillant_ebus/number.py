@@ -68,15 +68,13 @@ class EbusdNumber(CoordinatorEntity[VaillantCoordinator], NumberEntity):
             return None
         try:
             return float(raw)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     # Write value to ebusd and trigger refresh
     async def async_set_native_value(self, value: float) -> None:
         if value < self._attr_native_min_value or value > self._attr_native_max_value:
-            raise ValueError(
-                f"Value {value} not in [{self._attr_native_min_value}, {self._attr_native_max_value}]"
-            )
+            raise ValueError(f"Value {value} not in [{self._attr_native_min_value}, {self._attr_native_max_value}]")
         if not self.coordinator.ebus:
             return
         result = await self.coordinator.ebus.write_register(

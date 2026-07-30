@@ -44,22 +44,22 @@ def _parse_find_lines(raw_lines: list[str]) -> list[dict]:
             continue
         val = rhs
         key = f"{circuit}.{name}"
-        result.append({
-            "circuit": circuit,
-            "name": name,
-            "key": key,
-            "fields": ["value"],
-            "values": [val],
-            "writable": False,
-            "has_data": val not in ("-", "no data stored", "") and not val.startswith(("(empty ", "(ERR")),
-        })
+        result.append(
+            {
+                "circuit": circuit,
+                "name": name,
+                "key": key,
+                "fields": ["value"],
+                "values": [val],
+                "writable": False,
+                "has_data": val not in ("-", "no data stored", "") and not val.startswith(("(empty ", "(ERR")),
+            }
+        )
     return result
 
 
 # Collect discovered + REGISTER_MAP registers into serializable dicts
-async def _dump_registers(
-    ebus, seen_keys: set[str] | None = None
-) -> tuple[list[dict], set[str], list[str]]:
+async def _dump_registers(ebus, seen_keys: set[str] | None = None) -> tuple[list[dict], set[str], list[str]]:
     raw_lines = await ebus.find_registers()
     discovered = _parse_find_lines(raw_lines)
     if seen_keys is None:
@@ -167,13 +167,9 @@ async def async_export_discovery_dump(
 
     grab_lines = []
     if grab_duration > 0:
-        _LOGGER.info(
-            "Capturing raw eBUS traffic for %d seconds...", grab_duration
-        )
+        _LOGGER.info("Capturing raw eBUS traffic for %d seconds...", grab_duration)
         try:
-            grab_lines = await async_grab(
-                coordinator.ebusd_host, coordinator.ebusd_port, grab_duration
-            )
+            grab_lines = await async_grab(coordinator.ebusd_host, coordinator.ebusd_port, grab_duration)
             _LOGGER.info("Captured %d raw lines", len(grab_lines))
         except Exception as exc:
             _LOGGER.warning("Grab failed: %s", exc)
@@ -210,10 +206,7 @@ async def async_export_discovery_dump(
 
     persistent_notification.create(
         hass,
-        (
-            f"Discovery dump written to:<br><code>{filepath}</code><br><br>"
-            f"Captured {len(grab_lines)} raw grab lines."
-        ),
+        (f"Discovery dump written to:<br><code>{filepath}</code><br><br>Captured {len(grab_lines)} raw grab lines."),
         title="Vaillant eBUS Discovery Dump",
         notification_id="vaillant_ebus_discovery_dump",
     )
@@ -228,12 +221,7 @@ def _mkdir(path: str) -> None:
 
 # Write YAML dump file with security header
 def _write_yaml(filepath: str, data: dict) -> None:
-    header = (
-        "# Discovery dump for vaillant_ebus\n"
-        "# Review this file for sensitive information before sharing\n"
-    )
-    body = yaml.dump(
-        data, default_flow_style=False, allow_unicode=True, sort_keys=False
-    )
+    header = "# Discovery dump for vaillant_ebus\n# Review this file for sensitive information before sharing\n"
+    body = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
     with open(filepath, "w") as f:
         f.write(header + body)

@@ -76,11 +76,11 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
         data = self.coordinator.data.get("ebusd", {})
         raw = data.get(self._desc.key)
         if raw is None or raw in ("-", "no data stored", "empty", ""):
-            return getattr(self, '_cached_value', None)
+            return getattr(self, "_cached_value", None)
         try:
             val = float(raw)
-        except (ValueError, TypeError):
-            if getattr(self, '_attr_native_unit_of_measurement', None):
+        except ValueError, TypeError:
+            if getattr(self, "_attr_native_unit_of_measurement", None):
                 val = None
             else:
                 val = str(raw) if raw else None

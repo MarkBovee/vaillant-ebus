@@ -102,7 +102,7 @@ def _parse_date(raw: str | None) -> date | None:
         return None
     try:
         return datetime.strptime(raw.strip(), "%d.%m.%Y").date()
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 

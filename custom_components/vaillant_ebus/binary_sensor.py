@@ -127,10 +127,7 @@ class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntit
             self.coordinator.data.get("ebusd", {}).get("hmu.Currenterror.value"),
             self.coordinator.data.get("ebusd", {}).get(f"{c}.Currenterror.value"),
         )
-        return any(
-            value and any(part.strip() not in {"", "-"} for part in str(value).split(";"))
-            for value in values
-        )
+        return any(value and any(part.strip() not in {"", "-"} for part in str(value).split(";")) for value in values)
 
     @property
     def available(self) -> bool:

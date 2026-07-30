@@ -65,9 +65,7 @@ class EbusdSelect(CoordinatorEntity[VaillantCoordinator], SelectEntity):
     # Write selected option to ebusd and trigger refresh
     async def async_select_option(self, option: str) -> None:
         if self._attr_options and option not in self._attr_options:
-            raise ValueError(
-                f"Option '{option}' not valid for {self._desc.key}. Valid options: {self._attr_options}"
-            )
+            raise ValueError(f"Option '{option}' not valid for {self._desc.key}. Valid options: {self._attr_options}")
         if not self.coordinator.ebus:
             return
         result = await self.coordinator.ebus.write_register(

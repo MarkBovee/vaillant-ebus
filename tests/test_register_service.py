@@ -17,9 +17,7 @@ for name in ("vaillant_ebus", "vaillant_ebus.backend"):
     pkg.__path__ = [str(COMPONENT_PATH)] if name == "vaillant_ebus" else [str(BACKEND_PATH)]
     sys.modules[name] = pkg
 
-MODELS_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.models", BACKEND_PATH / "models.py"
-)
+MODELS_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.models", BACKEND_PATH / "models.py")
 assert MODELS_SPEC and MODELS_SPEC.loader
 MODELS = importlib.util.module_from_spec(MODELS_SPEC)
 sys.modules["vaillant_ebus.backend.models"] = MODELS
@@ -54,6 +52,7 @@ WriteResult = MODELS.WriteResult
 # Mock helpers
 # =============================================================================
 
+
 def _mock_ebus() -> EbusService:
     ebus = AsyncMock(spec=EbusService)
     ebus.is_connected = True
@@ -67,6 +66,7 @@ def _service(ebus: EbusService | None = None) -> RegisterService:
 # =============================================================================
 # A. Value parsing tests (pure function)
 # =============================================================================
+
 
 def test_parse_numeric_data1b() -> None:
     svc = _service()
@@ -162,11 +162,10 @@ def test_parse_empty_field_type() -> None:
 # B. Writeability tests
 # =============================================================================
 
+
 async def test_writeability_writable() -> None:
     ebus = _mock_ebus()
-    ebus.send_command.return_value = SendResult(
-        data="name=HwcTempDesired, circuit=ctlv2, value=45, writable=true"
-    )
+    ebus.send_command.return_value = SendResult(data="name=HwcTempDesired, circuit=ctlv2, value=45, writable=true")
     svc = RegisterService(ebus)
     result = await svc.verify_writeability("ctlv2", "HwcTempDesired")
     assert result.writable is True
@@ -175,9 +174,7 @@ async def test_writeability_writable() -> None:
 
 async def test_writeability_read_only() -> None:
     ebus = _mock_ebus()
-    ebus.send_command.return_value = SendResult(
-        data="name=SetMode, circuit=hmu, value=auto 17, writable=false"
-    )
+    ebus.send_command.return_value = SendResult(data="name=SetMode, circuit=hmu, value=auto 17, writable=false")
     svc = RegisterService(ebus)
     result = await svc.verify_writeability("hmu", "SetMode")
     assert result.writable is False
@@ -196,6 +193,7 @@ async def test_writeability_unknown() -> None:
 # =============================================================================
 # C. Read tests
 # =============================================================================
+
 
 async def test_read_success() -> None:
     ebus = _mock_ebus()
@@ -251,11 +249,10 @@ async def test_read_none_response() -> None:
 # D. Write tests
 # =============================================================================
 
+
 async def test_write_success() -> None:
     ebus = _mock_ebus()
-    ebus.send_command.return_value = SendResult(
-        data="name=HwcTempDesired, circuit=ctlv2, value=45, writable=true"
-    )
+    ebus.send_command.return_value = SendResult(data="name=HwcTempDesired, circuit=ctlv2, value=45, writable=true")
     ebus.write_register.return_value = WriteResult(success=True, verified_value="45")
     svc = RegisterService(ebus)
     result = await svc.write("ctlv2", "HwcTempDesired", "45")
@@ -265,9 +262,7 @@ async def test_write_success() -> None:
 
 async def test_write_read_only_blocked() -> None:
     ebus = _mock_ebus()
-    ebus.send_command.return_value = SendResult(
-        data="name=SetMode, circuit=hmu, value=auto 17, writable=false"
-    )
+    ebus.send_command.return_value = SendResult(data="name=SetMode, circuit=hmu, value=auto 17, writable=false")
     svc = RegisterService(ebus)
     result = await svc.write("hmu", "SetMode", "cooling")
     assert result.success is False
@@ -285,9 +280,7 @@ async def test_write_not_connected() -> None:
 
 async def test_write_verification_fails() -> None:
     ebus = _mock_ebus()
-    ebus.send_command.return_value = SendResult(
-        data="name=HwcTempDesired, circuit=ctlv2, value=45, writable=true"
-    )
+    ebus.send_command.return_value = SendResult(data="name=HwcTempDesired, circuit=ctlv2, value=45, writable=true")
     ebus.write_register.return_value = WriteResult(
         success=True,
         error_message="Write verification failed: 40",
@@ -301,9 +294,7 @@ async def test_write_verification_fails() -> None:
 
 async def test_write_ebus_error() -> None:
     ebus = _mock_ebus()
-    ebus.send_command.return_value = SendResult(
-        data="name=HwcTempDesired, circuit=ctlv2, value=45, writable=true"
-    )
+    ebus.send_command.return_value = SendResult(data="name=HwcTempDesired, circuit=ctlv2, value=45, writable=true")
     ebus.write_register.return_value = WriteResult(success=False, error_message="timeout")
     svc = RegisterService(ebus)
     result = await svc.write("ctlv2", "HwcTempDesired", "45")
@@ -315,11 +306,10 @@ async def test_write_ebus_error() -> None:
 # E. SetMode regression tests
 # =============================================================================
 
+
 async def test_setmode_is_read_only() -> None:
     ebus = _mock_ebus()
-    ebus.send_command.return_value = SendResult(
-        data="name=SetMode, circuit=hmu, value=auto 17, writable=false"
-    )
+    ebus.send_command.return_value = SendResult(data="name=SetMode, circuit=hmu, value=auto 17, writable=false")
     svc = RegisterService(ebus)
     result = await svc.verify_writeability("hmu", "SetMode")
     assert result.writable is False
@@ -329,9 +319,7 @@ async def test_setmode_is_read_only() -> None:
 async def test_setmode_write_blocked() -> None:
     ebus = _mock_ebus()
     ebus.read_register.return_value = "auto 17"
-    ebus.send_command.return_value = SendResult(
-        data="name=SetMode, circuit=hmu, value=auto 17, writable=false"
-    )
+    ebus.send_command.return_value = SendResult(data="name=SetMode, circuit=hmu, value=auto 17, writable=false")
     svc = RegisterService(ebus)
     result = await svc.write("hmu", "SetMode", "cooling")
     assert result.success is False
@@ -341,6 +329,7 @@ async def test_setmode_write_blocked() -> None:
 # =============================================================================
 # F. Cache hydrate
 # =============================================================================
+
 
 async def test_hydrate_from_cache() -> None:
     ebus = _mock_ebus()
@@ -400,9 +389,7 @@ async def test_read_caches_subsequent_calls() -> None:
 
 async def test_write_readability_check_called() -> None:
     ebus = _mock_ebus()
-    ebus.send_command.return_value = SendResult(
-        data="name=HwcTempDesired, circuit=ctlv2, value=45, writable=true"
-    )
+    ebus.send_command.return_value = SendResult(data="name=HwcTempDesired, circuit=ctlv2, value=45, writable=true")
     ebus.write_register.return_value = WriteResult(success=True, verified_value="45")
     svc = RegisterService(ebus)
     result = await svc.write("ctlv2", "HwcTempDesired", "45")

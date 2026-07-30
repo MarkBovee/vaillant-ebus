@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.2.1 - 2026-07-30
+
+### Fixed
+
+- **Blocking file I/O in event loop:** `open()` calls in `_load_cache` and
+  `_save_cache` now run via `hass.async_add_executor_job` to avoid HA warnings
+  about blocking the event loop during setup and poll cycles.
+- **Multi-zone cache seeding (#41):** cached controller registers now use the
+  same `DiscoveryService` graph builder as live ebusd output. Active `Z2*`
+  and higher-zone registers therefore create their logical zone devices and
+  entities before live discovery completes.
+- **Ventilation startup discovery (#38):** discovery now uses `find -a`, which
+  includes ebusd write and conditional messages, and performs one additional
+  full discovery pass five minutes after startup. This recovers values that
+  ebusd has not populated during the initial pass without continuous rescans.
+- **Duplicate find output:** when ebusd returns a register both with live data
+  and `no data stored`, discovery preserves the live value regardless of line
+  order.
+
+### Cleaned up
+
+- Removed the unused `generate_entity_descriptions()` compatibility wrapper.
+- Removed the obsolete `ebus_cli.py` script, which depended on the deleted
+  `EbusdTcpBackend` transport.
+- Updated the developer architecture and TCP command reference to the current
+  service-based implementation.
+
 ## 1.2.0 - 2026-07-29
 
 ### Refactored to service architecture

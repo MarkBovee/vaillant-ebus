@@ -69,7 +69,7 @@ class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEn
         try:
             naive = datetime.strptime(f"{end_date} {end_time}", f"{DATE_FMT} {TIME_FMT}")
             return naive.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
 
@@ -102,7 +102,7 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity)
         try:
             naive = datetime.strptime(f"{raw} {DEFAULT_TIME}", f"{DATE_FMT} {TIME_FMT}")
             return naive.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     # Write holiday date to ebusd register and trigger refresh

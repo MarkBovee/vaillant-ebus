@@ -45,7 +45,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             result = await coordinator.ebus.write_register(circuit, name, value)
             _LOGGER.info(
                 "write_parameter %s.%s=%s: success=%s, verified=%s",
-                circuit, name, value, result.success, result.verified_value,
+                circuit,
+                name,
+                value,
+                result.success,
+                result.verified_value,
             )
 
     # Force re-read all active registers.
@@ -62,20 +66,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.async_request_refresh()
 
     hass.services.async_register(
-        DOMAIN, "read_parameter", svc_read_parameter,
-        schema=vol.Schema({
-            vol.Required("circuit"): cv.string,
-            vol.Required("name"): cv.string,
-            vol.Optional("field", default=""): cv.string,
-        }),
+        DOMAIN,
+        "read_parameter",
+        svc_read_parameter,
+        schema=vol.Schema(
+            {
+                vol.Required("circuit"): cv.string,
+                vol.Required("name"): cv.string,
+                vol.Optional("field", default=""): cv.string,
+            }
+        ),
     )
     hass.services.async_register(
-        DOMAIN, "write_parameter", svc_write_parameter,
-        schema=vol.Schema({
-            vol.Required("circuit"): cv.string,
-            vol.Required("name"): cv.string,
-            vol.Required("value"): cv.string,
-        }),
+        DOMAIN,
+        "write_parameter",
+        svc_write_parameter,
+        schema=vol.Schema(
+            {
+                vol.Required("circuit"): cv.string,
+                vol.Required("name"): cv.string,
+                vol.Required("value"): cv.string,
+            }
+        ),
     )
     hass.services.async_register(DOMAIN, "refresh", svc_refresh, schema=vol.Schema({}))
     hass.services.async_register(DOMAIN, "rediscover", svc_rediscover, schema=vol.Schema({}))
@@ -87,10 +99,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await async_export_discovery_dump(hass, coordinator, grab_duration)
 
     hass.services.async_register(
-        DOMAIN, "export_discovery_dump", svc_export_discovery_dump,
-        schema=vol.Schema({
-            vol.Optional("grab_duration"): vol.Coerce(int),
-        }),
+        DOMAIN,
+        "export_discovery_dump",
+        svc_export_discovery_dump,
+        schema=vol.Schema(
+            {
+                vol.Optional("grab_duration"): vol.Coerce(int),
+            }
+        ),
     )
 
     return True

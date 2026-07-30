@@ -233,7 +233,7 @@ def cmd_cooling(dump: dict, opts) -> int:
     return 0
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Analyze vaillant_ebus discovery dump")
     parser.add_argument("dump", help="Path to discovery_dump_*.yaml file")
     parser.add_argument("-c", "--compare", action="store_true", help="Compare vs REGISTER_MAP")

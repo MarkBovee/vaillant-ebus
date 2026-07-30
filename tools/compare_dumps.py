@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Compare two discovery dumps from HA and show only changed/new registers."""
+
 import argparse
 import os
 import subprocess
@@ -15,9 +16,22 @@ except ImportError:
 
 def ssh(cmd: str, passwd: str) -> str:
     r = subprocess.run(
-        ["sshpass", "-p", passwd, "ssh", "-o", "StrictHostKeyChecking=no",
-         "-o", "UserKnownHostsFile=/dev/null", "markbovee@192.168.1.135", cmd],
-        capture_output=True, text=True, timeout=30)
+        [
+            "sshpass",
+            "-p",
+            passwd,
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "markbovee@192.168.1.135",
+            cmd,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
     if r.returncode != 0:
         print(f"SSH error: {r.stderr}", file=sys.stderr)
         sys.exit(1)
@@ -52,7 +66,7 @@ def fetch_dump(path: str, passwd: str) -> dict:
     return result
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Compare HA discovery dumps")
     parser.add_argument("--env", default="/mnt/work/Projects/Personal/vaillant-ebus/.env")
     args = parser.parse_args()

@@ -27,17 +27,21 @@ _LOGGER = logging.getLogger(__name__)
 
 ZONE = "z1"
 
-HEATING_STATES = frozenset({
-    "heat_compressor_active",
-    "heat_prerun",
-    "heat_overrun",
-    "heat_immersion_heater_active",
-})
-COOLING_STATES = frozenset({
-    "cool_compressor_active",
-    "cool_prerun",
-    "cool_overrun",
-})
+HEATING_STATES = frozenset(
+    {
+        "heat_compressor_active",
+        "heat_prerun",
+        "heat_overrun",
+        "heat_immersion_heater_active",
+    }
+)
+COOLING_STATES = frozenset(
+    {
+        "cool_compressor_active",
+        "cool_prerun",
+        "cool_overrun",
+    }
+)
 
 DATE_FMT = "%d.%m.%Y"
 HOLIDAY_RESET = "01.01.2015"
@@ -55,7 +59,7 @@ def _value(coordinator: VaillantCoordinator, register: str, circuit: str | None 
 def _float(value: str | None) -> float | None:
     try:
         return float(value) if value is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -76,7 +80,6 @@ async def async_setup_entry(
 
 
 class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
-
     _attr_has_entity_name = True
     _attr_name = "Home"
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO]
@@ -302,7 +305,6 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
 
 class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
-
     _attr_has_entity_name = True
     _attr_name = "Flow Temperature Range"
     _attr_hvac_modes = [HVACMode.AUTO]

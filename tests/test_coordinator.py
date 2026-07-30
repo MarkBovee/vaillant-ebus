@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
+import asyncio
 import json
 import sys
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -21,17 +23,13 @@ for name in ("vaillant_ebus", "vaillant_ebus.backend"):
     pkg.__path__ = [str(COMPONENT_PATH)] if name == "vaillant_ebus" else [str(BACKEND_PATH)]
     sys.modules[name] = pkg
 
-MODELS_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.models", BACKEND_PATH / "models.py"
-)
+MODELS_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.models", BACKEND_PATH / "models.py")
 assert MODELS_SPEC and MODELS_SPEC.loader
 MODELS = importlib.util.module_from_spec(MODELS_SPEC)
 sys.modules["vaillant_ebus.backend.models"] = MODELS
 MODELS_SPEC.loader.exec_module(MODELS)
 
-MAPPING_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.mapping", BACKEND_PATH / "mapping.py"
-)
+MAPPING_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.mapping", BACKEND_PATH / "mapping.py")
 assert MAPPING_SPEC and MAPPING_SPEC.loader
 MAPPING = importlib.util.module_from_spec(MAPPING_SPEC)
 sys.modules["vaillant_ebus.backend.mapping"] = MAPPING
@@ -78,11 +76,13 @@ mock_homeassistant.config_entries = MagicMock()
 mock_homeassistant.core = MagicMock()
 mock_homeassistant.helpers = MagicMock()
 mock_homeassistant.helpers.device_registry = MagicMock()
+mock_homeassistant.helpers.event = MagicMock()
 mock_homeassistant.helpers.update_coordinator = MagicMock()
 mock_homeassistant.helpers.device_registry.DeviceInfo = dict
 
+
 class _MockDataUpdateCoordinator:
-    def __init__(self, hass, logger, **kwargs):  # noqa: ARG002
+    def __init__(self, hass, logger, **kwargs) -> None:  # noqa: ARG002
         self.hass = hass
         self.name = kwargs.get("name", "")
         self.update_interval = kwargs.get("update_interval")
@@ -98,6 +98,7 @@ class _MockDataUpdateCoordinator:
     def __call__(self, *args, **kwargs):
         return self
 
+
 mock_homeassistant.helpers.update_coordinator.DataUpdateCoordinator = _MockDataUpdateCoordinator
 
 sys.modules["homeassistant"] = mock_homeassistant
@@ -105,21 +106,17 @@ sys.modules["homeassistant.config_entries"] = mock_homeassistant.config_entries
 sys.modules["homeassistant.core"] = mock_homeassistant.core
 sys.modules["homeassistant.helpers"] = mock_homeassistant.helpers
 sys.modules["homeassistant.helpers.device_registry"] = mock_homeassistant.helpers.device_registry
+sys.modules["homeassistant.helpers.event"] = mock_homeassistant.helpers.event
 sys.modules["homeassistant.helpers.update_coordinator"] = mock_homeassistant.helpers.update_coordinator
 sys.modules["homeassistant.const"] = MagicMock()
 
 
-
-repairs_module = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("vaillant_ebus.repairs", None)
-)
+repairs_module = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("vaillant_ebus.repairs", None))
 repairs_module.async_dismiss_ebusd_unreachable = AsyncMock()
 repairs_module.async_create_ebusd_unreachable = AsyncMock()
 sys.modules["vaillant_ebus.repairs"] = repairs_module
 
-const_module = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("vaillant_ebus.const", None)
-)
+const_module = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("vaillant_ebus.const", None))
 for attr, value in {
     "CONF_EBUSD_HOST": "ebusd_host",
     "CONF_EBUSD_PORT": "ebusd_port",
@@ -145,6 +142,10 @@ def _hass(cache_dir: str) -> MagicMock:
     h = MagicMock()
     h.config.path.return_value = str(Path(cache_dir) / "vaillant_ebus" / "register_cache.json")
     h.async_create_task = MagicMock()
+    async def _executor(func, *args):
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, func, *args)
+    h.async_add_executor_job = _executor
     return h
 
 
@@ -216,9 +217,44 @@ async def test_coordinator_seeds_from_cache_with_cached_values() -> None:
         hass.config.path.return_value = str(cache_path)
 
         c = VaillantCoordinator(hass, _entry())
+        await c._async_seed_entities_from_cache()
         assert c.registers.get("ctlv2.Z1DayTemp")
         assert c.registers["ctlv2.Z1DayTemp"].value.get("value") == "21.0"
         assert c.registers["ctlv2.Z1DayTemp"].has_data is True
+
+
+# Intent: recover Z2 entities from cache before ebusd completes live discovery.
+async def test_coordinator_cache_seed_creates_active_z2_entities() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cache_path = Path(tmpdir) / "vaillant_ebus" / "register_cache.json"
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "ctlv2.Z1RoomTemp.value": "21.5",
+                    "ctlv2.Z1DayTemp.value": "22.0",
+                    "ctlv2.Z1OpMode.value": "day",
+                    "ctlv2.Z2RoomTemp.value": "20.5",
+                    "ctlv2.Z2DayTemp.value": "21.0",
+                    "ctlv2.Z2OpMode.value": "auto",
+                    "ctlv2.Z2ActualRoomTempDesired.value": "21.0",
+                }
+            )
+        )
+
+        hass = _hass(tmpdir)
+        hass.config.path.return_value = str(cache_path)
+        coordinator = VaillantCoordinator(hass, _entry())
+        await coordinator._async_seed_entities_from_cache()
+
+        z2_entities = [entity for entity in coordinator.entities if entity.name.startswith("Z2")]
+        assert {entity.name for entity in z2_entities} == {
+            "Z2RoomTemp",
+            "Z2DayTemp",
+            "Z2OpMode",
+            "Z2ActualRoomTempDesired",
+        }
+        assert {entity.device_circuit for entity in z2_entities} == {"z2"}
 
 
 async def test_connect_and_discover_success() -> None:
@@ -230,6 +266,80 @@ async def test_connect_and_discover_success() -> None:
         c._graph = graph
         assert len(c.entities) > 0
         assert c.heating_circuit == "ctlv2"
+
+
+# Intent: re-run discovery once after ebusd has had time to populate live values.
+async def test_connect_schedules_one_delayed_rediscovery() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+        coordinator = VaillantCoordinator(hass, _entry())
+        graph = _make_graph()
+
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.version = "26.1"
+        mock_ebus.connect = AsyncMock()
+        mock_ebus.define_register = AsyncMock(return_value="done")
+        mock_ebus.read_register = AsyncMock(return_value=None)
+
+        mock_discovery = MagicMock()
+        mock_discovery.discover = AsyncMock(return_value=graph)
+        schedule = MagicMock(return_value=MagicMock())
+
+        module = sys.modules["vaillant_ebus.coordinator"]
+        original_ebus = module.EbusService
+        original_discovery = module.DiscoveryService
+        original_schedule = module.async_call_later
+        module.EbusService = MagicMock(return_value=mock_ebus)
+        module.DiscoveryService = MagicMock(return_value=mock_discovery)
+        module.async_call_later = schedule
+        try:
+            await coordinator._ebusd_connect_and_discover()
+        finally:
+            module.EbusService = original_ebus
+            module.DiscoveryService = original_discovery
+            module.async_call_later = original_schedule
+
+        schedule.assert_called_once()
+        assert schedule.call_args.args[0] is hass
+        assert schedule.call_args.args[1] == timedelta(minutes=5)
+        delayed_callback = schedule.call_args.args[2]
+        await delayed_callback(datetime.now())
+        assert mock_discovery.discover.await_count == 2
+        schedule.assert_called_once()
+
+
+# Intent: keep existing entities when delayed discovery finds only additional devices.
+async def test_delayed_rediscovery_only_adds_entities_and_devices() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        initial_graph = _make_graph()
+        delayed_graph = DeviceGraph(
+            nodes={
+                "v32": DeviceNode(
+                    circuit="v32",
+                    device_type=DeviceType.VENTILATION,
+                    registers=["v32.SupplyAirTemp"],
+                    has_data=True,
+                ),
+            },
+            raw_registers={"v32.SupplyAirTemp": "20.75"},
+            placeholder_registers=set(),
+        )
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value=None)
+        mock_discovery = MagicMock()
+        mock_discovery.discover = AsyncMock(return_value=delayed_graph)
+
+        coordinator.ebus = mock_ebus
+        coordinator.discovery = mock_discovery
+        await coordinator._apply_discovery_graph(initial_graph, "initial")
+        await coordinator._async_delayed_rediscover(datetime.now())
+
+        entity_names = {entity.name for entity in coordinator.entities}
+        assert {"Z1OpMode", "Z1DayTemp", "SupplyAirTemp"} <= entity_names
+        assert {"ctlv2", "v32"} <= set(coordinator._graph.nodes)
 
 
 async def test_connect_failure_no_crash() -> None:
@@ -316,8 +426,10 @@ async def test_fallback_read_adds_new_registers() -> None:
         c.ebus = mock_ebus
         c._graph = _make_graph()
         c._last_find_keys = {
-            "hmu.RunDataStatuscode", "hmu.OutsideTemp",
-            "ctlv2.Z1OpMode", "ctlv2.Z1DayTemp",
+            "hmu.RunDataStatuscode",
+            "hmu.OutsideTemp",
+            "ctlv2.Z1OpMode",
+            "ctlv2.Z1DayTemp",
         }
         c.entities = c.entity_factory.generate(c._graph)
 
@@ -349,41 +461,41 @@ async def test_get_device_info_uses_graph() -> None:
 
 # Intent: prefer configured names without changing stable circuit identifiers.
 async def test_get_device_info_prefers_circuit_names() -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            c = VaillantCoordinator(_hass(tmpdir), _entry())
-            c._graph = _make_graph()
-            c.ebus = MagicMock()
-            c.ebus.version = "23.2"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = _make_graph()
+        c.ebus = MagicMock()
+        c.ebus.version = "23.2"
 
-            for circuit in ("ctlv0", "ctlv2", "ctlv9"):
-                info = c.get_device_info(circuit)
-                assert info.get("name") == "Vaillant sensoCOMFORT Control"
-                assert info["identifiers"] == {("vaillant_ebus", circuit)}
-            assert c.get_device_info("z1").get("name") == "Zone 1"
-            assert c.get_device_info("hmu")["identifiers"] == {("vaillant_ebus", "hmu")}
+        for circuit in ("ctlv0", "ctlv2", "ctlv9"):
+            info = c.get_device_info(circuit)
+            assert info.get("name") == "Vaillant sensoCOMFORT Control"
+            assert info["identifiers"] == {("vaillant_ebus", circuit)}
+        assert c.get_device_info("z1").get("name") == "Zone 1"
+        assert c.get_device_info("hmu")["identifiers"] == {("vaillant_ebus", "hmu")}
 
 
 # Intent: expose unclassified devices using their ebusd scan metadata.
 async def test_get_device_info_for_unknown_scan_type() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
-            c = VaillantCoordinator(_hass(tmpdir), _entry())
-            graph = _make_graph()
-            graph.nodes["xyz"] = DeviceNode(
-                circuit="xyz",
-                device_type=DeviceType.UNKNOWN,
-                scan_type="XYZ01",
-                scan_sw="1234",
-                scan_hw="5678",
-            )
-            c._graph = graph
-            c.ebus = MagicMock()
-            c.ebus.version = "23.2"
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        graph = _make_graph()
+        graph.nodes["xyz"] = DeviceNode(
+            circuit="xyz",
+            device_type=DeviceType.UNKNOWN,
+            scan_type="XYZ01",
+            scan_sw="1234",
+            scan_hw="5678",
+        )
+        c._graph = graph
+        c.ebus = MagicMock()
+        c.ebus.version = "23.2"
 
-            info = c.get_device_info("xyz")
-            assert info["name"] == "Vaillant XYZ01"
-            assert info["sw_version"] == "1234"
-            assert info["hw_version"] == "5678"
-            assert info["identifiers"] == {("vaillant_ebus", "xyz")}
+        info = c.get_device_info("xyz")
+        assert info["name"] == "Vaillant XYZ01"
+        assert info["sw_version"] == "1234"
+        assert info["hw_version"] == "5678"
+        assert info["identifiers"] == {("vaillant_ebus", "xyz")}
 
 
 async def test_entities_generated_after_discovery() -> None:
@@ -424,7 +536,7 @@ async def test_values_from_registers_includes_suffix_stripped() -> None:
             value={"value": "22.50;ok"},
             has_data=True,
         )
-        values = c._values_from_registers()
+        values = await c._async_values_from_registers()
         assert values["test.Example.value"] == "22.50"
 
 
@@ -476,22 +588,26 @@ async def test_orchestration_order() -> None:
     mock_ebus.is_connected = True
     mock_ebus.version = "23.2"
 
-    async def connect():
+    async def connect() -> None:
         call_log.append("connect")
+
     mock_ebus.connect = connect
 
-    async def define_register(defn):
+    async def define_register(defn) -> str:
         call_log.append("define")
         return "done"
+
     mock_ebus.define_register = define_register
 
     async def find_registers():
         call_log.append("find")
         return ["hmu Status01 = standby"]
+
     mock_ebus.find_registers = find_registers
 
-    async def read_register(circuit, name):
+    async def read_register(circuit, name) -> None:
         return None
+
     mock_ebus.read_register = read_register
 
     module = sys.modules["vaillant_ebus.coordinator"]
@@ -536,18 +652,21 @@ async def test_entities_regenerated_with_fresh_graph() -> None:
         mock_ebus.version = "23.2"
         mock_ebus.connect = AsyncMock()
 
-        async def dfn(d):
+        async def dfn(d) -> str:
             return "defined"
+
         mock_ebus.define_register = dfn
 
         find_lines = load_find_lines("arotherm_find.txt")
 
         async def find_regs():
             return find_lines
+
         mock_ebus.find_registers = find_regs
 
-        async def read_reg(circuit, name):
+        async def read_reg(circuit, name) -> None:
             return None
+
         mock_ebus.read_register = read_reg
 
         mock_factory = MagicMock()
