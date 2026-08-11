@@ -65,6 +65,15 @@ Climate behavior must follow the corresponding `mypyllant` implementation.
 - Register classification is inferred from discovery and metadata; YAML overrides may be needed for uncommon registers.
 - Some useful registers may require runtime definitions before they can be discovered.
 
+## Test Fixtures
+
+- ebusd `find` output and discovery dumps are captured as fixtures in `tests/fixtures/`. There is no `data-dump/` directory anymore; all community and local captures live in `tests/fixtures/`.
+- `tests/fixtures/community/` holds third-party captures: discovery-dump YAML files (`flexotherm_discovery.yaml`, `arotherm_plus_2zone_discovery.yaml`, `arotherm_plus_basv3_discovery.yaml`, `arotherm_pro7_discovery.yaml`) and plain `find` output (`basv_find.txt`, `v32_find.txt`, `flexocompact_find.txt`, `szflo_ebusctl_info.txt`, `second_ebusctl_info.txt`, `dumpvalues.yaml`).
+- `dumpvalues.yaml` records multi-field register field names and is the reference for `MULTI_FIELD_MAP` in `tests/fake_ebusd.py`. Keep the two in sync.
+- Load fixtures in tests with `load_find_lines("community/<name>")` for `find` output and `load_discovery_dump("community/<name>")` for discovery-dump YAML; both live in `tests/fake_ebusd.py`. Discovery-dump YAML fixtures need `pyyaml` (installed in CI).
+- Open GitHub issues may reference specific community dumps. When investigating an issue, load the matching fixture and confirm the register behavior on the discovered device graph before changing production code.
+- New community captures should be added under `tests/fixtures/community/` as discovery-dump YAML (preferred, keeps metadata and `raw_find_lines`) with a fixture-load test, never as a separate `data-dump/` folder.
+
 ## Validation
 
 ```bash

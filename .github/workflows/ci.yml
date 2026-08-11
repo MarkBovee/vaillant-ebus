@@ -23,7 +23,7 @@ jobs:
           python-version: "3.14"
 
       - name: Install dependencies
-        run: pip install ruff pytest pytest-asyncio
+        run: pip install ruff pytest pytest-asyncio pyyaml
 
       - name: Lint
         run: ruff check .
@@ -47,7 +47,7 @@ jobs:
           python-version: "3.14"
 
       - name: Install dependencies
-        run: pip install ruff pytest pytest-asyncio
+        run: pip install ruff pytest pytest-asyncio pyyaml
 
       - name: Lint
         run: ruff check .

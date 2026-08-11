@@ -1,0 +1,1110 @@
+ebusd/hmux0:
+  SetMode:
+    hcmode: auto
+    flowtempdesired: 0
+    hwctempdesired: null
+    hwcflowtempdesired: null
+    disablehc: 1
+    disablehwctapping: 1
+    disablehwcload: 1
+    remoteControlHcPump: 0
+    releaseBackup: 0
+    releaseCooling: 0
+  State01:
+    "0":
+      name: temp1
+      value: 23.5
+    "1":
+      name: temp1
+      value: 22
+    "2":
+      name: temp2
+      value: 21.148
+    "3":
+      name: temp1
+      value: null
+    "4":
+      name: temp1
+      value: 44.5
+    "5":
+      name: pumpstate
+      value: "off"
+  RunDataCurrentConsumedPower: "?1"
+  DateTime:
+    dcfstate: valid
+    btime: "19:12:21"
+    bdate: 24.05.2026
+    temp2: 21.199
+  StatusCirPump:
+    "0":
+      name: ""
+      value: "off"
+  CurrentConsumedPowerWatt:
+    powerv: 6
+  Statuscode:
+    scode: Standby
+  YieldHcDay:
+    energy: 0
+  YieldCoolingDay:
+    energy: 0
+  YieldHwcDay:
+    energy: 1.5
+  YieldHcMonth:
+    energy: 111
+  YieldHc:
+    energy: 7730
+  YieldHwcMonth:
+    energy: 36.5
+  YieldHwc:
+    energy: 515
+  TargetTempHc:
+    "0":
+      name: ""
+      value: 0
+  EnergyIntegral: "?1"
+  CurrentYieldPower:
+    "0":
+      name: ""
+      value: 0
+  CurrentConsumedPower:
+    "0":
+      name: ""
+      value: 0
+  AirIntakeTemp:
+    "0":
+      name: ""
+      value: 19.12
+  YieldCooling:
+    energy: 0
+  FlowPressure:
+    "0":
+      name: ""
+      value: 1.39
+  TotalHours:
+    "0":
+      name: ""
+      value: 6818
+  CoolingHours:
+    "0":
+      name: ""
+      value: 0
+  TotalEnergyUsage:
+    energy: 3098
+  CompressorHours:
+    "0":
+      name: ""
+      value: 3121
+  CompressorStarts:
+    "0":
+      name: ""
+      value: 994
+  EnergyIntegralStartHeating:
+    integral: -120
+  BuildingCircuitMaxPressureDifference:
+    "0":
+      name: ""
+      value: 900
+  EnergyIntegralStartCooling:
+    integral: 60
+  HwcMode:
+    "0":
+      name: ""
+      value: eco
+  RunDataFlowTempDesiredTrunc:
+    "0":
+      name: ""
+      value: 0
+  RunDataFlowTemp:
+    "0":
+      name: ""
+      value: 18.875
+  RunDataEvaporationTemp:
+    "0":
+      name: ""
+      value: 18.75
+  RunDataCompressorInletTemp:
+    tempv: 21.25
+  RunDataCompressorOutletTemp:
+    tempv: 21.75
+  RunDataEEVOutletTemp:
+    tempv: 19.6875
+  RunDataCondensorOutletTemp3digits:
+    "0":
+      name: ""
+      value: 20.3438
+  RunDataAirIntakeTemp:
+    tempv: 19.125
+  RunDataReturnTemp3digits:
+    "0":
+      name: ""
+      value: 22.236
+  RunDataHighPressure:
+    pressv: 13.3
+  RunDataBuildingPumpPower:
+    "0":
+      name: ""
+      value: 0
+  LowPressureStatus:
+    "0":
+      name: ""
+      value: 0
+  RunStatsHMUHours:
+    "0":
+      name: ""
+      value: 6818
+  RunStatsHcHours:
+    "0":
+      name: ""
+      value: 2805
+  RunStatsHwcHours:
+    "0":
+      name: ""
+      value: 271
+  RunStatsCompressorHours:
+    "0":
+      name: ""
+      value: 3121
+  RunStatsCompressorStarts:
+    cntstarts2: 994
+  RunStatsBuildingPumpHours:
+    "0":
+      name: ""
+      value: 3666
+  RunStatsBuildingCPumpStarts:
+    cntstarts2: 494
+  RunStats4PortValveHours:
+    "0":
+      name: ""
+      value: 87
+  RunStatsFan1Hours:
+    "0":
+      name: ""
+      value: 3101
+  RunStatsFan1Starts:
+    cntstarts2: 1717
+  RunStatsFan2Hours:
+    "0":
+      name: ""
+      value: 0
+  RunStatsFan2Starts:
+    cntstarts2: 0
+  RunDataHCHours:
+    "0":
+      name: ""
+      value: 4886
+  State00: "?1"
+  currenterror:
+    "0":
+      name: error
+      value: null
+    "1":
+      name: error
+      value: null
+    "2":
+      name: error
+      value: null
+    "3":
+      name: error
+      value: null
+    "4":
+      name: error
+      value: null
+  RunDataCompressorSpeed: "?1"
+  RunDataFan1Speed: "?1"
+  WaterThroughput: "?1"
+  RunDataSubcoolingNominalValue: "?1"
+  CopHc: "?1"
+  CopHcMonth: "?1"
+  CopHwcMonth: "?1"
+  CopHwc: "?1"
+  airintaketemp: "?1"
+  compressorhours: "?1"
+  compressorstarts: "?1"
+  coolinghours: "?1"
+  currentconsumedpower: "?1"
+  currentconsumedpowerwatt: "?1"
+  currentyieldpower: "?1"
+  energyintegral: "?1"
+  hcmodeactive: "?1"
+  heatcurve: "?1"
+  returntemp: "?1"
+  rundataairintaketemp: "?1"
+  rundatabuildingpumppower: "?1"
+  rundatacompressorinlettemp: "?1"
+  rundatacompressoroutlettemp: "?1"
+  rundatacondensoroutlettemp3digits: "?1"
+  rundatacurrentconsumedpower: "?1"
+  rundataeevoutlettemp: "?1"
+  rundataevaporationtemp: "?1"
+  rundataflowtemp: "?1"
+  rundataflowtempdesiredtrunc: "?1"
+  rundatahchours: "?1"
+  rundatareturntemp3digits: "?1"
+  rundatastatuscode: "?1"
+  runstats4portvalvehours: "?1"
+  runstatsbuildingcpumpstarts: "?1"
+  runstatsbuildingpumphours: "?1"
+  runstatscompressorhours: "?1"
+  runstatscompressorstarts: "?1"
+  runstatsfan1hours: "?1"
+  runstatsfan1starts: "?1"
+  runstatshchours: "?1"
+  runstatshmuhours: "?1"
+  runstatshwchours: "?1"
+  setmode_hcmode: "?1"
+  setmode_flowtempdesired: "?1"
+  setmode_hwctempdesired: "?1"
+  setmode_hwcflowtempdesired: "?1"
+  setmode_disablehc: "?1"
+  setmode_disablehwctapping: "?1"
+  setmode_disablehwcload: "?1"
+  setmode_remotecontrolhcpump: "?1"
+  setmode_releasebackup: "?1"
+  setmode_releasecooling: "?1"
+  sourcetempinput: "?1"
+  sourcetempoutput: "?1"
+  status16: "?1"
+  statuscode: "?1"
+  supplytempweighted: "?1"
+  temperatureswitchcompressoroutlet: "?1"
+  temperatureswitchelectricheater: "?1"
+  totalenergyusage: "?1"
+  totalhours: "?1"
+  yieldhc: "?1"
+  yieldhcday: "?1"
+  yieldhcmonth: "?1"
+  yieldhwc: "?1"
+  yieldhwcday: "?1"
+  yieldhwcmonth: "?1"
+  yieldthisyear10_month: "?1"
+  yieldthisyear10_energy: "?1"
+  yieldthisyear11_month: "?1"
+  yieldthisyear11_energy: "?1"
+  yieldthisyear12_month: "?1"
+  yieldthisyear12_energy: "?1"
+  unknownMB513h0528:
+    "0":
+      name: ""
+      value: "01"
+  yieldthisyear1_month: "?1"
+  yieldthisyear1_energy: "?1"
+  yieldthisyear2_month: "?1"
+  yieldthisyear2_energy: "?1"
+  yieldthisyear3_month: "?1"
+  yieldthisyear3_energy: "?1"
+  yieldthisyear4_month: "?1"
+  yieldthisyear4_energy: "?1"
+  yieldthisyear5_month: "?1"
+  yieldthisyear5_energy: "?1"
+  yieldthisyear6_month: "?1"
+  yieldthisyear6_energy: "?1"
+  yieldthisyear7_month: "?1"
+  yieldthisyear7_energy: "?1"
+  yieldthisyear8_month: "?1"
+  yieldthisyear8_energy: "?1"
+  yieldthisyear9_month: "?1"
+  yieldthisyear9_energy: "?1"
+  yieldtotal: "?1"
+  statuscirpump: "?1"
+  buildingcircuitmaxpressuredifference: "?1"
+  buildingcircuitwaterpressure: "?1"
+  energyintegralstartcooling: "?1"
+  energyintegralstartheating: "?1"
+  flowpressure: "?1"
+  highpressure: "?1"
+  highpressureswitch: "?1"
+  hwcmode: "?1"
+  lowpressure: "?1"
+  rundatahighpressure: "?1"
+  sourcepressure: "?1"
+  targettemphc: "?1"
+  targettemphwc: "?1"
+  rundatalowpressure: "?1"
+  rundatawaterpressure: "?1"
+  lowpressurestatus: "?1"
+  buildingcircuitflow: "?1"
+  RunStatsCompressorHc:
+    runtime: 172044
+    cycles: 693
+  RunStatsCompressorHwc:
+    runtime: 15386
+    cycles: 299
+  RunDataEEVPositionAbs:
+    "0":
+      name: ""
+      value: 250
+  RunStats4PortValveSwitches:
+    cntstarts2: 712
+  Always13_4:
+    "0":
+      name: ""
+      value: 0
+  RunDataDeltaPPump:
+    "0":
+      name: ""
+      value: 0
+  RunDataWaterThroughPut:
+    "0":
+      name: ""
+      value: 0
+  RunDataFan2Speed:
+    "0":
+      name: ""
+      value: 0
+ebusd/vr_71:
+  SensorData1:
+    S1: 20.5
+    S2: 19.69
+    S3: null
+    S4: null
+    S5: null
+    S6: null
+    S7: null
+    ignore: 50 3d
+  SensorData2:
+    S8: null
+    S9: null
+    S10: null
+    S11: null
+    S12: 0
+    Sx: 8
+    ignore: 80 57 05
+  SetActorState:
+    R1: null
+    R2: "off"
+    R3: "off"
+    R4: "off"
+    R5: "off"
+    R6: "off"
+    R7: null
+    R8: null
+    R9: "off"
+    R10: "off"
+    R11: "off"
+    R12: "off"
+    Rx: 00 00
+  Mc1FlowTempDesired:
+    FTStatus: "off"
+    FTDesired: 0
+    MixerStatus: "on"
+    MixerMovement: -100
+ebusd/ctlv3:
+  Z3Timer_Wednesday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3ValveStatus: 0
+  Z1Timer_Config: 00 0c 0a 05 01 0c 05 1e 00
+  HwcTimer_Config: 00 03 0a 0a 01 01 23 46 00
+  CcTimer_Config: 00 03 0a 00 00 00 ff ff 00
+  Z2Timer_Config: 03 01 01 00 00 00 ff ff 00
+  Z3Timer_Config: 03 01 01 00 00 00 ff ff 00
+  Z1Timer_Timeframes:
+    slotcount: 1
+    slotcount_1: 1
+    slotcount_2: 1
+    slotcount_3: 1
+    slotcount_4: 1
+    slotcount_5: 1
+    slotcount_6: 1
+  HwcTimer_Timeframes:
+    slotcount: 2
+    slotcount_1: 2
+    slotcount_2: 2
+    slotcount_3: 2
+    slotcount_4: 2
+    slotcount_5: 2
+    slotcount_6: 2
+  CcTimer_Timeframes:
+    slotcount: 0
+    slotcount_1: 0
+    slotcount_2: 0
+    slotcount_3: 0
+    slotcount_4: 0
+    slotcount_5: 0
+    slotcount_6: 0
+  Z2Timer_Timeframes:
+    slotcount: 0
+    slotcount_1: 0
+    slotcount_2: 0
+    slotcount_3: 0
+    slotcount_4: 0
+    slotcount_5: 0
+    slotcount_6: 0
+  Z3Timer_Timeframes:
+    slotcount: 0
+    slotcount_1: 0
+    slotcount_2: 0
+    slotcount_3: 0
+    slotcount_4: 0
+    slotcount_5: 0
+    slotcount_6: 0
+  Z1Timer_Monday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Tuesday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Wednesday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Thursday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Friday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Saturday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Sunday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  HwcTimer_Monday1:
+    htm: "15:00"
+    htm_1: "16:00"
+    slottemp: 44
+  HwcTimer_Tuesday1:
+    htm: "15:00"
+    htm_1: "16:00"
+    slottemp: 44
+  HwcTimer_Wednesday1:
+    htm: "15:00"
+    htm_1: "16:00"
+    slottemp: 44
+  HwcTimer_Thursday1:
+    htm: "15:00"
+    htm_1: "16:00"
+    slottemp: 44
+  HwcTimer_Friday1:
+    htm: "15:00"
+    htm_1: "16:00"
+    slottemp: 44
+  HwcTimer_Saturday1:
+    htm: "15:00"
+    htm_1: "16:00"
+    slottemp: 44
+  HwcTimer_Sunday1:
+    htm: "15:00"
+    htm_1: "16:00"
+    slottemp: 44
+  CcTimer_Monday1:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Tuesday1:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Wednesday1:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Thursday1:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Friday1:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Saturday1:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Sunday1:
+    htm: "00:00"
+    htm_1: "00:00"
+  Z2Timer_Monday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Tuesday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Wednesday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Thursday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Friday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Saturday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Sunday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Monday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Tuesday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Wednesday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Thursday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Friday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Saturday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Sunday1:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Monday0:
+    htm: "00:00"
+    htm_1: "24:00"
+    slottemp: 20.5
+  Z1Timer_Tuesday0:
+    htm: "00:00"
+    htm_1: "24:00"
+    slottemp: 20.5
+  Z1Timer_Wednesday0:
+    htm: "00:00"
+    htm_1: "24:00"
+    slottemp: 20.5
+  Z1Timer_Thursday0:
+    htm: "00:00"
+    htm_1: "24:00"
+    slottemp: 20.5
+  Z1Timer_Friday0:
+    htm: "00:00"
+    htm_1: "24:00"
+    slottemp: 20.5
+  Z1Timer_Saturday0:
+    htm: "00:00"
+    htm_1: "24:00"
+    slottemp: 20.5
+  Z1Timer_Sunday0:
+    htm: "00:00"
+    htm_1: "24:00"
+    slottemp: 20.5
+  HwcTimer_Monday0:
+    htm: "07:40"
+    htm_1: "08:10"
+    slottemp: 44
+  HwcTimer_Tuesday0:
+    htm: "07:40"
+    htm_1: "08:10"
+    slottemp: 44
+  HwcTimer_Wednesday0:
+    htm: "07:40"
+    htm_1: "08:10"
+    slottemp: 44
+  HwcTimer_Thursday0:
+    htm: "07:40"
+    htm_1: "08:10"
+    slottemp: 44
+  HwcTimer_Friday0:
+    htm: "07:40"
+    htm_1: "08:10"
+    slottemp: 44
+  HwcTimer_Saturday0:
+    htm: "07:40"
+    htm_1: "08:10"
+    slottemp: 44
+  HwcTimer_Sunday0:
+    htm: "07:40"
+    htm_1: "08:10"
+    slottemp: 44
+  CcTimer_Monday0:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Tuesday0:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Wednesday0:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Thursday0:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Friday0:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Saturday0:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Sunday0:
+    htm: "00:00"
+    htm_1: "00:00"
+  Z2Timer_Monday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Tuesday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Wednesday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Thursday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Friday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Saturday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Sunday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Monday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Tuesday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Wednesday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Thursday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Friday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Saturday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Sunday0:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Monday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Tuesday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Wednesday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Thursday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Friday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Saturday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1Timer_Sunday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  HwcTimer_Monday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  HwcTimer_Tuesday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  HwcTimer_Wednesday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  HwcTimer_Thursday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  HwcTimer_Friday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  HwcTimer_Saturday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  HwcTimer_Sunday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  CcTimer_Monday2:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Tuesday2:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Wednesday2:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Thursday2:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Friday2:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Saturday2:
+    htm: "00:00"
+    htm_1: "00:00"
+  CcTimer_Sunday2:
+    htm: "00:00"
+    htm_1: "00:00"
+  Z2Timer_Monday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Tuesday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Wednesday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Thursday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Friday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Saturday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z2Timer_Sunday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Monday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Tuesday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Thursday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Friday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Saturday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z3Timer_Sunday2:
+    htm: "00:00"
+    htm_1: "00:00"
+    slottemp: null
+  Z1CoolingTemp: 24
+  Z2CoolingTemp: 24
+  HwcOpMode: auto
+  Z1OpMode: "?1"
+  Z2OpMode: auto
+  Z3OpMode: auto
+  Hc1ActualFlowTempDesired: 0
+  Hc2ActualFlowTempDesired: 0
+  Hc3ActualFlowTempDesired: 0
+  HwcTempDesired: 44
+  HwcStorageTemp: 45
+  Z1HolidayTemp: 15
+  Z2HolidayTemp: 15
+  Z3HolidayTemp: 15
+  Hc1ExcessTemp: "?1"
+  Hc2ExcessTemp: 0
+  Hc3ExcessTemp: 0
+  HwcFlowTemp: "?1"
+  Hc1FlowTemp: "?1"
+  Z1QuickVetoTemp: 21
+  Z2QuickVetoTemp: 21
+  Z3QuickVetoTemp: 21
+  Z1NightTemp: 19.5
+  Z2NightTemp: 15
+  Z3NightTemp: 15
+  MaxRoomHumidity: 40
+  Hc1AutoOffMode: eco
+  Hc2AutoOffMode: eco
+  Hc3AutoOffMode: eco
+  Z1SFMode: auto
+  Z2SFMode: auto
+  Z3SFMode: auto
+  Hc1HeatCurve: 0.2
+  Hc2HeatCurve: 1.2
+  Hc3HeatCurve: 1.2
+  Z1RoomTemp: "?1"
+  HwcSFMode: "?1"
+  Hc1MinFlowTempDesired: 26
+  Hc2MinFlowTempDesired: 15
+  Hc3MinFlowTempDesired: 15
+  Z1ValveStatus: 0
+  Z2ValveStatus: 0
+  Hc1MaxFlowTempDesired: 45
+  Hc2MaxFlowTempDesired: 90
+  Hc3MaxFlowTempDesired: 90
+  Hc1MinCoolingTempDesired: 20
+  Hc2MinCoolingTempDesired: 20
+  Hc3MinCoolingTempDesired: 20
+  AdaptHeatCurve: "no"
+  Hc1SummerTempLimit: 16
+  Hc2SummerTempLimit: 21
+  Hc3SummerTempLimit: 21
+  Z1ActualRoomTempDesired: 0
+  Z2ActualRoomTempDesired: 0
+  Z3ActualRoomTempDesired: 0
+  Hc1RoomTempSwitchOn: thermostat
+  Hc2RoomTempSwitchOn: "off"
+  Hc3RoomTempSwitchOn: "off"
+  Hc1Status: "?1"
+  Hc2Status: 0
+  Hc3Status: 0
+  Hc1PumpStatus: 0
+  Hc2PumpStatus: 0
+  Hc3PumpStatus: 0
+  Hc1HeatCurveAdaption: 0
+  Hc2HeatCurveAdaption: 0
+  Hc3HeatCurveAdaption: 0
+  Z1DayTemp: "?1"
+  Z2DayTemp: 21
+  Z3DayTemp: 21
+  z1RoomHumidity: 52
+  WaterPressure: "?1"
+  YieldTotal: "?1"
+  SolarYieldTotal: 0
+  HwcMaxFlowTempDesired: "?1"
+  SystemFlowTemp: "?1"
+  PrEnergySumHcThisMonth: "?1"
+  PrEnergySumHcLastMonth: "?1"
+  PrEnergySumHwcThisMonth: "?1"
+  PrEnergySumHc: "?1"
+  PrEnergySumHwcLastMonth: "?1"
+  PrEnergySumHwc: "?1"
+  DisplayedOutsideTemp: 21.2969
+  OutsideTempAvg: "?1"
+  Currenterror:
+    error: null
+    error_1: null
+    error_2: null
+    error_3: null
+    error_4: null
+  hot_water_trend: "?1"
+  hc1heatcurve: "?1"
+  displayedoutsidetemp: "?1"
+  hc1actualflowtempdesired: "?1"
+  hc1flowtemp: "?1"
+  hc1heatcurveadaption: "?1"
+  hc1pumpstatus: "?1"
+  hc1status: "?1"
+  hwcflowtemp: "?1"
+  hwcstoragetemp: "?1"
+  maxroomhumidity: "?1"
+  prenergysum: "?1"
+  prenergysumhc: "?1"
+  prenergysumhclastmonth: "?1"
+  prenergysumhcthismonth: "?1"
+  prenergysumhwc: "?1"
+  prenergysumhwclastmonth: "?1"
+  prenergysumhwcthismonth: "?1"
+  solaryieldtotal: "?1"
+  systemflowtemp: "?1"
+  yieldtotal: "?1"
+  z1roomtemp: "?1"
+  z1timer_friday0_htm: "?1"
+  z1timer_friday0_slottemp: "?1"
+  z1timer_friday1_htm: "?1"
+  z1timer_friday1_slottemp: "?1"
+  z1timer_friday2_htm: "?1"
+  z1timer_friday2_slottemp: "?1"
+  z1timer_monday0_htm: "?1"
+  z1timer_monday0_slottemp: "?1"
+  z1timer_monday1_htm: "?1"
+  z1timer_monday1_slottemp: "?1"
+  z1timer_monday2_htm: "?1"
+  z1timer_monday2_slottemp: "?1"
+  z1timer_saturday0_htm: "?1"
+  z1timer_saturday0_slottemp: "?1"
+  z1timer_saturday1_htm: "?1"
+  z1timer_saturday1_slottemp: "?1"
+  z1timer_saturday2_htm: "?1"
+  z1timer_saturday2_slottemp: "?1"
+  z1timer_sunday0_htm: "?1"
+  z1timer_sunday0_slottemp: "?1"
+  z1timer_sunday1_htm: "?1"
+  z1timer_sunday1_slottemp: "?1"
+  Hc1MinHeatingFlowTempDesired: "?1"
+  Hc1MaxHeatingFlowTempDesired: "?1"
+  z1timer_sunday2_htm: "?1"
+  z1ValveStatus: "?1"
+  PrEnergySum: "?1"
+  z1timer_sunday2_slottemp: "?1"
+  z1timer_thursday0_htm: "?1"
+  z1timer_thursday0_slottemp: "?1"
+  z1timer_thursday1_htm: "?1"
+  z1timer_thursday1_slottemp: "?1"
+  z1timer_thursday2_htm: "?1"
+  z1timer_thursday2_slottemp: "?1"
+  z1timer_timeframes_slotcount: "?1"
+  z1timer_tuesday0_htm: "?1"
+  z1timer_tuesday0_slottemp: "?1"
+  z1timer_tuesday1_htm: "?1"
+  z1timer_tuesday1_slottemp: "?1"
+  z1timer_tuesday2_htm: "?1"
+  z1timer_tuesday2_slottemp: "?1"
+  z1timer_wednesday0_htm: "?1"
+  z1timer_wednesday0_slottemp: "?1"
+  z1timer_wednesday1_htm: "?1"
+  z1timer_wednesday1_slottemp: "?1"
+  z1timer_wednesday2_htm: "?1"
+  z1timer_wednesday2_slottemp: "?1"
+  z1valvestatus: "?1"
+  HwcParallelLoading: "off"
+  Hc1MixerMovement: -100
+  adaptheatcurve: "?1"
+  hc1autooffmode: "?1"
+  hc1excesstemp: "?1"
+  hc1maxflowtempdesired: "?1"
+  hc1mincoolingtempdesired: "?1"
+  hc1minflowtempdesired: "?1"
+  hc1roomtempswitchon: "?1"
+  hc1summertemplimit: "?1"
+  hwcmaxflowtempdesired: "?1"
+  hwcopmode: "?1"
+  hwcsfmode: "?1"
+  hwctempdesired: "?1"
+  outsidetempavg: "?1"
+  waterpressure: "?1"
+  z1actualroomtempdesired: "?1"
+  z1coolingtemp: "?1"
+  z1daytemp: "?1"
+  z1holidaytemp: "?1"
+  z1nighttemp: "?1"
+  z1opmode: "?1"
+  z1quickvetotemp: "?1"
+  z1sfmode: "?1"
+  hwcstoragetemptop: "?1"
+  z1roomhumidity: "?1"
+  MultiRelaySetting: 4
+  ContinuousHeating: -26
+  HwcHolidayEndPeriod: 01.01.2019
+  HwcHolidayStartPeriod: 01.01.2019
+  MaxCylinderChargeTime: 100
+  HwcLockTime: 30
+  CylinderChargeHyst: 5
+  CylinderChargeOffset: 5
+  HydraulicScheme: 8
+  Date: 24.05.2026
+  Time: "18:32:12"
+  Z1HolidayStartPeriod: 01.01.2019
+  Z1HolidayEndPeriod: 01.01.2019
+ebusd/hmu:
+  unknownMPoll60sB507h:
+    "0":
+      name: ""
+      value: 1b 07
+ebusd/vwzio:
+  RunDataCondensorOutletTemp:
+    tempv: 20.5
+  RunDataSupplyFlowTemp: "?1"
+  RunDataReturnFlowTemp: "?1"
+  RunDataSystemPressure:
+    pressv: 1.39518
+  RunDataBuildingCircuitPumpPower:
+    "0":
+      name: ""
+      value: 0
+  RunStatsVWZHours:
+    "0":
+      name: ""
+      value: 6818
+  RunStatsHcHours:
+    "0":
+      name: ""
+      value: 2805
+  RunStatsImmersionHeaterHours:
+    "0":
+      name: ""
+      value: 7
+  RunStatsImmersionHeaterStarts:
+    cntstarts2: 19
+  RunStatsBuildingCircuitPumpHours:
+    "0":
+      name: ""
+      value: 3666
+  RunStatsBuildingCPumpStarts:
+    cntstarts2: 494
+  rundatabuildingcircuitpumppower: "?1"
+  rundatacondensoroutlettemp: "?1"
+  rundatareturnflowtemp: "?1"
+  rundatasupplyflowtemp: "?1"
+  runstatsbuildingcircuitpumphours: "?1"
+  runstatsbuildingcpumpstarts: "?1"
+  runstatshchours: "?1"
+  runstatsimmersionheaterhours: "?1"
+  runstatsimmersionheaterstarts: "?1"
+  runstatsvwzhours: "?1"
+  buildingcircuitpumppower: "?1"
+  buildingcircuitwaterpressure: "?1"
+  temperatureswitchelectricheater: "?1"
+  immersionheaterhours: "?1"
+  flowpressure: "?1"
+  immersionheaterstarts: "?1"
+  buildingcircuitflow: "?1"
+  RunStatsPrioritySwitchingValveOps:
+    cntstarts2: 521
+ebusd/broadcast:
+  outsidetemp: "?1"
+  OutsideTemp: "?1"
+ebusd/vr:
+  71_sensordata1_s1: "?1"
+  71_sensordata1_s2: "?1"
+  71_sensordata1_s3: "?1"
+  71_sensordata1_s4: "?1"
+  71_sensordata1_s5: "?1"
+  71_sensordata1_s6: "?1"
+  71_sensordata1_s7: "?1"
+  71_sensordata2_s8: "?1"
+  71_sensordata2_s9: "?1"
+  71_sensordata2_s10: "?1"
+  71_sensordata2_s11: "?1"
+  71_sensordata2_s12: "?1"
+  71_sensordata2_sx: "?1"
+  71_mc1flowtempdesired_ftstatus: "?1"
+  71_mc1flowtempdesired_ftdesired: "?1"
+  71_mc1flowtempdesired_mixerstatus: "?1"

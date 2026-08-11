@@ -96,16 +96,41 @@ def _parse_find_line_register(line: str) -> tuple[str, str, str | None]:
     return (circuit, name, val)
 
 
+def load_discovery_dump(name: str) -> dict:
+    """Load a discovery-dump YAML fixture and return its parsed structure.
+
+    Discovery dumps (``discovery_dump_*.yaml``) contain ``metadata``,
+    ``raw_find_lines``, ``before_registers``, and optionally ``grab`` /
+    ``after_registers``. Fixtures are searched in ``tests/fixtures/``.
+    """
+    path = Path(name) if name.startswith("/") else FIXTURES_DIR / name
+    if not path.exists():
+        raise FileNotFoundError(f"Fixture not found: {path}")
+    if path.suffix.lower() not in (".yaml", ".yml"):
+        raise ValueError(f"Not a discovery dump YAML file: {path}")
+    import yaml
+
+    return yaml.safe_load(path.read_text())
+
+
 def load_find_lines(name: str) -> list[str]:
     """Load find lines from a fixture file.
 
     Fixtures are searched in ``tests/fixtures/``. The ``name`` can be:
     - a relative path like ``arotherm_find.txt``
+    - a discovery dump YAML like ``community/flexotherm_discovery.yaml``
+      (its ``raw_find_lines`` are used)
     - an absolute path
     """
     path = Path(name) if name.startswith("/") else FIXTURES_DIR / name
     if not path.exists():
         raise FileNotFoundError(f"Fixture not found: {path}")
+    if path.suffix.lower() in (".yaml", ".yml"):
+        dump = load_discovery_dump(name)
+        raw = dump.get("raw_find_lines") or dump.get("raw_find_lines_after")
+        if not raw:
+            raise ValueError(f"No raw_find_lines in fixture: {path}")
+        return [ln.rstrip("\n\r") for ln in raw if ln.strip()]
     return [ln.rstrip("\n\r") for ln in path.read_text().splitlines() if ln.strip()]
 
 
