@@ -135,7 +135,7 @@ COORDINATOR = importlib.util.module_from_spec(COORDINATOR_SPEC)
 sys.modules["vaillant_ebus.coordinator"] = COORDINATOR
 COORDINATOR_SPEC.loader.exec_module(COORDINATOR)
 
-from vaillant_ebus.coordinator import VaillantCoordinator  # noqa: E402
+from vaillant_ebus.coordinator import VaillantCoordinator, _register_values  # noqa: E402
 
 
 def _hass(cache_dir: str) -> MagicMock:
@@ -538,6 +538,22 @@ async def test_values_from_registers_includes_suffix_stripped() -> None:
         )
         values = await c._async_values_from_registers()
         assert values["test.Example.value"] == "22.50"
+
+
+async def test_register_values_splits_status01() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.registers["hmu.Status01"] = EbusdRegister(
+            circuit="hmu",
+            name="Status01",
+            fields=["value"],
+            value=_register_values("hmu.Status01", "39.5;40.5;-;-;-;off"),
+            has_data=True,
+        )
+        values = await c._async_values_from_registers()
+        assert values["hmu.Status01.temp"] == "39.5"
+        assert values["hmu.Status01.temp_1"] == "40.5"
+        assert values["hmu.Status01.pumpstate"] == "off"
 
 
 async def test_ebus_none_when_not_connected() -> None:

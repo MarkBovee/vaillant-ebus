@@ -4,11 +4,66 @@ from __future__ import annotations
 
 from .models import RegisterMeta
 
+# Multi-field registers: register key -> field names in semicolon order of the
+# raw ebusd value. Field names follow the ebusd CSV definitions.
+# Source: ebusd vaillant CSV (08.hmu.csv) + community dumps.
+MULTI_FIELD_FIELDS: dict[str, list[str]] = {
+    "hmu.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
+}
+
+
+def multi_field_fields(register_key: str) -> list[str] | None:
+    """Return the field names for a multi-field register, or None."""
+    return MULTI_FIELD_FIELDS.get(register_key)
+
+
+def split_multi_field(register_key: str, raw: str | None) -> dict[str, str | None]:
+    """Split a raw register value into named fields (placeholder for single-field)."""
+    fields = MULTI_FIELD_FIELDS.get(register_key)
+    if not fields or raw is None:
+        return {"value": raw}
+    parts = raw.split(";")
+    return {field: parts[i] if i < len(parts) else None for i, field in enumerate(fields)}
+
+
 REGISTER_MAP: dict[str, RegisterMeta] = {
     # hmu (Heat Pump)
     "hmu.Status01": RegisterMeta(
         friendly_name="Status",
         icon="mdi:information",
+        entity_category="diagnostic",
+    ),
+    "hmu.Status01.temp": RegisterMeta(
+        friendly_name="Flow Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "hmu.Status01.temp_1": RegisterMeta(
+        friendly_name="Return Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "hmu.Status01.temp_2": RegisterMeta(
+        friendly_name="Outside Temperature",
+        device_class="temperature",
+        unit="°C",
+        enabled=False,
+    ),
+    "hmu.Status01.temp_3": RegisterMeta(
+        friendly_name="Hot Water Temperature",
+        device_class="temperature",
+        unit="°C",
+        enabled=False,
+    ),
+    "hmu.Status01.temp_4": RegisterMeta(
+        friendly_name="Storage Temperature",
+        device_class="temperature",
+        unit="°C",
+        enabled=False,
+    ),
+    "hmu.Status01.pumpstate": RegisterMeta(
+        friendly_name="Pump State",
+        entity_type="binary_sensor",
         entity_category="diagnostic",
     ),
     "hmu.StatusCirPump": RegisterMeta(
