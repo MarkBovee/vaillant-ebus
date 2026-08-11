@@ -51,6 +51,10 @@ AROTHERM_LINES = load_find_lines("arotherm_find.txt")
 COMMUNITY_BASV = load_find_lines("community/basv_find.txt")
 COMMUNITY_V32 = load_find_lines("community/v32_find.txt")
 COMMUNITY_MULTIZONE_SINGLE_CIRCUIT = load_find_lines("community/multizone_single_circuit_find.txt")
+FLEXOTHERM_LINES = load_find_lines("community/flexotherm_discovery.yaml")
+AROTHERM_PLUS_2ZONE_LINES = load_find_lines("community/arotherm_plus_2zone_discovery.yaml")
+AROTHERM_PLUS_BASV3_LINES = load_find_lines("community/arotherm_plus_basv3_discovery.yaml")
+AROTHERM_PRO7_LINES = load_find_lines("community/arotherm_pro7_discovery.yaml")
 
 
 def _arotherm_graph() -> DeviceGraph:
@@ -67,6 +71,22 @@ def _v32_graph() -> DeviceGraph:
 
 def _multizone_single_circuit_graph() -> DeviceGraph:
     return DiscoveryService.build_device_graph(COMMUNITY_MULTIZONE_SINGLE_CIRCUIT)
+
+
+def _flexotherm_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(FLEXOTHERM_LINES)
+
+
+def _arotherm_plus_2zone_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(AROTHERM_PLUS_2ZONE_LINES)
+
+
+def _arotherm_plus_basv3_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(AROTHERM_PLUS_BASV3_LINES)
+
+
+def _arotherm_pro7_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(AROTHERM_PRO7_LINES)
 
 
 # =============================================================================
@@ -291,8 +311,101 @@ def test_categorize_v32_from_community() -> None:
     assert graph.nodes["v32"].device_type == DeviceType.VENTILATION
 
 
+def test_flexotherm_device_graph() -> None:
+    graph = _flexotherm_graph()
+    assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+    assert graph.nodes["ctlv3"].device_type == DeviceType.HEATING_CONTROLLER
+    assert graph.nodes["hmu"].scan_type == "HMU00"
+    assert graph.nodes["ctlv3"].scan_type in ("CTLV3", "")
+    assert "hmu.SourceTempOutput" in graph.raw_registers or "hmu.SourceTempOutput" in graph.placeholder_registers
+    assert "hmu.SourceTempInput" not in graph.raw_registers
+    assert "hmu.SourceTempInput" not in graph.placeholder_registers
+
+
+def test_flexotherm_runtime_room_humidity() -> None:
+    graph = _flexotherm_graph()
+    assert graph.nodes["ctlv2"].device_type == DeviceType.HEATING_CONTROLLER
+    assert "ctlv2.z1RoomHumidity" in graph.raw_registers
+
+
+def test_flexotherm_energy_registers() -> None:
+    graph = _flexotherm_graph()
+    assert "ctlv3.PrEnergySumHc" in graph.raw_registers
+    assert "ctlv3.PrEnergySumHwc" in graph.raw_registers
+    assert "ctlv3.PrEnergySum" in graph.placeholder_registers
+
+
+def test_flexotherm_vr71_unknown() -> None:
+    graph = _flexotherm_graph()
+    assert graph.nodes["vr_71"].device_type == DeviceType.UNKNOWN
+    assert graph.nodes["vr_71"].scan_type in ("VR_71", "VR_92")
+
+
+def test_arotherm_plus_2zone_graph() -> None:
+    graph = _arotherm_plus_2zone_graph()
+    assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+    assert graph.nodes["ctlv3"].device_type == DeviceType.HEATING_CONTROLLER
+    assert graph.nodes["hmu"].scan_type == "HMU00"
+    assert graph.nodes["ctlv3"].scan_type == "CTLV3"
+    assert "hmu.Status01" in graph.raw_registers
+    assert "hmu.PowerConsumptionHmu" in graph.raw_registers
+    assert "hmu.BuildingCircuitFlow" in graph.placeholder_registers
+
+
+def test_arotherm_plus_2zone_active_z2() -> None:
+    graph = _arotherm_plus_2zone_graph()
+    assert graph.nodes["z2"].has_data is True
+    assert graph.nodes["z2"].device_type == DeviceType.ZONE
+    assert graph.nodes["hc2"].has_data is True
+    assert "ctlv3.Z2RoomTemp" in graph.raw_registers
+    assert graph.nodes["z3"].has_data is False
+
+
+def test_arotherm_plus_basv3_graph() -> None:
+    graph = _arotherm_plus_basv3_graph()
+    assert graph.nodes["basv3"].device_type == DeviceType.HEATING_CONTROLLER
+    assert graph.nodes["basv3"].scan_type == "BASV3"
+    assert graph.nodes["basv3"].scan_sw == "0708"
+    assert graph.nodes["basv3"].scan_hw == "4304"
+    assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+    assert graph.nodes["hmu"].scan_type == "HMU00"
+    assert graph.nodes["vwzio"].device_type == DeviceType.PASSIVE_COOLING
+
+
+def test_arotherm_plus_basv3_status01_multifield() -> None:
+    graph = _arotherm_plus_basv3_graph()
+    assert graph.raw_registers["hmu.Status01"] == "39.5;40.5;-;-;-;off"
+    assert "basv3.Hc1FlowTemp" in graph.raw_registers
+
+
+def test_arotherm_plus_basv3_zones() -> None:
+    graph = _arotherm_plus_basv3_graph()
+    assert graph.nodes["z1"].has_data is True
+    assert graph.nodes["z2"].has_data is False
+    assert graph.nodes["z3"].has_data is False
+
+
+def test_arotherm_pro7_graph() -> None:
+    graph = _arotherm_pro7_graph()
+    assert graph.nodes["ctlv3"].device_type == DeviceType.HEATING_CONTROLLER
+    assert graph.nodes["ctlv3"].scan_type in ("CTLV3", "")
+    assert graph.nodes["vwzio"].device_type == DeviceType.PASSIVE_COOLING
+    assert "hmu" not in graph.nodes
+    assert "ctlv3.Z1DayTemp" in graph.raw_registers
+    assert "ctlv3.Z1OpMode" in graph.raw_registers
+
+
+def test_arotherm_pro7_hmu_missing() -> None:
+    graph = _arotherm_pro7_graph()
+    assert "hmu" not in graph.nodes
+    assert "hmu.Status01" not in graph.raw_registers
+    assert "hmu.Status01" not in graph.placeholder_registers
+    assert graph.nodes["ctlv3"].has_data is False
+    assert graph.nodes["z1"].has_data is True
+
+
 def test_community_unknown_circuits() -> None:
-    for graph in (_basv_graph(), _v32_graph()):
+    for graph in (_basv_graph(), _v32_graph(), _flexotherm_graph()):
         for node in graph.nodes.values():
             assert node.device_type in DeviceType, f"Invalid device type for {node.circuit}"
 

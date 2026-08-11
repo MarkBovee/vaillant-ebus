@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.fake_ebusd import FakeEbusdServer
+from tests.fake_ebusd import FakeEbusdServer, load_find_lines
 
 # Load ebus_service module
 EBUS_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend/ebus_service.py"
@@ -32,18 +32,30 @@ async def test_arotherm_fixture_loads() -> None:
         assert ("Broadcast", "Outsidetemp") in server._registers
 
 
-# All three fixtures load without error
+# All fixtures load without error
 @pytest.mark.parametrize(
     "fixture,min_registers",
     [
         ("arotherm_find.txt", 50),
         ("community/basv_find.txt", 50),
         ("community/v32_find.txt", 5),
+        ("community/flexotherm_discovery.yaml", 50),
+        ("community/arotherm_plus_2zone_discovery.yaml", 50),
+        ("community/arotherm_plus_basv3_discovery.yaml", 50),
+        ("community/arotherm_pro7_discovery.yaml", 5),
     ],
 )
 async def test_all_fixtures_load(fixture: str, min_registers: int) -> None:
     async with FakeEbusdServer(fixture) as server:
         assert server.register_count >= min_registers, f"{fixture}: got {server.register_count} registers"
+
+
+# Discovery-dump YAML fixtures expose their metadata and raw find lines
+def test_load_discovery_dump_metadata() -> None:
+    dump = load_find_lines("community/flexotherm_discovery.yaml")
+    assert dump
+    assert any("ctlv3" in line for line in dump)
+    assert any("scan.15" in line for line in dump)
 
 
 # state returns acquired message
