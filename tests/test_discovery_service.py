@@ -55,6 +55,7 @@ FLEXOTHERM_LINES = load_find_lines("community/flexotherm_discovery.yaml")
 AROTHERM_PLUS_2ZONE_LINES = load_find_lines("community/arotherm_plus_2zone_discovery.yaml")
 AROTHERM_PLUS_BASV3_LINES = load_find_lines("community/arotherm_plus_basv3_discovery.yaml")
 AROTHERM_PRO7_LINES = load_find_lines("community/arotherm_pro7_discovery.yaml")
+FLEXOCOMPACT_LINES = load_find_lines("community/flexocompact_find.txt")
 
 
 def _arotherm_graph() -> DeviceGraph:
@@ -87,6 +88,10 @@ def _arotherm_plus_basv3_graph() -> DeviceGraph:
 
 def _arotherm_pro7_graph() -> DeviceGraph:
     return DiscoveryService.build_device_graph(AROTHERM_PRO7_LINES)
+
+
+def _flexocompact_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(FLEXOCOMPACT_LINES)
 
 
 # =============================================================================
@@ -404,8 +409,44 @@ def test_arotherm_pro7_hmu_missing() -> None:
     assert graph.nodes["z1"].has_data is True
 
 
+def test_flexocompact_device_graph() -> None:
+    graph = _flexocompact_graph()
+    assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+    assert graph.nodes["hmu"].scan_type == "HMU00"
+    assert graph.nodes["ctlv2"].device_type == DeviceType.HEATING_CONTROLLER
+    assert graph.nodes["ctlv2"].scan_type == "CTLV2"
+    assert graph.nodes["v32"].device_type == DeviceType.VENTILATION
+    assert graph.nodes["vwz"].device_type == DeviceType.PASSIVE_COOLING
+    assert graph.nodes["vwz"].scan_type == "VWZ00"
+    assert graph.nodes["v32"].has_data is True
+    assert graph.nodes["vwz"].has_data is False
+
+
+def test_flexocompact_multi_zone() -> None:
+    graph = _flexocompact_graph()
+    for zone in ("z1", "z2", "z3"):
+        assert graph.nodes[zone].has_data is True
+        assert graph.nodes[zone].device_type == DeviceType.ZONE
+    assert "ctlv2.Z1RoomTemp" in graph.raw_registers
+    assert "ctlv2.Z1RoomHumidity" in graph.raw_registers
+    assert "ctlv2.Z2RoomTemp" in graph.placeholder_registers
+    assert "ctlv2.Z3RoomTemp" in graph.placeholder_registers
+    assert "ctlv2.RoomTemp" in graph.raw_registers
+    assert "ctlv2.RoomHumidity" in graph.raw_registers
+
+
+def test_flexocompact_hmu_registers() -> None:
+    graph = _flexocompact_graph()
+    assert "hmu.Status01" in graph.raw_registers
+    assert "hmu.CurrentConsumedPower" in graph.raw_registers
+    assert "hmu.CurrentYieldPower" in graph.raw_registers
+    assert "ctlv2.Z1RoomHumidity" in graph.raw_registers
+    assert "hmu.RunDataBuildingCPumpPower" in graph.placeholder_registers
+    assert "hmu.RunDataElectricPowerConsumption" in graph.placeholder_registers
+
+
 def test_community_unknown_circuits() -> None:
-    for graph in (_basv_graph(), _v32_graph(), _flexotherm_graph()):
+    for graph in (_basv_graph(), _v32_graph(), _flexotherm_graph(), _flexocompact_graph()):
         for node in graph.nodes.values():
             assert node.device_type in DeviceType, f"Invalid device type for {node.circuit}"
 

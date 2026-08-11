@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.fake_ebusd import FakeEbusdServer, load_find_lines
+from tests.fake_ebusd import FakeEbusdServer, load_discovery_dump, load_find_lines
 
 # Load ebus_service module
 EBUS_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend/ebus_service.py"
@@ -43,6 +43,7 @@ async def test_arotherm_fixture_loads() -> None:
         ("community/arotherm_plus_2zone_discovery.yaml", 50),
         ("community/arotherm_plus_basv3_discovery.yaml", 50),
         ("community/arotherm_pro7_discovery.yaml", 5),
+        ("community/flexocompact_find.txt", 50),
     ],
 )
 async def test_all_fixtures_load(fixture: str, min_registers: int) -> None:
@@ -56,6 +57,21 @@ def test_load_discovery_dump_metadata() -> None:
     assert dump
     assert any("ctlv3" in line for line in dump)
     assert any("scan.15" in line for line in dump)
+
+
+# dumpvalues.yaml records field names for multi-field registers
+def test_dumpvalues_field_names_match_multi_field_map() -> None:
+    from tests.fake_ebusd import MULTI_FIELD_MAP
+
+    dump = load_discovery_dump("community/dumpvalues.yaml")
+    assert "ebusd/hmux0" in dump
+    for (circuit, name), fields in MULTI_FIELD_MAP.items():
+        reg_fields = dump.get(f"ebusd/{circuit}", {}).get(name)
+        if reg_fields is None:
+            reg_fields = dump.get("ebusd/hmux0", {}).get(name)
+        assert reg_fields is not None, f"{circuit}.{name} ontbreekt in dumpvalues.yaml"
+        for field in fields:
+            assert field in reg_fields, f"{circuit}.{name} field {field} ontbreekt in dumpvalues.yaml"
 
 
 # state returns acquired message
