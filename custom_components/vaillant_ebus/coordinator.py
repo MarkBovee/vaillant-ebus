@@ -215,7 +215,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     has_data=True,
                 )
             else:
-                self.registers[rk].value["value"] = raw
+                self.registers[rk].value.update(_register_values(rk, raw))
                 self.registers[rk].has_data = True
 
         self._last_find_keys.update(graph.raw_registers)

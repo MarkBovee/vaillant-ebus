@@ -551,6 +551,7 @@ async def test_register_values_splits_status01() -> None:
             has_data=True,
         )
         values = await c._async_values_from_registers()
+        assert values["hmu.Status01.value"] == "39.5;40.5;-;-;-;off"
         assert values["hmu.Status01.temp"] == "39.5"
         assert values["hmu.Status01.temp_1"] == "40.5"
         assert values["hmu.Status01.pumpstate"] == "off"

@@ -18,12 +18,16 @@ def multi_field_fields(register_key: str) -> list[str] | None:
 
 
 def split_multi_field(register_key: str, raw: str | None) -> dict[str, str | None]:
-    """Split a raw register value into named fields (placeholder for single-field)."""
+    """Split a raw register value into named fields; keep the raw value under "value"."""
     fields = MULTI_FIELD_FIELDS.get(register_key)
     if not fields or raw is None:
         return {"value": raw}
     parts = raw.split(";")
-    return {field: parts[i] if i < len(parts) else None for i, field in enumerate(fields)}
+    values = {"value": raw}
+    values.update(
+        {field: parts[i] if i < len(parts) else None for i, field in enumerate(fields)}
+    )
+    return values
 
 
 REGISTER_MAP: dict[str, RegisterMeta] = {
