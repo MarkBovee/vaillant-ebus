@@ -67,6 +67,14 @@ REGISTER = importlib.util.module_from_spec(REGISTER_SPEC)
 sys.modules["vaillant_ebus.backend.register_service"] = REGISTER
 REGISTER_SPEC.loader.exec_module(REGISTER)
 
+ANALYSIS_SPEC = importlib.util.spec_from_file_location(
+    "vaillant_ebus.backend.analysis_service", BACKEND_PATH / "analysis_service.py"
+)
+assert ANALYSIS_SPEC and ANALYSIS_SPEC.loader
+ANALYSIS = importlib.util.module_from_spec(ANALYSIS_SPEC)
+sys.modules["vaillant_ebus.backend.analysis_service"] = ANALYSIS
+ANALYSIS_SPEC.loader.exec_module(ANALYSIS)
+
 from vaillant_ebus.backend.ebus_service import EbusService  # noqa: E402
 from vaillant_ebus.backend.entity_factory import EntityFactoryService  # noqa: E402
 from vaillant_ebus.backend.models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister  # noqa: E402
@@ -300,13 +308,17 @@ async def test_connect_schedules_one_delayed_rediscovery() -> None:
             module.DiscoveryService = original_discovery
             module.async_call_later = original_schedule
 
-        schedule.assert_called_once()
-        assert schedule.call_args.args[0] is hass
-        assert schedule.call_args.args[1] == timedelta(minutes=5)
-        delayed_callback = schedule.call_args.args[2]
+        schedule.assert_called()
+        calls = schedule.call_args_list
+        assert len(calls) == 2
+        assert calls[0].args[0] is hass
+        assert calls[0].args[1] == timedelta(minutes=5)
+        assert calls[1].args[0] is hass
+        assert calls[1].args[1] == timedelta(minutes=15)
+        delayed_callback = calls[0].args[2]
         await delayed_callback(datetime.now())
         assert mock_discovery.discover.await_count == 2
-        schedule.assert_called_once()
+        schedule.assert_called()
 
 
 # Intent: keep existing entities when delayed discovery finds only additional devices.
@@ -703,3 +715,39 @@ async def test_entities_regenerated_with_fresh_graph() -> None:
                 assert c._graph is not None
         finally:
             module.EbusService = orig_ebus
+
+
+# Intent: auto-enable integration-disabled entities but respect user choice.
+async def test_enable_registry_entities_respects_user_choice() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+
+        class _Entry:
+            disabled_by = "integration"
+
+            def __init__(self, uid: str, config_entry_id: str, disabled_by: str | None = "integration") -> None:
+                self.unique_id = uid
+                self.config_entry_id = config_entry_id
+                self.disabled_by = disabled_by
+
+        updated: list[str] = []
+        registry = MagicMock()
+        registry.entities = {
+            "sensor.power": _Entry("ebusd_hmu_powerconsumptionhmu", "entry-1", "integration"),
+            "sensor.user_disabled": _Entry("ebusd_hmu_currentconsumedpower", "entry-1", "user"),
+            "sensor.enabled": _Entry("ebusd_hmu_currentyieldpower", "entry-1", None),
+            "sensor.other_entry": _Entry("ebusd_hmu_powerconsumptionhmu", "entry-2", "integration"),
+        }
+        registry.async_update_entity = MagicMock(
+            side_effect=lambda entity_id, **kwargs: updated.append(entity_id)
+        )
+        hass.helpers.entity_registry.async_get = MagicMock(return_value=registry)
+
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        c.ebus = MagicMock()
+        c.ebus.is_connected = True
+        result = await c._enable_registry_entities(["hmu.PowerConsumptionHmu"])
+        assert result == ["sensor.power"]
+        assert updated == ["sensor.power"]

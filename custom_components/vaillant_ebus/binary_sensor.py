@@ -23,21 +23,26 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[BinarySensorEntity] = []
 
-    for desc in coordinator.entities:
-        if desc.entity_type != "binary_sensor":
-            continue
-        uid = f"{entry.entry_id}_{desc.unique_id}"
-        entities.append(EbusdBinarySensor(coordinator, desc, uid, entry))
+    def _build(descriptions: list[EntityDescription]) -> list[BinarySensorEntity]:
+        entities: list[BinarySensorEntity] = []
+        for desc in descriptions:
+            if desc.entity_type != "binary_sensor":
+                continue
+            uid = f"{entry.entry_id}_{desc.unique_id}"
+            entities.append(EbusdBinarySensor(coordinator, desc, uid, entry))
+        return entities
 
-    entities.extend(
+    async_add_entities(_build(coordinator.entities))
+    async_add_entities(
         [
             EbusdConnectionSensor(coordinator, entry),
             EbusdFaultSensor(coordinator, entry),
         ]
     )
-    async_add_entities(entities)
+    coordinator.register_entity_adder(
+        "binary_sensor", lambda descriptions: async_add_entities(_build(descriptions))
+    )
 
 
 BINARY_TRUE_VALUES = {"on", "1", "true", "yes", "running", "day"}

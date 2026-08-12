@@ -40,6 +40,10 @@ rediscover:
   name: Rediscover
   description: Re-run entity discovery via `find` command.
 
+analyze_registers:
+  name: Analyze Registers
+  description: Run background analysis on-demand to discover and enable new devices and entities.
+
 export_discovery_dump:
   name: Export Discovery Dump
   description: Export all discovered registers plus full REGISTER_MAP to a YAML file for troubleshooting.
