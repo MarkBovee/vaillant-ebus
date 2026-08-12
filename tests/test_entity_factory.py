@@ -60,7 +60,7 @@ from vaillant_ebus.backend.entity_factory import (  # noqa: E402
     _determine_enabled_by_default,
     _resolve_device_circuit,
 )
-from vaillant_ebus.backend.mapping import REGISTER_MAP, RegisterMeta  # noqa: E402
+from vaillant_ebus.backend.mapping import REGISTER_MAP, RegisterMeta, get_meta  # noqa: E402
 from vaillant_ebus.backend.models import DeviceGraph, DeviceNode, DeviceType  # noqa: E402
 
 
@@ -429,3 +429,140 @@ class TestGenerateFromFixtureGraphs:
         svc = EntityFactoryService()
         entities = svc.generate(graph)
         assert len(entities) == 0, "No fallbacks — empty graph produces no entities"
+
+
+class TestMultiFieldParsing:
+    """Multi-field register parsing (issue #51)."""
+
+    @staticmethod
+    def _status01_graph() -> DeviceGraph:
+        return DeviceGraph(
+            nodes={
+                "hmu": DeviceNode(
+                    circuit="hmu",
+                    device_type=DeviceType.HEAT_PUMP,
+                    registers=["hmu.Status01"],
+                    has_data=True,
+                ),
+            },
+            raw_registers={"hmu.Status01": "39.5;40.5;-;-;-;off"},
+            placeholder_registers=set(),
+        )
+
+    def test_status01_splits_into_named_fields(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._status01_graph())
+        fields = {e.field for e in entities if e.name == "Status01"}
+        assert "temp" in fields
+        assert "temp_1" in fields
+        assert "pumpstate" in fields
+
+    def test_status01_flow_return_temperature_meta(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._status01_graph())
+        flow = next(e for e in entities if e.field == "temp")
+        ret = next(e for e in entities if e.field == "temp_1")
+        assert flow.meta.friendly_name == "Flow Temperature"
+        assert flow.meta.device_class == "temperature"
+        assert flow.meta.unit == "°C"
+        assert ret.meta.friendly_name == "Return Temperature"
+        assert ret.meta.unit == "°C"
+
+    def test_status01_field_keys_are_unique(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._status01_graph())
+        status_keys = [e.key for e in entities if e.name == "Status01"]
+        assert "hmu.Status01.temp" in status_keys
+        assert "hmu.Status01.temp_1" in status_keys
+        assert "hmu.Status01.pumpstate" in status_keys
+        assert len(status_keys) == len(set(status_keys))
+
+    def test_status01_placeholder_fields_skipped(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._status01_graph())
+        status_fields = {e.field for e in entities if e.name == "Status01"}
+        assert "temp_2" not in status_fields or any(
+            e.field == "temp_2" and e.raw_value == "-" for e in entities if e.name == "Status01"
+        )
+
+    def test_status01_original_string_entity_kept(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._status01_graph())
+        original = [e for e in entities if e.key == "hmu.Status01.value"]
+        assert original, "Original Status01 value entity must be kept"
+        assert original[0].meta.friendly_name == "Status"
+
+
+class TestPowerConsumptionUnit:
+    """Power unit consistency (issue #52)."""
+
+    def test_power_consumption_hmu_unit_is_kw(self) -> None:
+        meta = get_meta("hmu", "PowerConsumptionHmu")
+        assert meta.unit == "kW"
+        assert meta.device_class == "power"
+
+
+class TestStateClassSemantics:
+    """State class renders history as line graph (issue #54)."""
+
+    @staticmethod
+    def _cop_graph() -> DeviceGraph:
+        return DeviceGraph(
+            nodes={
+                "hmu": DeviceNode(
+                    circuit="hmu",
+                    device_type=DeviceType.HEAT_PUMP,
+                    registers=["hmu.CopHc", "hmu.CopCooling"],
+                    has_data=True,
+                ),
+            },
+            raw_registers={"hmu.CopHc": "4.2", "hmu.CopCooling": "3.8"},
+            placeholder_registers=set(),
+        )
+
+    def test_cop_entities_measurement_state_class(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._cop_graph())
+        cop = [e for e in entities if e.name.startswith("Cop")]
+        assert cop
+        for entity in cop:
+            assert entity.meta.state_class == "measurement"
+
+    def test_room_temp_measurement_state_class(self) -> None:
+        meta = get_meta("ctlv2", "Z1RoomTemp")
+        assert meta.state_class == "measurement"
+        assert meta.device_class == "temperature"
+
+
+class TestBuildingCircuitFlowUnit:
+    """Building circuit flow unit (issue #55)."""
+
+    def test_building_circuit_flow_unit_is_l_per_hour(self) -> None:
+        meta = get_meta("hmu", "BuildingCircuitFlow")
+        assert meta.unit == "l/h"
+
+
+class TestCaseInsensitiveRegisterDedup:
+    """Registers differing only by case must not create duplicate entities."""
+
+    @staticmethod
+    def _case_graph() -> DeviceGraph:
+        return DeviceGraph(
+            nodes={
+                "ctlv2": DeviceNode(
+                    circuit="ctlv2",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=["ctlv2.HwcSfMode", "ctlv2.HwcSFMode"],
+                    has_data=True,
+                ),
+            },
+            raw_registers={"ctlv2.HwcSfMode": "auto", "ctlv2.HwcSFMode": "auto"},
+            placeholder_registers=set(),
+        )
+
+    def test_case_variants_produce_single_entity(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._case_graph())
+        uids = [e.unique_id for e in entities]
+        assert len(uids) == len(set(uids)), f"duplicate unique IDs: {uids}"
+        assert uids.count("ebusd_ctlv2_hwcsfmode") == 1

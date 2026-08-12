@@ -67,6 +67,14 @@ REGISTER = importlib.util.module_from_spec(REGISTER_SPEC)
 sys.modules["vaillant_ebus.backend.register_service"] = REGISTER
 REGISTER_SPEC.loader.exec_module(REGISTER)
 
+ANALYSIS_SPEC = importlib.util.spec_from_file_location(
+    "vaillant_ebus.backend.analysis_service", BACKEND_PATH / "analysis_service.py"
+)
+assert ANALYSIS_SPEC and ANALYSIS_SPEC.loader
+ANALYSIS = importlib.util.module_from_spec(ANALYSIS_SPEC)
+sys.modules["vaillant_ebus.backend.analysis_service"] = ANALYSIS
+ANALYSIS_SPEC.loader.exec_module(ANALYSIS)
+
 from vaillant_ebus.backend.ebus_service import EbusService  # noqa: E402
 from vaillant_ebus.backend.entity_factory import EntityFactoryService  # noqa: E402
 from vaillant_ebus.backend.models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister  # noqa: E402
@@ -135,7 +143,7 @@ COORDINATOR = importlib.util.module_from_spec(COORDINATOR_SPEC)
 sys.modules["vaillant_ebus.coordinator"] = COORDINATOR
 COORDINATOR_SPEC.loader.exec_module(COORDINATOR)
 
-from vaillant_ebus.coordinator import VaillantCoordinator  # noqa: E402
+from vaillant_ebus.coordinator import VaillantCoordinator, _register_values  # noqa: E402
 
 
 def _hass(cache_dir: str) -> MagicMock:
@@ -300,13 +308,17 @@ async def test_connect_schedules_one_delayed_rediscovery() -> None:
             module.DiscoveryService = original_discovery
             module.async_call_later = original_schedule
 
-        schedule.assert_called_once()
-        assert schedule.call_args.args[0] is hass
-        assert schedule.call_args.args[1] == timedelta(minutes=5)
-        delayed_callback = schedule.call_args.args[2]
+        schedule.assert_called()
+        calls = schedule.call_args_list
+        assert len(calls) == 2
+        assert calls[0].args[0] is hass
+        assert calls[0].args[1] == timedelta(minutes=5)
+        assert calls[1].args[0] is hass
+        assert calls[1].args[1] == timedelta(minutes=15)
+        delayed_callback = calls[0].args[2]
         await delayed_callback(datetime.now())
         assert mock_discovery.discover.await_count == 2
-        schedule.assert_called_once()
+        schedule.assert_called()
 
 
 # Intent: keep existing entities when delayed discovery finds only additional devices.
@@ -540,6 +552,23 @@ async def test_values_from_registers_includes_suffix_stripped() -> None:
         assert values["test.Example.value"] == "22.50"
 
 
+async def test_register_values_splits_status01() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.registers["hmu.Status01"] = EbusdRegister(
+            circuit="hmu",
+            name="Status01",
+            fields=["value"],
+            value=_register_values("hmu.Status01", "39.5;40.5;-;-;-;off"),
+            has_data=True,
+        )
+        values = await c._async_values_from_registers()
+        assert values["hmu.Status01.value"] == "39.5;40.5;-;-;-;off"
+        assert values["hmu.Status01.temp"] == "39.5"
+        assert values["hmu.Status01.temp_1"] == "40.5"
+        assert values["hmu.Status01.pumpstate"] == "off"
+
+
 async def test_ebus_none_when_not_connected() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
@@ -686,3 +715,62 @@ async def test_entities_regenerated_with_fresh_graph() -> None:
                 assert c._graph is not None
         finally:
             module.EbusService = orig_ebus
+
+
+# Intent: auto-enable integration-disabled entities but respect user choice.
+async def test_enable_registry_entities_respects_user_choice() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+
+        class _Entry:
+            disabled_by = "integration"
+
+            def __init__(self, uid: str, config_entry_id: str, disabled_by: str | None = "integration") -> None:
+                self.unique_id = uid
+                self.config_entry_id = config_entry_id
+                self.disabled_by = disabled_by
+
+        updated: list[str] = []
+        registry = MagicMock()
+        registry.entities = {
+            "sensor.power": _Entry("ebusd_hmu_powerconsumptionhmu", "entry-1", "integration"),
+            "sensor.user_disabled": _Entry("ebusd_hmu_currentconsumedpower", "entry-1", "user"),
+            "sensor.enabled": _Entry("ebusd_hmu_currentyieldpower", "entry-1", None),
+            "sensor.other_entry": _Entry("ebusd_hmu_powerconsumptionhmu", "entry-2", "integration"),
+        }
+        registry.async_update_entity = MagicMock(
+            side_effect=lambda entity_id, **kwargs: updated.append(entity_id)
+        )
+        hass.helpers.entity_registry.async_get = MagicMock(return_value=registry)
+
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        c.ebus = MagicMock()
+        c.ebus.is_connected = True
+        result = await c._enable_registry_entities(["hmu.PowerConsumptionHmu"])
+        assert result == ["sensor.power"]
+        assert updated == ["sensor.power"]
+
+
+# Intent: case-variant cache keys (HwcSfMode vs HwcSFMode) must not double-register.
+async def test_coordinator_seed_dedups_case_variants() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cache_path = Path(tmpdir) / "vaillant_ebus" / "register_cache.json"
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache = {
+            "ctlv2.HwcSfMode.value": "auto",
+            "ctlv2.HwcSFMode.value": "auto",
+            "ctlv2.HwcStorageTemp.value": "40.5",
+        }
+        cache_path.write_text(json.dumps(cache))
+
+        hass = _hass(tmpdir)
+        hass.config.path.return_value = str(cache_path)
+        coordinator = VaillantCoordinator(hass, _entry())
+        await coordinator._async_seed_entities_from_cache()
+
+        sfmode = [e for e in coordinator.entities if "sfmode" in e.unique_id]
+        assert len(sfmode) == 1, f"expected one HwcSfMode entity, got {len(sfmode)}"
+        uids = [e.unique_id for e in coordinator.entities]
+        assert len(uids) == len(set(uids))

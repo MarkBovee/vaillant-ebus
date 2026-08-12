@@ -22,18 +22,23 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SensorEntity] = []
-    seen: set[str] = set()
 
-    for desc in coordinator.entities:
-        if desc.entity_type not in ("sensor", ""):
-            continue
-        uid = f"{entry.entry_id}_{desc.unique_id}"
-        if uid not in seen:
-            entities.append(EbusdSensor(coordinator, desc, uid, entry))
-            seen.add(uid)
+    def _build(descriptions: list[EntityDescription]) -> list[SensorEntity]:
+        entities: list[SensorEntity] = []
+        seen: set[str] = set()
+        for desc in descriptions:
+            if desc.entity_type not in ("sensor", ""):
+                continue
+            uid = f"{entry.entry_id}_{desc.unique_id}"
+            if uid not in seen:
+                entities.append(EbusdSensor(coordinator, desc, uid, entry))
+                seen.add(uid)
+        return entities
 
-    async_add_entities(entities)
+    async_add_entities(_build(coordinator.entities))
+    coordinator.register_entity_adder(
+        "sensor", lambda descriptions: async_add_entities(_build(descriptions))
+    )
 
 
 class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreEntity):

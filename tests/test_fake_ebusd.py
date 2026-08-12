@@ -44,6 +44,7 @@ async def test_arotherm_fixture_loads() -> None:
         ("community/arotherm_plus_basv3_discovery.yaml", 50),
         ("community/arotherm_pro7_discovery.yaml", 5),
         ("community/flexocompact_find.txt", 50),
+        ("community/arotherm_ecotec_discovery.yaml", 50),
     ],
 )
 async def test_all_fixtures_load(fixture: str, min_registers: int) -> None:
@@ -203,6 +204,20 @@ async def test_field_level_read_nonexistent() -> None:
         await ebus.connect()
         val = await ebus.read_register("hmu", "Status00", "defrost")
         assert val is None
+        await ebus.disconnect()
+
+
+# Field-level read of hmu.Status01 flow/return temp (issue #51)
+async def test_field_level_read_status01() -> None:
+    async with FakeEbusdServer("community/arotherm_plus_basv3_discovery.yaml") as fake:
+        ebus = EbusService(host="127.0.0.1", port=fake.port)
+        await ebus.connect()
+        flow = await ebus.read_register("hmu", "Status01", "temp")
+        assert flow == "39.5"
+        ret = await ebus.read_register("hmu", "Status01", "temp_1")
+        assert ret == "40.5"
+        pump = await ebus.read_register("hmu", "Status01", "pumpstate")
+        assert pump == "off"
         await ebus.disconnect()
 
 

@@ -24,15 +24,24 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SelectEntity] = []
 
-    for desc in coordinator.entities:
-        if desc.entity_type != "select":
-            continue
-        uid = f"{entry.entry_id}_{desc.unique_id}"
-        entities.append(EbusdSelect(coordinator, desc, uid, entry))
+    def _build(descriptions: list[EntityDescription]) -> list[SelectEntity]:
+        entities: list[SelectEntity] = []
+        seen: set[str] = set()
+        for desc in descriptions:
+            if desc.entity_type != "select":
+                continue
+            uid = f"{entry.entry_id}_{desc.unique_id}"
+            if uid in seen:
+                continue
+            seen.add(uid)
+            entities.append(EbusdSelect(coordinator, desc, uid, entry))
+        return entities
 
-    async_add_entities(entities)
+    async_add_entities(_build(coordinator.entities))
+    coordinator.register_entity_adder(
+        "select", lambda descriptions: async_add_entities(_build(descriptions))
+    )
 
 
 class EbusdSelect(CoordinatorEntity[VaillantCoordinator], SelectEntity):

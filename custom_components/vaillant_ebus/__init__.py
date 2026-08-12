@@ -65,6 +65,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator._started = False
         await coordinator.async_request_refresh()
 
+    # Run background analysis on-demand: discover + enable new devices/entities.
+    async def svc_analyze(call: ServiceCall) -> None:
+        await coordinator.async_run_analysis()
+
     hass.services.async_register(
         DOMAIN,
         "read_parameter",
@@ -91,6 +95,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     hass.services.async_register(DOMAIN, "refresh", svc_refresh, schema=vol.Schema({}))
     hass.services.async_register(DOMAIN, "rediscover", svc_rediscover, schema=vol.Schema({}))
+    hass.services.async_register(DOMAIN, "analyze_registers", svc_analyze, schema=vol.Schema({}))
 
     # Export full discovery dump to YAML, optionally with raw grab.
     async def svc_export_discovery_dump(call: ServiceCall) -> None:
@@ -114,7 +119,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 # Tear down coordinator and unregister services.
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    for service in ("read_parameter", "write_parameter", "refresh", "rediscover", "export_discovery_dump"):
+    for service in (
+        "read_parameter",
+        "write_parameter",
+        "refresh",
+        "rediscover",
+        "analyze_registers",
+        "export_discovery_dump",
+    ):
         hass.services.async_remove(DOMAIN, service)
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:

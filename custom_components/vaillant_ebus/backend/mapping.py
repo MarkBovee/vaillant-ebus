@@ -4,11 +4,70 @@ from __future__ import annotations
 
 from .models import RegisterMeta
 
+# Multi-field registers: register key -> field names in semicolon order of the
+# raw ebusd value. Field names follow the ebusd CSV definitions.
+# Source: ebusd vaillant CSV (08.hmu.csv) + community dumps.
+MULTI_FIELD_FIELDS: dict[str, list[str]] = {
+    "hmu.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
+}
+
+
+def multi_field_fields(register_key: str) -> list[str] | None:
+    """Return the field names for a multi-field register, or None."""
+    return MULTI_FIELD_FIELDS.get(register_key)
+
+
+def split_multi_field(register_key: str, raw: str | None) -> dict[str, str | None]:
+    """Split a raw register value into named fields; keep the raw value under "value"."""
+    fields = MULTI_FIELD_FIELDS.get(register_key)
+    if not fields or raw is None:
+        return {"value": raw}
+    parts = raw.split(";")
+    values = {"value": raw}
+    values.update(
+        {field: parts[i] if i < len(parts) else None for i, field in enumerate(fields)}
+    )
+    return values
+
+
 REGISTER_MAP: dict[str, RegisterMeta] = {
     # hmu (Heat Pump)
     "hmu.Status01": RegisterMeta(
         friendly_name="Status",
         icon="mdi:information",
+        entity_category="diagnostic",
+    ),
+    "hmu.Status01.temp": RegisterMeta(
+        friendly_name="Flow Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "hmu.Status01.temp_1": RegisterMeta(
+        friendly_name="Return Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "hmu.Status01.temp_2": RegisterMeta(
+        friendly_name="Outside Temperature",
+        device_class="temperature",
+        unit="°C",
+        enabled=False,
+    ),
+    "hmu.Status01.temp_3": RegisterMeta(
+        friendly_name="Hot Water Temperature",
+        device_class="temperature",
+        unit="°C",
+        enabled=False,
+    ),
+    "hmu.Status01.temp_4": RegisterMeta(
+        friendly_name="Storage Temperature",
+        device_class="temperature",
+        unit="°C",
+        enabled=False,
+    ),
+    "hmu.Status01.pumpstate": RegisterMeta(
+        friendly_name="Pump State",
+        entity_type="binary_sensor",
         entity_category="diagnostic",
     ),
     "hmu.StatusCirPump": RegisterMeta(
@@ -123,18 +182,32 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "hmu.CopHc": RegisterMeta(
         friendly_name="COP Heating",
         icon="mdi:lightning-bolt",
+        state_class="measurement",
+    ),
+    "hmu.CopHcMonth": RegisterMeta(
+        friendly_name="COP Heating Month",
+        icon="mdi:lightning-bolt",
+        state_class="measurement",
     ),
     "hmu.CopHwc": RegisterMeta(
         friendly_name="COP DHW",
         icon="mdi:lightning-bolt",
+        state_class="measurement",
+    ),
+    "hmu.CopHwcMonth": RegisterMeta(
+        friendly_name="COP DHW Month",
+        icon="mdi:lightning-bolt",
+        state_class="measurement",
     ),
     "hmu.CopCooling": RegisterMeta(
         friendly_name="COP Cooling",
         icon="mdi:lightning-bolt",
+        state_class="measurement",
     ),
     "hmu.CopCoolingMonth": RegisterMeta(
         friendly_name="COP Cooling Month",
         icon="mdi:lightning-bolt",
+        state_class="measurement",
     ),
     "hmu.YieldHc": RegisterMeta(
         friendly_name="Yield Heating",
@@ -291,14 +364,14 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "hmu.PowerConsumptionHmu": RegisterMeta(
         friendly_name="Power Consumption (HMU)",
         device_class="power",
-        unit="W",
+        unit="kW",
         state_class="measurement",
         enabled=False,
     ),
     "hmu.BuildingCircuitFlow": RegisterMeta(
         friendly_name="Building Circuit Flow",
         icon="mdi:water",
-        unit="l/min",
+        unit="l/h",
         entity_type="sensor",
     ),
     "hmu.DateTime": RegisterMeta(
@@ -944,6 +1017,13 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Room Temperature",
         device_class="temperature",
         unit="°C",
+        state_class="measurement",
+    ),
+    "ctlv2.Z2RoomTemp": RegisterMeta(
+        friendly_name="Room Temperature Zone 2",
+        device_class="temperature",
+        unit="°C",
+        state_class="measurement",
     ),
     "ctlv2.Z1QuickVetoDuration": RegisterMeta(
         friendly_name="Quick Veto Duration",

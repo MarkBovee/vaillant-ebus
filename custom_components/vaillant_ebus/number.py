@@ -24,15 +24,24 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[NumberEntity] = []
 
-    for desc in coordinator.entities:
-        if desc.entity_type != "number":
-            continue
-        uid = f"{entry.entry_id}_{desc.unique_id}"
-        entities.append(EbusdNumber(coordinator, desc, uid, entry))
+    def _build(descriptions: list[EntityDescription]) -> list[NumberEntity]:
+        entities: list[NumberEntity] = []
+        seen: set[str] = set()
+        for desc in descriptions:
+            if desc.entity_type != "number":
+                continue
+            uid = f"{entry.entry_id}_{desc.unique_id}"
+            if uid in seen:
+                continue
+            seen.add(uid)
+            entities.append(EbusdNumber(coordinator, desc, uid, entry))
+        return entities
 
-    async_add_entities(entities)
+    async_add_entities(_build(coordinator.entities))
+    coordinator.register_entity_adder(
+        "number", lambda descriptions: async_add_entities(_build(descriptions))
+    )
 
 
 class EbusdNumber(CoordinatorEntity[VaillantCoordinator], NumberEntity):

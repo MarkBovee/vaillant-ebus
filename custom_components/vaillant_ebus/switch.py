@@ -30,19 +30,31 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SwitchEntity] = []
 
-    for desc in coordinator.entities:
-        if desc.entity_type != "switch":
-            continue
-        uid = f"{entry.entry_id}_{desc.unique_id}"
-        entities.append(EbusdSwitch(coordinator, desc, uid, entry))
+    def _build(descriptions: list[EntityDescription]) -> list[SwitchEntity]:
+        entities: list[SwitchEntity] = []
+        seen: set[str] = set()
+        for desc in descriptions:
+            if desc.entity_type != "switch":
+                continue
+            uid = f"{entry.entry_id}_{desc.unique_id}"
+            if uid in seen:
+                continue
+            seen.add(uid)
+            entities.append(EbusdSwitch(coordinator, desc, uid, entry))
+        return entities
 
-    entities.append(AwayModeSwitch(coordinator, entry))
-    entities.append(HwcBoostSwitch(coordinator, entry))
-    entities.append(HwcAwayModeSwitch(coordinator, entry))
-
-    async_add_entities(entities)
+    async_add_entities(_build(coordinator.entities))
+    async_add_entities(
+        [
+            AwayModeSwitch(coordinator, entry),
+            HwcBoostSwitch(coordinator, entry),
+            HwcAwayModeSwitch(coordinator, entry),
+        ]
+    )
+    coordinator.register_entity_adder(
+        "switch", lambda descriptions: async_add_entities(_build(descriptions))
+    )
 
 
 class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):

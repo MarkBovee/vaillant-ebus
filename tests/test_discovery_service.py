@@ -56,6 +56,7 @@ AROTHERM_PLUS_2ZONE_LINES = load_find_lines("community/arotherm_plus_2zone_disco
 AROTHERM_PLUS_BASV3_LINES = load_find_lines("community/arotherm_plus_basv3_discovery.yaml")
 AROTHERM_PRO7_LINES = load_find_lines("community/arotherm_pro7_discovery.yaml")
 FLEXOCOMPACT_LINES = load_find_lines("community/flexocompact_find.txt")
+AROTHERM_ECOTEC_LINES = load_find_lines("community/arotherm_ecotec_discovery.yaml")
 
 
 def _arotherm_graph() -> DeviceGraph:
@@ -92,6 +93,10 @@ def _arotherm_pro7_graph() -> DeviceGraph:
 
 def _flexocompact_graph() -> DeviceGraph:
     return DiscoveryService.build_device_graph(FLEXOCOMPACT_LINES)
+
+
+def _arotherm_ecotec_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(AROTHERM_ECOTEC_LINES)
 
 
 # =============================================================================
@@ -449,6 +454,34 @@ def test_community_unknown_circuits() -> None:
     for graph in (_basv_graph(), _v32_graph(), _flexotherm_graph(), _flexocompact_graph()):
         for node in graph.nodes.values():
             assert node.device_type in DeviceType, f"Invalid device type for {node.circuit}"
+
+
+def test_arotherm_ecotec_device_graph() -> None:
+    graph = _arotherm_ecotec_graph()
+    assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+    assert graph.nodes["hmu"].scan_type == "HMU00"
+    assert graph.nodes["ctlv2"].device_type == DeviceType.HEATING_CONTROLLER
+    assert graph.nodes["ctlv2"].scan_type == "CTLV2"
+    assert graph.nodes["vr_71"].device_type == DeviceType.UNKNOWN
+    assert graph.nodes["vr_71"].scan_type in ("VR_71", "VR_92")
+    assert graph.nodes["vr_71"].has_data is True
+    assert graph.nodes["vwzio"].has_data is False
+
+
+def test_arotherm_ecotec_hmu_registers() -> None:
+    graph = _arotherm_ecotec_graph()
+    assert "hmu.Status01" in graph.raw_registers
+    assert "hmu.FlowTemp" in graph.raw_registers
+    assert "hmu.BuildingCircuitFlow" in graph.raw_registers
+    assert "ctlv2.Z1RoomHumidity" not in graph.raw_registers
+    assert "ctlv2.Z1RoomHumidity" not in graph.placeholder_registers
+
+
+def test_arotherm_ecotec_zones() -> None:
+    graph = _arotherm_ecotec_graph()
+    assert "z1" in graph.nodes
+    assert graph.nodes["z1"].has_data is True
+    assert graph.nodes["z1"].device_type == DeviceType.ZONE
 
 
 # =============================================================================
