@@ -60,7 +60,7 @@ from vaillant_ebus.backend.entity_factory import (  # noqa: E402
     _determine_enabled_by_default,
     _resolve_device_circuit,
 )
-from vaillant_ebus.backend.mapping import REGISTER_MAP, RegisterMeta  # noqa: E402
+from vaillant_ebus.backend.mapping import REGISTER_MAP, RegisterMeta, get_meta  # noqa: E402
 from vaillant_ebus.backend.models import DeviceGraph, DeviceNode, DeviceType  # noqa: E402
 
 
@@ -491,3 +491,52 @@ class TestMultiFieldParsing:
         original = [e for e in entities if e.key == "hmu.Status01.value"]
         assert original, "Original Status01 value entity must be kept"
         assert original[0].meta.friendly_name == "Status"
+
+
+class TestPowerConsumptionUnit:
+    """Power unit consistency (issue #52)."""
+
+    def test_power_consumption_hmu_unit_is_kw(self) -> None:
+        meta = get_meta("hmu", "PowerConsumptionHmu")
+        assert meta.unit == "kW"
+        assert meta.device_class == "power"
+
+
+class TestStateClassSemantics:
+    """State class renders history as line graph (issue #54)."""
+
+    @staticmethod
+    def _cop_graph() -> DeviceGraph:
+        return DeviceGraph(
+            nodes={
+                "hmu": DeviceNode(
+                    circuit="hmu",
+                    device_type=DeviceType.HEAT_PUMP,
+                    registers=["hmu.CopHc", "hmu.CopCooling"],
+                    has_data=True,
+                ),
+            },
+            raw_registers={"hmu.CopHc": "4.2", "hmu.CopCooling": "3.8"},
+            placeholder_registers=set(),
+        )
+
+    def test_cop_entities_measurement_state_class(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._cop_graph())
+        cop = [e for e in entities if e.name.startswith("Cop")]
+        assert cop
+        for entity in cop:
+            assert entity.meta.state_class == "measurement"
+
+    def test_room_temp_measurement_state_class(self) -> None:
+        meta = get_meta("ctlv2", "Z1RoomTemp")
+        assert meta.state_class == "measurement"
+        assert meta.device_class == "temperature"
+
+
+class TestBuildingCircuitFlowUnit:
+    """Building circuit flow unit (issue #55)."""
+
+    def test_building_circuit_flow_unit_is_l_per_hour(self) -> None:
+        meta = get_meta("hmu", "BuildingCircuitFlow")
+        assert meta.unit == "l/h"

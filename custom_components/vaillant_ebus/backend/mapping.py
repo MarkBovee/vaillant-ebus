@@ -182,18 +182,32 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "hmu.CopHc": RegisterMeta(
         friendly_name="COP Heating",
         icon="mdi:lightning-bolt",
+        state_class="measurement",
+    ),
+    "hmu.CopHcMonth": RegisterMeta(
+        friendly_name="COP Heating Month",
+        icon="mdi:lightning-bolt",
+        state_class="measurement",
     ),
     "hmu.CopHwc": RegisterMeta(
         friendly_name="COP DHW",
         icon="mdi:lightning-bolt",
+        state_class="measurement",
+    ),
+    "hmu.CopHwcMonth": RegisterMeta(
+        friendly_name="COP DHW Month",
+        icon="mdi:lightning-bolt",
+        state_class="measurement",
     ),
     "hmu.CopCooling": RegisterMeta(
         friendly_name="COP Cooling",
         icon="mdi:lightning-bolt",
+        state_class="measurement",
     ),
     "hmu.CopCoolingMonth": RegisterMeta(
         friendly_name="COP Cooling Month",
         icon="mdi:lightning-bolt",
+        state_class="measurement",
     ),
     "hmu.YieldHc": RegisterMeta(
         friendly_name="Yield Heating",
@@ -350,14 +364,14 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "hmu.PowerConsumptionHmu": RegisterMeta(
         friendly_name="Power Consumption (HMU)",
         device_class="power",
-        unit="W",
+        unit="kW",
         state_class="measurement",
         enabled=False,
     ),
     "hmu.BuildingCircuitFlow": RegisterMeta(
         friendly_name="Building Circuit Flow",
         icon="mdi:water",
-        unit="l/min",
+        unit="l/h",
         entity_type="sensor",
     ),
     "hmu.DateTime": RegisterMeta(
@@ -1003,6 +1017,13 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Room Temperature",
         device_class="temperature",
         unit="°C",
+        state_class="measurement",
+    ),
+    "ctlv2.Z2RoomTemp": RegisterMeta(
+        friendly_name="Room Temperature Zone 2",
+        device_class="temperature",
+        unit="°C",
+        state_class="measurement",
     ),
     "ctlv2.Z1QuickVetoDuration": RegisterMeta(
         friendly_name="Quick Veto Duration",
