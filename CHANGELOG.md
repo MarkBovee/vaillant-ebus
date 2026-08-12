@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.3 - 2026-08-12
+
+### Added
+
+- **`hmu.Status01` field parsing (#51):** the raw Status01 string
+  (`39.5;40.5;-;-;-;off`) is now split into named fields per the ebusd CSV
+  definition: `temp` (flow temperature), `temp_1` (return temperature),
+  `temp_2` (outside), `temp_3` (hot water), `temp_4` (storage), and
+  `pumpstate`. Flow and return temperature are exposed as numeric sensors with
+  °C units. The original Status01 string entity is preserved.
+
+### Fixed
+
+- **Status01 string entity regression:** splitting the register dropped the raw
+  value, leaving `sensor.vaillant_arotherm_status` frozen on its last cached
+  value. The raw value is kept under the `value` field, and split fields are
+  refreshed on delayed rediscovery.
+
+### Test fixtures
+
+- Added the aroTHERM + EcoTEC hybrid discovery dump (`arotherm_ecotec_discovery.yaml`)
+  from issue #48 with graph and fixture-load regression tests.
+
 ## 1.2.2 - 2026-07-30
 
 ### Fixed
