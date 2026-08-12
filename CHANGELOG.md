@@ -10,6 +10,12 @@
   `temp_2` (outside), `temp_3` (hot water), `temp_4` (storage), and
   `pumpstate`. Flow and return temperature are exposed as numeric sensors with
   °C units. The original Status01 string entity is preserved.
+- **Background analysis:** a recurring task (every 15 minutes) inspects
+  registers that became live since the previous tick and automatically
+  discovers new devices and entities and enables them without a restart.
+  Registers that are disabled by default (e.g. `PowerConsumptionHmu`) are
+  enabled as soon as they carry real data, while user-disabled entities are
+  respected. A new `analyze_registers` service runs the analysis on demand.
 
 ### Fixed
 
@@ -17,6 +23,15 @@
   value, leaving `sensor.vaillant_arotherm_status` frozen on its last cached
   value. The raw value is kept under the `value` field, and split fields are
   refreshed on delayed rediscovery.
+- **`PowerConsumptionHmu` unit (#52):** the ebusd value is in kW but the entity
+  was declared with unit W. Now reported in kW, consistent with the other power
+  registers.
+- **COP and room-temperature history (#54):** COP and room-temperature sensors
+  render as line graphs instead of bar charts by setting
+  `state_class=measurement`. Added missing mappings for `CopHcMonth`,
+  `CopHwcMonth`, and `Z2RoomTemp`.
+- **`BuildingCircuitFlow` unit (#55):** corrected from `l/min` to `l/h` per user
+  reports.
 
 ### Test fixtures
 
