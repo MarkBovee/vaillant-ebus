@@ -32,6 +32,11 @@
   `CopHwcMonth`, and `Z2RoomTemp`.
 - **`BuildingCircuitFlow` unit (#55):** corrected from `l/min` to `l/h` per user
   reports.
+- **Duplicate entity IDs at startup:** ebusd can report the same register under
+  different capitalisation (e.g. `HwcSfMode` vs `HwcSFMode`). The entity
+  factory and cache seeding now dedupe register keys case-insensitively, and
+  the entity platforms dedupe by unique ID, so Home Assistant no longer logs
+  "does not generate unique IDs ... already exists" at startup.
 
 ### Test fixtures
 
