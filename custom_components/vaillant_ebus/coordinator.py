@@ -19,7 +19,7 @@ from . import repairs
 from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService
 from .backend.ebus_service import EbusService
 from .backend.entity_factory import EntityDescription, EntityFactoryService
-from .backend.mapping import REGISTER_MAP
+from .backend.mapping import REGISTER_MAP, split_multi_field
 from .backend.models import (
     CIRCUIT_NAMES,
     COMPRESSOR_STATUS_LABELS,
@@ -51,6 +51,11 @@ EBUSD_STATUS_SUFFIXES: tuple[str, ...] = (
     ";unknown",
 )
 DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
+
+
+# Build the per-field value dict for a register (split multi-field values).
+def _register_values(register_key: str, raw: str | None) -> dict[str, str | None]:
+    return split_multi_field(register_key, raw)
 
 
 # Merge a delayed graph without removing devices that initial discovery found.
@@ -147,7 +152,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 circuit=circuit,
                 name=name,
                 fields=["value"],
-                value={"value": cached_value},
+                value=_register_values(rk, cached_value),
                 has_data=True,
             )
 
@@ -206,7 +211,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     circuit=circuit,
                     name=name,
                     fields=["value"],
-                    value={"value": raw},
+                    value=_register_values(rk, raw),
                     has_data=True,
                 )
             else:
@@ -385,12 +390,12 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             circuit=circuit,
                             name=name,
                             fields=["value"],
-                            value={"value": value},
+                            value=_register_values(key, value),
                             has_data=True,
                         )
                         added += 1
                     else:
-                        self.registers[key].value["value"] = value
+                        self.registers[key].value.update(_register_values(key, value))
                         self.registers[key].has_data = True
                     _LOGGER.debug("Fallback read %s = %s", key, value)
                 elif was_new and REGISTER_MAP[key].enabled:
@@ -398,7 +403,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         circuit=circuit,
                         name=name,
                         fields=["value"],
-                        value={"value": None},
+                        value=_register_values(key, None),
                         has_data=False,
                     )
                     added += 1
@@ -443,12 +448,12 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             circuit=circuit,
                             name=name,
                             fields=["value"],
-                            value={"value": val},
+                            value=_register_values(key, val),
                             has_data=True,
                         )
                         updated += 1
                     else:
-                        self.registers[key].value["value"] = val
+                        self.registers[key].value.update(_register_values(key, val))
                         self.registers[key].has_data = True
                         updated += 1
                 self._last_find_keys = {k for k in self.registers}

@@ -1,0 +1,5242 @@
+# Discovery dump for vaillant_ebus
+# Review this file for sensitive information before sharing
+metadata:
+  timestamp: '2026-08-11T10:14:48.415633'
+  ebusd_version: null
+  register_count: 580
+  grab_duration: 0
+  dump_version: 3
+raw_find_lines:
+- Broadcast Datetime = no data stored
+- Broadcast Error = no data stored
+- Broadcast HwcStatus = no data stored
+- Broadcast Id = no data stored
+- Broadcast IdAnswer = no data stored
+- Broadcast IdQuery = no data stored
+- Broadcast Load = no data stored
+- Broadcast Outsidetemp = 30.000
+- Broadcast Queryexistence =  (empty for 31fe07fe00 / )
+- Broadcast Signoflife = no data stored
+- Broadcast Vdatetime = 10:14:18;11.08.2026
+- Broadcast Vdatetime = no data stored
+- ctlv2 AdaptHeatCurve = no
+- ctlv2 AdaptHeatCurve = no data stored
+- ctlv2 CcTimer_Config = 00 03 0a 00 00 00 ff ff 00
+- ctlv2 CcTimer_Friday0 = 06:00;22:00
+- ctlv2 CcTimer_Friday1 = 00:00;00:00
+- ctlv2 CcTimer_Friday2 = 00:00;00:00
+- ctlv2 CcTimer_Friday = no data stored
+- ctlv2 CcTimer_Monday0 = 06:00;22:00
+- ctlv2 CcTimer_Monday1 = 00:00;00:00
+- ctlv2 CcTimer_Monday2 = 00:00;00:00
+- ctlv2 CcTimer_Monday = no data stored
+- ctlv2 CcTimer_Saturday0 = 07:30;23:30
+- ctlv2 CcTimer_Saturday1 = 00:00;00:00
+- ctlv2 CcTimer_Saturday2 = 00:00;00:00
+- ctlv2 CcTimer_Saturday = no data stored
+- ctlv2 CcTimer_Sunday0 = 07:30;22:00
+- ctlv2 CcTimer_Sunday1 = 00:00;00:00
+- ctlv2 CcTimer_Sunday2 = 00:00;00:00
+- ctlv2 CcTimer_Sunday = no data stored
+- ctlv2 CcTimer_Thursday0 = 06:00;22:00
+- ctlv2 CcTimer_Thursday1 = 00:00;00:00
+- ctlv2 CcTimer_Thursday2 = 00:00;00:00
+- ctlv2 CcTimer_Thursday = no data stored
+- ctlv2 CcTimer_Timeframes = 1;1;1;1;1;1;1
+- ctlv2 CcTimer_Tuesday0 = 06:00;22:00
+- ctlv2 CcTimer_Tuesday1 = 00:00;00:00
+- ctlv2 CcTimer_Tuesday2 = 00:00;00:00
+- ctlv2 CcTimer_Tuesday = no data stored
+- ctlv2 CcTimer_Wednesday0 = 06:00;22:00
+- ctlv2 CcTimer_Wednesday1 = 00:00;00:00
+- ctlv2 CcTimer_Wednesday2 = 00:00;00:00
+- ctlv2 CcTimer_Wednesday = no data stored
+- ctlv2 Clearerrorhistory = no data stored
+- ctlv2 ContinuousHeating = -26
+- ctlv2 ContinuousHeating = no data stored
+- ctlv2 Currenterror = -;-;-;-;-
+- ctlv2 CylinderChargeHyst = 3
+- ctlv2 CylinderChargeHyst = no data stored
+- ctlv2 CylinderChargeOffset = 25
+- ctlv2 CylinderChargeOffset = no data stored
+- ctlv2 Date = 11.08.2026
+- ctlv2 Date = no data stored
+- ctlv2 DisplayedOutsideTemp = 30
+- ctlv2 Errorhistory = no data stored
+- ctlv2 FrostOverRideTime = 4
+- ctlv2 FrostOverRideTime = no data stored
+- ctlv2 Hc1ActualFlowTempDesired = 0.0
+- ctlv2 Hc1AutoOffMode = night
+- ctlv2 Hc1AutoOffMode = no data stored
+- ctlv2 Hc1CircuitType = mixer
+- ctlv2 Hc1ExcessTemp = 0.0
+- ctlv2 Hc1ExcessTemp = no data stored
+- ctlv2 Hc1FlowTemp = 30.25
+- ctlv2 Hc1HeatCurve = 1.7
+- ctlv2 Hc1HeatCurve = no data stored
+- ctlv2 Hc1HeatCurveAdaption = 0.0
+- ctlv2 Hc1MaxFlowTempDesired = 65
+- ctlv2 Hc1MaxFlowTempDesired = no data stored
+- ctlv2 Hc1MinCoolingTempDesired = 20
+- ctlv2 Hc1MinCoolingTempDesired = no data stored
+- ctlv2 Hc1MinFlowTempDesired = 48
+- ctlv2 Hc1MinFlowTempDesired = no data stored
+- ctlv2 Hc1MixerMovement = -100
+- ctlv2 Hc1PumpStatus = 0
+- ctlv2 Hc1PumpStatus = no data stored
+- ctlv2 Hc1RoomTempSwitchOn = thermostat
+- ctlv2 Hc1RoomTempSwitchOn = no data stored
+- ctlv2 Hc1Status = 0
+- ctlv2 Hc1Status = no data stored
+- ctlv2 Hc1SummerTempLimit = 30
+- ctlv2 Hc1SummerTempLimit = no data stored
+- ctlv2 Hc2ActualFlowTempDesired = 0.0
+- ctlv2 Hc2AutoOffMode = night
+- ctlv2 Hc2AutoOffMode = no data stored
+- ctlv2 Hc2CircuitType = mixer
+- ctlv2 Hc2ExcessTemp = 0.0
+- ctlv2 Hc2ExcessTemp = no data stored
+- ctlv2 Hc2FlowTemp = 29.75
+- ctlv2 Hc2HeatCurve = 1.7
+- ctlv2 Hc2HeatCurve = no data stored
+- ctlv2 Hc2HeatCurveAdaption = 0.0
+- ctlv2 Hc2MaxFlowTempDesired = 65
+- ctlv2 Hc2MaxFlowTempDesired = no data stored
+- ctlv2 Hc2MinCoolingTempDesired = 20
+- ctlv2 Hc2MinCoolingTempDesired = no data stored
+- ctlv2 Hc2MinFlowTempDesired = 48
+- ctlv2 Hc2MinFlowTempDesired = no data stored
+- ctlv2 Hc2MixerMovement = -100
+- ctlv2 Hc2PumpStatus = 0
+- ctlv2 Hc2PumpStatus = no data stored
+- ctlv2 Hc2RoomTempSwitchOn = thermostat
+- ctlv2 Hc2RoomTempSwitchOn = no data stored
+- ctlv2 Hc2Status = 0
+- ctlv2 Hc2Status = no data stored
+- ctlv2 Hc2SummerTempLimit = 30
+- ctlv2 Hc2SummerTempLimit = no data stored
+- ctlv2 Hc3ActualFlowTempDesired = 0.0
+- ctlv2 Hc3AutoOffMode = eco
+- ctlv2 Hc3AutoOffMode = no data stored
+- ctlv2 Hc3CircuitType = inactive
+- ctlv2 Hc3ExcessTemp = 0.0
+- ctlv2 Hc3ExcessTemp = no data stored
+- ctlv2 Hc3FlowTemp =  (empty for 3115b52406020002020800 / 0800020800ffffff7f)
+- ctlv2 Hc3HeatCurve = 1.2
+- ctlv2 Hc3HeatCurve = no data stored
+- ctlv2 Hc3HeatCurveAdaption = 0.0
+- ctlv2 Hc3MaxFlowTempDesired = 90
+- ctlv2 Hc3MaxFlowTempDesired = no data stored
+- ctlv2 Hc3MinCoolingTempDesired = 20
+- ctlv2 Hc3MinCoolingTempDesired = no data stored
+- ctlv2 Hc3MinFlowTempDesired = 15
+- ctlv2 Hc3MinFlowTempDesired = no data stored
+- ctlv2 Hc3MixerMovement = 0.0
+- ctlv2 Hc3PumpStatus = 0
+- ctlv2 Hc3PumpStatus = no data stored
+- ctlv2 Hc3RoomTempSwitchOn = off
+- ctlv2 Hc3RoomTempSwitchOn = no data stored
+- ctlv2 Hc3Status = 0
+- ctlv2 Hc3Status = no data stored
+- ctlv2 Hc3SummerTempLimit = 21
+- ctlv2 Hc3SummerTempLimit = no data stored
+- ctlv2 HcStorageTempBottom =  (empty for f115b5240602000000a000 / 080000a000ffffff7f)
+- ctlv2 HcStorageTempTop =  (empty for f115b52406020000009f00 / 0800009f00ffffff7f)
+- ctlv2 HwcBankHolidayEndPeriod = no data stored
+- ctlv2 HwcBankHolidayEndPeriod = no data stored
+- ctlv2 HwcBankHolidayStartPeriod = no data stored
+- ctlv2 HwcBankHolidayStartPeriod = no data stored
+- ctlv2 HwcFlowTemp = 0.0
+- ctlv2 HwcHolidayEndPeriod = 01.01.2015
+- ctlv2 HwcHolidayEndPeriod = no data stored
+- ctlv2 HwcHolidayStartPeriod = 01.01.2015
+- ctlv2 HwcHolidayStartPeriod = no data stored
+- ctlv2 HwcLockTime = 60
+- ctlv2 HwcLockTime = no data stored
+- ctlv2 HwcMaxFlowTempDesired = 80
+- ctlv2 HwcMaxFlowTempDesired = no data stored
+- ctlv2 HwcOpMode = day
+- ctlv2 HwcOpMode = no data stored
+- ctlv2 HwcParallelLoading = off
+- ctlv2 HwcParallelLoading = no data stored
+- ctlv2 HwcSFMode = auto
+- ctlv2 HwcSFMode = no data stored
+- ctlv2 HwcStorageTemp = 45
+- ctlv2 HwcStorageTempBottom =  (empty for f115b52406020000009e00 / 0800009e00ffffff7f)
+- ctlv2 HwcStorageTempTop =  (empty for f115b52406020000009d00 / 0800009d00ffffff7f)
+- ctlv2 HwcTempDesired = 46
+- ctlv2 HwcTempDesired = no data stored
+- ctlv2 HwcTimer_Config = 00 03 0a 0a 01 01 23 46 00
+- ctlv2 HwcTimer_Friday0 = 05:30;22:00;46.0
+- ctlv2 HwcTimer_Friday1 = 00:00;00:00;-
+- ctlv2 HwcTimer_Friday2 = 00:00;00:00;-
+- ctlv2 HwcTimer_Friday = no data stored
+- ctlv2 HwcTimer_Monday0 = 05:30;22:00;46.0
+- ctlv2 HwcTimer_Monday1 = 00:00;00:00;-
+- ctlv2 HwcTimer_Monday2 = 00:00;00:00;-
+- ctlv2 HwcTimer_Monday = no data stored
+- ctlv2 HwcTimer_Saturday0 = 07:00;23:30;46.0
+- ctlv2 HwcTimer_Saturday1 = 00:00;00:00;-
+- ctlv2 HwcTimer_Saturday2 = 00:00;00:00;-
+- ctlv2 HwcTimer_Saturday = no data stored
+- ctlv2 HwcTimer_Sunday0 = 07:00;22:00;46.0
+- ctlv2 HwcTimer_Sunday1 = 00:00;00:00;-
+- ctlv2 HwcTimer_Sunday2 = 00:00;00:00;-
+- ctlv2 HwcTimer_Sunday = no data stored
+- ctlv2 HwcTimer_Thursday0 = 05:30;22:00;46.0
+- ctlv2 HwcTimer_Thursday1 = 00:00;00:00;-
+- ctlv2 HwcTimer_Thursday2 = 00:00;00:00;-
+- ctlv2 HwcTimer_Thursday = no data stored
+- ctlv2 HwcTimer_Timeframes = 1;1;1;1;1;1;1
+- ctlv2 HwcTimer_Tuesday0 = 05:30;22:00;46.0
+- ctlv2 HwcTimer_Tuesday1 = 00:00;00:00;-
+- ctlv2 HwcTimer_Tuesday2 = 00:00;00:00;-
+- ctlv2 HwcTimer_Tuesday = no data stored
+- ctlv2 HwcTimer_Wednesday0 = 05:30;22:00;46.0
+- ctlv2 HwcTimer_Wednesday1 = 00:00;00:00;-
+- ctlv2 HwcTimer_Wednesday2 = 00:00;00:00;-
+- ctlv2 HwcTimer_Wednesday = no data stored
+- ctlv2 HydraulicScheme = 12
+- ctlv2 HydraulicScheme = no data stored
+- 'ctlv2 Installer1 =  (ERR: invalid position for 3015b52406020000006c00 / 0503006c0000)'
+- ctlv2 Installer1 = no data stored
+- 'ctlv2 Installer2 =  (ERR: invalid position for 3015b52406020000006d00 / 0503006d0000)'
+- ctlv2 Installer2 = no data stored
+- ctlv2 KeyCodeforConfigMenu = no data stored
+- ctlv2 KeyCodeforConfigMenu = no data stored
+- ctlv2 MaintenanceDate = no data stored
+- ctlv2 MaintenanceDate = no data stored
+- ctlv2 MaintenanceDue = yes
+- ctlv2 MaxCylinderChargeTime = 60
+- ctlv2 MaxCylinderChargeTime = no data stored
+- ctlv2 MaxRoomHumidity = 40
+- ctlv2 MaxRoomHumidity = no data stored
+- ctlv2 MultiRelaySetting = circulation
+- ctlv2 MultiRelaySetting = no data stored
+- ctlv2 OutsideTempAvg = 30.9375
+- ctlv2 OutsideTempAvg = no data stored
+- 'ctlv2 PhoneNumber1 =  (ERR: invalid position for 3015b52406020000006f00 / 0503006f0000)'
+- ctlv2 PhoneNumber1 = no data stored
+- 'ctlv2 PhoneNumber2 =  (ERR: invalid position for 3015b52406020000007000 / 050300700000)'
+- ctlv2 PhoneNumber2 = no data stored
+- 'ctlv2 PrEnergySum =  (ERR: invalid position for 3115b52406020000005c00 / 00)'
+- ctlv2 PrEnergySum = no data stored
+- ctlv2 PrEnergySumHc = 6217
+- ctlv2 PrEnergySumHc = no data stored
+- ctlv2 PrEnergySumHcLastMonth = 13
+- ctlv2 PrEnergySumHcLastMonth = no data stored
+- ctlv2 PrEnergySumHcThisMonth = 4
+- ctlv2 PrEnergySumHcThisMonth = no data stored
+- ctlv2 PrEnergySumHwc = 2584
+- ctlv2 PrEnergySumHwc = no data stored
+- ctlv2 PrEnergySumHwcLastMonth = 24
+- ctlv2 PrEnergySumHwcLastMonth = no data stored
+- ctlv2 PrEnergySumHwcThisMonth = 10
+- ctlv2 PrEnergySumHwcThisMonth = no data stored
+- ctlv2 PrFuelSum = no data stored
+- ctlv2 PrFuelSum = no data stored
+- ctlv2 PrFuelSumHc = no data stored
+- ctlv2 PrFuelSumHc = no data stored
+- ctlv2 PrFuelSumHcLastMonth = no data stored
+- ctlv2 PrFuelSumHcLastMonth = no data stored
+- ctlv2 PrFuelSumHcThisMonth = no data stored
+- ctlv2 PrFuelSumHcThisMonth = no data stored
+- ctlv2 PrFuelSumHwc = no data stored
+- ctlv2 PrFuelSumHwc = no data stored
+- ctlv2 PrFuelSumHwcLastMonth = no data stored
+- ctlv2 PrFuelSumHwcLastMonth = no data stored
+- ctlv2 PrFuelSumHwcThisMonth = no data stored
+- ctlv2 PrFuelSumHwcThisMonth = no data stored
+- ctlv2 PumpAdditionalTime = no data stored
+- ctlv2 PumpAdditionalTime = no data stored
+- ctlv2 SolarYieldTotal = 0
+- ctlv2 SolarYieldTotal = no data stored
+- ctlv2 SystemFlowTemp = 30.6875
+- ctlv2 Time = 09:43:34
+- ctlv2 Time = no data stored
+- ctlv2 WaterPressure = 1.5
+- ctlv2 YieldTotal = 14807
+- ctlv2 YieldTotal = no data stored
+- ctlv2 Z1ActualRoomTempDesired = 0.0
+- ctlv2 Z1ActualRoomTempDesired = no data stored
+- ctlv2 Z1BankHolidayEndPeriod = no data stored
+- ctlv2 Z1BankHolidayEndPeriod = no data stored
+- ctlv2 Z1BankHolidayStartPeriod = no data stored
+- ctlv2 Z1BankHolidayStartPeriod = no data stored
+- ctlv2 Z1CoolingTemp = 24
+- ctlv2 Z1CoolingTemp = no data stored
+- ctlv2 Z1DayTemp = 18
+- ctlv2 Z1DayTemp = no data stored
+- ctlv2 Z1HolidayEndPeriod = 01.01.2015
+- ctlv2 Z1HolidayEndPeriod = no data stored
+- ctlv2 Z1HolidayStartPeriod = 01.01.2015
+- ctlv2 Z1HolidayStartPeriod = no data stored
+- ctlv2 Z1HolidayTemp = 15
+- ctlv2 Z1HolidayTemp = no data stored
+- ctlv2 Z1Name1 = Sever
+- ctlv2 Z1Name1 = no data stored
+- 'ctlv2 Z1Name2 =  (ERR: invalid position for f115b52406020003001800 / 0803031800696e6100)'
+- ctlv2 Z1Name2 = no data stored
+- ctlv2 Z1NightTemp = 18.5
+- ctlv2 Z1NightTemp = no data stored
+- ctlv2 Z1OpMode = off
+- ctlv2 Z1OpMode = no data stored
+- ctlv2 Z1QuickVetoDuration = 3
+- ctlv2 Z1QuickVetoDuration = no data stored
+- ctlv2 Z1QuickVetoEndDate = 01.01.2019
+- ctlv2 Z1QuickVetoEndTime = 00:00:00
+- ctlv2 Z1QuickVetoTemp = 10
+- ctlv2 Z1QuickVetoTemp = no data stored
+- ctlv2 z1RoomHumidity = 49
+- ctlv2 Z1RoomTemp = 28.4125
+- ctlv2 Z1RoomZoneMapping = VRC700
+- ctlv2 Z1RoomZoneMapping = no data stored
+- ctlv2 Z1SFMode = auto
+- ctlv2 Z1SFMode = no data stored
+- ctlv2 Z1Shortname = no data stored
+- ctlv2 Z1Shortname = no data stored
+- ctlv2 Z1Timer_Config = 00 0c 0a 05 01 0c 05 1e 00
+- ctlv2 Z1Timer_Friday0 = 12:00;20:30;19.0
+- ctlv2 Z1Timer_Friday1 = 00:00;00:00;-
+- ctlv2 Z1Timer_Friday2 = 00:00;00:00;-
+- ctlv2 Z1Timer_Friday = no data stored
+- ctlv2 Z1Timer_Monday0 = 12:00;20:30;19.0
+- ctlv2 Z1Timer_Monday1 = 00:00;00:00;-
+- ctlv2 Z1Timer_Monday2 = 00:00;00:00;-
+- ctlv2 Z1Timer_Monday = no data stored
+- ctlv2 Z1Timer_Saturday0 = 12:00;20:30;19.0
+- ctlv2 Z1Timer_Saturday1 = 00:00;00:00;-
+- ctlv2 Z1Timer_Saturday2 = 00:00;00:00;-
+- ctlv2 Z1Timer_Saturday = no data stored
+- ctlv2 Z1Timer_Sunday0 = 12:00;20:30;19.0
+- ctlv2 Z1Timer_Sunday1 = 00:00;00:00;-
+- ctlv2 Z1Timer_Sunday2 = 00:00;00:00;-
+- ctlv2 Z1Timer_Sunday = no data stored
+- ctlv2 Z1Timer_Thursday0 = 12:00;20:30;19.0
+- ctlv2 Z1Timer_Thursday1 = 00:00;00:00;-
+- ctlv2 Z1Timer_Thursday2 = 00:00;00:00;-
+- ctlv2 Z1Timer_Thursday = no data stored
+- ctlv2 Z1Timer_Timeframes = 1;1;1;1;1;1;1
+- ctlv2 Z1Timer_Tuesday0 = 12:00;20:30;19.0
+- ctlv2 Z1Timer_Tuesday1 = 00:00;00:00;-
+- ctlv2 Z1Timer_Tuesday2 = 00:00;00:00;-
+- ctlv2 Z1Timer_Tuesday = no data stored
+- ctlv2 Z1Timer_Wednesday0 = 12:00;20:30;19.0
+- ctlv2 Z1Timer_Wednesday1 = 00:00;00:00;-
+- ctlv2 Z1Timer_Wednesday2 = 00:00;00:00;-
+- ctlv2 Z1Timer_Wednesday = no data stored
+- ctlv2 Z1ValveStatus = 0
+- ctlv2 Z1ValveStatus = no data stored
+- ctlv2 Z2ActualRoomTempDesired = 0.0
+- ctlv2 Z2ActualRoomTempDesired = no data stored
+- ctlv2 Z2BankHolidayEndPeriod = no data stored
+- ctlv2 Z2BankHolidayEndPeriod = no data stored
+- ctlv2 Z2BankHolidayStartPeriod = no data stored
+- ctlv2 Z2BankHolidayStartPeriod = no data stored
+- ctlv2 Z2CoolingTemp = 24
+- ctlv2 Z2CoolingTemp = no data stored
+- ctlv2 Z2DayTemp = 19
+- ctlv2 Z2DayTemp = no data stored
+- ctlv2 Z2HolidayEndPeriod = 01.01.2015
+- ctlv2 Z2HolidayEndPeriod = no data stored
+- ctlv2 Z2HolidayStartPeriod = 01.01.2015
+- ctlv2 Z2HolidayStartPeriod = no data stored
+- ctlv2 Z2HolidayTemp = 15
+- ctlv2 Z2HolidayTemp = no data stored
+- ctlv2 Z2Name1 = Fabri
+- ctlv2 Z2Name1 = no data stored
+- 'ctlv2 Z2Name2 =  (ERR: invalid position for f115b52406020003011800 / 08030318007a696f00)'
+- ctlv2 Z2Name2 = no data stored
+- ctlv2 Z2NightTemp = 18.5
+- ctlv2 Z2NightTemp = no data stored
+- ctlv2 Z2OpMode = off
+- ctlv2 Z2OpMode = no data stored
+- ctlv2 Z2QuickVetoDuration = 3
+- ctlv2 Z2QuickVetoDuration = no data stored
+- ctlv2 Z2QuickVetoEndDate = 08.08.2026
+- ctlv2 Z2QuickVetoEndTime = 08:51:00
+- ctlv2 Z2QuickVetoTemp = 16
+- ctlv2 Z2QuickVetoTemp = no data stored
+- ctlv2 Z2RoomTemp = 27.6
+- ctlv2 Z2RoomZoneMapping = VR91_1
+- ctlv2 Z2RoomZoneMapping = no data stored
+- ctlv2 Z2SFMode = auto
+- ctlv2 Z2SFMode = no data stored
+- ctlv2 Z2Shortname = no data stored
+- ctlv2 Z2Shortname = no data stored
+- ctlv2 Z2Timer_Config = 00 0c 0a 05 01 0c 05 1e 00
+- ctlv2 Z2Timer_Friday0 = 12:30;19:30;19.5
+- ctlv2 Z2Timer_Friday1 = 19:30;21:30;20.0
+- ctlv2 Z2Timer_Friday2 = 00:00;00:00;-
+- ctlv2 Z2Timer_Friday = no data stored
+- ctlv2 Z2Timer_Monday0 = 12:30;19:30;19.5
+- ctlv2 Z2Timer_Monday1 = 19:30;21:30;20.0
+- ctlv2 Z2Timer_Monday2 = 00:00;00:00;-
+- ctlv2 Z2Timer_Monday = no data stored
+- ctlv2 Z2Timer_Saturday0 = 08:00;11:00;19.0
+- ctlv2 Z2Timer_Saturday1 = 12:30;15:00;20.0
+- ctlv2 Z2Timer_Saturday2 = 15:00;19:30;19.0
+- ctlv2 Z2Timer_Saturday = no data stored
+- ctlv2 Z2Timer_Sunday0 = 08:00;12:30;19.0
+- ctlv2 Z2Timer_Sunday1 = 12:30;15:00;20.0
+- ctlv2 Z2Timer_Sunday2 = 15:00;19:30;19.0
+- ctlv2 Z2Timer_Sunday = no data stored
+- ctlv2 Z2Timer_Thursday0 = 12:30;19:30;19.5
+- ctlv2 Z2Timer_Thursday1 = 19:30;21:30;20.0
+- ctlv2 Z2Timer_Thursday2 = 00:00;00:00;-
+- ctlv2 Z2Timer_Thursday = no data stored
+- ctlv2 Z2Timer_Timeframes = 2;2;2;2;2;4;4
+- ctlv2 Z2Timer_Tuesday0 = 12:30;19:30;19.5
+- ctlv2 Z2Timer_Tuesday1 = 19:30;21:30;20.0
+- ctlv2 Z2Timer_Tuesday2 = 00:00;00:00;-
+- ctlv2 Z2Timer_Tuesday = no data stored
+- ctlv2 Z2Timer_Wednesday0 = 12:30;19:30;19.5
+- ctlv2 Z2Timer_Wednesday1 = 19:30;21:30;20.0
+- ctlv2 Z2Timer_Wednesday2 = 00:00;00:00;-
+- ctlv2 Z2Timer_Wednesday = no data stored
+- ctlv2 Z2ValveStatus = 0
+- ctlv2 Z2ValveStatus = no data stored
+- ctlv2 Z3ActualRoomTempDesired = 0.0
+- ctlv2 Z3ActualRoomTempDesired = no data stored
+- ctlv2 Z3BankHolidayEndPeriod = no data stored
+- ctlv2 Z3BankHolidayEndPeriod = no data stored
+- ctlv2 Z3BankHolidayStartPeriod = no data stored
+- ctlv2 Z3BankHolidayStartPeriod = no data stored
+- ctlv2 Z3DayTemp = 21
+- ctlv2 Z3DayTemp = no data stored
+- ctlv2 Z3HolidayEndPeriod = no data stored
+- ctlv2 Z3HolidayEndPeriod = no data stored
+- ctlv2 Z3HolidayStartPeriod = no data stored
+- ctlv2 Z3HolidayStartPeriod = no data stored
+- ctlv2 Z3HolidayTemp = 15
+- ctlv2 Z3HolidayTemp = no data stored
+- ctlv2 Z3Name1 = no data stored
+- ctlv2 Z3Name1 = no data stored
+- ctlv2 Z3Name2 = no data stored
+- ctlv2 Z3Name2 = no data stored
+- ctlv2 Z3NightTemp = 15
+- ctlv2 Z3NightTemp = no data stored
+- ctlv2 Z3OpMode = auto
+- ctlv2 Z3OpMode = no data stored
+- ctlv2 Z3QuickVetoDuration = no data stored
+- ctlv2 Z3QuickVetoDuration = no data stored
+- ctlv2 Z3QuickVetoEndDate = no data stored
+- ctlv2 Z3QuickVetoEndTime = no data stored
+- ctlv2 Z3QuickVetoTemp = 21
+- ctlv2 Z3QuickVetoTemp = no data stored
+- ctlv2 Z3RoomTemp =  (empty for 3115b52406020003020f00 / 0800030f00ffffff7f)
+- ctlv2 Z3RoomZoneMapping = none
+- ctlv2 Z3RoomZoneMapping = no data stored
+- ctlv2 Z3SFMode = auto
+- ctlv2 Z3SFMode = no data stored
+- ctlv2 Z3Shortname = no data stored
+- ctlv2 Z3Shortname = no data stored
+- ctlv2 Z3Timer_Config = 03 01 01 00 00 00 ff ff 00
+- ctlv2 Z3Timer_Friday0 = 00:00;00:00;-
+- ctlv2 Z3Timer_Friday1 = 00:00;00:00;-
+- ctlv2 Z3Timer_Friday2 = 00:00;00:00;-
+- ctlv2 Z3Timer_Friday = no data stored
+- ctlv2 Z3Timer_Monday0 = 00:00;00:00;-
+- ctlv2 Z3Timer_Monday1 = 00:00;00:00;-
+- ctlv2 Z3Timer_Monday2 = 00:00;00:00;-
+- ctlv2 Z3Timer_Monday = no data stored
+- ctlv2 Z3Timer_Saturday0 = 00:00;00:00;-
+- ctlv2 Z3Timer_Saturday1 = 00:00;00:00;-
+- ctlv2 Z3Timer_Saturday2 = 00:00;00:00;-
+- ctlv2 Z3Timer_Saturday = no data stored
+- ctlv2 Z3Timer_Sunday0 = 00:00;00:00;-
+- ctlv2 Z3Timer_Sunday1 = 00:00;00:00;-
+- ctlv2 Z3Timer_Sunday2 = 00:00;00:00;-
+- ctlv2 Z3Timer_Sunday = no data stored
+- ctlv2 Z3Timer_Thursday0 = 00:00;00:00;-
+- ctlv2 Z3Timer_Thursday1 = 00:00;00:00;-
+- ctlv2 Z3Timer_Thursday2 = 00:00;00:00;-
+- ctlv2 Z3Timer_Thursday = no data stored
+- ctlv2 Z3Timer_Timeframes = 0;0;0;0;0;0;0
+- ctlv2 Z3Timer_Tuesday0 = 00:00;00:00;-
+- ctlv2 Z3Timer_Tuesday1 = 00:00;00:00;-
+- ctlv2 Z3Timer_Tuesday2 = 00:00;00:00;-
+- ctlv2 Z3Timer_Tuesday = no data stored
+- ctlv2 Z3Timer_Wednesday0 = 00:00;00:00;-
+- ctlv2 Z3Timer_Wednesday1 = 00:00;00:00;-
+- ctlv2 Z3Timer_Wednesday2 = 00:00;00:00;-
+- ctlv2 Z3Timer_Wednesday = no data stored
+- ctlv2 Z3ValveStatus = 0
+- ctlv2 Z3ValveStatus = no data stored
+- General Valuerange = no data stored
+- hmu BuildingCircuitFlow = 0
+- hmu Clearerrorhistory = no data stored
+- hmu CompressorBlocktime = no data stored
+- hmu CompressorHc = no data stored (message not available due to condition)
+- hmu CompressorHwc = no data stored (message not available due to condition)
+- hmu CopCooling = 1.0
+- hmu CopCoolingMonth = 1.0
+- hmu CopHc = 2.6
+- hmu CopHcMonth = no data stored
+- hmu CopHwc = 2.7
+- hmu CopHwcMonth = no data stored
+- hmu CurrentCompressorUtil = 0.00
+- hmu CurrentConsumedPower = 0.0
+- hmu Currenterror = -;-;-;-;-
+- hmu CurrentYieldPower = 0.0
+- hmu DateTime = nosignal;-:-:-;-.-.-;-
+- hmu EnergyIntegral = 0
+- hmu Errorhistory = no data stored
+- hmu FlowPressure = no data stored (message not available due to condition)
+- hmu FlowTemp = 38.94
+- 'hmu PowerConsumptionHmu =  (ERR: invalid position for 3108b5160114 / 00)'
+- hmu RunDataAirInletTemp = 26.966
+- hmu RunDataBuildingCPumpPower = 0.0
+- hmu RunDataCompressorInletTemp = 24.9776
+- hmu RunDataCompressorOutletTemp = 27.0625
+- hmu RunDataCompressorSpeed = 0.0
+- hmu RunDataEEVOutletTemp = 25.8908
+- hmu RunDataEEVPositionAbs = 150
+- hmu RunDataFan1Speed = 0.0
+- hmu RunDataFan2Speed = 0.0
+- hmu RunDataHighPressure = 18.5714
+- hmu RunDataStatuscode = standby
+- hmu RunStats4PortValveHours = 0
+- hmu RunStats4PortValveSwitches = 14
+- hmu RunStatsBuildingCPumpStarts = 4062
+- hmu RunStatsBuildingPumpHours = 4800
+- hmu RunStatsCompressorHours = 2542
+- hmu RunStatsCompressorStarts = 6481
+- hmu RunStatsFan1Hours = 3034
+- hmu RunStatsFan1Starts = 9877
+- hmu RunStatsFan2Hours = 3034
+- hmu RunStatsFan2Starts = 9877
+- hmu RunStatsHcHours = 2416
+- hmu RunStatsHMUHours = 26378
+- hmu RunStatsHwcHours = 1128
+- hmu SetMode = auto;0.0;-;-;1;1;1;0;0;0
+- hmu SetMode = no data stored
+- hmu Status01 = 38.5;35.0;-;-;-;off
+- 'hmu Status02 =  (ERR: invalid position for 3108b5110102 / 00)'
+- 'hmu Status16 =  (ERR: invalid position for 3108b5040116 / 00)'
+- 'hmu Status =  (ERR: invalid position for 3108b5110103 / 00)'
+- hmu StatusCirPump = on
+- hmu SupplyTempWeighted = 20.00
+- hmu TotalEnergyUsage = 8542
+- hmu YieldCoolDay = 0.0
+- hmu YieldCooling = 0.0
+- hmu YieldCoolingMonth = 0.0
+- hmu YieldHc = 10135
+- hmu YieldHcDay = 0.0
+- hmu YieldHcMonth = 0.0
+- hmu YieldHwc = 4672
+- hmu YieldHwcDay = 0.1
+- hmu YieldHwcMonth = 30.5
+- Memory Eeprom = no data stored
+- Memory Eeprom = no data stored
+- Memory Ram = no data stored
+- Memory Ram = no data stored
+- Scan Id = no data stored
+- scan.08  = Vaillant;HMU00;0522;5103
+- Scan.08 Id = 21;22;46;0010034188;1610;005674;N3
+- scan.15  = Vaillant;CTLV2;0514;1104
+- Scan.15 Id = 21;22;51;0020260913;0953;045677;N9
+- scan.18  = Vaillant;V32;0106;6004
+- scan.26  = Vaillant;VR_71;0100;5904
+- Scan.26 Id = 21;22;42;0020184847;0082;020249;N7
+- scan.35  = Vaillant;VR_92;0514;1204
+- Scan.35 Id = 21;22;18;0020260925;0953;009293;N2
+- scan.76  = Vaillant;VWZIO;0901;5103
+- Scan.76 Id = 21;23;03;0010034193;1610;005152;N2
+- scan.f6  = Vaillant;NETX3;0129;0404
+- Scan.f6 Id = 21;22;45;0020292012;0933;083357;N0
+- vr_71 Clearerrorhistory = no data stored
+- vr_71 Currenterror = no data stored
+- vr_71 Errorhistory = no data stored
+- vr_71 Mc1Operation = off;0.0;on;-100
+- vr_71 Mc2Operation = off;0.0;on;-100
+- vr_71 Mc3Operation = no data stored
+- vr_71 SensorData1 = 30.69;30.19;29.75;-;-;-;-;40 3d
+- vr_71 SensorData2 = -;-;-;-;0.00;8.00;80 57 05
+- vr_71 SetActorState = -;-;off;off;off;off;-;-;-;-;off;off;00 00
+- vwzio EnableTestHwcTemp = no data stored
+- vwzio EnableTestOutdoorTemp = no data stored
+- vwzio EnableTestThreeWayValve = no data stored
+- vwzio TestHwcTemp = no data stored
+- vwzio TestOutdoorTemp = no data stored
+- vwzio TestThreeWayValve = no data stored
+- ''
+before_registers:
+- circuit: Broadcast
+  name: Datetime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Error
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: Broadcast
+  name: HwcStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Id
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: IdAnswer
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: IdQuery
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Load
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Outsidetemp
+  fields:
+  - value
+  values:
+  - '30.000'
+  writable: false
+  has_data: true
+- circuit: Broadcast
+  name: Queryexistence
+  fields:
+  - value
+  values:
+  - (empty for 31fe07fe00 / )
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Signoflife
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Vdatetime
+  fields:
+  - value
+  values:
+  - 10:14:18;11.08.2026
+  writable: false
+  has_data: true
+- circuit: Broadcast
+  name: Vdatetime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: WaterPressure
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: General
+  name: Valuerange
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Eeprom
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Eeprom
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Ram
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Ram
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Scan
+  name: Id
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Scan.08
+  name: Id
+  fields:
+  - value
+  values:
+  - 21;22;46;0010034188;1610;005674;N3
+  writable: false
+  has_data: true
+- circuit: Scan.15
+  name: Id
+  fields:
+  - value
+  values:
+  - 21;22;51;0020260913;0953;045677;N9
+  writable: false
+  has_data: true
+- circuit: Scan.26
+  name: Id
+  fields:
+  - value
+  values:
+  - 21;22;42;0020184847;0082;020249;N7
+  writable: false
+  has_data: true
+- circuit: Scan.35
+  name: Id
+  fields:
+  - value
+  values:
+  - 21;22;18;0020260925;0953;009293;N2
+  writable: false
+  has_data: true
+- circuit: Scan.76
+  name: Id
+  fields:
+  - value
+  values:
+  - 21;23;03;0010034193;1610;005152;N2
+  writable: false
+  has_data: true
+- circuit: Scan.f6
+  name: Id
+  fields:
+  - value
+  values:
+  - 21;22;45;0020292012;0933;083357;N0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: AdaptHeatCurve
+  fields:
+  - value
+  values:
+  - 'no'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: AdaptHeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: CcTimer_Config
+  fields:
+  - value
+  values:
+  - 00 03 0a 00 00 00 ff ff 00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: CcTimer_Friday0
+  fields:
+  - value
+  values:
+  - 06:00;22:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Friday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Friday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: CcTimer_Monday0
+  fields:
+  - value
+  values:
+  - 06:00;22:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Monday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Monday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: CcTimer_Saturday0
+  fields:
+  - value
+  values:
+  - 07:30;23:30
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Saturday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Saturday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: CcTimer_Sunday0
+  fields:
+  - value
+  values:
+  - 07:30;22:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Sunday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Sunday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: CcTimer_Thursday0
+  fields:
+  - value
+  values:
+  - 06:00;22:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Thursday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Thursday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Timeframes
+  fields:
+  - value
+  values:
+  - 1;1;1;1;1;1;1
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: CcTimer_Tuesday0
+  fields:
+  - value
+  values:
+  - 06:00;22:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Tuesday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Tuesday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: CcTimer_Wednesday0
+  fields:
+  - value
+  values:
+  - 06:00;22:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Wednesday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CcTimer_Wednesday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Clearerrorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: ContinuousHeating
+  fields:
+  - value
+  values:
+  - '-26'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: ContinuousHeating
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - -;-;-;-;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CylinderChargeHyst
+  fields:
+  - value
+  values:
+  - '3'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CylinderChargeHyst
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: CylinderChargeOffset
+  fields:
+  - value
+  values:
+  - '25'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: CylinderChargeOffset
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Date
+  fields:
+  - value
+  values:
+  - 11.08.2026
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Date
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: DisplayedOutsideTemp
+  fields:
+  - value
+  values:
+  - '30'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: FrostOverRideTime
+  fields:
+  - value
+  values:
+  - '4'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: FrostOverRideTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1AutoOffMode
+  fields:
+  - value
+  values:
+  - night
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1AutoOffMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1CircuitType
+  fields:
+  - value
+  values:
+  - mixer
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1CoolingEnabled
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1CoolingFlowTempMin
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1DewPointMonitoring
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1DewPointOffset
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1ExcessTemp
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1ExcessTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1FlowTemp
+  fields:
+  - value
+  values:
+  - '30.25'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1HeatCurve
+  fields:
+  - value
+  values:
+  - '1.7'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1HeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - '65'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - '20'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - '48'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1MixerMovement
+  fields:
+  - value
+  values:
+  - '-100'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1PumpStatus
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1PumpStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1RoomTempModulation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - thermostat
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1Status
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1Status
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1SummerTempLimit
+  fields:
+  - value
+  values:
+  - '30'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc1SummerTempLimit
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2AutoOffMode
+  fields:
+  - value
+  values:
+  - night
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2AutoOffMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2CircuitType
+  fields:
+  - value
+  values:
+  - mixer
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2ExcessTemp
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2ExcessTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2FlowTemp
+  fields:
+  - value
+  values:
+  - '29.75'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2HeatCurve
+  fields:
+  - value
+  values:
+  - '1.7'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2HeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - '65'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - '20'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - '48'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2MixerMovement
+  fields:
+  - value
+  values:
+  - '-100'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2PumpStatus
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2PumpStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - thermostat
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2Status
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2Status
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2SummerTempLimit
+  fields:
+  - value
+  values:
+  - '30'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc2SummerTempLimit
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc3ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3AutoOffMode
+  fields:
+  - value
+  values:
+  - eco
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3AutoOffMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc3CircuitType
+  fields:
+  - value
+  values:
+  - inactive
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3ExcessTemp
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3ExcessTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc3FlowTemp
+  fields:
+  - value
+  values:
+  - (empty for 3115b52406020002020800 / 0800020800ffffff7f)
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc3HeatCurve
+  fields:
+  - value
+  values:
+  - '1.2'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3HeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc3HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - '90'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc3MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - '20'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc3MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - '15'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc3MixerMovement
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3PumpStatus
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3PumpStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc3RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - 'off'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc3Status
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3Status
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc3SummerTempLimit
+  fields:
+  - value
+  values:
+  - '21'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Hc3SummerTempLimit
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HcStorageTempBottom
+  fields:
+  - value
+  values:
+  - (empty for f115b5240602000000a000 / 080000a000ffffff7f)
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HcStorageTempTop
+  fields:
+  - value
+  values:
+  - (empty for f115b52406020000009f00 / 0800009f00ffffff7f)
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcBankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcBankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcBankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcBankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcFlowTemp
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - 01.01.2015
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - 01.01.2015
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcLockTime
+  fields:
+  - value
+  values:
+  - '60'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcLockTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcMaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - '80'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcMaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcOpMode
+  fields:
+  - value
+  values:
+  - day
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcOpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcParallelLoading
+  fields:
+  - value
+  values:
+  - 'off'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcParallelLoading
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcSFMode
+  fields:
+  - value
+  values:
+  - auto
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcSFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcSfMode
+  fields:
+  - value
+  values:
+  - auto
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcStorageTemp
+  fields:
+  - value
+  values:
+  - '45'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcStorageTempBottom
+  fields:
+  - value
+  values:
+  - (empty for f115b52406020000009e00 / 0800009e00ffffff7f)
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcStorageTempTop
+  fields:
+  - value
+  values:
+  - (empty for f115b52406020000009d00 / 0800009d00ffffff7f)
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcTempDesired
+  fields:
+  - value
+  values:
+  - '46'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcTimer_Config
+  fields:
+  - value
+  values:
+  - 00 03 0a 0a 01 01 23 46 00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcTimer_Friday0
+  fields:
+  - value
+  values:
+  - 05:30;22:00;46.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Friday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Friday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcTimer_Monday0
+  fields:
+  - value
+  values:
+  - 05:30;22:00;46.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Monday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Monday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcTimer_Saturday0
+  fields:
+  - value
+  values:
+  - 07:00;23:30;46.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Saturday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Saturday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcTimer_Sunday0
+  fields:
+  - value
+  values:
+  - 07:00;22:00;46.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Sunday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Sunday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcTimer_Thursday0
+  fields:
+  - value
+  values:
+  - 05:30;22:00;46.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Thursday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Thursday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Timeframes
+  fields:
+  - value
+  values:
+  - 1;1;1;1;1;1;1
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcTimer_Tuesday0
+  fields:
+  - value
+  values:
+  - 05:30;22:00;46.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Tuesday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Tuesday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: HwcTimer_Wednesday0
+  fields:
+  - value
+  values:
+  - 05:30;22:00;46.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Wednesday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HwcTimer_Wednesday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HydraulicScheme
+  fields:
+  - value
+  values:
+  - '12'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: HydraulicScheme
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Installer1
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Installer1
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Installer2
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Installer2
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: KeyCodeforConfigMenu
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: KeyCodeforConfigMenu
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: MaintenanceDate
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: MaintenanceDate
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: MaintenanceDue
+  fields:
+  - value
+  values:
+  - 'yes'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: MaxCylinderChargeTime
+  fields:
+  - value
+  values:
+  - '60'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: MaxCylinderChargeTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: MaxRoomHumidity
+  fields:
+  - value
+  values:
+  - '40'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: MaxRoomHumidity
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: MultiRelaySetting
+  fields:
+  - value
+  values:
+  - circulation
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: MultiRelaySetting
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: OutsideTempAvg
+  fields:
+  - value
+  values:
+  - '30.9375'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: OutsideTempAvg
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PhoneNumber1
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3015b52406020000006f00 / 0503006f0000)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PhoneNumber1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PhoneNumber2
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3015b52406020000007000 / 050300700000)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PhoneNumber2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrEnergySum
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020000005c00 / 00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrEnergySum
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrEnergySumHc
+  fields:
+  - value
+  values:
+  - '6217'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: PrEnergySumHc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrEnergySumHcLastMonth
+  fields:
+  - value
+  values:
+  - '13'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: PrEnergySumHcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrEnergySumHcThisMonth
+  fields:
+  - value
+  values:
+  - '4'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: PrEnergySumHcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrEnergySumHwc
+  fields:
+  - value
+  values:
+  - '2584'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: PrEnergySumHwc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrEnergySumHwcLastMonth
+  fields:
+  - value
+  values:
+  - '24'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: PrEnergySumHwcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrEnergySumHwcThisMonth
+  fields:
+  - value
+  values:
+  - '10'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: PrEnergySumHwcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSum
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSum
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHwc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHwc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHwcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHwcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHwcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PrFuelSumHwcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PumpAdditionalTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: PumpAdditionalTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: SolarYieldTotal
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: SolarYieldTotal
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: SystemFlowTemp
+  fields:
+  - value
+  values:
+  - '30.6875'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Time
+  fields:
+  - value
+  values:
+  - 09:43:34
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Time
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: WaterPressure
+  fields:
+  - value
+  values:
+  - '1.5'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: YieldTotal
+  fields:
+  - value
+  values:
+  - '14807'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: YieldTotal
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1CoolingManualTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingOpMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingSetbackTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingTemp
+  fields:
+  - value
+  values:
+  - '24'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1CoolingTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1CoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1DayTemp
+  fields:
+  - value
+  values:
+  - '18'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1DayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - 01.01.2015
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - 01.01.2015
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1HolidayTemp
+  fields:
+  - value
+  values:
+  - '15'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1HolidayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Name1
+  fields:
+  - value
+  values:
+  - Sever
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Name1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Name2
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for f115b52406020003001800 / 0803031800696e6100)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Name2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1NightTemp
+  fields:
+  - value
+  values:
+  - '18.5'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1NightTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1OpMode
+  fields:
+  - value
+  values:
+  - 'off'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1OpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1QuickVetoDuration
+  fields:
+  - value
+  values:
+  - '3'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1QuickVetoDuration
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1QuickVetoEndDate
+  fields:
+  - value
+  values:
+  - 01.01.2019
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1QuickVetoEndTime
+  fields:
+  - value
+  values:
+  - 00:00:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1QuickVetoTemp
+  fields:
+  - value
+  values:
+  - '10'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1QuickVetoTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1RoomTemp
+  fields:
+  - value
+  values:
+  - '28.4125'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1SFMode
+  fields:
+  - value
+  values:
+  - auto
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1SFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Timer_Config
+  fields:
+  - value
+  values:
+  - 00 0c 0a 05 01 0c 05 1e 00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Timer_Friday0
+  fields:
+  - value
+  values:
+  - 12:00;20:30;19.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Friday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Friday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Timer_Monday0
+  fields:
+  - value
+  values:
+  - 12:00;20:30;19.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Monday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Monday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Timer_Saturday0
+  fields:
+  - value
+  values:
+  - 12:00;20:30;19.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Saturday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Saturday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Timer_Sunday0
+  fields:
+  - value
+  values:
+  - 12:00;20:30;19.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Sunday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Sunday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Timer_Thursday0
+  fields:
+  - value
+  values:
+  - 12:00;20:30;19.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Thursday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Thursday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Timeframes
+  fields:
+  - value
+  values:
+  - 1;1;1;1;1;1;1
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Timer_Tuesday0
+  fields:
+  - value
+  values:
+  - 12:00;20:30;19.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Tuesday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Tuesday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z1Timer_Wednesday0
+  fields:
+  - value
+  values:
+  - 12:00;20:30;19.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Wednesday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1Timer_Wednesday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1ValveStatus
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z1ValveStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2CoolingTemp
+  fields:
+  - value
+  values:
+  - '24'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2CoolingTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2DayTemp
+  fields:
+  - value
+  values:
+  - '19'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2DayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - 01.01.2015
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - 01.01.2015
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2HolidayTemp
+  fields:
+  - value
+  values:
+  - '15'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2HolidayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Name1
+  fields:
+  - value
+  values:
+  - Fabri
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Name1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Name2
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for f115b52406020003011800 / 08030318007a696f00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Name2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2NightTemp
+  fields:
+  - value
+  values:
+  - '18.5'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2NightTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2OpMode
+  fields:
+  - value
+  values:
+  - 'off'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2OpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2QuickVetoDuration
+  fields:
+  - value
+  values:
+  - '3'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2QuickVetoDuration
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2QuickVetoEndDate
+  fields:
+  - value
+  values:
+  - 08.08.2026
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2QuickVetoEndTime
+  fields:
+  - value
+  values:
+  - 08:51:00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2QuickVetoTemp
+  fields:
+  - value
+  values:
+  - '16'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2QuickVetoTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2RoomTemp
+  fields:
+  - value
+  values:
+  - '27.6'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2SFMode
+  fields:
+  - value
+  values:
+  - auto
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2SFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Timer_Config
+  fields:
+  - value
+  values:
+  - 00 0c 0a 05 01 0c 05 1e 00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Timer_Friday0
+  fields:
+  - value
+  values:
+  - 12:30;19:30;19.5
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Friday1
+  fields:
+  - value
+  values:
+  - 19:30;21:30;20.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Friday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Timer_Monday0
+  fields:
+  - value
+  values:
+  - 12:30;19:30;19.5
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Monday1
+  fields:
+  - value
+  values:
+  - 19:30;21:30;20.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Monday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Timer_Saturday0
+  fields:
+  - value
+  values:
+  - 08:00;11:00;19.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Saturday1
+  fields:
+  - value
+  values:
+  - 12:30;15:00;20.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Saturday2
+  fields:
+  - value
+  values:
+  - 15:00;19:30;19.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Timer_Sunday0
+  fields:
+  - value
+  values:
+  - 08:00;12:30;19.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Sunday1
+  fields:
+  - value
+  values:
+  - 12:30;15:00;20.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Sunday2
+  fields:
+  - value
+  values:
+  - 15:00;19:30;19.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Timer_Thursday0
+  fields:
+  - value
+  values:
+  - 12:30;19:30;19.5
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Thursday1
+  fields:
+  - value
+  values:
+  - 19:30;21:30;20.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Thursday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Timeframes
+  fields:
+  - value
+  values:
+  - 2;2;2;2;2;4;4
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Timer_Tuesday0
+  fields:
+  - value
+  values:
+  - 12:30;19:30;19.5
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Tuesday1
+  fields:
+  - value
+  values:
+  - 19:30;21:30;20.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Tuesday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z2Timer_Wednesday0
+  fields:
+  - value
+  values:
+  - 12:30;19:30;19.5
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Wednesday1
+  fields:
+  - value
+  values:
+  - 19:30;21:30;20.0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2Timer_Wednesday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2ValveStatus
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z2ValveStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3DayTemp
+  fields:
+  - value
+  values:
+  - '21'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3DayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3HolidayTemp
+  fields:
+  - value
+  values:
+  - '15'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3HolidayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Name1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Name1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Name2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Name2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3NightTemp
+  fields:
+  - value
+  values:
+  - '15'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3NightTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3OpMode
+  fields:
+  - value
+  values:
+  - auto
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3OpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3QuickVetoDuration
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3QuickVetoDuration
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3QuickVetoEndDate
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3QuickVetoEndTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3QuickVetoTemp
+  fields:
+  - value
+  values:
+  - '21'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3QuickVetoTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3RoomTemp
+  fields:
+  - value
+  values:
+  - (empty for 3115b52406020003020f00 / 0800030f00ffffff7f)
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3SFMode
+  fields:
+  - value
+  values:
+  - auto
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3SFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Timer_Config
+  fields:
+  - value
+  values:
+  - 03 01 01 00 00 00 ff ff 00
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Timer_Friday0
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Friday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Friday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Timer_Monday0
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Monday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Monday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Timer_Saturday0
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Saturday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Saturday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Timer_Sunday0
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Sunday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Sunday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Timer_Thursday0
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Thursday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Thursday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Timeframes
+  fields:
+  - value
+  values:
+  - 0;0;0;0;0;0;0
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Timer_Tuesday0
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Tuesday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Tuesday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Z3Timer_Wednesday0
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Wednesday1
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3Timer_Wednesday2
+  fields:
+  - value
+  values:
+  - 00:00;00:00;-
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3ValveStatus
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: Z3ValveStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: z1RoomHumidity
+  fields:
+  - value
+  values:
+  - '49'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: BuildingCircuitFlow
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: BuildingCircuitPumpSpeed
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: Clearerrorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CompressorBlocktime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CompressorHc
+  fields:
+  - value
+  values:
+  - no data stored (message not available due to condition)
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CompressorHwc
+  fields:
+  - value
+  values:
+  - no data stored (message not available due to condition)
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CopCooling
+  fields:
+  - value
+  values:
+  - '1.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopCoolingMonth
+  fields:
+  - value
+  values:
+  - '1.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopHc
+  fields:
+  - value
+  values:
+  - '2.6'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopHcMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CopHwc
+  fields:
+  - value
+  values:
+  - '2.7'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopHwcMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CurrentCompressorUtil
+  fields:
+  - value
+  values:
+  - '0.00'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CurrentConsumedPower
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CurrentYieldPower
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - -;-;-;-;-
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: DateTime
+  fields:
+  - value
+  values:
+  - nosignal;-:-:-;-.-.-;-
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: EnergyIntegral
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FlowPressure
+  fields:
+  - value
+  values:
+  - no data stored (message not available due to condition)
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FlowTemp
+  fields:
+  - value
+  values:
+  - '38.94'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: FlowTemperature
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: HoursCool
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: PowerConsumptionHmu
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3108b5160114 / 00)'
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: RunDataAirInletTemp
+  fields:
+  - value
+  values:
+  - '26.966'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataBuildingCPumpPower
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataCompressorInletTemp
+  fields:
+  - value
+  values:
+  - '24.9776'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataCompressorOutletTemp
+  fields:
+  - value
+  values:
+  - '27.0625'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataCompressorSpeed
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataEEVOutletTemp
+  fields:
+  - value
+  values:
+  - '25.8908'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataEEVPositionAbs
+  fields:
+  - value
+  values:
+  - '150'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataFan1Speed
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataFan2Speed
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataHighPressure
+  fields:
+  - value
+  values:
+  - '18.5714'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataLowPressure
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: hmu
+  name: RunDataStatuscode
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStats4PortValveHours
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStats4PortValveSwitches
+  fields:
+  - value
+  values:
+  - '14'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsBuildingCPumpStarts
+  fields:
+  - value
+  values:
+  - '4062'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsBuildingPumpHours
+  fields:
+  - value
+  values:
+  - '4800'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsCompressorHours
+  fields:
+  - value
+  values:
+  - '2542'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsCompressorStarts
+  fields:
+  - value
+  values:
+  - '6481'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan1Hours
+  fields:
+  - value
+  values:
+  - '3034'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan1Starts
+  fields:
+  - value
+  values:
+  - '9877'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan2Hours
+  fields:
+  - value
+  values:
+  - '3034'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan2Starts
+  fields:
+  - value
+  values:
+  - '9877'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsHMUHours
+  fields:
+  - value
+  values:
+  - '26378'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsHcHours
+  fields:
+  - value
+  values:
+  - '2416'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsHwcHours
+  fields:
+  - value
+  values:
+  - '1128'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: SetMode
+  fields:
+  - value
+  values:
+  - auto;0.0;-;-;1;1;1;0;0;0
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: SetMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatElectricEnergySumCool
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: StatEnvironmentEnergySumCool
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: Status
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3108b5110103 / 00)'
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Status01
+  fields:
+  - value
+  values:
+  - 38.5;35.0;-;-;-;off
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: Status02
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3108b5110102 / 00)'
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Status16
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3108b5040116 / 00)'
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatusCirPump
+  fields:
+  - value
+  values:
+  - 'on'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: SupplyTempWeighted
+  fields:
+  - value
+  values:
+  - '20.00'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: TotalEnergyUsage
+  fields:
+  - value
+  values:
+  - '8542'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldCoolDay
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldCooling
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldCoolingMonth
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHc
+  fields:
+  - value
+  values:
+  - '10135'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHcDay
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHcMonth
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHwc
+  fields:
+  - value
+  values:
+  - '4672'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHwcDay
+  fields:
+  - value
+  values:
+  - '0.1'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHwcMonth
+  fields:
+  - value
+  values:
+  - '30.5'
+  writable: false
+  has_data: true
+- circuit: v32
+  name: BypassPosition
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: ExhaustAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: ExhaustAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: MaxAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: MinAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: OutsideAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: SupplyAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: VentilationLevelDay
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: VentilationLevelNight
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: YieldMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: YieldToday
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: YieldTotal
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: YieldYear
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: vr_71
+  name: Clearerrorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vr_71
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vr_71
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vr_71
+  name: Mc1Operation
+  fields:
+  - value
+  values:
+  - off;0.0;on;-100
+  writable: false
+  has_data: true
+- circuit: vr_71
+  name: Mc2Operation
+  fields:
+  - value
+  values:
+  - off;0.0;on;-100
+  writable: false
+  has_data: true
+- circuit: vr_71
+  name: Mc3Operation
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vr_71
+  name: SensorData1
+  fields:
+  - value
+  values:
+  - 30.69;30.19;29.75;-;-;-;-;40 3d
+  writable: false
+  has_data: true
+- circuit: vr_71
+  name: SensorData2
+  fields:
+  - value
+  values:
+  - -;-;-;-;0.00;8.00;80 57 05
+  writable: false
+  has_data: true
+- circuit: vr_71
+  name: SetActorState
+  fields:
+  - value
+  values:
+  - -;-;off;off;off;off;-;-;-;-;off;off;00 00
+  writable: false
+  has_data: true
+- circuit: vwz
+  name: TestHwcTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: vwz
+  name: TestOutdoorTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: vwz
+  name: TestThreeWayValve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: vwzio
+  name: EnableTestHwcTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vwzio
+  name: EnableTestOutdoorTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vwzio
+  name: EnableTestThreeWayValve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vwzio
+  name: TestHwcTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vwzio
+  name: TestOutdoorTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vwzio
+  name: TestThreeWayValve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false

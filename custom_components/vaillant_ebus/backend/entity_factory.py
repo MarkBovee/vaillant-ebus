@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .mapping import REGISTER_MAP, RegisterMeta, get_meta
+from .mapping import REGISTER_MAP, RegisterMeta, get_meta, multi_field_fields, split_multi_field
 from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister
 
 _LOGGER = logging.getLogger("vaillant_ebus.entity")
@@ -282,6 +282,42 @@ class EntityFactoryService:
                     device_circuit=dc,
                 )
                 entities.append(entity)
+
+                field_names = multi_field_fields(rk)
+                if field_names:
+                    field_values = split_multi_field(rk, raw)
+                    for field_name in field_names:
+                        field_raw = field_values.get(field_name)
+                        field_meta = get_meta(circuit, name, field_name)
+                        field_override = overrides.get(f"{rk}.{field_name}") or {}
+                        field_meta = _merge_overrides(field_meta, field_override)
+                        field_enabled = _determine_enabled_by_default(
+                            f"{rk}.{field_name}", field_raw, node.has_data, field_meta
+                        )
+                        field_reg = EbusdRegister(
+                            circuit=circuit,
+                            name=name,
+                            fields=[field_name],
+                            value={field_name: field_raw},
+                            has_data=field_raw is not None,
+                            writable=field_meta.writable,
+                        )
+                        if not field_meta.entity_type:
+                            field_meta.entity_type = _classify_register(
+                                field_reg, field_name, field_raw, field_meta
+                            )
+                        entities.append(
+                            EntityDescription(
+                                circuit=circuit,
+                                name=name,
+                                field=field_name,
+                                meta=field_meta,
+                                register=field_reg,
+                                raw_value=field_raw,
+                                enabled_by_default=field_enabled,
+                                device_circuit=dc,
+                            )
+                        )
 
         entities = _redistribute_device_assignments(entities, graph, overrides)
         _LOGGER.info("Generated %d entity descriptions from device graph", len(entities))

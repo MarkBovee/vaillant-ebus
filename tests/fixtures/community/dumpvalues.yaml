@@ -10,6 +10,13 @@ ebusd/hmux0:
     remoteControlHcPump: 0
     releaseBackup: 0
     releaseCooling: 0
+  Status01:
+    temp: 39.5
+    temp_1: 40.5
+    temp_2: null
+    temp_3: null
+    temp_4: null
+    pumpstate: "off"
   State01:
     "0":
       name: temp1
