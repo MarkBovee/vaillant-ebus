@@ -157,6 +157,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_seed_entities_from_cache(self) -> None:
         cache = await self._async_load_cache()
         find_lines: list[str] = []
+        seen_keys: set[str] = set()
 
         for cache_key, cached_value in cache.items():
             if cached_value is None or not cached_value.strip():
@@ -168,6 +169,10 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if any(kw in circuit.lower() for kw in HIDDEN_DEVICE_KEYWORDS):
                 continue
             rk = f"{circuit}.{name}"
+            normalized = rk.lower()
+            if normalized in seen_keys:
+                continue
+            seen_keys.add(normalized)
             find_lines.append(f"{circuit} {name} = {cached_value}")
             self.registers[rk] = EbusdRegister(
                 circuit=circuit,

@@ -27,10 +27,14 @@ async def async_setup_entry(
 
     def _build(descriptions: list[EntityDescription]) -> list[NumberEntity]:
         entities: list[NumberEntity] = []
+        seen: set[str] = set()
         for desc in descriptions:
             if desc.entity_type != "number":
                 continue
             uid = f"{entry.entry_id}_{desc.unique_id}"
+            if uid in seen:
+                continue
+            seen.add(uid)
             entities.append(EbusdNumber(coordinator, desc, uid, entry))
         return entities
 

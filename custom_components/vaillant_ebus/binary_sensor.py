@@ -26,10 +26,14 @@ async def async_setup_entry(
 
     def _build(descriptions: list[EntityDescription]) -> list[BinarySensorEntity]:
         entities: list[BinarySensorEntity] = []
+        seen: set[str] = set()
         for desc in descriptions:
             if desc.entity_type != "binary_sensor":
                 continue
             uid = f"{entry.entry_id}_{desc.unique_id}"
+            if uid in seen:
+                continue
+            seen.add(uid)
             entities.append(EbusdBinarySensor(coordinator, desc, uid, entry))
         return entities
 

@@ -751,3 +751,26 @@ async def test_enable_registry_entities_respects_user_choice() -> None:
         result = await c._enable_registry_entities(["hmu.PowerConsumptionHmu"])
         assert result == ["sensor.power"]
         assert updated == ["sensor.power"]
+
+
+# Intent: case-variant cache keys (HwcSfMode vs HwcSFMode) must not double-register.
+async def test_coordinator_seed_dedups_case_variants() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cache_path = Path(tmpdir) / "vaillant_ebus" / "register_cache.json"
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache = {
+            "ctlv2.HwcSfMode.value": "auto",
+            "ctlv2.HwcSFMode.value": "auto",
+            "ctlv2.HwcStorageTemp.value": "40.5",
+        }
+        cache_path.write_text(json.dumps(cache))
+
+        hass = _hass(tmpdir)
+        hass.config.path.return_value = str(cache_path)
+        coordinator = VaillantCoordinator(hass, _entry())
+        await coordinator._async_seed_entities_from_cache()
+
+        sfmode = [e for e in coordinator.entities if "sfmode" in e.unique_id]
+        assert len(sfmode) == 1, f"expected one HwcSfMode entity, got {len(sfmode)}"
+        uids = [e.unique_id for e in coordinator.entities]
+        assert len(uids) == len(set(uids))

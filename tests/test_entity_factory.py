@@ -540,3 +540,29 @@ class TestBuildingCircuitFlowUnit:
     def test_building_circuit_flow_unit_is_l_per_hour(self) -> None:
         meta = get_meta("hmu", "BuildingCircuitFlow")
         assert meta.unit == "l/h"
+
+
+class TestCaseInsensitiveRegisterDedup:
+    """Registers differing only by case must not create duplicate entities."""
+
+    @staticmethod
+    def _case_graph() -> DeviceGraph:
+        return DeviceGraph(
+            nodes={
+                "ctlv2": DeviceNode(
+                    circuit="ctlv2",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=["ctlv2.HwcSfMode", "ctlv2.HwcSFMode"],
+                    has_data=True,
+                ),
+            },
+            raw_registers={"ctlv2.HwcSfMode": "auto", "ctlv2.HwcSFMode": "auto"},
+            placeholder_registers=set(),
+        )
+
+    def test_case_variants_produce_single_entity(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._case_graph())
+        uids = [e.unique_id for e in entities]
+        assert len(uids) == len(set(uids)), f"duplicate unique IDs: {uids}"
+        assert uids.count("ebusd_ctlv2_hwcsfmode") == 1

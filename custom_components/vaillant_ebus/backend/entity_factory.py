@@ -238,11 +238,11 @@ class EntityFactoryService:
 
         for node in graph.nodes.values():
             for rk in node.registers:
-                if rk in seen:
+                if rk.lower() in seen:
                     continue
                 if "." not in rk:
                     continue
-                seen.add(rk)
+                seen.add(rk.lower())
 
                 circuit, name = rk.split(".", 1)
                 raw = graph.raw_registers.get(rk)
