@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.4 - 2026-08-13
+
+### Fixed
+
+- **`OutsideTemp` graphable measurement (#61):** `basv3.OutsideTemp` (and the
+  `ctlv2.OutsideTemp` variant) now map to `device_class=temperature`,
+  `state_class=measurement`, unit °C, so the entity renders as a line graph
+  instead of a string state.
+- **Per-mode compressor stats (#62):** `hmu.CompressorHc` / `hmu.CompressorHwc`
+  are split into `runtime` (minutes) and `cycles` (start count) fields, exposed
+  as separate sensors:
+  - `Compressor Runtime (HC)` / `Compressor Starts (HC)`
+  - `Compressor Runtime (DHW)` / `Compressor Starts (DHW)`
+
+  The `RunStatsCompressorHc` / `RunStatsCompressorHwc` aliases (seen on
+  flexoTHERM dumps) are covered too. The raw `187055;4327` string entity is
+  kept but disabled by default.
+
 ## 1.2.3 - 2026-08-12
 
 ### Added
