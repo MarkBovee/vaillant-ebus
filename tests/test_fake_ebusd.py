@@ -45,6 +45,7 @@ async def test_arotherm_fixture_loads() -> None:
         ("community/arotherm_pro7_discovery.yaml", 5),
         ("community/flexocompact_find.txt", 50),
         ("community/arotherm_ecotec_discovery.yaml", 50),
+        ("community/arotherm_plus_prenergy_discovery.yaml", 50),
     ],
 )
 async def test_all_fixtures_load(fixture: str, min_registers: int) -> None:
