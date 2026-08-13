@@ -58,6 +58,8 @@ MULTI_FIELD_MAP: dict[tuple[str, str], list[str]] = {
     ("hmu", "DateTime"): ["dcfstate", "btime", "bdate", "temp2"],
     ("hmu", "RunStatsCompressorHc"): ["runtime", "cycles"],
     ("hmu", "RunStatsCompressorHwc"): ["runtime", "cycles"],
+    ("hmu", "CompressorHc"): ["runtime", "cycles"],
+    ("hmu", "CompressorHwc"): ["runtime", "cycles"],
     ("hmu", "Status01"): ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
 }
 

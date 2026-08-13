@@ -566,3 +566,113 @@ class TestCaseInsensitiveRegisterDedup:
         uids = [e.unique_id for e in entities]
         assert len(uids) == len(set(uids)), f"duplicate unique IDs: {uids}"
         assert uids.count("ebusd_ctlv2_hwcsfmode") == 1
+
+
+class TestCompressorRunStatsSplit:
+    """CompressorHc/CompressorHwc multi-field split (issue #62)."""
+
+    @staticmethod
+    def _compressor_graph() -> DeviceGraph:
+        return DeviceGraph(
+            nodes={
+                "hmu": DeviceNode(
+                    circuit="hmu",
+                    device_type=DeviceType.HEAT_PUMP,
+                    registers=["hmu.CompressorHc", "hmu.CompressorHwc"],
+                    has_data=True,
+                ),
+            },
+            raw_registers={
+                "hmu.CompressorHc": "187055;4327",
+                "hmu.CompressorHwc": "51989;733",
+            },
+            placeholder_registers=set(),
+        )
+
+    def test_compressor_hc_splits_into_runtime_and_cycles(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._compressor_graph())
+        keys = [e.key for e in entities if e.name == "CompressorHc"]
+        assert "hmu.CompressorHc.runtime" in keys
+        assert "hmu.CompressorHc.cycles" in keys
+        runtime = next(e for e in entities if e.key == "hmu.CompressorHc.runtime")
+        cycles = next(e for e in entities if e.key == "hmu.CompressorHc.cycles")
+        assert runtime.raw_value == "187055"
+        assert cycles.raw_value == "4327"
+        assert runtime.meta.unit == "min"
+        assert runtime.meta.device_class == "duration"
+        assert runtime.meta.state_class == "total_increasing"
+
+    def test_compressor_hwc_splits_into_runtime_and_cycles(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._compressor_graph())
+        runtime = next(e for e in entities if e.key == "hmu.CompressorHwc.runtime")
+        cycles = next(e for e in entities if e.key == "hmu.CompressorHwc.cycles")
+        assert runtime.raw_value == "51989"
+        assert cycles.raw_value == "733"
+
+    def test_compressor_split_unique_ids(self) -> None:
+        svc = EntityFactoryService()
+        entities = svc.generate(self._compressor_graph())
+        uids = [e.unique_id for e in entities]
+        assert len(uids) == len(set(uids)), f"duplicate unique IDs: {uids}"
+        assert "ebusd_hmu_compressorhc_runtime" in uids
+        assert "ebusd_hmu_compressorhc_cycles" in uids
+        assert "ebusd_hmu_compressorhwc_runtime" in uids
+
+
+class TestOutsideTempDeviceClass:
+    """OutsideTemp must be a graphable measurement (issue #61)."""
+
+    def test_ctlv2_outsidetemp_is_temperature(self) -> None:
+        meta = get_meta("ctlv2", "OutsideTemp")
+        assert meta.device_class == "temperature"
+        assert meta.unit == "°C"
+        assert meta.state_class == "measurement"
+
+    def test_basv3_outsidetemp_falls_back_to_temperature(self) -> None:
+        meta = get_meta("basv3", "OutsideTemp")
+        assert meta.device_class == "temperature"
+        assert meta.unit == "°C"
+        assert meta.state_class == "measurement"
+
+    def test_basv3_outsidetemp_entity_has_device_class(self) -> None:
+        graph = DeviceGraph(
+            nodes={
+                "basv3": DeviceNode(
+                    circuit="basv3",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=["basv3.OutsideTemp"],
+                    has_data=True,
+                ),
+            },
+            raw_registers={"basv3.OutsideTemp": "24.6719"},
+            placeholder_registers=set(),
+        )
+        entities = EntityFactoryService().generate(graph)
+        entity = next(e for e in entities if e.key == "basv3.OutsideTemp.value")
+        assert entity.meta.device_class == "temperature"
+        assert entity.meta.state_class == "measurement"
+
+    def test_basv3_fixture_outsidetemp_is_measurement(self) -> None:
+        lines = load_find_lines("community/arotherm_plus_basv3_discovery.yaml")
+        graph = DiscoveryService.build_device_graph(lines)
+        entities = EntityFactoryService().generate(graph)
+        matches = [e for e in entities if e.name == "OutsideTemp"]
+        assert matches, "basv3 OutsideTemp entity must be generated"
+        entity = next(e for e in matches if e.circuit == "basv3")
+        assert entity.meta.device_class == "temperature"
+        assert entity.meta.unit == "°C"
+        assert entity.meta.state_class == "measurement"
+
+    def test_2zone_fixture_compressor_split(self) -> None:
+        lines = load_find_lines("community/arotherm_plus_2zone_discovery.yaml")
+        graph = DiscoveryService.build_device_graph(lines)
+        entities = EntityFactoryService().generate(graph)
+        keys = {e.key for e in entities}
+        assert "hmu.CompressorHc.runtime" in keys
+        assert "hmu.CompressorHc.cycles" in keys
+        assert "hmu.CompressorHwc.runtime" in keys
+        assert "hmu.CompressorHwc.cycles" in keys
+        uids = [e.unique_id for e in entities]
+        assert len(uids) == len(set(uids)), f"duplicate unique IDs: {uids}"
