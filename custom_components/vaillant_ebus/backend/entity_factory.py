@@ -8,7 +8,7 @@ from typing import Any
 from .mapping import REGISTER_MAP, RegisterMeta, get_meta, multi_field_fields, split_multi_field
 from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister
 
-_LOGGER = logging.getLogger("vaillant_ebus.entity")
+_LOGGER = logging.getLogger(__name__)
 
 _PLACEHOLDER_VALUES = frozenset({"-", "empty", "", "unknown", "unavailable"})
 _DHW_PREFIXES = ("dhw", "hwc", "cylinder", "maxcylinder", "solar")

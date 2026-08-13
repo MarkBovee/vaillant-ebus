@@ -10,7 +10,7 @@ from typing import Any
 from .ebus_service import EbusService
 from .models import WriteResult
 
-_LOGGER = logging.getLogger("vaillant_ebus.register")
+_LOGGER = logging.getLogger(__name__)
 
 PLACEHOLDER_VALUES: frozenset[str] = frozenset({"no data stored", "-", "empty", ""})
 SENTINEL_VALUES: frozenset[str] = frozenset({"Open"})

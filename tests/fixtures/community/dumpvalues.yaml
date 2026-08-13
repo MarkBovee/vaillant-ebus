@@ -336,6 +336,12 @@ ebusd/hmux0:
   RunStatsCompressorHwc:
     runtime: 15386
     cycles: 299
+  CompressorHc:
+    runtime: 187055
+    cycles: 4327
+  CompressorHwc:
+    runtime: 51989
+    cycles: 733
   RunDataEEVPositionAbs:
     "0":
       name: ""

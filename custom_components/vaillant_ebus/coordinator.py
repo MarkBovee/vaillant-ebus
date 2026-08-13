@@ -258,10 +258,15 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.entities.extend(entity for entity in generated_entities if entity.key not in existing_entity_keys)
         else:
             self.entities = generated_entities
+        platform_counts: dict[str, int] = {}
+        for entity in self.entities:
+            ptype = str(entity.entity_type or "sensor")
+            platform_counts[ptype] = platform_counts.get(ptype, 0) + 1
         _LOGGER.info(
-            "Generated %d entity descriptions after %s ebusd discovery",
+            "Generated %d entity descriptions after %s ebusd discovery: %s",
             len(self.entities),
             source,
+            ", ".join(f"{count} {ptype}" for ptype, count in sorted(platform_counts.items())),
         )
         self.async_update_listeners()
 
@@ -386,7 +391,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for definition in defines:
             try:
                 resp = await self.ebus.define_register(definition)
-                _LOGGER.debug("Define %s: %s", definition.split(",")[2], resp)
+                _LOGGER.info("Defined register %s: %s", definition.split(",")[2], resp)
             except Exception as exc:
                 _LOGGER.warning("Failed to define register: %s", exc)
 
@@ -482,8 +487,9 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         to_read = [k for k in REGISTER_MAP if REGISTER_MAP[k].enabled and k not in graph_keys]
         if not to_read:
             return
-        _LOGGER.debug("Fallback reading %d known register(s)", len(to_read))
+        _LOGGER.info("Fallback reading %d known register(s)", len(to_read))
         added = 0
+        read_with_data = 0
         for key in to_read:
             parts = key.split(".", 1)
             if len(parts) != 2:
@@ -500,6 +506,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if cached is not None:
                         value = cached
                 if value is not None:
+                    read_with_data += 1
                     if was_new:
                         self.registers[key] = EbusdRegister(
                             circuit=circuit,
@@ -528,6 +535,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if added and self._graph:
             self.entities = self.entity_factory.generate(self._graph)
             _LOGGER.info("Regenerated entities after fallback: added %d new", added)
+        else:
+            _LOGGER.info("Fallback read complete: %d/%d registers with data", read_with_data, len(to_read))
 
     async def _async_update_data(self) -> dict[str, Any]:
         if not self._cache_seeded:
@@ -576,7 +585,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self._fallback_read()
                 zero_idle_registers(self.registers)
                 if updated:
-                    _LOGGER.debug("Poll updated %d registers", updated)
+                    _LOGGER.info("Poll updated %d registers", updated)
                 return {"ebusd": await self._async_values_from_registers()}
             except ConnectionError, TimeoutError, OSError:
                 _LOGGER.warning("ebusd connection lost, reconnecting")

@@ -10,7 +10,7 @@ from .entity_factory import EntityDescription, EntityFactoryService
 from .mapping import REGISTER_MAP
 from .models import DeviceGraph, DeviceType
 
-_LOGGER = logging.getLogger("vaillant_ebus.analysis")
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass

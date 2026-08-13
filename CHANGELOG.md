@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.2.4 - 2026-08-13
+
+### Added
+
+- **Diagnostic logging:** discovery now logs each detected device (type, scan,
+  register count, data count) plus a device-type summary and an entity count
+  broken down by platform (sensor/binary_sensor/number/select/switch). The
+  fallback read reports how many registers returned data, and every poll cycle
+  logs how many registers updated. Logger names are normalized so a single
+  Home Assistant logger configuration covers all integration logs:
+  ```yaml
+  logger:
+    logs:
+      custom_components.vaillant_ebus: info
+  ```
+  Use `debug` instead of `info` for per-register detail.
+
+### Fixed
+
+- **`OutsideTemp` graphable measurement (#61):** `basv3.OutsideTemp` (and the
+  `ctlv2.OutsideTemp` variant) now map to `device_class=temperature`,
+  `state_class=measurement`, unit °C, so the entity renders as a line graph
+  instead of a string state.
+- **Per-mode compressor stats (#62):** `hmu.CompressorHc` / `hmu.CompressorHwc`
+  are split into `runtime` (minutes) and `cycles` (start count) fields, exposed
+  as separate sensors:
+  - `Compressor Runtime (HC)` / `Compressor Starts (HC)`
+  - `Compressor Runtime (DHW)` / `Compressor Starts (DHW)`
+
+  The `RunStatsCompressorHc` / `RunStatsCompressorHwc` aliases (seen on
+  flexoTHERM dumps) are covered too. The raw `187055;4327` string entity is
+  kept but disabled by default.
+- **Electrical energy consumption sensors (#53):** `PrEnergySum`,
+  `PrEnergySumHc`, `PrEnergySumHwc` (plus This/Last Month variants) are now
+  exposed as energy sensors (kWh, `state_class=total_increasing`) instead of
+  plain string registers. They cover the `ctlv3` and `basv3` controller
+  variants via the existing metadata fallback. Values appear once the heat
+  pump reports data (registers return `no data stored` while idle).
+
 ## 1.2.3 - 2026-08-12
 
 ### Added

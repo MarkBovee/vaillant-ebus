@@ -10,7 +10,7 @@ from .models import DeviceGraph, DeviceNode, DeviceType
 if TYPE_CHECKING:
     from .ebus_service import EbusService
 
-_LOGGER = logging.getLogger("vaillant_ebus.discovery")
+_LOGGER = logging.getLogger(__name__)
 
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
 ALWAYS_HIDDEN = {"memory"}
@@ -33,6 +33,14 @@ class DiscoveryService:
         for node in graph.nodes.values():
             k = node.device_type.value
             type_counts[k] = type_counts.get(k, 0) + 1
+            _LOGGER.info(
+                "Discovered device %s: type=%s scan=%s regs=%d with_data=%d",
+                node.circuit,
+                node.device_type.name,
+                node.scan_type or "-",
+                len(node.registers),
+                sum(1 for rk in node.registers if rk in graph.raw_registers),
+            )
         _LOGGER.info(
             "Device graph: %d devices (%s)",
             len(graph.nodes),
