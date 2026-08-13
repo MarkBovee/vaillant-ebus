@@ -534,6 +534,34 @@ class TestStateClassSemantics:
         assert meta.device_class == "temperature"
 
 
+class TestPrEnergySum:
+    """Electrical energy consumption registers (issue #53)."""
+
+    def test_pr_energy_sum_meta_is_energy(self) -> None:
+        meta = get_meta("ctlv2", "PrEnergySumHc")
+        assert meta.device_class == "energy"
+        assert meta.unit == "kWh"
+        assert meta.state_class == "total_increasing"
+
+    def test_ctlv3_fallback_gets_energy_meta(self) -> None:
+        meta = get_meta("ctlv3", "PrEnergySumHwc")
+        assert meta.device_class == "energy"
+        assert meta.unit == "kWh"
+        assert meta.state_class == "total_increasing"
+
+    def test_prenergy_fixture_entities_have_energy_meta(self) -> None:
+        lines = load_find_lines("community/arotherm_plus_prenergy_discovery.yaml")
+        graph = DiscoveryService.build_device_graph(lines)
+        entities = EntityFactoryService().generate(graph)
+        pre = [e for e in entities if "PrEnergySum" in e.name]
+        assert pre, "PrEnergySum entities must be generated"
+        for entity in pre:
+            assert entity.meta.device_class == "energy"
+            assert entity.meta.unit == "kWh"
+            assert entity.meta.state_class == "total_increasing"
+            assert entity.enabled_by_default is True
+
+
 class TestBuildingCircuitFlowUnit:
     """Building circuit flow unit (issue #55)."""
 

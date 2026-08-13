@@ -32,6 +32,12 @@
   The `RunStatsCompressorHc` / `RunStatsCompressorHwc` aliases (seen on
   flexoTHERM dumps) are covered too. The raw `187055;4327` string entity is
   kept but disabled by default.
+- **Electrical energy consumption sensors (#53):** `PrEnergySum`,
+  `PrEnergySumHc`, `PrEnergySumHwc` (plus This/Last Month variants) are now
+  exposed as energy sensors (kWh, `state_class=total_increasing`) instead of
+  plain string registers. They cover the `ctlv3` and `basv3` controller
+  variants via the existing metadata fallback. Values appear once the heat
+  pump reports data (registers return `no data stored` while idle).
 
 ## 1.2.3 - 2026-08-12
 
