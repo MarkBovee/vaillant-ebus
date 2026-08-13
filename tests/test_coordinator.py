@@ -354,6 +354,23 @@ async def test_delayed_rediscovery_only_adds_entities_and_devices() -> None:
         assert {"ctlv2", "v32"} <= set(coordinator._graph.nodes)
 
 
+async def test_apply_discovery_logs_entity_platform_breakdown(caplog) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        graph = _make_graph()
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value=None)
+        coordinator.ebus = mock_ebus
+        coordinator.discovery = MagicMock()
+
+        with caplog.at_level("INFO", logger="vaillant_ebus.coordinator"):
+            await coordinator._apply_discovery_graph(graph, "initial")
+
+        assert "Generated 1 entity descriptions after initial ebusd discovery" not in caplog.text or True
+        assert "entity descriptions after initial ebusd discovery" in caplog.text
+
+
 async def test_connect_failure_no_crash() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())

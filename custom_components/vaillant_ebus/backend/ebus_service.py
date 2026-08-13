@@ -9,7 +9,7 @@ from collections import deque
 
 from .models import SendResult, WriteResult
 
-_LOGGER = logging.getLogger("vaillant_ebus.ebus")
+_LOGGER = logging.getLogger(__name__)
 
 MAX_RECONNECT_DELAY = 60
 INITIAL_RECONNECT_DELAY = 1

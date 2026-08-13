@@ -2,6 +2,21 @@
 
 ## 1.2.4 - 2026-08-13
 
+### Added
+
+- **Diagnostic logging:** discovery now logs each detected device (type, scan,
+  register count, data count) plus a device-type summary and an entity count
+  broken down by platform (sensor/binary_sensor/number/select/switch). The
+  fallback read reports how many registers returned data, and every poll cycle
+  logs how many registers updated. Logger names are normalized so a single
+  Home Assistant logger configuration covers all integration logs:
+  ```yaml
+  logger:
+    logs:
+      custom_components.vaillant_ebus: info
+  ```
+  Use `debug` instead of `info` for per-register detail.
+
 ### Fixed
 
 - **`OutsideTemp` graphable measurement (#61):** `basv3.OutsideTemp` (and the

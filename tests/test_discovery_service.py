@@ -768,3 +768,19 @@ async def test_integration_arotherm_zone_mapping() -> None:
         assert "hc1" in ctlv2.heating_circuits
         z1_node = graph.nodes["z1"]
         assert any("Z1" in r for r in z1_node.registers)
+
+
+async def test_discover_logs_per_device_and_type_summary(caplog) -> None:
+    async with FakeEbusdServer("arotherm_find.txt") as fake:
+        svc = DiscoveryService(EbusService(host=fake.host, port=fake.port))
+        await svc._ebus.connect()
+        with caplog.at_level("INFO", logger="vaillant_ebus.backend.discovery_service"):
+            graph = await svc.discover()
+        await svc._ebus.disconnect()
+
+    messages = caplog.text
+    assert "Starting device discovery" in messages
+    assert "Discovered device hmu" in messages
+    assert "Discovered device ctlv2" in messages
+    assert "Device graph:" in messages
+    assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
