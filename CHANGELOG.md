@@ -4,13 +4,15 @@
 
 ### Added
 
-- **Manual cooling start/end dates as read-only sensors.** The myVaillant-app
-  "cool until [date]" period is exposed from the ebusd bus. The registers are
-  runtime-defined (GitHub issue john30/ebusd-configuration#644, verified on
-  CTLV2 SW0514/HW1104) using the same `value,,IGN:4,,,,value,,HDA:3` field
-  layout as the holiday/away date registers. Exposed as
-  `sensor.vaillant_ebus_manual_cooling_start_date` and
-  `sensor.vaillant_ebus_manual_cooling_end_date`.
+- **Manual cooling start/end dates as read/write datetime entities.** The
+  myVaillant-app "cool until [date]" period is exposed from the ebusd bus. The
+  registers are runtime-defined (GitHub issue john30/ebusd-configuration#644,
+  verified on CTLV2 SW0514/HW1104) using the same `value,,IGN:4,,,,value,,HDA:3`
+  field layout as the holiday/away date registers, with a `value,m,HDA:3` write
+  route on the `0201...` write-sub. Exposed as
+  `datetime.vaillant_ebus_manual_cooling_start_date` and
+  `datetime.vaillant_ebus_manual_cooling_end_date` (setting the end date writes
+  the new manual cooling period).
 
 ## 1.2.5 - 2026-08-14
 

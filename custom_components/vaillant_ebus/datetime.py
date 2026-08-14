@@ -27,6 +27,12 @@ HOLIDAY_ENTITIES = [
     ("DHW Holiday End", "HwcHolidayEndPeriod", "mdi:calendar-end", "dhw"),
 ]
 
+# Manual cooling period (myVaillant "cool until [date]"), read/write on ctlv2.
+MANUAL_COOLING_ENTITIES = [
+    ("Manual Cooling Start Date", "ManualCoolingStartDate", "mdi:snowflake", "ctlv2"),
+    ("Manual Cooling End Date", "ManualCoolingEndDate", "mdi:snowflake", "ctlv2"),
+]
+
 
 # Create datetime entities for quick veto end and holiday periods
 async def async_setup_entry(
@@ -38,6 +44,8 @@ async def async_setup_entry(
     entities: list[DateTimeEntity] = [EbusdQuickVetoEndEntity(coordinator, entry)]
     for name, register, icon, zone in HOLIDAY_ENTITIES:
         entities.append(EbusdHolidayEntity(coordinator, entry, name, register, icon, zone))
+    for name, register, icon, zone in MANUAL_COOLING_ENTITIES:
+        entities.append(EbusdManualCoolingEntity(coordinator, entry, name, register, icon, zone))
     async_add_entities(entities)
 
 
@@ -111,5 +119,46 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity)
         if ebus:
             date_str = value.strftime(DATE_FMT)
             result = await ebus.write_register(self.coordinator.heating_circuit, self._register, date_str)
+            if result.success:
+                await self.coordinator.async_request_refresh()
+
+
+class EbusdManualCoolingEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity):
+    """Manual cooling start/end date (myVaillant 'cool until [date]')."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: VaillantCoordinator,
+        entry: ConfigEntry,
+        name: str,
+        register: str,
+        icon: str,
+        zone: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._register = register
+        self._attr_name = name
+        self._attr_icon = icon
+        self._attr_unique_id = f"{entry.entry_id}_{register.lower()}"
+        self._attr_device_info = coordinator.get_device_info(zone)
+
+    @property
+    def native_value(self) -> datetime | None:
+        raw = self.coordinator.data.get("ebusd", {}).get(f"ctlv2.{self._register}.value")
+        if not raw or str(raw) in ("-", "") or str(raw).startswith(("ERR:", "no data stored")):
+            return None
+        try:
+            naive = datetime.strptime(f"{raw} {DEFAULT_TIME}", f"{DATE_FMT} {TIME_FMT}")
+            return naive.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+        except ValueError:
+            return None
+
+    async def async_set_value(self, value: datetime) -> None:
+        ebus = self.coordinator.ebus
+        if ebus:
+            date_str = value.strftime(DATE_FMT)
+            result = await ebus.write_register("ctlv2", self._register, date_str)
             if result.success:
                 await self.coordinator.async_request_refresh()

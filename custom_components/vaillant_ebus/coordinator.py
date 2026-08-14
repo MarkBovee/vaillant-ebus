@@ -391,6 +391,10 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ",02000000da00,value,,IGN:4,,,,value,,HDA:3",
             "r5,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
             ",02000000db00,value,,IGN:4,,,,value,,HDA:3",
+            "w,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524"
+            ",02010000da00,value,m,HDA:3",
+            "w,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
+            ",02010000db00,value,m,HDA:3",
         ]
         for definition in defines:
             try:
