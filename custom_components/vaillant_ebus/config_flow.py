@@ -234,7 +234,8 @@ class VaillantOptionsFlow(OptionsFlow):
             ),
         )
 
-    # Export dump: confirm + grab_duration
+    # Export dump: confirm + grab_duration, runs in background so long grabs
+    # do not block the flow (frontend times out otherwise).
     async def async_step_export_dump(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
             coordinator = self.hass.data[DOMAIN].get(self._config_entry.entry_id)
@@ -242,7 +243,9 @@ class VaillantOptionsFlow(OptionsFlow):
                 grab_duration = user_input.get("grab_duration", 10)
                 from .dump_service import async_export_discovery_dump
 
-                await async_export_discovery_dump(self.hass, coordinator, grab_duration)
+                self.hass.async_create_task(
+                    async_export_discovery_dump(self.hass, coordinator, grab_duration)
+                )
             return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
