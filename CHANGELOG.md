@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.6 - 2026-08-14
+## 1.3.0 - 2026-08-14
 
 ### Added
 
@@ -15,13 +15,11 @@
   the new manual cooling period).
 - **Climate COOL mode starts a manual cooling period.** Selecting COOL on the
   climate entity now writes the manual cooling end date (today +
-  `COOLING_DAYS_DEFAULT` days) through the runtime write route and switches the
+  `cooling_duration` days) through the runtime write route and switches the
   zone to auto, instead of writing the ineffective `night` operation mode.
-
-## 1.2.5 - 2026-08-14
-
-### Added
-
+- **Configurable manual cooling duration.** The `cooling_duration` option
+  (default 3 days) controls how many days the climate COOL mode keeps cooling
+  active.
 - **Discovery dumps now include structured grab telegrams:** `labeled_telegrams`
   and `unknown_telegrams` entries next to the raw `grab` lines. Unknown telegrams
   (no register label in the ebusd CSV) are candidates for runtime `define -r`

@@ -13,12 +13,14 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_AWAY_DURATION,
+    CONF_COOLING_DURATION,
     CONF_EBUSD_HOST,
     CONF_EBUSD_PORT,
     CONF_QUICK_VETO_DURATION,
     CONF_QUICK_VETO_TEMP,
     CONF_SCAN_INTERVAL,
     DEFAULT_AWAY_DURATION,
+    DEFAULT_COOLING_DURATION,
     DEFAULT_EBUSD_POLL_INTERVAL,
     DEFAULT_EBUSD_PORT,
     DEFAULT_QUICK_VETO_DURATION,
@@ -230,6 +232,10 @@ class VaillantOptionsFlow(OptionsFlow):
                         CONF_QUICK_VETO_TEMP,
                         default=options.get(CONF_QUICK_VETO_TEMP, DEFAULT_QUICK_VETO_TEMP),
                     ): vol.Coerce(float),
+                    vol.Optional(
+                        CONF_COOLING_DURATION,
+                        default=options.get(CONF_COOLING_DURATION, DEFAULT_COOLING_DURATION),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=30)),
                 }
             ),
         )

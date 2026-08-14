@@ -20,7 +20,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import COOLING_DAYS_DEFAULT, DOMAIN, EBUSD_TO_HA_HVAC, HA_TO_EBUSD_HVAC
+from .const import (
+    CONF_COOLING_DURATION,
+    DEFAULT_COOLING_DURATION,
+    DOMAIN,
+    EBUSD_TO_HA_HVAC,
+    HA_TO_EBUSD_HVAC,
+)
 from .coordinator import VaillantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -205,12 +211,13 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             self.async_write_ha_state()
 
     # Start manual cooling by writing the end date (myVaillant "cool until").
-    # The end date is today plus COOLING_DAYS_DEFAULT; the write route is the
-    # runtime-defined w-define on the 0201... write-sub (value,m,HDA:3).
+    # The end date is today plus the configurable cooling_duration; the write
+    # route is the runtime-defined w-define on the 0201... write-sub (value,m,HDA:3).
     async def _start_manual_cooling(self) -> None:
         try:
+            days = self.coordinator._entry.options.get(CONF_COOLING_DURATION, DEFAULT_COOLING_DURATION)
             today = datetime.now().date()
-            end = today + timedelta(days=COOLING_DAYS_DEFAULT)
+            end = today + timedelta(days=days)
             ok = await self._write_raw("ctlv2", "ManualCoolingEndDate", end.strftime(DATE_FMT))
             if ok:
                 ok = await self._write("Z1OpMode", "auto")

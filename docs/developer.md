@@ -134,9 +134,10 @@ The datetime platform exposes them as read/write `DateTimeEntity` instances.
 ### Climate COOL integration
 
 Selecting `HVACMode.COOL` on the climate entity writes the manual cooling end
-date (today + `COOLING_DAYS_DEFAULT`, default 3 days) via the write route and
-switches `Z1OpMode` to `auto`. The old `"cool": "night"` write was removed from
-`HA_TO_EBUSD_HVAC` because `night` is not retained by this controller.
+date (today + the `cooling_duration` option, default 3 days) via the write route
+and switches `Z1OpMode` to `auto`. The old `"cool": "night"` write was removed
+from `HA_TO_EBUSD_HVAC` because `night` is not retained by this controller. The
+`cooling_duration` option is configurable per entry in the options flow.
 
 ## Testing against live ebusd
 
