@@ -57,5 +57,7 @@ HA_TO_EBUSD_HVAC = {
     "off": "off",
     "auto": "auto",
     "heat": "day",
-    "cool": "night",
 }
+
+# Number of days for the manual cooling period when COOL is selected on a climate.
+COOLING_DAYS_DEFAULT = 3

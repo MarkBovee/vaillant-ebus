@@ -131,6 +131,13 @@ CTLV2 `SW0514`/`HW1104`. The write route uses the `0201...` write-sub (w_1-base)
 with a `value,m,HDA:3` field; `write_register` then accepts `DD.MM.YYYY` values.
 The datetime platform exposes them as read/write `DateTimeEntity` instances.
 
+### Climate COOL integration
+
+Selecting `HVACMode.COOL` on the climate entity writes the manual cooling end
+date (today + `COOLING_DAYS_DEFAULT`, default 3 days) via the write route and
+switches `Z1OpMode` to `auto`. The old `"cool": "night"` write was removed from
+`HA_TO_EBUSD_HVAC` because `night` is not retained by this controller.
+
 ## Testing against live ebusd
 
 ```bash

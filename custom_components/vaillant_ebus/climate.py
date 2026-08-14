@@ -20,7 +20,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, EBUSD_TO_HA_HVAC, HA_TO_EBUSD_HVAC
+from .const import COOLING_DAYS_DEFAULT, DOMAIN, EBUSD_TO_HA_HVAC, HA_TO_EBUSD_HVAC
 from .coordinator import VaillantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -186,6 +186,9 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         self.async_write_ha_state()
         if self.preset_mode == PRESET_BOOST:
             await self._cancel_quick_veto()
+        if hvac_mode == HVACMode.COOL:
+            await self._start_manual_cooling()
+            return
         ebusd_mode = HA_TO_EBUSD_HVAC.get(hvac_mode.value)
         if ebusd_mode is None:
             self._optimistic_hvac_mode = None
@@ -196,6 +199,23 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             ok = await self._write("Z1OpMode", ebusd_mode)
         except Exception as exc:
             _LOGGER.exception("set_hvac_mode failed: %s", exc)
+            ok = False
+        if not ok:
+            self._optimistic_hvac_mode = None
+            self.async_write_ha_state()
+
+    # Start manual cooling by writing the end date (myVaillant "cool until").
+    # The end date is today plus COOLING_DAYS_DEFAULT; the write route is the
+    # runtime-defined w-define on the 0201... write-sub (value,m,HDA:3).
+    async def _start_manual_cooling(self) -> None:
+        try:
+            today = datetime.now().date()
+            end = today + timedelta(days=COOLING_DAYS_DEFAULT)
+            ok = await self._write_raw("ctlv2", "ManualCoolingEndDate", end.strftime(DATE_FMT))
+            if ok:
+                ok = await self._write("Z1OpMode", "auto")
+        except Exception as exc:
+            _LOGGER.exception("start manual cooling failed: %s", exc)
             ok = False
         if not ok:
             self._optimistic_hvac_mode = None
