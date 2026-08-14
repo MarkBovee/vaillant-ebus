@@ -595,6 +595,30 @@ class TestPrEnergySum:
                 assert entity.meta.device_class == "energy"
                 assert entity.meta.unit == "kWh"
 
+    # ctlv2 cooling fixture (Mark's own system while cooling): the live cooling
+    # data registers exposed by ebusd map to proper entities; the cooling-program
+    # registers that this hardware does not have must not appear as entities.
+    def test_ctlv2_cooling_fixture_entities(self) -> None:
+        lines = load_find_lines("community/arotherm_plus_ctlv2_cooling_discovery.yaml")
+        graph = DiscoveryService.build_device_graph(lines)
+        entities = EntityFactoryService().generate(graph)
+        by_key = {e.key: e for e in entities}
+        for reg in (
+            "hmu.CopCooling.value",
+            "hmu.CopCoolingMonth.value",
+            "hmu.YieldCoolDay.value",
+            "hmu.YieldCooling.value",
+            "hmu.YieldCoolingMonth.value",
+            "ctlv2.Z1CoolingTemp.value",
+        ):
+            assert by_key.get(reg) is not None, f"missing {reg}"
+        for reg in (
+            "ctlv2.Hc1CoolingEnabled.value",
+            "ctlv2.Z1CoolingOpMode.value",
+            "ctlv2.Z1CoolingTempDesired.value",
+        ):
+            assert by_key.get(reg) is None, f"unexpected {reg}"
+
 
 class TestBuildingCircuitFlowUnit:
     """Building circuit flow unit (issue #55)."""
