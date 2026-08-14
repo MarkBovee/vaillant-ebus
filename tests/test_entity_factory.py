@@ -561,6 +561,40 @@ class TestPrEnergySum:
             assert entity.meta.state_class == "total_increasing"
             assert entity.enabled_by_default is True
 
+    # aroTHERM Plus run dumps (#53 follow-up): PrEnergySum* stay no-data even
+    # during active runs, but entities must still be generated (and enabled).
+    def test_run_fixtures_keep_prenergy_entities(self) -> None:
+        for fixture in (
+            "community/arotherm_plus_cooling_run_discovery.yaml",
+            "community/arotherm_plus_hwc_run_discovery.yaml",
+        ):
+            lines = load_find_lines(fixture)
+            graph = DiscoveryService.build_device_graph(lines)
+            entities = EntityFactoryService().generate(graph)
+            pre = [e for e in entities if "PrEnergySum" in e.name]
+            assert pre, f"{fixture}: PrEnergySum entities must be generated"
+            for entity in pre:
+                assert entity.meta.device_class == "energy"
+                assert entity.meta.unit == "kWh"
+                assert entity.meta.state_class == "total_increasing"
+                assert entity.enabled_by_default is True
+
+    # Live yield/energy registers from the run dumps map to energy entities.
+    def test_run_fixtures_live_energy_registers_are_energy(self) -> None:
+        for fixture in (
+            "community/arotherm_plus_cooling_run_discovery.yaml",
+            "community/arotherm_plus_hwc_run_discovery.yaml",
+        ):
+            lines = load_find_lines(fixture)
+            graph = DiscoveryService.build_device_graph(lines)
+            entities = EntityFactoryService().generate(graph)
+            by_key = {e.key: e for e in entities}
+            for reg in ("hmu.YieldHc", "hmu.YieldHwc", "hmu.TotalEnergyUsage", "hmu.YieldCooling"):
+                entity = by_key.get(f"{reg}.value")
+                assert entity is not None, f"{fixture}: missing {reg}"
+                assert entity.meta.device_class == "energy"
+                assert entity.meta.unit == "kWh"
+
 
 class TestBuildingCircuitFlowUnit:
     """Building circuit flow unit (issue #55)."""
