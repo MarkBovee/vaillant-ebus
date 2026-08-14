@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from copy import copy
 from typing import Any
 
 from .mapping import REGISTER_MAP, RegisterMeta, get_meta, multi_field_fields, split_multi_field
@@ -112,7 +113,7 @@ def _classify_register(
 def _merge_overrides(meta: RegisterMeta, override: dict[str, Any]) -> RegisterMeta:
     """Merge YAML overrides into a RegisterMeta, returning new instance."""
     if not override:
-        return meta
+        return copy(meta)
     merged = RegisterMeta(
         friendly_name=override.get("friendly_name", meta.friendly_name),
         icon=override.get("icon", meta.icon),

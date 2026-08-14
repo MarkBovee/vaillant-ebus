@@ -126,6 +126,12 @@ def test_parse_scan_metadata_vwz() -> None:
     assert result[1] == "VWZ00"
 
 
+def test_parse_scan_metadata_current_ebusd_format() -> None:
+    result = DiscoveryService._parse_scan("scan.76 = MF=Vaillant;ID=VWZ00;SW=0522;HW=5103")
+    assert result is not None
+    assert result[1:] == ("VWZ00", "0522", "5103")
+
+
 def test_parse_scan_metadata_netx2() -> None:
     result = DiscoveryService._parse_scan("scan.04 = Vaillant;NETX2;4039;5703")
     assert result is not None
@@ -296,6 +302,25 @@ def test_duplicate_find_lines_preserve_live_value_regardless_of_order(
     graph = DiscoveryService.build_device_graph(find_lines)
     assert graph.raw_registers["v32.SupplyAirTemp"] == "20.75;ok"
     assert graph.nodes["v32"].has_data is True
+
+
+def test_address_and_empty_unknown_circuits_are_suppressed() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.76 = MF=Vaillant;ID=VWZ00;SW=0522;HW=5103",
+            "76 VWZ_Status01b = 42",
+            "B504 VWZ_Status_0100 =  (ERR: invalid position)",
+            "B512 VWZ_Status_030f0101 =  (ERR: invalid position)",
+            "sc Col = no data stored",
+            "vwz TestHwcTemp = no data stored",
+        ]
+    )
+    assert "76" not in graph.nodes
+    assert "B504" not in graph.nodes
+    assert "B512" not in graph.nodes
+    assert "sc" not in graph.nodes
+    assert graph.nodes["vwz"].device_type == DeviceType.PASSIVE_COOLING
+
 
 
 # =============================================================================

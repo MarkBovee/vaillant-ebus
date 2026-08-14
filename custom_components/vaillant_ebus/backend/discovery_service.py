@@ -82,6 +82,10 @@ class DiscoveryService:
         parts = rhs.split(";")
         if len(parts) != 4:
             return None
+        if all("=" in part for part in parts):
+            metadata = dict(part.split("=", 1) for part in parts)
+            if {"MF", "ID", "SW", "HW"} <= metadata.keys():
+                return (lhs.strip(), metadata["ID"], metadata["SW"], metadata["HW"])
         return (lhs.strip(), parts[1].strip(), parts[2].strip(), parts[3].strip())
 
     @staticmethod
@@ -202,6 +206,8 @@ class DiscoveryService:
                 continue
             if c_lower in ALWAYS_HIDDEN or any(kw in c_lower for kw in HIDDEN_DEVICE_KEYWORDS):
                 continue
+            if _is_address_circuit(circuit):
+                continue
 
             scan_info = scan_by_circuit.get(circuit)
             scan_type = scan_info[0] if scan_info else ""
@@ -218,11 +224,16 @@ class DiscoveryService:
 
             if any(kw in circuit.lower() for kw in HIDDEN_DEVICE_KEYWORDS):
                 continue
+            device_type = DiscoveryService.categorize_circuit(circuit, regs, scan_type)
+            circuit_has_data = any(raw_registers.get(rk) is not None for rk in regs)
+            if not circuit_has_data and device_type == DeviceType.UNKNOWN:
+                continue
+
             node = DeviceNode(
                 circuit=circuit,
-                device_type=DiscoveryService.categorize_circuit(circuit, regs, scan_type),
+                device_type=device_type,
                 registers=regs,
-                has_data=any(raw_registers.get(rk) is not None for rk in regs),
+                has_data=circuit_has_data,
                 scan_type=scan_type,
                 scan_sw=scan_sw,
                 scan_hw=scan_hw,
@@ -253,6 +264,15 @@ class DiscoveryService:
 # Extract the logical sub-device name from its parent-qualified key.
 def _sub_name(sub_key: str) -> str:
     return sub_key.split("/", 1)[1]
+
+
+def _is_address_circuit(circuit: str) -> bool:
+    """Return whether ebusd used a raw hexadecimal bus address as circuit name."""
+    try:
+        int(circuit, 16)
+    except ValueError:
+        return False
+    return True
 
 
 # Determine whether each source circuit contains at least one live value.

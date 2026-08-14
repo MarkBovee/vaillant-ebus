@@ -199,6 +199,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             await ebus.connect()
         except Exception as exc:
+            self._started = False
             _LOGGER.warning("ebusd connect failed, will retry: %s", exc)
             return
         self.ebus = ebus
@@ -215,6 +216,9 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             graph = await self.discovery.discover()
         except Exception as exc:
+            self._ebusd_connected = False
+            self._started = False
+            await ebus.disconnect()
             _LOGGER.warning("ebusd discovery failed: %s", exc)
             return
 
@@ -255,7 +259,9 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         generated_entities = self.entity_factory.generate(graph)
         if is_delayed:
             existing_entity_keys = {entity.key for entity in self.entities}
-            self.entities.extend(entity for entity in generated_entities if entity.key not in existing_entity_keys)
+            additions = [entity for entity in generated_entities if entity.key not in existing_entity_keys]
+            self.entities.extend(additions)
+            self._add_new_entities(additions)
         else:
             self.entities = generated_entities
         platform_counts: dict[str, int] = {}
@@ -528,21 +534,21 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self.registers[key].value.update(_register_values(key, value))
                         self.registers[key].has_data = True
                     _LOGGER.debug("Fallback read %s = %s", key, value)
-                elif was_new and REGISTER_MAP[key].enabled:
-                    self.registers[key] = EbusdRegister(
-                        circuit=circuit,
-                        name=name,
-                        fields=["value"],
-                        value=_register_values(key, None),
-                        has_data=False,
-                    )
-                    added += 1
-                    _LOGGER.debug("Fallback added empty %s (will populate on poll)", key)
             except Exception as exc:
                 _LOGGER.warning("Fallback read failed: %s (%s)", key, exc)
         if added and self._graph:
-            self.entities = self.entity_factory.generate(self._graph)
-            _LOGGER.info("Regenerated entities after fallback: added %d new", added)
+            for key, register in self.registers.items():
+                if not register.has_data or key in self._graph.raw_registers:
+                    continue
+                node = self._graph.nodes.get(register.circuit)
+                if node is None:
+                    continue
+                self._graph.raw_registers[key] = register.value.get("value", "")
+                if key not in node.registers:
+                    node.registers.append(key)
+                node.has_data = True
+                self._last_find_keys.add(key)
+            _LOGGER.info("Fallback read added %d register(s) to discovery", added)
         else:
             _LOGGER.info("Fallback read complete: %d/%d registers with data", read_with_data, len(to_read))
 

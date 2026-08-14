@@ -266,6 +266,30 @@ class TestEnabledByDefault:
         assert result is False
 
 
+class TestMetadataIsolation:
+    """Generated entities must not mutate shared register mapping metadata."""
+
+    def test_register_classification_does_not_leak_between_generations(self) -> None:
+        graph = DeviceGraph(
+            nodes={
+                "custom": DeviceNode(
+                    circuit="custom",
+                    device_type=DeviceType.UNKNOWN,
+                    registers=["custom.Value"],
+                    has_data=True,
+                )
+            },
+            raw_registers={"custom.Value": "1"},
+            placeholder_registers=set(),
+        )
+        first = EntityFactoryService().generate(graph)[0]
+        graph.raw_registers["custom.Value"] = "hello"
+        second = EntityFactoryService().generate(graph)[0]
+
+        assert first.meta.entity_type == "binary_sensor"
+        assert second.meta.entity_type == "sensor"
+
+
 class TestYamlOverrides:
     """YAML override handling."""
 
