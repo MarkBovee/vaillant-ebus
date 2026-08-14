@@ -77,12 +77,6 @@ class EbusdSelect(CoordinatorEntity[VaillantCoordinator], SelectEntity):
             raise ValueError(f"Option '{option}' not valid for {self._desc.key}. Valid options: {self._attr_options}")
         if not self.coordinator.ebus:
             return
-        result = await self.coordinator.ebus.write_register(
-            self._desc.circuit,
-            self._desc.name,
-            option,
-        )
-        if result.success:
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.warning("Write failed for %s: %s", self._desc.key, result.error_message)
+        ok = await self.coordinator.async_write_register(self._desc.circuit, self._desc.name, option)
+        if not ok:
+            _LOGGER.warning("Write failed for %s", self._desc.key)

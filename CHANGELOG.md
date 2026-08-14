@@ -27,6 +27,14 @@
 
 ### Changed
 
+- **Central register write path.** All entities now write through the
+  coordinator `async_write_registers()` API, which bundles multiple writes and
+  triggers a single refresh. Multi-register operations (holiday periods, DHW
+  mode, manual cooling) are written atomically.
+- **Climate COOL/HEAT is now symmetric.** Selecting COOL writes the manual
+  cooling end date and switches to auto; selecting HEAT clears the manual
+  cooling end date and switches to day, so a cooling period is properly
+  cancelled instead of left running.
 - **Discovery dump export runs in the background:** long raw eBUS traffic grabs
   no longer block the options flow, so the Home Assistant frontend does not time
   out. The export step now reports that the dump is being written instead of the

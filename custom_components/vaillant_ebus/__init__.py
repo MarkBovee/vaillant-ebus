@@ -36,21 +36,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             value = await coordinator.ebus.read_register(circuit, name, field)
             _LOGGER.info("read_parameter %s.%s = %s", circuit, name, value)
 
-    # Write a value with read-after-write verification.
+    # Write a value with read-after-write verification via the central write path.
     async def svc_write_parameter(call: ServiceCall) -> None:
         circuit = call.data["circuit"]
         name = call.data["name"]
         value = call.data["value"]
-        if coordinator.ebus:
-            result = await coordinator.ebus.write_register(circuit, name, value)
-            _LOGGER.info(
-                "write_parameter %s.%s=%s: success=%s, verified=%s",
-                circuit,
-                name,
-                value,
-                result.success,
-                result.verified_value,
-            )
+        ok = await coordinator.async_write_register(circuit, name, value)
+        _LOGGER.info("write_parameter %s.%s=%s: success=%s", circuit, name, value, ok)
 
     # Force re-read all active registers.
     async def svc_refresh(call: ServiceCall) -> None:

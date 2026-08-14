@@ -193,40 +193,53 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if self.preset_mode == PRESET_BOOST:
             await self._cancel_quick_veto()
         if hvac_mode == HVACMode.COOL:
-            await self._start_manual_cooling()
-            return
-        ebusd_mode = HA_TO_EBUSD_HVAC.get(hvac_mode.value)
-        if ebusd_mode is None:
-            self._optimistic_hvac_mode = None
-            self.async_write_ha_state()
-            return
-        ok = True
-        try:
-            ok = await self._write("Z1OpMode", ebusd_mode)
-        except Exception as exc:
-            _LOGGER.exception("set_hvac_mode failed: %s", exc)
-            ok = False
+            ok = await self._start_manual_cooling()
+        elif hvac_mode == HVACMode.HEAT:
+            ok = await self._cancel_manual_cooling()
+            if ok:
+                ok = await self._write("Z1OpMode", "day")
+        else:
+            ebusd_mode = HA_TO_EBUSD_HVAC.get(hvac_mode.value)
+            if ebusd_mode is None:
+                self._optimistic_hvac_mode = None
+                self.async_write_ha_state()
+                return
+            try:
+                ok = await self._write("Z1OpMode", ebusd_mode)
+            except Exception as exc:
+                _LOGGER.exception("set_hvac_mode failed: %s", exc)
+                ok = False
         if not ok:
             self._optimistic_hvac_mode = None
             self.async_write_ha_state()
 
-    # Start manual cooling by writing the end date (myVaillant "cool until").
-    # The end date is today plus the configurable cooling_duration; the write
-    # route is the runtime-defined w-define on the 0201... write-sub (value,m,HDA:3).
-    async def _start_manual_cooling(self) -> None:
+    # Start manual cooling: write the end date (today + the configurable
+    # cooling_duration) through the central write path, then set the zone to
+    # auto so the controller engages cooling. The controller manages the start
+    # date itself, so only the end date is written.
+    async def _start_manual_cooling(self) -> bool:
         try:
             days = self.coordinator._entry.options.get(CONF_COOLING_DURATION, DEFAULT_COOLING_DURATION)
             today = datetime.now().date()
             end = today + timedelta(days=days)
-            ok = await self._write_raw("ctlv2", "ManualCoolingEndDate", end.strftime(DATE_FMT))
-            if ok:
-                ok = await self._write("Z1OpMode", "auto")
+            writes = [
+                ("ctlv2", "ManualCoolingEndDate", end.strftime(DATE_FMT)),
+                (self.coordinator.heating_circuit, "Z1OpMode", "auto"),
+            ]
+            return await self.coordinator.async_write_registers(writes)
         except Exception as exc:
             _LOGGER.exception("start manual cooling failed: %s", exc)
-            ok = False
-        if not ok:
-            self._optimistic_hvac_mode = None
-            self.async_write_ha_state()
+            return False
+
+    # Cancel manual cooling by clearing the end date (reset to the holiday
+    # reset sentinel) so the controller stops keeping a cooling period active.
+    # The controller manages the start date itself.
+    async def _cancel_manual_cooling(self) -> bool:
+        try:
+            return await self.coordinator.async_write_register("ctlv2", "ManualCoolingEndDate", HOLIDAY_RESET)
+        except Exception as exc:
+            _LOGGER.exception("cancel manual cooling failed: %s", exc)
+            return False
 
     # Set preset: boost (quick veto), away (holiday), or cancel
     async def async_set_preset_mode(self, preset_mode: str) -> None:
@@ -313,22 +326,13 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         await self._write("Z1HolidayStartPeriod", HOLIDAY_RESET)
         await self._write("Z1HolidayEndPeriod", HOLIDAY_RESET)
 
-    # Write register to heating circuit via backend
+    # Write register to heating circuit through the central write path
     async def _write(self, name: str, value: str) -> bool:
         return await self._write_raw(self.coordinator.heating_circuit, name, value)
 
-    # Write register to arbitrary circuit via backend, trigger refresh on success
+    # Write register to arbitrary circuit through the central write path
     async def _write_raw(self, circuit: str, name: str, value: str) -> bool:
-        ebus = self.coordinator.ebus
-        if not ebus:
-            return False
-        try:
-            result = await ebus.write_register(circuit, name, value)
-            if result.success:
-                await self.coordinator.async_request_refresh()
-            return result.success
-        except Exception:
-            return False
+        return await self.coordinator.async_write_register(circuit, name, value)
 
 
 class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
@@ -398,15 +402,6 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if high is not None:
             await self._write("Hc1MaxFlowTempDesired", str(int(high)))
 
-    # Write register to heating circuit, trigger refresh on success
+    # Write register to heating circuit through the central write path
     async def _write(self, name: str, value: str) -> bool:
-        ebus = self.coordinator.ebus
-        if not ebus:
-            return False
-        try:
-            result = await ebus.write_register(self.coordinator.heating_circuit, name, value)
-            if result.success:
-                await self.coordinator.async_request_refresh()
-            return result.success
-        except Exception:
-            return False
+        return await self.coordinator.async_write_register(self.coordinator.heating_circuit, name, value)

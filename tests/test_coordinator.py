@@ -75,7 +75,7 @@ ANALYSIS = importlib.util.module_from_spec(ANALYSIS_SPEC)
 sys.modules["vaillant_ebus.backend.analysis_service"] = ANALYSIS
 ANALYSIS_SPEC.loader.exec_module(ANALYSIS)
 
-from vaillant_ebus.backend.ebus_service import EbusService  # noqa: E402
+from vaillant_ebus.backend.ebus_service import EbusService, WriteResult  # noqa: E402
 from vaillant_ebus.backend.entity_factory import EntityFactoryService  # noqa: E402
 from vaillant_ebus.backend.models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister  # noqa: E402
 
@@ -448,6 +448,50 @@ async def test_define_custom_registers_skips_when_not_connected() -> None:
 
         await c._define_custom_registers()
         assert mock_ebus.define_register.call_count == 0
+
+
+async def test_async_write_registers_bundles_and_refreshes() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.write_register = AsyncMock(
+            return_value=WriteResult(success=True, verified_value=None)
+        )
+        c.ebus = mock_ebus
+        c.async_request_refresh = MagicMock()
+
+        ok = await c.async_write_registers(
+            [("ctlv2", "ManualCoolingStartDate", "14.08.2026"), ("ctlv2", "ManualCoolingEndDate", "17.08.2026")]
+        )
+
+        assert ok is True
+        assert mock_ebus.write_register.call_count == 2
+        assert c.async_request_refresh.call_count == 1
+
+
+async def test_async_write_registers_stops_on_failure_no_refresh() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.write_register = AsyncMock(
+            side_effect=[
+                WriteResult(success=True, verified_value=None),
+                WriteResult(success=False, error_message="boom"),
+            ]
+        )
+        c.ebus = mock_ebus
+        c.async_request_refresh = MagicMock()
+
+        ok = await c.async_write_registers(
+            [("ctlv2", "A", "1"), ("ctlv2", "B", "2")]
+        )
+
+        assert ok is False
+        assert c.async_request_refresh.call_count == 0
 
 
 async def test_fallback_read_adds_new_registers() -> None:

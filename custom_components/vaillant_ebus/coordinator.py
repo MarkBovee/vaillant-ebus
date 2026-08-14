@@ -607,6 +607,29 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return {"ebusd": await self._async_values_from_registers()}
 
+    # Write one or more registers through the central write path. Each write is
+    # verified by read-back; on any failure the already-written registers are
+    # reported but not rolled back. A single refresh fires after all writes.
+    async def async_write_registers(
+        self,
+        writes: list[tuple[str, str, str]],
+    ) -> bool:
+        if not self.ebus or not self.ebus.is_connected:
+            return False
+        all_ok = True
+        for circuit, name, value in writes:
+            result = await self.ebus.write_register(circuit, name, value)
+            if not result.success:
+                _LOGGER.warning("Write failed %s.%s=%s: %s", circuit, name, value, result.error_message)
+                all_ok = False
+        if all_ok:
+            self.async_request_refresh()
+        return all_ok
+
+    # Convenience wrapper for a single-register write through the central path.
+    async def async_write_register(self, circuit: str, name: str, value: str) -> bool:
+        return await self.async_write_registers([(circuit, name, value)])
+
     async def async_stop(self) -> None:
         if self._cancel_delayed_rediscovery:
             self._cancel_delayed_rediscovery()

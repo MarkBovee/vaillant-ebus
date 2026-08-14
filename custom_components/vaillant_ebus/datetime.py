@@ -113,14 +113,12 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity)
         except ValueError, TypeError:
             return None
 
-    # Write holiday date to ebusd register and trigger refresh
+    # Write holiday date to ebusd register through the central write path
     async def async_set_value(self, value: datetime) -> None:
-        ebus = self.coordinator.ebus
-        if ebus:
-            date_str = value.strftime(DATE_FMT)
-            result = await ebus.write_register(self.coordinator.heating_circuit, self._register, date_str)
-            if result.success:
-                await self.coordinator.async_request_refresh()
+        if self.coordinator.ebus:
+            await self.coordinator.async_write_register(
+                self.coordinator.heating_circuit, self._register, value.strftime(DATE_FMT)
+            )
 
 
 class EbusdManualCoolingEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity):
@@ -156,9 +154,5 @@ class EbusdManualCoolingEntity(CoordinatorEntity[VaillantCoordinator], DateTimeE
             return None
 
     async def async_set_value(self, value: datetime) -> None:
-        ebus = self.coordinator.ebus
-        if ebus:
-            date_str = value.strftime(DATE_FMT)
-            result = await ebus.write_register("ctlv2", self._register, date_str)
-            if result.success:
-                await self.coordinator.async_request_refresh()
+        if self.coordinator.ebus:
+            await self.coordinator.async_write_register("ctlv2", self._register, value.strftime(DATE_FMT))

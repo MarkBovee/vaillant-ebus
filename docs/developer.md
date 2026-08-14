@@ -135,9 +135,27 @@ The datetime platform exposes them as read/write `DateTimeEntity` instances.
 
 Selecting `HVACMode.COOL` on the climate entity writes the manual cooling end
 date (today + the `cooling_duration` option, default 3 days) via the write route
-and switches `Z1OpMode` to `auto`. The old `"cool": "night"` write was removed
-from `HA_TO_EBUSD_HVAC` because `night` is not retained by this controller. The
-`cooling_duration` option is configurable per entry in the options flow.
+and switches `Z1OpMode` to `auto`. Selecting `HEAT` clears the manual cooling
+end date and switches to `day`, so a cooling period is properly cancelled. The
+old `"cool": "night"` write was removed from `HA_TO_EBUSD_HVAC` because `night`
+is not retained by this controller. The `cooling_duration` option is
+configurable per entry in the options flow.
+
+### Central write path
+
+All entities write through `VaillantCoordinator.async_write_registers()`, which
+takes a list of `(circuit, name, value)` tuples, writes each (verified by
+read-back), and triggers a single coordinator refresh. Use it for any operation
+that touches more than one register so the writes are grouped:
+
+```python
+await coordinator.async_write_registers([
+    (circuit, "HwcHolidayStartPeriod", today),
+    (circuit, "HwcHolidayEndPeriod", end),
+])
+```
+
+For a single write use `coordinator.async_write_register(circuit, name, value)`.
 
 ## Testing against live ebusd
 
