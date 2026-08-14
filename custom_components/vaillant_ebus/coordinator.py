@@ -579,7 +579,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         continue
                     val = rhs.strip()
                     key = f"{circuit}.{name}"
-                    if val in ("-", "") or val.startswith(("(empty ", "(ERR", "no data stored")):
+                    if val in ("-", "") or val.startswith(("(empty ", "no data stored")) or "(ERR" in val:
                         continue
                     self._live_since_analysis.add(key)
                     if key not in self.registers:

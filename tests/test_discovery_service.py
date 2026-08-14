@@ -767,6 +767,13 @@ def test_parse_register_empty_with_meta() -> None:
     assert v is None
 
 
+def test_parse_register_partial_value_with_error_is_unavailable() -> None:
+    _, _, value = DiscoveryService._parse_register(
+        "sc YieldThisYear = 0;32768;13056;0 (ERR: invalid position)"
+    )
+    assert value is None
+
+
 def test_scan_metadata_present_in_nodes() -> None:
     graph = _arotherm_graph()
     hmu = graph.nodes["hmu"]
