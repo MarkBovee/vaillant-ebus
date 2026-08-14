@@ -1222,6 +1222,16 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         unit="%",
         icon="mdi:water-percent",
     ),
+    "ctlv2.ManualCoolingStartDate": RegisterMeta(
+        friendly_name="Manual Cooling Start Date",
+        icon="mdi:snowflake",
+        entity_category="diagnostic",
+    ),
+    "ctlv2.ManualCoolingEndDate": RegisterMeta(
+        friendly_name="Manual Cooling End Date",
+        icon="mdi:snowflake",
+        entity_category="diagnostic",
+    ),
     "ctlv2.Date": RegisterMeta(
         friendly_name="Date",
         icon="mdi:calendar",

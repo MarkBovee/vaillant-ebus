@@ -429,7 +429,11 @@ async def test_define_custom_registers_delegates_to_ebus() -> None:
         c.ebus = mock_ebus
         await c._define_custom_registers()
 
-        assert mock_ebus.define_register.call_count == 1
+        assert mock_ebus.define_register.call_count == 3
+        calls = [c.args[0] for c in mock_ebus.define_register.call_args_list]
+        assert any("z1RoomHumidity" in d for d in calls)
+        assert any("ManualCoolingStartDate" in d for d in calls)
+        assert any("ManualCoolingEndDate" in d for d in calls)
 
 
 async def test_define_custom_registers_skips_when_not_connected() -> None:

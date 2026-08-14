@@ -619,6 +619,26 @@ class TestPrEnergySum:
         ):
             assert by_key.get(reg) is None, f"unexpected {reg}"
 
+    # The runtime-defined manual cooling dates (GitHub issue #644) must appear as
+    # sensor entities when present in the find output, carrying the mapped
+    # friendly name.
+    def test_manual_cooling_dates_entities(self) -> None:
+        lines = [
+            "ctlv2 ManualCoolingStartDate = 14.08.2026",
+            "ctlv2 ManualCoolingEndDate = 15.08.2026",
+        ]
+        graph = DiscoveryService.build_device_graph(lines)
+        entities = EntityFactoryService().generate(graph)
+        by_key = {e.key: e for e in entities}
+        start = by_key.get("ctlv2.ManualCoolingStartDate.value")
+        end = by_key.get("ctlv2.ManualCoolingEndDate.value")
+        assert start is not None
+        assert end is not None
+        assert start.entity_type == "sensor"
+        assert end.entity_type == "sensor"
+        assert start.meta.friendly_name == "Manual Cooling Start Date"
+        assert end.meta.friendly_name == "Manual Cooling End Date"
+
 
 class TestBuildingCircuitFlowUnit:
     """Building circuit flow unit (issue #55)."""

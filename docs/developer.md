@@ -104,6 +104,28 @@ defines = [
 
 The register then appears as `ctlv2.z1RoomHumidity` and needs a mapping entry in `mapping.py`.
 
+### Date registers (manual cooling start/end)
+
+The manual cooling start/end dates (myVaillant "cool until [date]") are defined
+the same way, but use the `HDA:3` date field type (day;month;year with the year
+byte as year−2000, no BCD) plus an `IGN:4` skip of the echo prefix, matching the
+holiday/away date registers:
+
+```python
+defines = [
+    "r5,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524"
+    ",02000000da00,value,,IGN:4,,,,value,,HDA:3",
+    "r5,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
+    ",02000000db00,value,,IGN:4,,,,value,,HDA:3",
+]
+```
+
+These derive from `john30/ebusd-configuration` issue #644
+(`@ext(0xda, 0)` / `@ext(0xdb, 0)` on the `_720` r_1 base) and were verified on a
+CTLV2 `SW0514`/`HW1104`. A write-route exists via a separate `w` define with
+`value,m,HDA:3` on the write-sub `02010000da00/db00`; it is not yet wired into
+the integration.
+
 ## Testing against live ebusd
 
 ```bash
