@@ -227,7 +227,7 @@ class VaillantOptionsFlow(OptionsFlow):
                     vol.Optional(
                         CONF_QUICK_VETO_DURATION,
                         default=options.get(CONF_QUICK_VETO_DURATION, DEFAULT_QUICK_VETO_DURATION),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
+                    ): vol.Coerce(int),
                     vol.Optional(
                         CONF_QUICK_VETO_TEMP,
                         default=options.get(CONF_QUICK_VETO_TEMP, DEFAULT_QUICK_VETO_TEMP),
@@ -235,7 +235,7 @@ class VaillantOptionsFlow(OptionsFlow):
                     vol.Optional(
                         CONF_COOLING_DURATION,
                         default=options.get(CONF_COOLING_DURATION, DEFAULT_COOLING_DURATION),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=30)),
+                    ): vol.Coerce(int),
                 }
             ),
         )
