@@ -14,9 +14,9 @@
   `datetime.vaillant_ebus_manual_cooling_end_date` (setting the end date writes
   the new manual cooling period).
 - **Climate COOL mode starts a manual cooling period.** Selecting COOL on the
-  climate entity now writes the manual cooling end date (today + `COOLING_DAYS`
-  days) through the runtime write route and switches the zone to auto, instead
-  of writing the ineffective `night` operation mode.
+  climate entity now writes the manual cooling end date (today +
+  `COOLING_DAYS_DEFAULT` days) through the runtime write route and switches the
+  zone to auto, instead of writing the ineffective `night` operation mode.
 
 ## 1.2.5 - 2026-08-14
 
