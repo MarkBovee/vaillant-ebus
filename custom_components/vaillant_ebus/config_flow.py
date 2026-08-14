@@ -235,7 +235,8 @@ class VaillantOptionsFlow(OptionsFlow):
         )
 
     # Export dump: confirm + grab_duration, runs in background so long grabs
-    # do not block the flow (frontend times out otherwise).
+    # do not block the flow (frontend times out otherwise). Ends with abort so
+    # the frontend shows our own message instead of "Options successfully saved".
     async def async_step_export_dump(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
             coordinator = self.hass.data[DOMAIN].get(self._config_entry.entry_id)
@@ -246,7 +247,7 @@ class VaillantOptionsFlow(OptionsFlow):
                 self.hass.async_create_task(
                     async_export_discovery_dump(self.hass, coordinator, grab_duration)
                 )
-            return self.async_create_entry(title="", data={})
+            return self.async_abort(reason="export_started")
 
         return self.async_show_form(
             step_id="export_dump",

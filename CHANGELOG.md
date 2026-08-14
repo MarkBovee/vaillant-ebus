@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.2.5 - 2026-08-14
+
+### Added
+
+- **Discovery dumps now include structured grab telegrams:** `labeled_telegrams`
+  and `unknown_telegrams` entries next to the raw `grab` lines. Unknown telegrams
+  (no register label in the ebusd CSV) are candidates for runtime `define -r`
+  registers absent from the installed CSV files.
+
+### Changed
+
+- **Discovery dump export runs in the background:** long raw eBUS traffic grabs
+  no longer block the options flow, so the Home Assistant frontend does not time
+  out. The export step now reports that the dump is being written instead of the
+  misleading "Options successfully saved" message, and a persistent notification
+  appears when the YAML file is ready.
+- **Dump export step ends with an abort message** instead of a create-entry result,
+  so the frontend shows the "export started" message instead of "Options
+  successfully saved".
+
 ## 1.2.4 - 2026-08-13
 
 ### Added

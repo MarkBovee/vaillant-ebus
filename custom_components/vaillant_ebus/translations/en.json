@@ -53,6 +53,9 @@
           "grab_duration": "Raw traffic capture (seconds)"
         }
       }
+    },
+    "abort": {
+      "export_started": "Discovery dump export started. The YAML file is written in the background — a notification will appear when it is ready."
     }
   },
   "issues": {
