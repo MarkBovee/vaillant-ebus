@@ -10,12 +10,12 @@
 ### New & found registers
 
 - **Manual cooling start/end date** (`ctlv2.ManualCoolingStartDate` /
-  `ctlv2.ManualCoolingEndDate`) — previously absent from every ebusd CSV. Derived
-  from `john30/ebusd-configuration` issue #644 (`@ext(0xda,0)` / `@ext(0xdb,0)`
-  on the `_720` r_1 base) and verified on a real CTLV2 `SW0514`/`HW1104`. The
-  field layout is the holiday/away date type (`value,,IGN:4,,,,value,,HDA:3`,
-  year byte = year−2000, no BCD), with a `value,m,HDA:3` write route on the
-  `0201...` write-sub. Exposed as read/write datetime entities:
+  `ctlv2.ManualCoolingEndDate`) — previously absent from every ebusd CSV. The
+  sub-addresses (`0xda` / `0xdb` on the `_720` r_1 base) were reverse-engineered
+  and verified on a real CTLV2 `SW0514`/`HW1104`. The field layout is the
+  holiday/away date type (`value,,IGN:4,,,,value,,HDA:3`, year byte =
+  year−2000, no BCD), with a `value,m,HDA:3` write route on the `0201...`
+  write-sub. Exposed as read/write datetime entities:
   - `datetime.vaillant_ebus_manual_cooling_start_date`
   - `datetime.vaillant_ebus_manual_cooling_end_date`
 - **Climate COOL mode now starts a real cooling period.** Selecting COOL writes

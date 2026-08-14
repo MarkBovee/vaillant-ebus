@@ -125,9 +125,9 @@ defines = [
 ]
 ```
 
-These derive from `john30/ebusd-configuration` issue #644
-(`@ext(0xda, 0)` / `@ext(0xdb, 0)` on the `_720` r_1 base) and were verified on a
-CTLV2 `SW0514`/`HW1104`. The write route uses the `0201...` write-sub (w_1-base)
+These use the sub-addresses `0xda` / `0xdb` on the `_720` r_1 base
+(`@ext(0xda, 0)` / `@ext(0xdb, 0)`), reverse-engineered and verified on a CTLV2
+`SW0514`/`HW1104`. The write route uses the `0201...` write-sub (w_1-base)
 with a `value,m,HDA:3` field; `write_register` then accepts `DD.MM.YYYY` values.
 The datetime platform exposes them as read/write `DateTimeEntity` instances.
 
