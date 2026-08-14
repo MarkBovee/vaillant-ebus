@@ -354,6 +354,37 @@ async def test_delayed_rediscovery_only_adds_entities_and_devices() -> None:
         assert {"ctlv2", "v32"} <= set(coordinator._graph.nodes)
 
 
+async def test_delayed_rediscovery_adds_new_platform_entities() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        additions = MagicMock()
+        coordinator.register_entity_adder("sensor", additions)
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value=None)
+        coordinator.ebus = mock_ebus
+        await coordinator._apply_discovery_graph(_make_graph(), "initial")
+
+        await coordinator._apply_discovery_graph(
+            DeviceGraph(
+                nodes={
+                    "v32": DeviceNode(
+                        circuit="v32",
+                        device_type=DeviceType.VENTILATION,
+                        registers=["v32.SupplyAirTemp"],
+                        has_data=True,
+                    )
+                },
+                raw_registers={"v32.SupplyAirTemp": "20.75"},
+                placeholder_registers=set(),
+            ),
+            "delayed",
+        )
+
+        additions.assert_called_once()
+        assert additions.call_args.args[0][0].key == "v32.SupplyAirTemp.value"
+
+
 async def test_apply_discovery_logs_entity_platform_breakdown(caplog) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
@@ -374,6 +405,7 @@ async def test_apply_discovery_logs_entity_platform_breakdown(caplog) -> None:
 async def test_connect_failure_no_crash() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._started = True
         entities_before = len(c.entities)
 
         mock_ebus = MagicMock(spec=EbusService)
@@ -387,6 +419,7 @@ async def test_connect_failure_no_crash() -> None:
         finally:
             module.EbusService = orig_ebus
         assert len(c.entities) >= entities_before
+        assert c._started is False
 
 
 async def test_discovery_failure_preserves_cached_entities() -> None:
@@ -516,6 +549,10 @@ async def test_fallback_read_adds_new_registers() -> None:
         await c._fallback_read()
 
         assert len(c.registers) >= before
+        for key, register in c.registers.items():
+            if register.has_data and register.circuit in c._graph.nodes:
+                assert key in c._graph.raw_registers
+                assert key in c._graph.nodes[register.circuit].registers
 
 
 async def test_fallback_read_no_ebus_skips() -> None:
