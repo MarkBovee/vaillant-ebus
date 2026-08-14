@@ -10,6 +10,7 @@ import yaml
 from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
 
+from .backend.grab_parser import parse_grab_lines, unknown_telegrams
 from .backend.mapping import REGISTER_MAP
 from .const import DOMAIN, SENSITIVE_FIELDS
 from .coordinator import VaillantCoordinator
@@ -197,6 +198,12 @@ async def async_export_discovery_dump(
     }
     if grab_lines:
         dump_data["grab"] = grab_lines
+        try:
+            telegrams = parse_grab_lines(grab_lines)
+            dump_data["labeled_telegrams"] = [t for t in telegrams if t["label"]]
+            dump_data["unknown_telegrams"] = unknown_telegrams(grab_lines)
+        except Exception as exc:  # pragma: no cover - defensive
+            _LOGGER.warning("Failed to parse grab telegrams: %s", exc)
     if after_registers:
         dump_data["after_registers"] = after_registers
         dump_data["raw_find_lines_after"] = after_raw_lines
