@@ -41,7 +41,8 @@
           "scan_interval": "Poll interval (seconds)",
           "away_duration": "Default away duration (days)",
           "quick_veto_duration": "Default quick veto duration (hours)",
-          "quick_veto_temp": "Default quick veto temperature"
+          "quick_veto_temp": "Default quick veto temperature",
+          "cooling_duration": "Manual cooling duration (days)"
         }
       },
       "export_dump": {
@@ -51,6 +52,9 @@
           "grab_duration": "Raw traffic capture (seconds)"
         }
       }
+    },
+    "abort": {
+      "export_started": "Discovery dump export started. The YAML file is written in the background — a notification will appear when it is ready."
     }
   }
 }

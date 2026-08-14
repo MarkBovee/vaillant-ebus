@@ -485,6 +485,83 @@ def test_arotherm_ecotec_zones() -> None:
 
 
 # =============================================================================
+# D. aroTHERM Plus cooling/HWC run dumps (issue #53 follow-up dumps)
+# =============================================================================
+
+AROTHERM_PLUS_COOLING_RUN_LINES = load_find_lines("community/arotherm_plus_cooling_run_discovery.yaml")
+AROTHERM_PLUS_HWC_RUN_LINES = load_find_lines("community/arotherm_plus_hwc_run_discovery.yaml")
+
+
+def _arotherm_plus_cooling_run_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(AROTHERM_PLUS_COOLING_RUN_LINES)
+
+
+def _arotherm_plus_hwc_run_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(AROTHERM_PLUS_HWC_RUN_LINES)
+
+
+# aroTHERM Plus cooling-run dump: graph exposes heat pump + controller
+def test_arotherm_plus_cooling_run_graph() -> None:
+    graph = _arotherm_plus_cooling_run_graph()
+    assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+    assert graph.nodes["ctlv3"].device_type == DeviceType.HEATING_CONTROLLER
+    assert graph.nodes["vr_71"].device_type == DeviceType.UNKNOWN
+    assert "hmu.YieldHc" in graph.raw_registers
+
+
+# aroTHERM Plus HWC-run dump: graph exposes heat pump + controller
+def test_arotherm_plus_hwc_run_graph() -> None:
+    graph = _arotherm_plus_hwc_run_graph()
+    assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+    assert graph.nodes["ctlv3"].device_type == DeviceType.HEATING_CONTROLLER
+    assert "hmu.YieldHwc" in graph.raw_registers
+    assert "hmu.RunStatsHwcHours" in graph.raw_registers
+
+
+# PrEnergySum* stays no-data in both run dumps — entities must still exist
+# (enabled but unavailable), never dropped because of transient no-data values.
+def test_arotherm_plus_runs_keep_prenergy_registers() -> None:
+    for graph in (_arotherm_plus_cooling_run_graph(), _arotherm_plus_hwc_run_graph()):
+        for reg in ("ctlv3.PrEnergySum", "ctlv3.PrEnergySumHc", "ctlv3.PrEnergySumHwc"):
+            assert reg in graph.placeholder_registers or reg in graph.raw_registers, reg
+
+
+# ctlv2-cooling fixture: Mark's own aroTHERM Plus while cooling is active
+# (status cool_compressor_active). Same heat pump + controller shape as the
+# ctlv3 run dumps, but on a ctlv2 controller without the cooling-program
+# registers (Hc1CoolingEnabled, Z1CoolingOpMode, ... — absent from find).
+AROTHERM_PLUS_CTLV2_COOLING_LINES = load_find_lines("community/arotherm_plus_ctlv2_cooling_discovery.yaml")
+
+
+def _arotherm_plus_ctlv2_cooling_graph() -> DeviceGraph:
+    return DiscoveryService.build_device_graph(AROTHERM_PLUS_CTLV2_COOLING_LINES)
+
+
+def test_arotherm_plus_ctlv2_cooling_graph() -> None:
+    graph = _arotherm_plus_ctlv2_cooling_graph()
+    assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+    assert graph.nodes["ctlv2"].device_type == DeviceType.HEATING_CONTROLLER
+    assert "hmu.RunDataStatuscode" in graph.raw_registers
+    assert "ctlv2.Z1CoolingTemp" in graph.raw_registers
+
+
+# The ctlv2 cooling run must not invent cooling-program registers that ebusd
+# does not expose (they only exist with a 720 room panel / Hc1CoolingEnabled=1).
+def test_arotherm_plus_ctlv2_cooling_no_program_registers() -> None:
+    graph = _arotherm_plus_ctlv2_cooling_graph()
+    for reg in (
+        "ctlv2.Hc1CoolingEnabled",
+        "ctlv2.Hc1CoolingFlowTempMin",
+        "ctlv2.Z1CoolingOpMode",
+        "ctlv2.Z1CoolingManualTemp",
+        "ctlv2.Z1CoolingSetbackTemp",
+        "ctlv2.Z1CoolingTempDesired",
+    ):
+        assert reg not in graph.raw_registers, reg
+        assert reg not in graph.placeholder_registers, reg
+
+
+# =============================================================================
 # E. Zone-to-circuit mapping
 # =============================================================================
 

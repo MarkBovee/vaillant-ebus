@@ -11,12 +11,14 @@ CONF_SCAN_INTERVAL = "scan_interval"
 CONF_AWAY_DURATION = "away_duration"
 CONF_QUICK_VETO_DURATION = "quick_veto_duration"
 CONF_QUICK_VETO_TEMP = "quick_veto_temp"
+CONF_COOLING_DURATION = "cooling_duration"
 DEFAULT_EBUSD_HOST = ""
 DEFAULT_EBUSD_PORT = 8888
 DEFAULT_EBUSD_POLL_INTERVAL = 30
 DEFAULT_AWAY_DURATION = 7
 DEFAULT_QUICK_VETO_DURATION = 3
 DEFAULT_QUICK_VETO_TEMP = 21.0
+DEFAULT_COOLING_DURATION = 3
 DISCOVERY_PORT = 8888
 DISCOVERY_TIMEOUT = 3
 DISCOVERY_CANDIDATES = ["core-ebusd", "localhost", "127.0.0.1", "homeassistant.local"]
@@ -57,5 +59,4 @@ HA_TO_EBUSD_HVAC = {
     "off": "off",
     "auto": "auto",
     "heat": "day",
-    "cool": "night",
 }

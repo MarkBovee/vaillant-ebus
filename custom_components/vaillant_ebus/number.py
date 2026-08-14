@@ -86,12 +86,6 @@ class EbusdNumber(CoordinatorEntity[VaillantCoordinator], NumberEntity):
             raise ValueError(f"Value {value} not in [{self._attr_native_min_value}, {self._attr_native_max_value}]")
         if not self.coordinator.ebus:
             return
-        result = await self.coordinator.ebus.write_register(
-            self._desc.circuit,
-            self._desc.name,
-            str(value),
-        )
-        if result.success:
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.warning("Write failed for %s: %s", self._desc.key, result.error_message)
+        ok = await self.coordinator.async_write_register(self._desc.circuit, self._desc.name, str(value))
+        if not ok:
+            _LOGGER.warning("Write failed for %s", self._desc.key)

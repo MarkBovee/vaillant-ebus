@@ -59,6 +59,24 @@ Climate behavior must follow the corresponding `mypyllant` implementation.
 - Before changing integration code for a register write, test the register directly against ebusd over TCP or HTTP, verify a `done` response, and read the value back.
 - Treat registers that return `ERR: element not found` or `no data stored` as unsupported or temporarily unavailable; do not fabricate values or entities.
 
+## Discovering Registers Absent From CSV
+
+The installed ebusd CSV files only cover what `find` returns. The bus carries more
+telegrams; capture them with `grab` and mine the unknown ones for new registers.
+
+- Live grab: `grab` → wait N seconds → `grab result all` → `grab stop`. Do **not**
+  use `grab -m ...` (invalid syntax). A grab that runs while the user changes a
+  setting in the myVaillant app shows the write telegram that carries the new
+  register (app → cloud → NETX2 → bus).
+- Unknown telegrams have no register label after the count: `.../ 09410111... = 3`.
+  Labeled ones look like `... = 19: hmu SetMode`. Parse them with
+  `backend/grab_parser.py` (`parse_grab_lines`, `unknown_telegrams`).
+- Dumps capture them as `unknown_telegrams` (and `labeled_telegrams`) next to the
+  raw `grab` lines. When a dump exists, prefer mining its `unknown_telegrams` over
+  a fresh grab.
+- Register candidates found this way must be verified against ebusd (message format,
+  read-back value) before adding a `define -r` to `_define_custom_registers()`.
+
 ## Known Limitations
 
 - Many heat-pump registers return `no data stored` while the compressor is idle.

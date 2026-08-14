@@ -13,12 +13,14 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_AWAY_DURATION,
+    CONF_COOLING_DURATION,
     CONF_EBUSD_HOST,
     CONF_EBUSD_PORT,
     CONF_QUICK_VETO_DURATION,
     CONF_QUICK_VETO_TEMP,
     CONF_SCAN_INTERVAL,
     DEFAULT_AWAY_DURATION,
+    DEFAULT_COOLING_DURATION,
     DEFAULT_EBUSD_POLL_INTERVAL,
     DEFAULT_EBUSD_PORT,
     DEFAULT_QUICK_VETO_DURATION,
@@ -225,16 +227,22 @@ class VaillantOptionsFlow(OptionsFlow):
                     vol.Optional(
                         CONF_QUICK_VETO_DURATION,
                         default=options.get(CONF_QUICK_VETO_DURATION, DEFAULT_QUICK_VETO_DURATION),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
+                    ): vol.Coerce(int),
                     vol.Optional(
                         CONF_QUICK_VETO_TEMP,
                         default=options.get(CONF_QUICK_VETO_TEMP, DEFAULT_QUICK_VETO_TEMP),
                     ): vol.Coerce(float),
+                    vol.Optional(
+                        CONF_COOLING_DURATION,
+                        default=options.get(CONF_COOLING_DURATION, DEFAULT_COOLING_DURATION),
+                    ): vol.Coerce(int),
                 }
             ),
         )
 
-    # Export dump: confirm + grab_duration
+    # Export dump: confirm + grab_duration, runs in background so long grabs
+    # do not block the flow (frontend times out otherwise). Ends with abort so
+    # the frontend shows our own message instead of "Options successfully saved".
     async def async_step_export_dump(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
             coordinator = self.hass.data[DOMAIN].get(self._config_entry.entry_id)
@@ -242,8 +250,10 @@ class VaillantOptionsFlow(OptionsFlow):
                 grab_duration = user_input.get("grab_duration", 10)
                 from .dump_service import async_export_discovery_dump
 
-                await async_export_discovery_dump(self.hass, coordinator, grab_duration)
-            return self.async_create_entry(title="", data={})
+                self.hass.async_create_task(
+                    async_export_discovery_dump(self.hass, coordinator, grab_duration)
+                )
+            return self.async_abort(reason="export_started")
 
         return self.async_show_form(
             step_id="export_dump",

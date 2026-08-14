@@ -1,5 +1,75 @@
 # Changelog
 
+## 1.3.0 - 2026-08-14
+
+> **Cooling works!** After a deep investigation (see below), this release exposes
+> the manual cooling period on the eBUS bus — you can now read **and write** the
+> "cool until [date]" period that the myVaillant app manages, and drive it from
+> the Home Assistant climate entity.
+
+### New & found registers
+
+- **Manual cooling start/end date** (`ctlv2.ManualCoolingStartDate` /
+  `ctlv2.ManualCoolingEndDate`) — previously absent from every ebusd CSV. Derived
+  from `john30/ebusd-configuration` issue #644 (`@ext(0xda,0)` / `@ext(0xdb,0)`
+  on the `_720` r_1 base) and verified on a real CTLV2 `SW0514`/`HW1104`. The
+  field layout is the holiday/away date type (`value,,IGN:4,,,,value,,HDA:3`,
+  year byte = year−2000, no BCD), with a `value,m,HDA:3` write route on the
+  `0201...` write-sub. Exposed as read/write datetime entities:
+  - `datetime.vaillant_ebus_manual_cooling_start_date`
+  - `datetime.vaillant_ebus_manual_cooling_end_date`
+- **Climate COOL mode now starts a real cooling period.** Selecting COOL writes
+  the manual cooling end date (today + configurable `cooling_duration`, default
+  3 days) and switches the zone to auto. Selecting HEAT clears the end date and
+  switches to day. The old `"cool": "night"` write was removed because `night`
+  is not retained by this controller.
+- **Configurable `cooling_duration`** option (days) in the integration settings.
+
+### Investigation notes
+
+A 300 s bus capture while cooling was turned on in the app showed zero write
+telegrams (the app drives the outdoor unit via NETX2/cloud, not the controller
+bus), and the old `15.700.csv` cooling sub-addresses returned `invalid position`.
+The `_720`-conditional cooling-program registers (`Hc1CoolingEnabled`,
+`Z1CoolingOpMode`, timers) are absent on this hardware, but the manual-cooling
+period itself is readable and writable.
+
+### Added
+
+- **Structured grab telegrams in discovery dumps:** `labeled_telegrams` and
+  `unknown_telegrams` entries next to the raw `grab` lines. Unknown telegrams
+  (no register label in the ebusd CSV) are candidates for runtime `define -r`
+  registers absent from the installed CSV files — the basis for the cooling
+  register discovery above.
+
+### Changed
+
+- **Central register write path.** All entities now write through the
+  coordinator `async_write_registers()` API, which bundles multiple writes and
+  triggers a single refresh. Multi-register operations (holiday periods, DHW
+  mode, manual cooling) are written atomically.
+- **Climate COOL/HEAT is now symmetric.** Selecting COOL writes the manual
+  cooling end date and switches to auto; selecting HEAT clears the manual
+  cooling end date and switches to day, so a cooling period is properly
+  cancelled instead of left running.
+- **Discovery dump export runs in the background:** long raw eBUS traffic grabs
+  no longer block the options flow, so the Home Assistant frontend does not time
+  out. The export step now reports that the dump is being written instead of the
+  misleading "Options successfully saved" message, and a persistent notification
+  appears when the YAML file is ready.
+- **Dump export step ends with an abort message** instead of a create-entry result,
+  so the frontend shows the "export started" message instead of "Options
+  successfully saved".
+
+### Test it
+
+- Set your climate to **COOL** and check `datetime.vaillant_ebus_manual_cooling_end_date`
+  moves to today + `cooling_duration`. Switch back to **HEAT** and it resets.
+- If your heat pump does not expose the manual-cooling registers (different
+  firmware), the datetime entities simply stay unavailable — nothing breaks.
+- Use **Settings → Export Discovery Dump** to capture registers + raw bus
+  traffic, and share the YAML if a register is missing so it can be mapped.
+
 ## 1.2.4 - 2026-08-13
 
 ### Added

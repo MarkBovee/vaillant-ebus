@@ -104,6 +104,59 @@ defines = [
 
 The register then appears as `ctlv2.z1RoomHumidity` and needs a mapping entry in `mapping.py`.
 
+### Date registers (manual cooling start/end)
+
+The manual cooling start/end dates (myVaillant "cool until [date]") are defined
+the same way, but use the `HDA:3` date field type (day;month;year with the year
+byte as year−2000, no BCD) plus an `IGN:4` skip of the echo prefix, matching the
+holiday/away date registers:
+
+```python
+defines = [
+    "r5,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524"
+    ",02000000da00,value,,IGN:4,,,,value,,HDA:3",
+    "r5,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
+    ",02000000db00,value,,IGN:4,,,,value,,HDA:3",
+    # write route: separate w-define on the 0201... write-sub with value,m
+    "w,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524"
+    ",02010000da00,value,m,HDA:3",
+    "w,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
+    ",02010000db00,value,m,HDA:3",
+]
+```
+
+These derive from `john30/ebusd-configuration` issue #644
+(`@ext(0xda, 0)` / `@ext(0xdb, 0)` on the `_720` r_1 base) and were verified on a
+CTLV2 `SW0514`/`HW1104`. The write route uses the `0201...` write-sub (w_1-base)
+with a `value,m,HDA:3` field; `write_register` then accepts `DD.MM.YYYY` values.
+The datetime platform exposes them as read/write `DateTimeEntity` instances.
+
+### Climate COOL integration
+
+Selecting `HVACMode.COOL` on the climate entity writes the manual cooling end
+date (today + the `cooling_duration` option, default 3 days) via the write route
+and switches `Z1OpMode` to `auto`. Selecting `HEAT` clears the manual cooling
+end date and switches to `day`, so a cooling period is properly cancelled. The
+old `"cool": "night"` write was removed from `HA_TO_EBUSD_HVAC` because `night`
+is not retained by this controller. The `cooling_duration` option is
+configurable per entry in the options flow.
+
+### Central write path
+
+All entities write through `VaillantCoordinator.async_write_registers()`, which
+takes a list of `(circuit, name, value)` tuples, writes each (verified by
+read-back), and triggers a single coordinator refresh. Use it for any operation
+that touches more than one register so the writes are grouped:
+
+```python
+await coordinator.async_write_registers([
+    (circuit, "HwcHolidayStartPeriod", today),
+    (circuit, "HwcHolidayEndPeriod", end),
+])
+```
+
+For a single write use `coordinator.async_write_register(circuit, name, value)`.
+
 ## Testing against live ebusd
 
 ```bash

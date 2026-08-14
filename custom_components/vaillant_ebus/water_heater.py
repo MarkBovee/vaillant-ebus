@@ -131,16 +131,17 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
     async def async_set_operation_mode(self, operation_mode: str) -> None:
         if operation_mode not in OPERATION_MODES:
             raise ValueError(f"Unsupported DHW operation: {operation_mode}")
-        ebus = self.coordinator.ebus
-        if not ebus:
-            return
+        ckt = self.coordinator.heating_circuit
         if operation_mode == "boost":
-            await ebus.write_register(self.coordinator.heating_circuit, "HwcSFMode", "load")
+            await self.coordinator.async_write_registers([(ckt, "HwcSFMode", "load")])
         else:
             ebusd_mode = HA_TO_EBUSD_OPMODE.get(operation_mode, operation_mode)
-            await ebus.write_register(self.coordinator.heating_circuit, "HwcSFMode", "auto")
-            await ebus.write_register(self.coordinator.heating_circuit, "HwcOpMode", ebusd_mode)
-        await self.coordinator.async_request_refresh()
+            await self.coordinator.async_write_registers(
+                [
+                    (ckt, "HwcSFMode", "auto"),
+                    (ckt, "HwcOpMode", ebusd_mode),
+                ]
+            )
 
     # Turn DHW on by setting operation mode to auto
     async def async_turn_on(self) -> None:
@@ -155,18 +156,22 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         today = date.today().strftime(DATE_FMT)
         away_duration = self.coordinator._entry.options.get(CONF_AWAY_DURATION, DEFAULT_AWAY_DURATION)
         end = (date.today() + timedelta(days=away_duration)).strftime(DATE_FMT)
-        await self._write("HwcHolidayStartPeriod", today)
-        await self._write("HwcHolidayEndPeriod", end)
+        await self.coordinator.async_write_registers(
+            [
+                (self.coordinator.heating_circuit, "HwcHolidayStartPeriod", today),
+                (self.coordinator.heating_circuit, "HwcHolidayEndPeriod", end),
+            ]
+        )
 
     # Disable away mode by resetting holiday dates to unset
     async def async_turn_away_mode_off(self) -> None:
-        await self._write("HwcHolidayStartPeriod", HOLIDAY_RESET)
-        await self._write("HwcHolidayEndPeriod", HOLIDAY_RESET)
+        await self.coordinator.async_write_registers(
+            [
+                (self.coordinator.heating_circuit, "HwcHolidayStartPeriod", HOLIDAY_RESET),
+                (self.coordinator.heating_circuit, "HwcHolidayEndPeriod", HOLIDAY_RESET),
+            ]
+        )
 
-    # Write value to a DHW register and trigger coordinator refresh
+    # Write value to a DHW register through the central write path
     async def _write(self, name: str, value: str) -> None:
-        ebus = self.coordinator.ebus
-        if ebus:
-            result = await ebus.write_register(self.coordinator.heating_circuit, name, value)
-            if result.success:
-                await self.coordinator.async_request_refresh()
+        await self.coordinator.async_write_register(self.coordinator.heating_circuit, name, value)

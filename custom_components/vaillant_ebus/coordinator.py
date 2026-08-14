@@ -387,6 +387,14 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         defines = [
             "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800"
             ",value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity",
+            "r5,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524"
+            ",02000000da00,value,,IGN:4,,,,value,,HDA:3",
+            "r5,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
+            ",02000000db00,value,,IGN:4,,,,value,,HDA:3",
+            "w,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524"
+            ",02010000da00,value,m,HDA:3",
+            "w,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
+            ",02010000db00,value,m,HDA:3",
         ]
         for definition in defines:
             try:
@@ -598,6 +606,29 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     await repairs.async_create_ebusd_unreachable(self.hass)
 
         return {"ebusd": await self._async_values_from_registers()}
+
+    # Write one or more registers through the central write path. Each write is
+    # verified by read-back; on any failure the already-written registers are
+    # reported but not rolled back. A single refresh fires after all writes.
+    async def async_write_registers(
+        self,
+        writes: list[tuple[str, str, str]],
+    ) -> bool:
+        if not self.ebus or not self.ebus.is_connected:
+            return False
+        all_ok = True
+        for circuit, name, value in writes:
+            result = await self.ebus.write_register(circuit, name, value)
+            if not result.success:
+                _LOGGER.warning("Write failed %s.%s=%s: %s", circuit, name, value, result.error_message)
+                all_ok = False
+        if all_ok:
+            self.async_request_refresh()
+        return all_ok
+
+    # Convenience wrapper for a single-register write through the central path.
+    async def async_write_register(self, circuit: str, name: str, value: str) -> bool:
+        return await self.async_write_registers([(circuit, name, value)])
 
     async def async_stop(self) -> None:
         if self._cancel_delayed_rediscovery:
