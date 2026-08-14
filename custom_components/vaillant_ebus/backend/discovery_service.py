@@ -63,7 +63,7 @@ class DiscoveryService:
             return (circuit, name, None)
         if val.lower().startswith("no data stored"):
             return (circuit, name, None)
-        if val.startswith(("(empty ", "(ERR")):
+        if val.startswith("(empty ") or "(ERR" in val:
             return (circuit, name, None)
         return (circuit, name, val)
 

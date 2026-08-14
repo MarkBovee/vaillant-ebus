@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.1 - 2026-08-14
+
+### Fixed
+
+- **Phantom devices are no longer created.** Raw eBUS address circuits such as
+  `B504`, `B511`, and `76`, plus unsupported no-data circuits such as `sc`, are
+  excluded from discovery instead of appearing as mostly-empty Vaillant devices.
+- **Partially decoded ebusd errors are unavailable.** Values containing
+  `(ERR: invalid position)` no longer create misleading sensor states.
+- **Current ebusd scan metadata is parsed correctly.** The
+  `MF=...;ID=...;SW=...;HW=...` format now maps device type and version data.
+- **Discovery recovers and updates live entities.** A failed initial ebusd
+  connection retries on the next poll; delayed discovery and successful fallback
+  reads add their new entities to Home Assistant.
+
 ## 1.3.0 - 2026-08-14
 
 > **Cooling works!** After a deep investigation (see below), this release exposes
