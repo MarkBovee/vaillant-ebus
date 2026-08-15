@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- **Energy statistics on aroTHERM Plus / basv3 controllers (#53).** The electric
+  and environment energy statistics (`StatElectricEnergySum*`,
+  `StatEnvironmentEnergySum*` — including the cooling variants) were defined in
+  the register map under the `hmu` circuit, but these controllers expose them on
+  the `basv3` circuit. The metadata fallback only mapped heating-controller
+  variants onto `ctlv2`, so the sensors appeared without energy metadata.
+  Register metadata now also falls back onto the `hmu` statistics keys, and the
+  full `StatElectricEnergySum` / `StatEnvironmentEnergySum` family (blank, `Hc`,
+  `Hwc`, `Cool`) is exposed as `kWh` energy sensors with `total_increasing` state
+  class.
+
 - **Register writes now trigger the expected refresh (#68):** the coordinator's
   central write path called `async_request_refresh()` without `await`, so the
   refresh coroutine was discarded and entity states only updated on the next
