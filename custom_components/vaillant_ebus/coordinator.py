@@ -629,7 +629,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.warning("Write failed %s.%s=%s: %s", circuit, name, value, result.error_message)
                 all_ok = False
         if all_ok:
-            self.async_request_refresh()
+            await self.async_request_refresh()
         return all_ok
 
     # Convenience wrapper for a single-register write through the central path.

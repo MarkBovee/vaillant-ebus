@@ -493,7 +493,7 @@ async def test_async_write_registers_bundles_and_refreshes() -> None:
             return_value=WriteResult(success=True, verified_value=None)
         )
         c.ebus = mock_ebus
-        c.async_request_refresh = MagicMock()
+        c.async_request_refresh = AsyncMock()
 
         ok = await c.async_write_registers(
             [("ctlv2", "ManualCoolingStartDate", "14.08.2026"), ("ctlv2", "ManualCoolingEndDate", "17.08.2026")]
