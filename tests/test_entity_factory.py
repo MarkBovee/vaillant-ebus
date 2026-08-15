@@ -257,7 +257,7 @@ class TestEnabledByDefault:
 
     def test_enabled_by_default_placeholder_known(self) -> None:
         result = _determine_enabled_by_default("hmu.Status01", "-", False, REGISTER_MAP["hmu.Status01"])
-        assert result is True
+        assert result is False
 
     def test_enabled_by_default_meta_disabled(self) -> None:
         result = _determine_enabled_by_default(
@@ -524,6 +524,20 @@ class TestPowerConsumptionUnit:
         meta = get_meta("hmu", "PowerConsumptionHmu")
         assert meta.unit == "kW"
         assert meta.device_class == "power"
+
+
+class TestSourceTempMetadata:
+    """Source temp metadata (issue #49)."""
+
+    def test_source_temp_input_metadata(self) -> None:
+        meta = get_meta("hmu", "SourceTempInput")
+        assert meta.device_class == "temperature"
+        assert meta.unit == "°C"
+
+    def test_source_temp_output_metadata(self) -> None:
+        meta = get_meta("hmu", "SourceTempOutput")
+        assert meta.device_class == "temperature"
+        assert meta.unit == "°C"
 
 
 class TestStateClassSemantics:

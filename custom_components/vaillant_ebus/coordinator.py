@@ -398,6 +398,9 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _define_custom_registers(self) -> None:
         if not self.ebus or not self.ebus.is_connected:
             return
+        # Definitions may target hardware not present on this bus. ebusd
+        # reports those as unavailable; fallback/entity filtering handles that.
+        # Keep only definitions verified by upstream or community evidence here.
         defines = [
             "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800"
             ",value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity",
@@ -410,12 +413,27 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "w,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
             ",02010000db00,value,m,HDA:3",
         ]
+        defined = 0
+        unavailable = 0
         for definition in defines:
+            name = definition.split(",", 2)[2]
             try:
                 resp = await self.ebus.define_register(definition)
-                _LOGGER.info("Defined register %s: %s", definition.split(",")[2], resp)
+                if resp.startswith("ERR:"):
+                    unavailable += 1
+                    _LOGGER.debug("Runtime register unavailable: %s (%s)", name, resp)
+                else:
+                    defined += 1
+                    _LOGGER.debug("Runtime register defined: %s", name)
             except Exception as exc:
+                unavailable += 1
                 _LOGGER.warning("Failed to define register: %s", exc)
+        _LOGGER.info(
+            "Runtime register definitions complete: %d defined, %d unavailable, %d total",
+            defined,
+            unavailable,
+            len(defines),
+        )
 
     async def _async_values_from_registers(self, registers: list[EbusdRegister] | None = None) -> dict[str, str]:
         values: dict[str, str] = {}

@@ -95,5 +95,5 @@ class TestAnalysisService:
         graph = _graph({"hmu.CopHc": "4.2"})
         entities = _entities(graph)
         service = AnalysisService()
-        result = service.analyze({"hmu.CopHc": "4.2", "vr_71.Mc1Operation": "standby"}, graph, entities)
-        assert any("vr_71" in s for s in result.suggestions)
+        result = service.analyze({"hmu.CopHc": "4.2", "foo.Bar": "1"}, graph, entities)
+        assert any("foo" in s for s in result.suggestions)

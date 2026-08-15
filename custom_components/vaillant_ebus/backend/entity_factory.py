@@ -142,15 +142,17 @@ def _determine_enabled_by_default(
     """Determine if entity should be enabled by default in HA."""
     if not meta.enabled:
         return False
+    if raw_value is not None:
+        rv = raw_value.strip().lower()
+        if rv in _PLACEHOLDER_VALUES or "no data" in rv:
+            return False
     known_in_map = register_key in REGISTER_MAP
     if known_in_map:
         return True
     if node_has_data:
         return True
     if raw_value is not None:
-        rv = raw_value.strip().lower()
-        if rv not in _PLACEHOLDER_VALUES and "no data" not in rv:
-            return True
+        return True
     return False
 
 
@@ -258,7 +260,10 @@ class EntityFactoryService:
                 if override.get("device_circuit"):
                     dc = override["device_circuit"]
 
-                entity_enabled = _determine_enabled_by_default(rk, raw, node.has_data, meta)
+                entity_enabled = override.get(
+                    "enabled",
+                    _determine_enabled_by_default(rk, raw, node.has_data, meta),
+                )
 
                 dummy_reg = EbusdRegister(
                     circuit=circuit,

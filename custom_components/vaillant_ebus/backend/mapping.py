@@ -177,6 +177,16 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         device_class="temperature",
         unit="°C",
     ),
+    "hmu.SourceTempInput": RegisterMeta(
+        friendly_name="Source Temp Input",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "hmu.SourceTempOutput": RegisterMeta(
+        friendly_name="Source Temp Output",
+        device_class="temperature",
+        unit="°C",
+    ),
     "hmu.TotalEnergyUsage": RegisterMeta(
         friendly_name="Total Energy",
         device_class="energy",
@@ -1416,6 +1426,51 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Max Air Humidity",
         icon="mdi:water-percent",
         unit="%",
+        entity_category="diagnostic",
+    ),
+    "vr_71.SetActorState": RegisterMeta(
+        friendly_name="Mixer Actuator State",
+        icon="mdi:tune-variant",
+        entity_category="diagnostic",
+    ),
+    "vr_71.Mc1Operation": RegisterMeta(
+        friendly_name="Mixing Circuit 1",
+        icon="mdi:water-pump",
+        entity_category="diagnostic",
+    ),
+    "vr_71.Mc2Operation": RegisterMeta(
+        friendly_name="Mixing Circuit 2",
+        icon="mdi:water-pump",
+        entity_category="diagnostic",
+    ),
+    "vr_71.Mc3Operation": RegisterMeta(
+        friendly_name="Mixing Circuit 3",
+        icon="mdi:water-pump",
+        entity_category="diagnostic",
+    ),
+    "vr_71.SensorData1": RegisterMeta(
+        friendly_name="Mixer Sensors 1-7",
+        icon="mdi:thermometer",
+        entity_category="diagnostic",
+    ),
+    "vr_71.SensorData2": RegisterMeta(
+        friendly_name="Mixer Sensors 8-12",
+        icon="mdi:thermometer",
+        entity_category="diagnostic",
+    ),
+    "vr_71.Currenterror": RegisterMeta(
+        friendly_name="Error",
+        icon="mdi:alert",
+        entity_category="diagnostic",
+    ),
+    "vr_71.Errorhistory": RegisterMeta(
+        friendly_name="Error History",
+        icon="mdi:history",
+        entity_category="diagnostic",
+    ),
+    "vr_71.Clearerrorhistory": RegisterMeta(
+        friendly_name="Clear Error History",
+        icon="mdi:delete",
         entity_category="diagnostic",
     ),
 }
