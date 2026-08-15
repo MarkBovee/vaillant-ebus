@@ -266,6 +266,42 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         unit="kWh",
         state_class="total_increasing",
     ),
+    "hmu.StatElectricEnergySum": RegisterMeta(
+        friendly_name="Electric Energy",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+    ),
+    "hmu.StatElectricEnergySumHc": RegisterMeta(
+        friendly_name="Electric Energy (Heating)",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+    ),
+    "hmu.StatElectricEnergySumHwc": RegisterMeta(
+        friendly_name="Electric Energy (DHW)",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+    ),
+    "hmu.StatEnvironmentEnergySum": RegisterMeta(
+        friendly_name="Environment Energy",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+    ),
+    "hmu.StatEnvironmentEnergySumHc": RegisterMeta(
+        friendly_name="Environment Energy (Heating)",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+    ),
+    "hmu.StatEnvironmentEnergySumHwc": RegisterMeta(
+        friendly_name="Environment Energy (DHW)",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+    ),
     "hmu.RunStatsCompressorHours": RegisterMeta(
         friendly_name="Compressor Runtime",
         device_class="duration",
@@ -1391,10 +1427,18 @@ def get_meta(circuit: str, name: str, field: str = "value") -> RegisterMeta:
     if field != "value":
         key += f".{field}"
     meta = REGISTER_MAP.get(key)
-    # ponytail: fallback for heating controller variants (basv → ctlv2). Add if new variants appear.
-    if meta is None and circuit != "ctlv2":
-        alt = f"ctlv2.{name}"
-        if field != "value":
-            alt += f".{field}"
-        meta = REGISTER_MAP.get(alt)
+    # Fallbacks for hardware variants that expose the same register under a
+    # different circuit. The ctlv2 variant can appear as its own circuit (do not
+    # self-alias), and heat-pump statistics (Stat* energy, etc.) map onto the hmu
+    # keys across controller circuits.
+    if meta is None:
+        for alt_circuit in ("ctlv2", "hmu"):
+            if alt_circuit == circuit:
+                continue
+            alt = f"{alt_circuit}.{name}"
+            if field != "value":
+                alt += f".{field}"
+            meta = REGISTER_MAP.get(alt)
+            if meta is not None:
+                break
     return meta or RegisterMeta()

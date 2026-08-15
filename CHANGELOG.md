@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.3.2 - 2026-08-15
+
+### Fixed
+
+- **Energy statistics on aroTHERM Plus / basv3 controllers (#53).** The electric
+  and environment energy statistics (`StatElectricEnergySum*`,
+  `StatEnvironmentEnergySum*` — including the cooling variants) were defined in
+  the register map under the `hmu` circuit, but these controllers expose them on
+  the `basv3` circuit. The metadata fallback only mapped heating-controller
+  variants onto `ctlv2`, so the sensors appeared without energy metadata.
+  Register metadata now also falls back onto the `hmu` statistics keys, and the
+  full `StatElectricEnergySum` / `StatEnvironmentEnergySum` family (blank, `Hc`,
+  `Hwc`, `Cool`) is exposed as `kWh` energy sensors with `total_increasing` state
+  class.
+
+- **Cooling energy on actively-cooling air/water units (#50).** The flexoCOMPACT
+  (air/water aroTHERM with active cooling) reports `StatElectricEnergySumCool`
+  live on both `hmu` and `ctlv2`, but the register-metadata fallback skipped the
+  `hmu` statistics keys when the circuit was already `ctlv2`, so the sensors lost
+  their energy metadata. The fallback now consults the `hmu` keys for every
+  non-`hmu` circuit (including `ctlv2`). The flexoTHERM (brine-water, no active
+  cooling) never exposes this register — it returns "element not found" and
+  correctly stays absent.
+
+- **Register writes now trigger the expected refresh (#68):** the coordinator's
+  central write path called `async_request_refresh()` without `await`, so the
+  refresh coroutine was discarded and entity states only updated on the next
+  poll cycle. After successful writes the coordinator now refreshes immediately.
+- **aroTHERM Pro 7 recognized as heat pump (#56).** The Pro 7 reports its heat
+  pump under the circuit `HMUX0` instead of `hmu`, so the compressor state and
+  the connection/fault sensors read the wrong device. Circuit detection now
+  classifies `hmux*` as a heat pump and `sol*` as a solar controller, and the
+  coordinator resolves the heat pump circuit from the discovered graph instead of
+  assuming `hmu`.
+
 ## 1.3.1 - 2026-08-14
 
 ### Fixed

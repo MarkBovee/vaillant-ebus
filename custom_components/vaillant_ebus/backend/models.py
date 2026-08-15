@@ -209,6 +209,7 @@ class DeviceType(Enum):
     VENTILATION = "ventilation"
     PASSIVE_COOLING = "cooling"
     BUS = "bus"
+    SOLAR = "solar"
     UNKNOWN = "unknown"
 
 

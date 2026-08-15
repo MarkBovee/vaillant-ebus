@@ -94,7 +94,7 @@ class DiscoveryService:
         if low == "netx2":
             return "Broadcast"
         prefix = low.rstrip("0123456789")
-        if prefix in ("hmu", "ctlv", "basv", "bai", "vwz", "vwzio"):
+        if prefix in ("hmu", "hmux", "ctlv", "basv", "bai", "vwz", "vwzio", "sol"):
             return prefix
         return ""
 
@@ -425,6 +425,8 @@ def _apply_relationships(
 _SCAN_TO_DEVICE: dict[str, DeviceType] = {
     "hmu": DeviceType.HEAT_PUMP,
     "hmu00": DeviceType.HEAT_PUMP,
+    "hmux": DeviceType.HEAT_PUMP,
+    "hmux0": DeviceType.HEAT_PUMP,
     "ctlv": DeviceType.HEATING_CONTROLLER,
     "ctlv1": DeviceType.HEATING_CONTROLLER,
     "ctlv2": DeviceType.HEATING_CONTROLLER,
@@ -437,10 +439,13 @@ _SCAN_TO_DEVICE: dict[str, DeviceType] = {
     "netx": DeviceType.BUS,
     "netx2": DeviceType.BUS,
     "v32": DeviceType.VENTILATION,
+    "sol": DeviceType.SOLAR,
+    "sol00": DeviceType.SOLAR,
 }
 
 _PREFIX_TO_DEVICE: dict[str, DeviceType] = {
     "hmu": DeviceType.HEAT_PUMP,
+    "hmux": DeviceType.HEAT_PUMP,
     "ctlv": DeviceType.HEATING_CONTROLLER,
     "basv": DeviceType.HEATING_CONTROLLER,
     "bai": DeviceType.HEATING_CONTROLLER,
@@ -448,6 +453,7 @@ _PREFIX_TO_DEVICE: dict[str, DeviceType] = {
     "vwz": DeviceType.PASSIVE_COOLING,
     "vwzio": DeviceType.PASSIVE_COOLING,
     "v32": DeviceType.VENTILATION,
+    "sol": DeviceType.SOLAR,
 }
 
 
