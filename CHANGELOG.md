@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.2 - 2026-08-15
+
+### Fixed
+
+- **Register writes now trigger the expected refresh (#68):** the coordinator's
+  central write path called `async_request_refresh()` without `await`, so the
+  refresh coroutine was discarded and entity states only updated on the next
+  poll cycle. After successful writes the coordinator now refreshes immediately.
+
 ## 1.3.1 - 2026-08-14
 
 ### Fixed
