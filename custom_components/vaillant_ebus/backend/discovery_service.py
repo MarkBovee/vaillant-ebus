@@ -406,8 +406,8 @@ def _match_scan_to_circuits(
         for scan_addr, scan_type, scan_sw, scan_hw in scan_entries:
             if scan_type.lower() == "netx2":
                 continue
-            prefix = scan_type.lower().rstrip("0123456789")
-            if ckt.lower().startswith(prefix) and (best is None or len(prefix) > len(best[0])):
+            prefix = _norm(scan_type).rstrip("0123456789")
+            if _norm(ckt).startswith(prefix) and (best is None or len(prefix) > len(best[0])):
                 best = (prefix, scan_type, scan_sw, scan_hw)
         if best is not None:
             result[ckt] = (best[1], best[2], best[3])

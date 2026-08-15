@@ -46,6 +46,7 @@ DiscoveryService = DISCOVERY.DiscoveryService
 DeviceGraph = DISCOVERY.DeviceGraph
 DeviceNode = DISCOVERY.DeviceNode
 DeviceType = DISCOVERY.DeviceType
+match_scan_to_circuits = DISCOVERY._match_scan_to_circuits
 
 AROTHERM_LINES = load_find_lines("arotherm_find.txt")
 COMMUNITY_BASV = load_find_lines("community/basv_find.txt")
@@ -57,6 +58,14 @@ AROTHERM_PLUS_BASV3_LINES = load_find_lines("community/arotherm_plus_basv3_disco
 AROTHERM_PRO7_LINES = load_find_lines("community/arotherm_pro7_discovery.yaml")
 FLEXOCOMPACT_LINES = load_find_lines("community/flexocompact_find.txt")
 AROTHERM_ECOTEC_LINES = load_find_lines("community/arotherm_ecotec_discovery.yaml")
+
+
+def test_scan_matching_normalizes_prefix_underscores() -> None:
+    result = match_scan_to_circuits(
+        [("26", "VR71", "0100", "5904")],
+        {"vr_71": ["vr_71.Mc1Operation"]},
+    )
+    assert result["vr_71"] == ("VR71", "0100", "5904")
 
 
 def _arotherm_graph() -> DeviceGraph:

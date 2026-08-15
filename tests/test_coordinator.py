@@ -500,14 +500,13 @@ async def test_define_custom_registers_delegates_to_ebus() -> None:
         c.ebus = mock_ebus
         await c._define_custom_registers()
 
-        assert mock_ebus.define_register.call_count == 6
+        assert mock_ebus.define_register.call_count == 5
         calls = [c.args[0] for c in mock_ebus.define_register.call_args_list]
         assert any("z1RoomHumidity" in d for d in calls)
         assert any("ManualCoolingStartDate" in d and d.startswith("r5") for d in calls)
         assert any("ManualCoolingEndDate" in d and d.startswith("r5") for d in calls)
         assert any("ManualCoolingStartDate" in d and d.startswith("w") for d in calls)
         assert any("ManualCoolingEndDate" in d and d.startswith("w") for d in calls)
-        assert any("SourceTempInput" in d and d.startswith("r3") for d in calls)
 
 
 async def test_define_custom_registers_skips_when_not_connected() -> None:

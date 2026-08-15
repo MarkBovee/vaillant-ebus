@@ -412,8 +412,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ",02010000da00,value,m,HDA:3",
             "w,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
             ",02010000db00,value,m,HDA:3",
-            "r3,hmu,SourceTempInput,SourceTempInput,31,8,B51A,05ff3222"
-            ",value,,IGN:3,,,,value,,D2C,,°C,Source temp input",
         ]
         defined = 0
         unavailable = 0

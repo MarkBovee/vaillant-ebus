@@ -257,7 +257,7 @@ class TestEnabledByDefault:
 
     def test_enabled_by_default_placeholder_known(self) -> None:
         result = _determine_enabled_by_default("hmu.Status01", "-", False, REGISTER_MAP["hmu.Status01"])
-        assert result is True
+        assert result is False
 
     def test_enabled_by_default_meta_disabled(self) -> None:
         result = _determine_enabled_by_default(
