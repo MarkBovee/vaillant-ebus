@@ -15,6 +15,15 @@
   `Hwc`, `Cool`) is exposed as `kWh` energy sensors with `total_increasing` state
   class.
 
+- **Cooling energy on actively-cooling air/water units (#50).** The flexoCOMPACT
+  (air/water aroTHERM with active cooling) reports `StatElectricEnergySumCool`
+  live on both `hmu` and `ctlv2`, but the register-metadata fallback skipped the
+  `hmu` statistics keys when the circuit was already `ctlv2`, so the sensors lost
+  their energy metadata. The fallback now consults the `hmu` keys for every
+  non-`hmu` circuit (including `ctlv2`). The flexoTHERM (brine-water, no active
+  cooling) never exposes this register — it returns "element not found" and
+  correctly stays absent.
+
 - **Register writes now trigger the expected refresh (#68):** the coordinator's
   central write path called `async_request_refresh()` without `await`, so the
   refresh coroutine was discarded and entity states only updated on the next

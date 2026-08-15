@@ -1428,10 +1428,13 @@ def get_meta(circuit: str, name: str, field: str = "value") -> RegisterMeta:
         key += f".{field}"
     meta = REGISTER_MAP.get(key)
     # Fallbacks for hardware variants that expose the same register under a
-    # different circuit. Heating controller variants (basv* etc.) map onto the
-    # ctlv2 keys; heat-pump statistics (Stat* energy, etc.) map onto the hmu keys.
-    if meta is None and circuit != "ctlv2":
+    # different circuit. The ctlv2 variant can appear as its own circuit (do not
+    # self-alias), and heat-pump statistics (Stat* energy, etc.) map onto the hmu
+    # keys across controller circuits.
+    if meta is None:
         for alt_circuit in ("ctlv2", "hmu"):
+            if alt_circuit == circuit:
+                continue
             alt = f"{alt_circuit}.{name}"
             if field != "value":
                 alt += f".{field}"

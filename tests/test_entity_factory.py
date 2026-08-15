@@ -704,6 +704,35 @@ class TestStatEnergyRegisters:
         by_key = {e.key: e for e in entities}
         assert "vwzio.StatElectricEnergySumCool.value" not in by_key
 
+    # flexoTHERM (brine-water, no active cooling) reports the cooling energy
+    # register as "element not found" — it must not appear as an entity.
+    def test_flexotherm_has_no_cooling_energy_entity(self) -> None:
+        graph = DiscoveryService.build_device_graph(
+            load_find_lines("community/flexotherm_discovery.yaml")
+        )
+        by_key = {e.key: e for e in EntityFactoryService().generate(graph)}
+        assert "hmu.StatElectricEnergySumCool.value" not in by_key
+        assert "hmu.StatEnvironmentEnergySumCool.value" not in by_key
+
+    # flexoCOMPACT (air/water aroTHERM with active cooling) reports cooling
+    # energy live on both hmu and ctlv2; both get hmu energy metadata (issue #50).
+    def test_flexocompact_cooling_energy_entities(self) -> None:
+        graph = DiscoveryService.build_device_graph(
+            load_find_lines("community/flexocompact_find.txt")
+        )
+        by_key = {e.key: e for e in EntityFactoryService().generate(graph)}
+        for reg in (
+            "hmu.StatElectricEnergySumCool.value",
+            "hmu.StatEnvironmentEnergySumCool.value",
+            "ctlv2.StatElectricEnergySumCool.value",
+            "ctlv2.StatEnvironmentEnergySumCool.value",
+        ):
+            entity = by_key.get(reg)
+            assert entity is not None, f"missing {reg}"
+            assert entity.meta.device_class == "energy", reg
+            assert entity.meta.unit == "kWh", reg
+            assert entity.meta.state_class == "total_increasing", reg
+
 
 class TestBuildingCircuitFlowUnit:
     """Building circuit flow unit (issue #55)."""
