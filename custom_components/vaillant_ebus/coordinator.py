@@ -154,6 +154,14 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     return node.circuit
         return self._heating_circuit
 
+    @property
+    def heat_pump_circuit(self) -> str:
+        if self._graph:
+            for node in self._graph.nodes.values():
+                if node.device_type == DeviceType.HEAT_PUMP:
+                    return node.circuit
+        return "hmu"
+
     async def _async_seed_entities_from_cache(self) -> None:
         cache = await self._async_load_cache()
         find_lines: list[str] = []
@@ -415,7 +423,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for field, value in reg.value.items():
                 if value is not None:
                     translated = value
-                    if reg.key == "hmu.RunDataStatuscode":
+                    if reg.key == f"{self.heat_pump_circuit}.RunDataStatuscode":
                         translated = COMPRESSOR_STATUS_LABELS.get(value, value)
                     for suffix in EBUSD_STATUS_SUFFIXES:
                         if translated.endswith(suffix):

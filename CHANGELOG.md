@@ -8,6 +8,12 @@
   central write path called `async_request_refresh()` without `await`, so the
   refresh coroutine was discarded and entity states only updated on the next
   poll cycle. After successful writes the coordinator now refreshes immediately.
+- **aroTHERM Pro 7 recognized as heat pump (#56).** The Pro 7 reports its heat
+  pump under the circuit `HMUX0` instead of `hmu`, so the compressor state and
+  the connection/fault sensors read the wrong device. Circuit detection now
+  classifies `hmux*` as a heat pump and `sol*` as a solar controller, and the
+  coordinator resolves the heat pump circuit from the discovered graph instead of
+  assuming `hmu`.
 
 ## 1.3.1 - 2026-08-14
 

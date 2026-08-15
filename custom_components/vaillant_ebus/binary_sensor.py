@@ -107,7 +107,7 @@ class EbusdConnectionSensor(CoordinatorEntity[VaillantCoordinator], BinarySensor
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_ebusd_online"
-        self._attr_device_info = coordinator.get_device_info("hmu")
+        self._attr_device_info = coordinator.get_device_info(coordinator.heat_pump_circuit)
 
     @property
     def is_on(self) -> bool:
@@ -126,14 +126,15 @@ class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntit
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_fault_active"
-        self._attr_device_info = coordinator.get_device_info("hmu")
+        self._attr_device_info = coordinator.get_device_info(coordinator.heat_pump_circuit)
 
     # True when either HMU or CTLV2 has active error codes
     @property
     def is_on(self) -> bool:
         c = self.coordinator.heating_circuit
+        hp = self.coordinator.heat_pump_circuit
         values = (
-            self.coordinator.data.get("ebusd", {}).get("hmu.Currenterror.value"),
+            self.coordinator.data.get("ebusd", {}).get(f"{hp}.Currenterror.value"),
             self.coordinator.data.get("ebusd", {}).get(f"{c}.Currenterror.value"),
         )
         return any(value and any(part.strip() not in {"", "-"} for part in str(value).split(";")) for value in values)

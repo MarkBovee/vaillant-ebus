@@ -276,6 +276,44 @@ async def test_connect_and_discover_success() -> None:
         assert c.heating_circuit == "ctlv2"
 
 
+# Intent: heat-pump circuit resolves from the graph; defaults to hmu without a heat pump node.
+async def test_heat_pump_circuit_resolves_from_graph() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        assert c.heat_pump_circuit == "hmu"
+        c._graph = _make_graph()
+        assert c.heat_pump_circuit == "hmu"
+
+
+async def test_heat_pump_circuit_resolves_hmux0() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        graph = DeviceGraph(
+            nodes={
+                "hmux0": DeviceNode(
+                    circuit="hmux0",
+                    device_type=DeviceType.HEAT_PUMP,
+                    registers=["hmux0.RunDataStatuscode"],
+                    has_data=True,
+                    scan_type="HMUX0",
+                ),
+                "ctlv3": DeviceNode(
+                    circuit="ctlv3",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=["ctlv3.Z1OpMode"],
+                    has_data=True,
+                    scan_type="CTLV3",
+                    parent="hmux0",
+                ),
+            },
+            raw_registers={"hmux0.RunDataStatuscode": "standby", "ctlv3.Z1OpMode": "day"},
+            placeholder_registers=set(),
+        )
+        c._graph = graph
+        assert c.heat_pump_circuit == "hmux0"
+        assert c.heating_circuit == "ctlv3"
+
+
 # Intent: re-run discovery once after ebusd has had time to populate live values.
 async def test_connect_schedules_one_delayed_rediscovery() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:

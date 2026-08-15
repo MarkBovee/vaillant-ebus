@@ -234,6 +234,30 @@ def test_categorize_bai_by_scan() -> None:
     assert result == DeviceType.HEATING_CONTROLLER
 
 
+# aroTHERM Pro uses HMUX0 as heat pump identifier (issue #56)
+def test_categorize_hmux0_by_scan() -> None:
+    result = DiscoveryService.categorize_circuit("hmux0", [], "HMUX0")
+    assert result == DeviceType.HEAT_PUMP
+
+
+# HMUX0 circuit without scan metadata still resolves via prefix
+def test_categorize_hmux0_by_prefix() -> None:
+    result = DiscoveryService.categorize_circuit("hmux0", [], "")
+    assert result == DeviceType.HEAT_PUMP
+
+
+# SOL00 solar-collector controller is recognized (issue #56)
+def test_categorize_sol00_by_scan() -> None:
+    result = DiscoveryService.categorize_circuit("sol00", [], "SOL00")
+    assert result == DeviceType.SOLAR
+
+
+# SOL00 circuit without scan metadata still resolves via prefix
+def test_categorize_sol00_by_prefix() -> None:
+    result = DiscoveryService.categorize_circuit("sol00", [], "")
+    assert result == DeviceType.SOLAR
+
+
 # =============================================================================
 # C. Device graph construction (integration tests using fixture data)
 # =============================================================================
@@ -428,6 +452,18 @@ def test_arotherm_pro7_graph() -> None:
     assert "hmu" not in graph.nodes
     assert "ctlv3.Z1DayTemp" in graph.raw_registers
     assert "ctlv3.Z1OpMode" in graph.raw_registers
+
+
+# Pro7 scan metadata (HMUX0) classifies as heat pump even without data
+def test_arotherm_pro7_hmux0_scan_classification() -> None:
+    result = DiscoveryService.categorize_circuit("hmux0", [], "HMUX0")
+    assert result == DeviceType.HEAT_PUMP
+
+
+# Pro7 scan metadata (SOL00) classifies as solar even without data
+def test_arotherm_pro7_sol00_scan_classification() -> None:
+    result = DiscoveryService.categorize_circuit("sol00", [], "SOL00")
+    assert result == DeviceType.SOLAR
 
 
 def test_arotherm_pro7_hmu_missing() -> None:

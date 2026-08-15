@@ -145,7 +145,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if hc is None:
             pump = _value(self.coordinator, "Hc1PumpStatus")
             zone_active = (pump or "").lower() in ("on", "1", "true", "yes", "running")
-        comp = (_value(self.coordinator, "RunDataStatuscode", "hmu") or "").lower()
+        comp = (_value(self.coordinator, "RunDataStatuscode", self.coordinator.heat_pump_circuit) or "").lower()
         global_heat = comp in HEATING_STATES
         global_cool = comp in COOLING_STATES
         if zone_active:
@@ -373,7 +373,7 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # HVAC action from compressor status (heating/cooling/idle/off)
     @property
     def hvac_action(self) -> HVACAction | None:
-        comp = (_value(self.coordinator, "RunDataStatuscode", "hmu") or "").lower()
+        comp = (_value(self.coordinator, "RunDataStatuscode", self.coordinator.heat_pump_circuit) or "").lower()
         if comp in HEATING_STATES:
             return HVACAction.HEATING
         if comp in COOLING_STATES:
