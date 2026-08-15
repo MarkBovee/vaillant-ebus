@@ -177,6 +177,16 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         device_class="temperature",
         unit="°C",
     ),
+    "hmu.SourceTempInput": RegisterMeta(
+        friendly_name="Source Temp Input",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "hmu.SourceTempOutput": RegisterMeta(
+        friendly_name="Source Temp Output",
+        device_class="temperature",
+        unit="°C",
+    ),
     "hmu.TotalEnergyUsage": RegisterMeta(
         friendly_name="Total Energy",
         device_class="energy",

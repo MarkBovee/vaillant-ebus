@@ -526,6 +526,20 @@ class TestPowerConsumptionUnit:
         assert meta.device_class == "power"
 
 
+class TestSourceTempMetadata:
+    """Source temp metadata (issue #49)."""
+
+    def test_source_temp_input_metadata(self) -> None:
+        meta = get_meta("hmu", "SourceTempInput")
+        assert meta.device_class == "temperature"
+        assert meta.unit == "°C"
+
+    def test_source_temp_output_metadata(self) -> None:
+        meta = get_meta("hmu", "SourceTempOutput")
+        assert meta.device_class == "temperature"
+        assert meta.unit == "°C"
+
+
 class TestStateClassSemantics:
     """State class renders history as line graph (issue #54)."""
 
