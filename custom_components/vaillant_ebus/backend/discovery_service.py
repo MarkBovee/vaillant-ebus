@@ -383,16 +383,34 @@ def _match_scan_to_circuits(
 ) -> dict[str, tuple[str, str, str]]:
     result: dict[str, tuple[str, str, str]] = {}
     circuit_names = [c for c in regs_by_circuit if not c.lower().startswith("scan")]
+
+    def _norm(name: str) -> str:
+        return name.replace("_", "").lower()
+
+    # Prefer the most specific match. Exact scan-type ↔ circuit first.
     for scan_addr, scan_type, scan_sw, scan_hw in scan_entries:
         # Direct mapping for NETX2 → Broadcast
         if scan_type.lower() == "netx2":
             result["Broadcast"] = (scan_type, scan_sw, scan_hw)
             continue
-        prefix = scan_type.lower().rstrip("0123456789")
         for ckt in circuit_names:
-            if ckt.lower().startswith(prefix):
+            if _norm(ckt) == _norm(scan_type):
                 result[ckt] = (scan_type, scan_sw, scan_hw)
                 break
+    # Fall back to prefix matching for circuits with no exact match, giving
+    # each circuit the longest matching scan prefix.
+    for ckt in circuit_names:
+        if ckt in result:
+            continue
+        best = None
+        for scan_addr, scan_type, scan_sw, scan_hw in scan_entries:
+            if scan_type.lower() == "netx2":
+                continue
+            prefix = scan_type.lower().rstrip("0123456789")
+            if ckt.lower().startswith(prefix) and (best is None or len(prefix) > len(best[0])):
+                best = (prefix, scan_type, scan_sw, scan_hw)
+        if best is not None:
+            result[ckt] = (best[1], best[2], best[3])
     return result
 
 
@@ -454,6 +472,7 @@ _PREFIX_TO_DEVICE: dict[str, DeviceType] = {
     "vwzio": DeviceType.PASSIVE_COOLING,
     "v32": DeviceType.VENTILATION,
     "sol": DeviceType.SOLAR,
+    "vr": DeviceType.MIXING_MODULE,
 }
 
 

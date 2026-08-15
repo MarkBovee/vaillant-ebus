@@ -210,6 +210,7 @@ class DeviceType(Enum):
     PASSIVE_COOLING = "cooling"
     BUS = "bus"
     SOLAR = "solar"
+    MIXING_MODULE = "mixing_module"
     UNKNOWN = "unknown"
 
 

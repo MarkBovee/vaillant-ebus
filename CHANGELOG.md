@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.3.3 - 2026-08-15
+
+### Fixed
+
+- **EcoTEC mixing module (`vr_71`) now exposed (#48).** Circuits detected under
+  the `vr`-prefix (e.g. the VR 71 mixing/low-loss-header module that connects a
+  gas boiler into a hybrid plant) are now categorized as `MIXING_MODULE` and
+  their registers (`Mc1Operation`, `SetActorState`, `SensorData1/2`,
+  `Currenterror`, `Errorhistory`, ...) generate entities. The scan-type match
+  was also corrected so `VR_71`/`VR_92` (shared `vr` prefix) no longer
+  overwrite each other and target the wrong circuit — each discovered circuit
+  now gets the longest matching scan prefix instead of the last one winning.
+
+### Changed
+
+- **Runtime register definition logging.** Startup now reports how many
+  generic runtime definitions were accepted or unavailable, while individual
+  successful definitions remain debug-level and unsupported hardware does not
+  flood normal logs.
+- **Community-verified runtime registers are offered generically.** Proven
+  `define -r` definitions are installed for every compatible connection, even
+  when a register is not present on the local installation. Missing registers
+  remain unavailable and do not create entities; hardware-specific or
+  unverified candidates are not added automatically. This allows registers
+  discovered on other Vaillant systems to work for those users without
+  fabricating values on unsupported hardware.
+
 ## 1.3.2 - 2026-08-15
 
 ### Fixed

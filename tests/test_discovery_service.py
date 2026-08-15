@@ -394,10 +394,10 @@ def test_flexotherm_energy_registers() -> None:
     assert "ctlv3.PrEnergySum" in graph.placeholder_registers
 
 
-def test_flexotherm_vr71_unknown() -> None:
+def test_flexotherm_vr71_mixing_module() -> None:
     graph = _flexotherm_graph()
-    assert graph.nodes["vr_71"].device_type == DeviceType.UNKNOWN
-    assert graph.nodes["vr_71"].scan_type in ("VR_71", "VR_92")
+    assert graph.nodes["vr_71"].device_type == DeviceType.MIXING_MODULE
+    assert graph.nodes["vr_71"].scan_type == "VR_71"
 
 
 def test_arotherm_plus_2zone_graph() -> None:
@@ -523,8 +523,8 @@ def test_arotherm_ecotec_device_graph() -> None:
     assert graph.nodes["hmu"].scan_type == "HMU00"
     assert graph.nodes["ctlv2"].device_type == DeviceType.HEATING_CONTROLLER
     assert graph.nodes["ctlv2"].scan_type == "CTLV2"
-    assert graph.nodes["vr_71"].device_type == DeviceType.UNKNOWN
-    assert graph.nodes["vr_71"].scan_type in ("VR_71", "VR_92")
+    assert graph.nodes["vr_71"].device_type == DeviceType.MIXING_MODULE
+    assert graph.nodes["vr_71"].scan_type == "VR_71"
     assert graph.nodes["vr_71"].has_data is True
     assert graph.nodes["vwzio"].has_data is False
 
@@ -566,7 +566,7 @@ def test_arotherm_plus_cooling_run_graph() -> None:
     graph = _arotherm_plus_cooling_run_graph()
     assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
     assert graph.nodes["ctlv3"].device_type == DeviceType.HEATING_CONTROLLER
-    assert graph.nodes["vr_71"].device_type == DeviceType.UNKNOWN
+    assert graph.nodes["vr_71"].device_type == DeviceType.MIXING_MODULE
     assert "hmu.YieldHc" in graph.raw_registers
 
 
