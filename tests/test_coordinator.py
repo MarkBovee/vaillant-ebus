@@ -600,6 +600,26 @@ async def test_fallback_read_no_ebus_skips() -> None:
         await c._fallback_read()
 
 
+async def test_fallback_read_polls_known_placeholders() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value="25")
+        c.ebus = mock_ebus
+        c._graph = DeviceGraph(
+            nodes=_make_graph().nodes,
+            raw_registers=_make_graph().raw_registers,
+            placeholder_registers={"hmu.YieldHc"},
+        )
+        c._last_find_keys = set(c._graph.raw_registers) | {"hmu.YieldHc"}
+
+        await c._fallback_read(include_placeholders=True)
+
+        mock_ebus.read_register.assert_any_await("hmu", "YieldHc")
+        assert c.registers["hmu.YieldHc"].has_data is True
+
+
 async def test_get_device_info_uses_graph() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
@@ -883,7 +903,9 @@ async def test_enable_registry_entities_respects_user_choice() -> None:
         registry.async_update_entity = MagicMock(
             side_effect=lambda entity_id, **kwargs: updated.append(entity_id)
         )
-        hass.helpers.entity_registry.async_get = MagicMock(return_value=registry)
+        from homeassistant.helpers import entity_registry
+
+        entity_registry.async_get = MagicMock(return_value=registry)
 
         entry = _entry()
         entry.entry_id = "entry-1"

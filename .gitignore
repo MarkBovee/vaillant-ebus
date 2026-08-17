@@ -43,3 +43,7 @@ captures/
 strings.json
 data-dump/
 discovery_dumps/
+
+
+# GitHub inbox local state
+.gh-inbox-state.json
