@@ -2,6 +2,12 @@
   <img src="docs/social-preview.png" alt="Vaillant eBUS" width="700"/>
 </p>
 
+<p align="center">
+  <a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=MarkBovee&repository=vaillant-ebus&category=integration">
+    <img src="https://my.home-assistant.io/badges/hacs_repository.svg?repository=MarkBovee/vaillant-ebus" alt="Open Vaillant eBUS in HACS"/>
+  </a>
+</p>
+
 > **Disclaimer:** This project is an independent third-party integration and is **not affiliated with, endorsed by, or connected to Vaillant GmbH** in any way. All trademarks belong to their respective owners.
 
 # Vaillant eBUS
@@ -155,11 +161,12 @@ If you see `ERR: element not found` for some registers, that is normal — your 
 
 ### HACS (recommended)
 
-1. Go to **HACS → Integrations → three-dot menu → Custom repositories**
-2. Repository URL: `https://github.com/MarkBovee/vaillant-ebus`
-3. Category: **Integration**
-4. Click **Add**, then install **"Vaillant eBUS"** from HACS
-5. **Restart HA**
+Use the button above to open this repository directly in HACS. Alternatively:
+
+1. Go to **HACS → Integrations → three-dot menu → Custom repositories**.
+2. Enter `https://github.com/MarkBovee/vaillant-ebus`.
+3. Select **Integration**, click **Add**, and install **Vaillant eBUS**.
+4. Restart Home Assistant.
 
 ### Manual
 
