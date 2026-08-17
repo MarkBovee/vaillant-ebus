@@ -11,6 +11,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -53,6 +54,7 @@ EBUSD_STATUS_SUFFIXES: tuple[str, ...] = (
 )
 DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
 ANALYSIS_INTERVAL = timedelta(minutes=15)
+PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 
 
 # Build the per-field value dict for a register (split multi-field values).
@@ -125,6 +127,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._live_since_analysis: set[str] = set()
         self._cancel_analysis: Callable[[], None] | None = None
         self._analysis_scheduled = False
+        self._last_placeholder_poll = datetime.min
         self._analysis = AnalysisService()
         self.entity_adders: dict[str, Callable[[list[EntityDescription]], None]] = {}
 
@@ -376,20 +379,20 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     # Enable entities that map to recently live registers (respect user choice).
     async def _enable_registry_entities(self, register_keys: list[str]) -> list[str]:
-        entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
+        registry = entity_registry.async_get(self.hass)
         desired_uids = {
             f"ebusd_{key.split('.')[0]}_{key.split('.', 1)[1].lower().replace(' ', '_')}"
             for key in register_keys
         }
         enabled: list[str] = []
-        for entity_id, entry in entity_registry.entities.items():
+        for entity_id, entry in registry.entities.items():
             if entry.config_entry_id != self._entry.entry_id:
                 continue
             if entry.unique_id not in desired_uids:
                 continue
             if entry.disabled_by != "integration":
                 continue
-            entity_registry.async_update_entity(entity_id, disabled_by=None)
+            registry.async_update_entity(entity_id, disabled_by=None)
             enabled.append(entity_id)
         if enabled:
             _LOGGER.info("Auto-enabled entities with live data: %s", ", ".join(enabled))
@@ -520,11 +523,17 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             via_device=via_device,
         )
 
-    async def _fallback_read(self) -> None:
+    async def _fallback_read(self, include_placeholders: bool = False) -> None:
         if not self.ebus or not self.ebus.is_connected:
             return
         graph_keys = self._last_find_keys
         to_read = [k for k in REGISTER_MAP if REGISTER_MAP[k].enabled and k not in graph_keys]
+        if include_placeholders and self._graph:
+            to_read.extend(
+                key
+                for key in self._graph.placeholder_registers
+                if key in REGISTER_MAP and REGISTER_MAP[key].enabled and key not in to_read
+            )
         if not to_read:
             return
         _LOGGER.info("Fallback reading %d known register(s)", len(to_read))
@@ -622,7 +631,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self.registers[key].has_data = True
                         updated += 1
                 self._last_find_keys = {k for k in self.registers}
-                await self._fallback_read()
+                now = datetime.now()
+                poll_placeholders = now - self._last_placeholder_poll >= PLACEHOLDER_POLL_INTERVAL
+                if poll_placeholders:
+                    self._last_placeholder_poll = now
+                await self._fallback_read(include_placeholders=poll_placeholders)
                 zero_idle_registers(self.registers)
                 if updated:
                     _LOGGER.info("Poll updated %d registers", updated)

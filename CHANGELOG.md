@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.4 - 2026-08-17
+
+### Fixed
+
+- **`analyze_registers` no longer crashes on current Home Assistant (#72).** Entity
+  registry access now uses the supported `entity_registry.async_get(hass)` API.
+- **Energy and yield statistics are refreshed when ebusd initially reports no data
+  (#71).** Enabled placeholder registers are retried through direct ebusd reads every
+  15 minutes, allowing values that become available later to update normally without
+  increasing the regular polling frequency.
+
 ## 1.3.3 - 2026-08-15
 
 ### Fixed

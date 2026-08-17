@@ -99,3 +99,9 @@ telegrams; capture them with `grab` and mine the unknown ones for new registers.
 .venv/bin/pytest -q
 python3 -m compileall -f custom_components/vaillant_ebus/
 ```
+
+## GitHub Communication
+
+- Write GitHub issue, discussion, and pull request replies in clear English.
+- Use clean Markdown with complete sentences, correct punctuation, and blank lines between paragraphs.
+- Put lists and distinct points on separate lines. Never post compressed, run-on, or caveman-style prose.
