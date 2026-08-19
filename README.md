@@ -120,14 +120,14 @@ network_device: ens:192.168.x.x
 seed_mqtt_cfg: false
 commandline_options:
   - "--accesslevel=*"
+  - "--scanconfig=full"
   - "--port=8888"
   - "--enabledefine"
 ```
 
 Replace `192.168.x.x` with your C6 adapter's fixed IP.
 
-<img width="1301" height="1027" alt="image" src="https://github.com/user-attachments/assets/b98d020d-6b20-484e-b173-5a4023a0cac8" />
-
+<img width="1011" height="837" alt="image" src="https://github.com/user-attachments/assets/80729dba-77fd-4b01-bece-557959c46810" />
 
 | Setting | Purpose |
 |---------|---------|
