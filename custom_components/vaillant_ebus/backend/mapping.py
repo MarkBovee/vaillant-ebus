@@ -234,11 +234,26 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         device_class="energy",
         unit="kWh",
     ),
+    "hmu.YieldHcMonth": RegisterMeta(
+        friendly_name="Yield Heating Month",
+        device_class="energy",
+        unit="kWh",
+    ),
     "hmu.YieldHwc": RegisterMeta(
         friendly_name="Yield DHW",
         device_class="energy",
         unit="kWh",
         state_class="total_increasing",
+    ),
+    "hmu.YieldHwcDay": RegisterMeta(
+        friendly_name="Yield DHW Today",
+        device_class="energy",
+        unit="kWh",
+    ),
+    "hmu.YieldHwcMonth": RegisterMeta(
+        friendly_name="Yield DHW Month",
+        device_class="energy",
+        unit="kWh",
     ),
     "hmu.YieldCoolDay": RegisterMeta(
         friendly_name="Yield Cooling Today",

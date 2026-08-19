@@ -620,6 +620,85 @@ async def test_fallback_read_polls_known_placeholders() -> None:
         assert c.registers["hmu.YieldHc"].has_data is True
 
 
+# aroTHERM Plus exposes energy registers under basv3/ctlv3 while REGISTER_MAP
+# stores them under ctlv2/hmu; the fallback read must read the discovered
+# circuit (mirrors get_meta's aliasing). Regression for #53/#76/#77.
+async def test_fallback_read_aliases_discovered_placeholder_circuit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value="42")
+        c.ebus = mock_ebus
+        basv3_node = DeviceNode(
+            circuit="basv3",
+            device_type=DeviceType.HEATING_CONTROLLER,
+            registers=[],
+            has_data=True,
+            scan_type="BASV3",
+        )
+        c._graph = DeviceGraph(
+            nodes={"basv3": basv3_node},
+            raw_registers={},
+            placeholder_registers={
+                "basv3.PrEnergySumHc",
+                "basv3.StatElectricEnergySum",
+            },
+        )
+        c._last_find_keys = set()
+
+        await c._fallback_read(include_placeholders=True)
+
+        mock_ebus.read_register.assert_any_await("basv3", "PrEnergySumHc")
+        mock_ebus.read_register.assert_any_await("basv3", "StatElectricEnergySum")
+        assert c.registers["basv3.PrEnergySumHc"].has_data is True
+        assert c.registers["basv3.StatElectricEnergySum"].has_data is True
+        assert "basv3.PrEnergySumHc" in c._graph.raw_registers
+        assert "basv3.PrEnergySumHc" in basv3_node.registers
+
+
+async def test_fallback_read_map_reads_discovered_circuit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value="42")
+        c.ebus = mock_ebus
+        ctlv3_node = DeviceNode(
+            circuit="ctlv3",
+            device_type=DeviceType.HEATING_CONTROLLER,
+            registers=[],
+            has_data=True,
+            scan_type="CTLV3",
+        )
+        c._graph = DeviceGraph(
+            nodes={"ctlv3": ctlv3_node},
+            raw_registers={},
+            placeholder_registers={"ctlv3.PrEnergySumHwc"},
+        )
+        c._last_find_keys = set()
+
+        await c._fallback_read()
+
+        mock_ebus.read_register.assert_any_await("ctlv3", "PrEnergySumHwc")
+        calls = {args[0] for args, _ in mock_ebus.read_register.call_args_list}
+        assert ("ctlv2", "PrEnergySumHwc") not in calls
+        assert c.registers["ctlv3.PrEnergySumHwc"].has_data is True
+
+
+# The Yield day/month variants from #77 must be mapped so they get entities
+# and placeholder retries.
+def test_fallback_read_yield_day_month_variants_mapped() -> None:
+    from vaillant_ebus.backend.mapping import REGISTER_MAP
+
+    for key in ("hmu.YieldHcMonth", "hmu.YieldHwcDay", "hmu.YieldHwcMonth"):
+        assert key in REGISTER_MAP
+        meta = REGISTER_MAP[key]
+        assert meta.enabled is True
+        assert meta.device_class == "energy"
+        assert meta.unit == "kWh"
+
+
 async def test_get_device_info_uses_graph() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())

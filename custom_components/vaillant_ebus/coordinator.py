@@ -523,27 +523,73 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             via_device=via_device,
         )
 
+    def _fallback_candidate(self, name: str) -> str | None:
+        """Return the circuit to read a register from.
+
+        Prefer the circuit where the register was discovered (its raw or
+        placeholder graph key); otherwise fall back to the literal map circuit.
+        Mirrors the ctlv2/hmu aliasing used by get_meta() so registers that
+        live under basv3/ctlv3/vwzio are read from the correct circuit.
+        """
+        if self._graph:
+            for rk in self._graph.raw_registers:
+                if rk.endswith(f".{name}"):
+                    return rk.split(".", 1)[0]
+            for rk in self._graph.placeholder_registers:
+                if rk.endswith(f".{name}"):
+                    return rk.split(".", 1)[0]
+        return None
+
     async def _fallback_read(self, include_placeholders: bool = False) -> None:
         if not self.ebus or not self.ebus.is_connected:
             return
         graph_keys = self._last_find_keys
-        to_read = [k for k in REGISTER_MAP if REGISTER_MAP[k].enabled and k not in graph_keys]
+        # Resolve the REGISTER_MAP entry for a discovered register, applying the
+        # same ctlv2/hmu circuit aliasing as get_meta().
+        def _meta_key(circuit: str, name: str) -> str | None:
+            for alt in (circuit, "ctlv2", "hmu"):
+                key = f"{alt}.{name}"
+                if key in REGISTER_MAP:
+                    return key
+            return None
+
+        candidates: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+
+        def _add(circuit: str, name: str) -> None:
+            key = (circuit, name)
+            if key not in seen:
+                seen.add(key)
+                candidates.append(key)
+
+        # Map-driven reads: registers with metadata not yet in the graph.
+        for key in REGISTER_MAP:
+            meta = REGISTER_MAP[key]
+            if not meta.enabled or key in graph_keys:
+                continue
+            map_circuit, name = key.split(".", 1)
+            circuit = self._fallback_candidate(name)
+            _add(circuit or map_circuit, name)
+
+        # Placeholder reads: discovered no-data registers whose metadata
+        # resolves via the circuit alias (15-minute interval).
         if include_placeholders and self._graph:
-            to_read.extend(
-                key
-                for key in self._graph.placeholder_registers
-                if key in REGISTER_MAP and REGISTER_MAP[key].enabled and key not in to_read
-            )
-        if not to_read:
+            for key in self._graph.placeholder_registers:
+                parts = key.split(".", 1)
+                if len(parts) != 2:
+                    continue
+                circuit, name = parts
+                meta_key = _meta_key(circuit, name)
+                if meta_key and REGISTER_MAP[meta_key].enabled:
+                    _add(circuit, name)
+
+        if not candidates:
             return
-        _LOGGER.info("Fallback reading %d known register(s)", len(to_read))
+        _LOGGER.info("Fallback reading %d known register(s)", len(candidates))
         added = 0
         read_with_data = 0
-        for key in to_read:
-            parts = key.split(".", 1)
-            if len(parts) != 2:
-                continue
-            circuit, name = parts
+        for circuit, name in candidates:
+            key = f"{circuit}.{name}"
             try:
                 value = await self.ebus.read_register(circuit, name)
                 was_new = key not in self.registers
@@ -585,7 +631,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._last_find_keys.add(key)
             _LOGGER.info("Fallback read added %d register(s) to discovery", added)
         else:
-            _LOGGER.info("Fallback read complete: %d/%d registers with data", read_with_data, len(to_read))
+            _LOGGER.info("Fallback read complete: %d/%d registers with data", read_with_data, len(candidates))
 
     async def _async_update_data(self) -> dict[str, Any]:
         if not self._cache_seeded:

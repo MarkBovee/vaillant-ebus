@@ -77,6 +77,30 @@ telegrams; capture them with `grab` and mine the unknown ones for new registers.
 - Register candidates found this way must be verified against ebusd (message format,
   read-back value) before adding a `define -r` to `_define_custom_registers()`.
 
+## Upstream Issues/PRs as a Register Source
+
+The shipped CSVs in `john30/ebusd-configuration` and the compiled CDN copies run far
+behind the bus (see `john30/ebusd-configuration#632`). Do **not** expect unknown
+register definitions, field layouts, or message IDs to exist in the `.tsp`/CSV source.
+The working knowledge lives in that repo's **issues and pull requests** — people post
+CSV snippets, `define` strings, `find` output, and per-hardware field layouts there.
+
+- Search issues and PRs with `tools/search_upstream.sh`, which wraps `gh search`
+  against `john30/ebusd-configuration`:
+  - `tools/search_upstream.sh "PrEnergySum"` — issues matching title/body.
+  - `tools/search_upstream.sh --comments "YieldHwcDay"` — also match comment bodies
+    (most CSV snippets and layouts are pasted in comments).
+  - `tools/search_upstream.sh --all "SourceTempInput"` — issues and PRs.
+  - `tools/search_upstream.sh "query" "john30/ebusd"` — search another repo.
+- The ebusd-configuration repo has discussions **disabled**; search issues and PRs only.
+- When a promising thread is found, open it (`gh issue view <n> --comments`) and read
+  the full conversation before trusting a snippet. Prefer definitions that the reporter
+  verified against a live device.
+- Always cross-check candidates against a live ebusd (message format + read-back value)
+  before adding a `define -r` to `_define_custom_registers()` or a `REGISTER_MAP`/
+  `MULTI_FIELD_FIELDS` entry. Do not fabricate layouts from a single untested comment.
+- Never modify or upload ebusd CSV files and never set `--configpath`; that is addon-side.
+
 ## Known Limitations
 
 - Many heat-pump registers return `no data stored` while the compressor is idle.
