@@ -56,8 +56,16 @@ DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
 ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 
-# Core registers whose live data mark a discovered zone as genuinely present.
-ZONE_CORE_REGISTERS: tuple[str, ...] = ("RoomTemp", "DayTemp", "OpMode", "ActualRoomTempDesired")
+# Registers whose live (non-sentinel) value marks a discovered zone as
+# genuinely present. DayTemp/OpMode are excluded: ebusd reports static
+# defaults for these even on unused zones, so they cannot distinguish a real
+# zone from a ghost.
+ZONE_LIVE_REGISTERS: tuple[str, ...] = ("RoomTemp", "ActualRoomTempDesired")
+
+# ebusd values that mean "no usable data" rather than a measured value.
+ZONE_SENTINEL_VALUES: frozenset[str] = frozenset(
+    {"", "-", "empty", "unknown", "unavailable", "no data stored", "none"}
+)
 
 
 # Build the per-field value dict for a register (split multi-field values).
@@ -197,11 +205,16 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         mapping = self._graph.raw_registers.get(f"{circuit}.{zn}RoomZoneMapping")
         if mapping is not None:
             normalized = mapping.strip().lower()
-            if normalized and normalized != "none":
+            if normalized and normalized not in ZONE_SENTINEL_VALUES:
                 return True
-        return any(
-            f"{circuit}.{zn}{name}" in self._graph.raw_registers for name in ZONE_CORE_REGISTERS
-        )
+        # Fall back to a measured value on a live register. Static defaults
+        # (DayTemp/OpMode) and sentinel values (empty/unknown/no data stored)
+        # do not prove the zone is real.
+        for name in ZONE_LIVE_REGISTERS:
+            value = self._graph.raw_registers.get(f"{circuit}.{zn}{name}")
+            if value is not None and value.strip().lower() not in ZONE_SENTINEL_VALUES:
+                return True
+        return False
 
     # Whether `circuit.<ZN><name>` was discovered on the bus. Both live values
     # and no-data placeholders count as present: ebusd returns `no data stored`
