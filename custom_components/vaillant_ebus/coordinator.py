@@ -56,6 +56,9 @@ DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
 ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 
+# Core registers whose live data mark a discovered zone as genuinely present.
+ZONE_CORE_REGISTERS: tuple[str, ...] = ("RoomTemp", "DayTemp", "OpMode", "ActualRoomTempDesired")
+
 
 # Build the per-field value dict for a register (split multi-field values).
 def _register_values(register_key: str, raw: str | None) -> dict[str, str | None]:
@@ -130,6 +133,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_placeholder_poll = datetime.min
         self._analysis = AnalysisService()
         self.entity_adders: dict[str, Callable[[list[EntityDescription]], None]] = {}
+        self._post_discovery_callbacks: list[Callable[[], None]] = []
 
         scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL)
         super().__init__(
@@ -164,6 +168,57 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if node.device_type == DeviceType.HEAT_PUMP:
                     return node.circuit
         return "hmu"
+
+    # Active heating zones (zone id -> hosting circuit) derived from the
+    # discovery graph. A zone counts as active when it has a room-zone mapping
+    # (ZNRoomZoneMapping with a value other than none/empty) or live data on a
+    # core register (ZNRoomTemp / ZNDayTemp / ZNOpMode / ZNActualRoomTempDesired).
+    # Ghost zones - every ZN register present but unused (mapping none and no
+    # live data) - are skipped so they never produce a permanently-unavailable
+    # climate entity. Deliberately NOT filtered on the zone node's has_data:
+    # ebusd reports ghost mapping values like "none" as real register values.
+    def zone_circuits(self) -> dict[str, str]:
+        zones: dict[str, str] = {}
+        if not self._graph:
+            return zones
+        for node in self._graph.nodes.values():
+            for zone in node.zone_circuits:
+                if zone in zones:
+                    continue
+                if self._zone_is_valid(node.circuit, zone):
+                    zones[zone] = node.circuit
+        return zones
+
+    # Whether a discovered zone is a real heating zone rather than a ghost.
+    def _zone_is_valid(self, circuit: str, zone: str) -> bool:
+        if self._graph is None:
+            return False
+        zn = zone.upper()
+        mapping = self._graph.raw_registers.get(f"{circuit}.{zn}RoomZoneMapping")
+        if mapping is not None:
+            normalized = mapping.strip().lower()
+            if normalized and normalized != "none":
+                return True
+        return any(
+            f"{circuit}.{zn}{name}" in self._graph.raw_registers for name in ZONE_CORE_REGISTERS
+        )
+
+    # Whether `circuit.<ZN><name>` was discovered on the bus. Both live values
+    # and no-data placeholders count as present: ebusd returns `no data stored`
+    # for registers the hardware supports while they are idle. Until a real
+    # discovery has populated the find set, absence is not proof of hardware
+    # absence (cache-seeded graphs only carry live values), so the register is
+    # assumed present to preserve the pre-per-zone behavior.
+    def has_zone_register(self, circuit: str, zone: str, name: str) -> bool:
+        if not self._graph or not self._last_find_keys:
+            return True
+        key = f"{circuit}.{zone.upper()}{name}"
+        if key in self._graph.raw_registers or key in self._graph.placeholder_registers:
+            return True
+        lower = key.lower()
+        return any(rk.lower() == lower for rk in self._graph.raw_registers) or any(
+            rk.lower() == lower for rk in self._graph.placeholder_registers
+        )
 
     async def _async_seed_entities_from_cache(self) -> None:
         cache = await self._async_load_cache()
@@ -286,6 +341,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ", ".join(f"{count} {ptype}" for ptype, count in sorted(platform_counts.items())),
         )
         self.async_update_listeners()
+        for callback in self._post_discovery_callbacks:
+            try:
+                callback()
+            except Exception:
+                _LOGGER.warning("Post-discovery callback failed", exc_info=True)
 
     # Schedule exactly one delayed pass for ebusd values unavailable at startup.
     def _schedule_delayed_rediscovery(self) -> None:
@@ -355,6 +415,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self, entity_type: str, callback: Callable[[list[EntityDescription]], None]
     ) -> None:
         self.entity_adders[entity_type] = callback
+
+    # Register a callback invoked after every applied discovery graph, so
+    # hand-built platforms (climate) can add entities once the graph exists.
+    def register_post_discovery_callback(self, callback: Callable[[], None]) -> None:
+        self._post_discovery_callbacks.append(callback)
 
     # Run a background analysis pass on-demand (used by the analyze service).
     async def async_run_analysis(self) -> None:

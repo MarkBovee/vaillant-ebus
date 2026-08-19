@@ -1017,3 +1017,212 @@ async def test_coordinator_seed_dedups_case_variants() -> None:
         assert len(sfmode) == 1, f"expected one HwcSfMode entity, got {len(sfmode)}"
         uids = [e.unique_id for e in coordinator.entities]
         assert len(uids) == len(set(uids))
+
+
+# Intent: active zones are derived from the discovery graph, mapping each zone
+# to the circuit hosting its registers for per-zone climate entities.
+async def test_zone_circuits_two_zone_graph() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(
+            nodes={
+                "ctlv2": DeviceNode(
+                    circuit="ctlv2",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=[],
+                    has_data=True,
+                    zone_circuits=["z1", "z2"],
+                ),
+                "z1": DeviceNode(
+                    circuit="z1",
+                    device_type=DeviceType.ZONE,
+                    registers=["ctlv2.Z1RoomTemp", "ctlv2.Z1DayTemp"],
+                    has_data=True,
+                    parent="ctlv2",
+                ),
+                "z2": DeviceNode(
+                    circuit="z2",
+                    device_type=DeviceType.ZONE,
+                    registers=["ctlv2.Z2RoomTemp", "ctlv2.Z2DayTemp"],
+                    has_data=True,
+                    parent="ctlv2",
+                ),
+            },
+            raw_registers={
+                "ctlv2.Z1RoomTemp": "21.5",
+                "ctlv2.Z2RoomTemp": "20.5",
+            },
+            placeholder_registers=set(),
+        )
+        assert c.zone_circuits() == {"z1": "ctlv2", "z2": "ctlv2"}
+
+
+# Intent: zones whose registers were found but carry no data are not active,
+# so a single-zone system keeps exactly one climate entity.
+async def test_zone_circuits_skips_no_data_zone() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(
+            nodes={
+                "ctlv2": DeviceNode(
+                    circuit="ctlv2",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=[],
+                    has_data=True,
+                    zone_circuits=["z1", "z2"],
+                ),
+                "z1": DeviceNode(
+                    circuit="z1",
+                    device_type=DeviceType.ZONE,
+                    registers=["ctlv2.Z1RoomTemp"],
+                    has_data=True,
+                ),
+                "z2": DeviceNode(
+                    circuit="z2",
+                    device_type=DeviceType.ZONE,
+                    registers=["ctlv2.Z2RoomTemp"],
+                    has_data=False,
+                ),
+            },
+            raw_registers={"ctlv2.Z1RoomTemp": "21.5"},
+            placeholder_registers={"ctlv2.Z2RoomTemp"},
+        )
+        assert c.zone_circuits() == {"z1": "ctlv2"}
+
+
+# Intent: an empty graph yields no zones; the climate platform falls back to z1.
+async def test_zone_circuits_empty_graph() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        assert c.zone_circuits() == {}
+
+
+# Intent: feature gating treats live values and no-data placeholders alike.
+async def test_has_zone_register_checks_raw_and_placeholder() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(
+            nodes={},
+            raw_registers={"ctlv2.Z2CoolingTemp": "26"},
+            placeholder_registers={"ctlv2.Z2QuickVetoDuration"},
+        )
+        c._last_find_keys = {"ctlv2.Z2CoolingTemp"}
+        assert c.has_zone_register("ctlv2", "z2", "CoolingTemp") is True
+        assert c.has_zone_register("ctlv2", "z2", "QuickVetoDuration") is True
+        assert c.has_zone_register("ctlv2", "z2", "RoomTemp") is False
+        assert c.has_zone_register("ctlv2", "z1", "CoolingTemp") is False
+
+
+# Intent: before discovery populates the find set, absence is not proof of
+# hardware absence, so the register is assumed present (pre-per-zone behavior).
+async def test_has_zone_register_assumes_present_until_discovery() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        assert c.has_zone_register("ctlv2", "z1", "CoolingTemp") is True
+        c._graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+        assert c.has_zone_register("ctlv2", "z1", "CoolingTemp") is True
+        c._last_find_keys = {"ctlv2.Z1RoomTemp"}
+        assert c.has_zone_register("ctlv2", "z1", "CoolingTemp") is False
+
+
+# Intent: platforms can add entities once a discovery graph has been applied.
+async def test_post_discovery_callbacks_fire_on_apply() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        fired: list[str] = []
+        c.register_post_discovery_callback(lambda: fired.append("initial"))
+        c.register_post_discovery_callback(lambda: fired.append("delayed"))
+
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value=None)
+        c.ebus = mock_ebus
+        await c._apply_discovery_graph(_make_graph(), "initial")
+        await c._apply_discovery_graph(
+            DeviceGraph(
+                nodes={
+                    "v32": DeviceNode(
+                        circuit="v32",
+                        device_type=DeviceType.VENTILATION,
+                        registers=["v32.SupplyAirTemp"],
+                        has_data=True,
+                    )
+                },
+                raw_registers={"v32.SupplyAirTemp": "20.75"},
+                placeholder_registers=set(),
+            ),
+            "delayed",
+        )
+        assert fired == ["initial", "delayed", "initial", "delayed"]
+
+
+# Intent: a ghost zone (mapping "none", no live core registers) must not get a
+# climate entity, even though ebusd reports its registers as real values.
+async def test_zone_circuits_skips_ghost_zone() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(
+            nodes={
+                "ctlv2": DeviceNode(
+                    circuit="ctlv2",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=[],
+                    has_data=True,
+                    zone_circuits=["z1", "z2"],
+                ),
+                "z1": DeviceNode(
+                    circuit="z1",
+                    device_type=DeviceType.ZONE,
+                    registers=["ctlv2.Z1RoomTemp"],
+                    has_data=True,
+                ),
+                "z2": DeviceNode(
+                    circuit="z2",
+                    device_type=DeviceType.ZONE,
+                    registers=["ctlv2.Z2RoomZoneMapping", "ctlv2.Z2RoomTemp"],
+                    has_data=True,
+                ),
+            },
+            raw_registers={
+                "ctlv2.Z1RoomTemp": "21.5",
+                "ctlv2.Z2RoomZoneMapping": "none",
+            },
+            placeholder_registers={"ctlv2.Z2RoomTemp", "ctlv2.Z2DayTemp", "ctlv2.Z2OpMode"},
+        )
+        assert c.zone_circuits() == {"z1": "ctlv2"}
+
+
+# Intent: a real but idle zone (real mapping, no live data yet) still gets a
+# climate entity; it simply reports unavailable values while inactive.
+async def test_zone_circuits_keeps_real_idle_zone() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(
+            nodes={
+                "ctlv2": DeviceNode(
+                    circuit="ctlv2",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=[],
+                    has_data=True,
+                    zone_circuits=["z1", "z2"],
+                ),
+                "z1": DeviceNode(
+                    circuit="z1",
+                    device_type=DeviceType.ZONE,
+                    registers=["ctlv2.Z1RoomTemp"],
+                    has_data=True,
+                ),
+                "z2": DeviceNode(
+                    circuit="z2",
+                    device_type=DeviceType.ZONE,
+                    registers=["ctlv2.Z2RoomZoneMapping", "ctlv2.Z2RoomTemp"],
+                    has_data=False,
+                ),
+            },
+            raw_registers={
+                "ctlv2.Z1RoomTemp": "21.5",
+                "ctlv2.Z2RoomZoneMapping": "VR91_1",
+            },
+            placeholder_registers={"ctlv2.Z2RoomTemp", "ctlv2.Z2DayTemp", "ctlv2.Z2OpMode"},
+        )
+        assert c.zone_circuits() == {"z1": "ctlv2", "z2": "ctlv2"}
