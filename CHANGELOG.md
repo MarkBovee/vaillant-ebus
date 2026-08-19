@@ -9,9 +9,11 @@
   zone-scoped registers (`Z2DayTemp`, `Z2OpMode`, ...), unique ids, and devices.
   The `COOL` mode is only offered where the zone has a cooling register, and the
   `BOOST` preset only where quick-veto duration exists. Ghost zones (a zone that
-  exists on the bus but is unused — `RoomZoneMapping = none` and no live data) are
-  excluded so they never produce a permanently-unavailable climate entity.
-  Single-zone systems keep the existing `z1` entity ids unchanged.
+  exists on the bus but is unused — `RoomZoneMapping = none` and no measured
+  room temperature) are excluded so they never produce a permanently-unavailable
+  climate entity; static set-point defaults like `Z2DayTemp = 21` do not count as
+  live zone activity. Single-zone systems keep the existing `z1` entity ids
+  unchanged.
 
 ### Fixed
 
