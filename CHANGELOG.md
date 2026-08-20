@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.4.0 - 2026-08-19
+
+### Added
+
+- **Per-zone climate entities (#75).** One thermostat and flow-temperature-range
+  entity is now created for every discovered heating zone (zone 1, 2, 3), with
+  zone-scoped registers (`Z2DayTemp`, `Z2OpMode`, ...), unique ids, and devices.
+  The `COOL` mode is only offered where the zone has a cooling register, and the
+  `BOOST` preset only where quick-veto duration exists. Ghost zones (a zone that
+  exists on the bus but is unused — `RoomZoneMapping = none` and no measured
+  room temperature) are excluded so they never produce a permanently-unavailable
+  climate entity; static set-point defaults like `Z2DayTemp = 21` do not count as
+  live zone activity. Single-zone systems keep the existing `z1` entity ids
+  unchanged.
+
+### Fixed
+
+- **Energy and yield sensors on aroTHERM Plus now populate from the correct
+  circuit (#53, #76, #77).** The fallback read used to read `PrEnergySum*` and
+  `StatElectricEnergySum*` / `StatEnvironmentEnergySum*` from the circuit where
+  their metadata lives (`ctlv2` / `hmu`), but aroTHERM Plus exposes them on the
+  `ctlv3` / `basv3` / `vwzio` controller circuit, so ebusd replied `ERR: element
+  not found` and the sensors stayed unavailable. The fallback read now resolves
+  the circuit where a register was actually discovered (mirroring the `get_meta`
+  alias) and reads it there, including the periodic retry of no-data registers.
+- **Missing yield day/month registers mapped.** `hmu.YieldHcMonth`,
+  `hmu.YieldHwcDay`, and `hmu.YieldHwcMonth` are now registered as energy sensors
+  (#77), so they are treated as enabled and picked up by the placeholder retry.
+
 ## 1.3.4 - 2026-08-17
 
 ### Fixed

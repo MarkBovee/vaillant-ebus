@@ -79,7 +79,7 @@ The normal data flow is: connect to ebusd, define any runtime-only registers, di
 - Direct TCP connection to ebusd — zero MQTT setup required
 - Dynamically discovers available circuits and registers on connect
 - Generates native Home Assistant entities for sensors, controls, climate, water heating, calendars, and dates
-- Climate entities with quick veto and away mode (calendar-based scheduling)
+- Climate entities with quick veto and away mode (calendar-based scheduling) — one thermostat and flow-temperature-range per discovered heating zone on multi-zone systems
 - **Cooling control** — read and write the manual cooling period ("cool until [date]") via the climate COOL mode and dedicated datetime entities
 - Water heater entities with DHW boost and temperature control
 - Room humidity (CTLV2) — not available via standard ebusd MQTT

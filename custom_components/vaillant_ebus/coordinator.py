@@ -56,6 +56,17 @@ DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
 ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 
+# Registers whose live (non-sentinel) value marks a discovered zone as
+# genuinely present. DayTemp/OpMode are excluded: ebusd reports static
+# defaults for these even on unused zones, so they cannot distinguish a real
+# zone from a ghost.
+ZONE_LIVE_REGISTERS: tuple[str, ...] = ("RoomTemp", "ActualRoomTempDesired")
+
+# ebusd values that mean "no usable data" rather than a measured value.
+ZONE_SENTINEL_VALUES: frozenset[str] = frozenset(
+    {"", "-", "empty", "unknown", "unavailable", "no data stored", "none"}
+)
+
 
 # Build the per-field value dict for a register (split multi-field values).
 def _register_values(register_key: str, raw: str | None) -> dict[str, str | None]:
@@ -130,6 +141,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_placeholder_poll = datetime.min
         self._analysis = AnalysisService()
         self.entity_adders: dict[str, Callable[[list[EntityDescription]], None]] = {}
+        self._post_discovery_callbacks: list[Callable[[], None]] = []
 
         scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL)
         super().__init__(
@@ -164,6 +176,62 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if node.device_type == DeviceType.HEAT_PUMP:
                     return node.circuit
         return "hmu"
+
+    # Active heating zones (zone id -> hosting circuit) derived from the
+    # discovery graph. A zone counts as active when it has a room-zone mapping
+    # (ZNRoomZoneMapping with a value other than none/empty) or live data on a
+    # core register (ZNRoomTemp / ZNDayTemp / ZNOpMode / ZNActualRoomTempDesired).
+    # Ghost zones - every ZN register present but unused (mapping none and no
+    # live data) - are skipped so they never produce a permanently-unavailable
+    # climate entity. Deliberately NOT filtered on the zone node's has_data:
+    # ebusd reports ghost mapping values like "none" as real register values.
+    def zone_circuits(self) -> dict[str, str]:
+        zones: dict[str, str] = {}
+        if not self._graph:
+            return zones
+        for node in self._graph.nodes.values():
+            for zone in node.zone_circuits:
+                if zone in zones:
+                    continue
+                if self._zone_is_valid(node.circuit, zone):
+                    zones[zone] = node.circuit
+        return zones
+
+    # Whether a discovered zone is a real heating zone rather than a ghost.
+    def _zone_is_valid(self, circuit: str, zone: str) -> bool:
+        if self._graph is None:
+            return False
+        zn = zone.upper()
+        mapping = self._graph.raw_registers.get(f"{circuit}.{zn}RoomZoneMapping")
+        if mapping is not None:
+            normalized = mapping.strip().lower()
+            if normalized and normalized not in ZONE_SENTINEL_VALUES:
+                return True
+        # Fall back to a measured value on a live register. Static defaults
+        # (DayTemp/OpMode) and sentinel values (empty/unknown/no data stored)
+        # do not prove the zone is real.
+        for name in ZONE_LIVE_REGISTERS:
+            value = self._graph.raw_registers.get(f"{circuit}.{zn}{name}")
+            if value is not None and value.strip().lower() not in ZONE_SENTINEL_VALUES:
+                return True
+        return False
+
+    # Whether `circuit.<ZN><name>` was discovered on the bus. Both live values
+    # and no-data placeholders count as present: ebusd returns `no data stored`
+    # for registers the hardware supports while they are idle. Until a real
+    # discovery has populated the find set, absence is not proof of hardware
+    # absence (cache-seeded graphs only carry live values), so the register is
+    # assumed present to preserve the pre-per-zone behavior.
+    def has_zone_register(self, circuit: str, zone: str, name: str) -> bool:
+        if not self._graph or not self._last_find_keys:
+            return True
+        key = f"{circuit}.{zone.upper()}{name}"
+        if key in self._graph.raw_registers or key in self._graph.placeholder_registers:
+            return True
+        lower = key.lower()
+        return any(rk.lower() == lower for rk in self._graph.raw_registers) or any(
+            rk.lower() == lower for rk in self._graph.placeholder_registers
+        )
 
     async def _async_seed_entities_from_cache(self) -> None:
         cache = await self._async_load_cache()
@@ -286,6 +354,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ", ".join(f"{count} {ptype}" for ptype, count in sorted(platform_counts.items())),
         )
         self.async_update_listeners()
+        for callback in self._post_discovery_callbacks:
+            try:
+                callback()
+            except Exception:
+                _LOGGER.warning("Post-discovery callback failed", exc_info=True)
 
     # Schedule exactly one delayed pass for ebusd values unavailable at startup.
     def _schedule_delayed_rediscovery(self) -> None:
@@ -355,6 +428,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self, entity_type: str, callback: Callable[[list[EntityDescription]], None]
     ) -> None:
         self.entity_adders[entity_type] = callback
+
+    # Register a callback invoked after every applied discovery graph, so
+    # hand-built platforms (climate) can add entities once the graph exists.
+    def register_post_discovery_callback(self, callback: Callable[[], None]) -> None:
+        self._post_discovery_callbacks.append(callback)
 
     # Run a background analysis pass on-demand (used by the analyze service).
     async def async_run_analysis(self) -> None:
@@ -523,27 +601,73 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             via_device=via_device,
         )
 
+    def _fallback_candidate(self, name: str) -> str | None:
+        """Return the circuit to read a register from.
+
+        Prefer the circuit where the register was discovered (its raw or
+        placeholder graph key); otherwise fall back to the literal map circuit.
+        Mirrors the ctlv2/hmu aliasing used by get_meta() so registers that
+        live under basv3/ctlv3/vwzio are read from the correct circuit.
+        """
+        if self._graph:
+            for rk in self._graph.raw_registers:
+                if rk.endswith(f".{name}"):
+                    return rk.split(".", 1)[0]
+            for rk in self._graph.placeholder_registers:
+                if rk.endswith(f".{name}"):
+                    return rk.split(".", 1)[0]
+        return None
+
     async def _fallback_read(self, include_placeholders: bool = False) -> None:
         if not self.ebus or not self.ebus.is_connected:
             return
         graph_keys = self._last_find_keys
-        to_read = [k for k in REGISTER_MAP if REGISTER_MAP[k].enabled and k not in graph_keys]
+        # Resolve the REGISTER_MAP entry for a discovered register, applying the
+        # same ctlv2/hmu circuit aliasing as get_meta().
+        def _meta_key(circuit: str, name: str) -> str | None:
+            for alt in (circuit, "ctlv2", "hmu"):
+                key = f"{alt}.{name}"
+                if key in REGISTER_MAP:
+                    return key
+            return None
+
+        candidates: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+
+        def _add(circuit: str, name: str) -> None:
+            key = (circuit, name)
+            if key not in seen:
+                seen.add(key)
+                candidates.append(key)
+
+        # Map-driven reads: registers with metadata not yet in the graph.
+        for key in REGISTER_MAP:
+            meta = REGISTER_MAP[key]
+            if not meta.enabled or key in graph_keys:
+                continue
+            map_circuit, name = key.split(".", 1)
+            circuit = self._fallback_candidate(name)
+            _add(circuit or map_circuit, name)
+
+        # Placeholder reads: discovered no-data registers whose metadata
+        # resolves via the circuit alias (15-minute interval).
         if include_placeholders and self._graph:
-            to_read.extend(
-                key
-                for key in self._graph.placeholder_registers
-                if key in REGISTER_MAP and REGISTER_MAP[key].enabled and key not in to_read
-            )
-        if not to_read:
+            for key in self._graph.placeholder_registers:
+                parts = key.split(".", 1)
+                if len(parts) != 2:
+                    continue
+                circuit, name = parts
+                meta_key = _meta_key(circuit, name)
+                if meta_key and REGISTER_MAP[meta_key].enabled:
+                    _add(circuit, name)
+
+        if not candidates:
             return
-        _LOGGER.info("Fallback reading %d known register(s)", len(to_read))
+        _LOGGER.info("Fallback reading %d known register(s)", len(candidates))
         added = 0
         read_with_data = 0
-        for key in to_read:
-            parts = key.split(".", 1)
-            if len(parts) != 2:
-                continue
-            circuit, name = parts
+        for circuit, name in candidates:
+            key = f"{circuit}.{name}"
             try:
                 value = await self.ebus.read_register(circuit, name)
                 was_new = key not in self.registers
@@ -585,7 +709,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._last_find_keys.add(key)
             _LOGGER.info("Fallback read added %d register(s) to discovery", added)
         else:
-            _LOGGER.info("Fallback read complete: %d/%d registers with data", read_with_data, len(to_read))
+            _LOGGER.info("Fallback read complete: %d/%d registers with data", read_with_data, len(candidates))
 
     async def _async_update_data(self) -> dict[str, Any]:
         if not self._cache_seeded:
