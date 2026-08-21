@@ -50,6 +50,7 @@ async def test_arotherm_fixture_loads() -> None:
         ("community/arotherm_plus_hwc_run_discovery.yaml", 50),
         ("community/arotherm_plus_ctlv2_cooling_discovery.yaml", 50),
         ("community/geniaset_bass3_discovery.yaml", 50),
+        ("community/flexotherm_133_cooling_discovery.yaml", 50),
     ],
 )
 async def test_all_fixtures_load(fixture: str, min_registers: int) -> None:

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.2 - 2026-08-21
+
+### Fixed
+
+- **flexoTHERM cooling-yield data backed by a community dump (#50).** A new
+  discovery-dump fixture
+  (`tests/fixtures/community/flexotherm_133_cooling_discovery.yaml`) confirms
+  the flexoTHERM reports the daily cooling yield (`hmu.YieldCoolDay`, kWh) and
+  cooling runtime (`hmu.HoursCool`, h) as live values, while the cumulative
+  cooling totals (`StatElectricEnergySumCool`, `StatEnvironmentEnergySumCool`,
+  `YieldCooling`, `YieldCoolingMonth`, `CopCooling`, `CopCoolingMonth`) return
+  `ERR: element not found`. Regression tests assert the daily yield/runtime
+  entities are generated and the element-not-found totals stay hidden. No
+  production code change was required — the previous fixture simply had no live
+  cooling data.
+
 ## 1.4.1 - 2026-08-21
 
 ### Fixed

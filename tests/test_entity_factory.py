@@ -728,6 +728,31 @@ class TestStatEnergyRegisters:
         assert "hmu.StatElectricEnergySumCool.value" not in by_key
         assert "hmu.StatEnvironmentEnergySumCool.value" not in by_key
 
+    # flexoTHERM v1.3.3 dump (issue #50): daily cooling yield + runtime are
+    # live (YieldCoolDay=0.0, HoursCool=0), while cumulative cooling totals
+    # return "element not found" and must stay hidden.
+    def test_flexotherm_133_cooling_daily_yield_entities(self) -> None:
+        graph = DiscoveryService.build_device_graph(
+            load_find_lines("community/flexotherm_133_cooling_discovery.yaml")
+        )
+        by_key = {e.key: e for e in EntityFactoryService().generate(graph)}
+        yield_day = by_key.get("hmu.YieldCoolDay.value")
+        assert yield_day is not None, "daily cooling yield must be an entity"
+        assert yield_day.meta.device_class == "energy"
+        assert yield_day.meta.unit == "kWh"
+        runtime = by_key.get("hmu.HoursCool.value")
+        assert runtime is not None, "cooling runtime must be an entity"
+        assert runtime.meta.device_class == "duration"
+        for reg in (
+            "hmu.StatElectricEnergySumCool.value",
+            "hmu.StatEnvironmentEnergySumCool.value",
+            "hmu.YieldCooling.value",
+            "hmu.YieldCoolingMonth.value",
+            "hmu.CopCooling.value",
+            "hmu.CopCoolingMonth.value",
+        ):
+            assert reg not in by_key, f"element-not-found register must stay hidden: {reg}"
+
     # flexoCOMPACT (air/water aroTHERM with active cooling) reports cooling
     # energy live on both hmu and ctlv2; both get hmu energy metadata (issue #50).
     def test_flexocompact_cooling_energy_entities(self) -> None:
