@@ -182,6 +182,11 @@ def test_categorize_basv() -> None:
     assert result == DeviceType.HEATING_CONTROLLER
 
 
+def test_categorize_bass3() -> None:
+    result = DiscoveryService.categorize_circuit("bass", [], "BASS3")
+    assert result == DeviceType.HEATING_CONTROLLER
+
+
 def test_categorize_vwz() -> None:
     result = DiscoveryService.categorize_circuit("vwz", [], "VWZ00")
     assert result == DeviceType.PASSIVE_COOLING

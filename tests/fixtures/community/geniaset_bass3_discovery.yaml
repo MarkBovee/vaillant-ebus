@@ -1,0 +1,7865 @@
+# Discovery dump for vaillant_ebus
+# Review this file for sensitive information before sharing
+metadata:
+  timestamp: '2026-08-20T01:43:38.131295'
+  ebusd_version: null
+  register_count: 871
+  grab_duration: 0
+  dump_version: 3
+raw_find_lines:
+- bass AdaptHeatCurve = no data stored
+- bass AdaptHeatCurve = no data stored
+- bass BankHolidayEndPeriod = no data stored
+- bass BankHolidayEndPeriod = no data stored
+- bass BankHolidayStartPeriod = no data stored
+- bass BankHolidayStartPeriod = no data stored
+- bass CcTimer_Friday = no data stored
+- bass CcTimer_Friday = no data stored
+- bass CcTimer_Monday = no data stored
+- bass CcTimer_Monday = no data stored
+- bass CcTimer_Saturday = no data stored
+- bass CcTimer_Saturday = no data stored
+- bass CcTimer_Sunday = no data stored
+- bass CcTimer_Sunday = no data stored
+- bass CcTimer_Thursday = no data stored
+- bass CcTimer_Thursday = no data stored
+- bass CcTimer_Tuesday = no data stored
+- bass CcTimer_Tuesday = no data stored
+- bass CcTimer_Wednesday = no data stored
+- bass CcTimer_Wednesday = no data stored
+- bass Clearerrorhistory = no data stored
+- bass ContinuosHeating = no data stored
+- bass ContinuosHeating = no data stored
+- bass Currenterror = no data stored
+- bass CylinderChargeHyst = no data stored
+- bass CylinderChargeHyst = no data stored
+- bass CylinderChargeOffset = no data stored
+- bass CylinderChargeOffset = no data stored
+- bass Date = no data stored
+- bass Date = no data stored
+- bass DisplayedOutsideTemp = no data stored
+- bass Errorhistory = no data stored
+- bass FrostOverRideTime = no data stored
+- bass FrostOverRideTime = no data stored
+- bass GlobalSystemOff = no
+- bass GlobalSystemOff = no data stored
+- bass Hc1ActualFlowTempDesired = no data stored
+- bass Hc1AutoOffMode = no data stored
+- bass Hc1AutoOffMode = no data stored
+- bass Hc1CircuitType = no data stored
+- bass Hc1ExcessTemp = no data stored
+- bass Hc1ExcessTemp = no data stored
+- bass Hc1FlowTemp = 14.5
+- bass Hc1HeatCurve = 0.6
+- bass Hc1HeatCurve = no data stored
+- bass Hc1HeatCurveAdaption = no data stored
+- bass Hc1MaxFlowTempDesired = 48
+- bass Hc1MaxFlowTempDesired = no data stored
+- bass Hc1MinFlowTempDesired = no data stored
+- bass Hc1MinFlowTempDesired = no data stored
+- bass Hc1MixerMovement = no data stored
+- bass Hc1PumpStatus = no data stored
+- bass Hc1PumpStatus = no data stored
+- bass Hc1RoomTempSwitchOn = no data stored
+- bass Hc1RoomTempSwitchOn = no data stored
+- bass Hc1Status = no data stored
+- bass Hc1Status = no data stored
+- bass Hc1SummerTempLimit = 28
+- bass Hc1SummerTempLimit = no data stored
+- bass Hc2ActualFlowTempDesired = no data stored
+- bass Hc2AutoOffMode = no data stored
+- bass Hc2AutoOffMode = no data stored
+- bass Hc2CircuitType = no data stored
+- bass Hc2ExcessTemp = no data stored
+- bass Hc2ExcessTemp = no data stored
+- bass Hc2FlowTemp = no data stored
+- bass Hc2HeatCurve = no data stored
+- bass Hc2HeatCurve = no data stored
+- bass Hc2HeatCurveAdaption = no data stored
+- bass Hc2MaxFlowTempDesired = no data stored
+- bass Hc2MaxFlowTempDesired = no data stored
+- bass Hc2MinFlowTempDesired = no data stored
+- bass Hc2MinFlowTempDesired = no data stored
+- bass Hc2MixerMovement = no data stored
+- bass Hc2PumpStatus = no data stored
+- bass Hc2PumpStatus = no data stored
+- bass Hc2RoomTempSwitchOn = no data stored
+- bass Hc2RoomTempSwitchOn = no data stored
+- bass Hc2Status = no data stored
+- bass Hc2Status = no data stored
+- bass Hc2SummerTempLimit = no data stored
+- bass Hc2SummerTempLimit = no data stored
+- bass Hc3ActualFlowTempDesired = no data stored
+- bass Hc3AutoOffMode = no data stored
+- bass Hc3AutoOffMode = no data stored
+- bass Hc3CircuitType = no data stored
+- bass Hc3ExcessTemp = no data stored
+- bass Hc3ExcessTemp = no data stored
+- bass Hc3FlowTemp = no data stored
+- bass Hc3HeatCurve = no data stored
+- bass Hc3HeatCurve = no data stored
+- bass Hc3HeatCurveAdaption = no data stored
+- bass Hc3MaxFlowTempDesired = no data stored
+- bass Hc3MaxFlowTempDesired = no data stored
+- bass Hc3MinFlowTempDesired = no data stored
+- bass Hc3MinFlowTempDesired = no data stored
+- bass Hc3MixerMovement = no data stored
+- bass Hc3PumpStatus = no data stored
+- bass Hc3PumpStatus = no data stored
+- bass Hc3RoomTempSwitchOn = no data stored
+- bass Hc3RoomTempSwitchOn = no data stored
+- bass Hc3Status = no data stored
+- bass Hc3Status = no data stored
+- bass Hc3SummerTempLimit = no data stored
+- bass Hc3SummerTempLimit = no data stored
+- bass HcStorageTempBottom = no data stored
+- bass HcStorageTempTop = no data stored
+- bass HolidayEndPeriod = no data stored
+- bass HolidayEndPeriod = no data stored
+- bass HolidayStartPeriod = no data stored
+- bass HolidayStartPeriod = no data stored
+- bass HolidayTemp = no data stored
+- bass HolidayTemp = no data stored
+- bass HwcBankHolidayEndPeriod = no data stored
+- bass HwcBankHolidayEndPeriod = no data stored
+- bass HwcBankHolidayStartPeriod = no data stored
+- bass HwcBankHolidayStartPeriod = no data stored
+- bass HwcFlowTemp = no data stored
+- bass HwcHolidayEndPeriod = no data stored
+- bass HwcHolidayEndPeriod = no data stored
+- bass HwcHolidayStartPeriod = no data stored
+- bass HwcHolidayStartPeriod = no data stored
+- bass HwcLockTime = no data stored
+- bass HwcLockTime = no data stored
+- bass HwcMaxFlowTempDesired = no data stored
+- bass HwcMaxFlowTempDesired = no data stored
+- bass HwcOpMode = day
+- bass HwcOpMode = no data stored
+- bass HwcParallelLoading = no data stored
+- bass HwcParallelLoading = no data stored
+- bass HwcSFMode = no data stored
+- bass HwcSFMode = no data stored
+- bass HwcStorageTemp = 44
+- bass HwcStorageTempBottom = no data stored
+- bass HwcStorageTempTop = no data stored
+- bass HwcTempDesired = no data stored
+- bass HwcTempDesired = 48
+- bass HwcTimer_Friday = no data stored
+- bass HwcTimer_Friday = no data stored
+- bass HwcTimer_Monday = no data stored
+- bass HwcTimer_Monday = no data stored
+- bass HwcTimer_Saturday = no data stored
+- bass HwcTimer_Saturday = no data stored
+- bass HwcTimer_Sunday = no data stored
+- bass HwcTimer_Sunday = no data stored
+- bass HwcTimer_Thursday = no data stored
+- bass HwcTimer_Thursday = no data stored
+- bass HwcTimer_Tuesday = no data stored
+- bass HwcTimer_Tuesday = no data stored
+- bass HwcTimer_Wednesday = no data stored
+- bass HwcTimer_Wednesday = no data stored
+- bass HydraulicScheme = no data stored
+- bass HydraulicScheme = no data stored
+- bass Installer1 = no data stored
+- bass Installer1 = no data stored
+- bass Installer2 = no data stored
+- bass Installer2 = no data stored
+- bass KeyCodeforConfigMenu = no data stored
+- bass KeyCodeforConfigMenu = no data stored
+- bass MaintenanceDate = no data stored
+- bass MaintenanceDate = no data stored
+- bass MaintenanceDue = no data stored
+- 'bass ManualCooling =  (ERR: invalid position for 3115b52406020000000600 / 00)'
+- bass ManualCooling = no data stored
+- bass MaxCylinderChargeTime = no data stored
+- bass MaxCylinderChargeTime = no data stored
+- bass MaxRoomHumidity = no data stored
+- bass MaxRoomHumidity = no data stored
+- bass MultiRelaySetting = no data stored
+- bass MultiRelaySetting = no data stored
+- bass NoiseReductionTimer_Friday = no data stored
+- bass NoiseReductionTimer_Friday = no data stored
+- bass NoiseReductionTimer_Monday = no data stored
+- bass NoiseReductionTimer_Monday = no data stored
+- bass NoiseReductionTimer_Saturday = no data stored
+- bass NoiseReductionTimer_Saturday = no data stored
+- bass NoiseReductionTimer_Sunday = no data stored
+- bass NoiseReductionTimer_Sunday = no data stored
+- bass NoiseReductionTimer_Thursday = no data stored
+- bass NoiseReductionTimer_Thursday = no data stored
+- bass NoiseReductionTimer_Tuesday = no data stored
+- bass NoiseReductionTimer_Tuesday = no data stored
+- bass NoiseReductionTimer_Wednesday = no data stored
+- bass NoiseReductionTimer_Wednesday = no data stored
+- bass OpMode = no data stored
+- bass OpMode = no data stored
+- bass OpModeCooling = no data stored
+- bass OpModeCooling = no data stored
+- bass OpModeEffect = no data stored
+- bass OpModeEffect = no data stored
+- bass OpModeVentilation = no data stored
+- bass OpModeVentilation = no data stored
+- bass OutsideTempAvg = no data stored
+- bass OutsideTempAvg = no data stored
+- bass PhoneNumber1 = no data stored
+- bass PhoneNumber1 = no data stored
+- bass PhoneNumber2 = no data stored
+- bass PhoneNumber2 = no data stored
+- 'bass PrEnergySum =  (ERR: invalid position for 3115b52406020000005c00 / 00)'
+- bass PrEnergySum = no data stored
+- bass PrEnergySumHc = 2
+- bass PrEnergySumHc = no data stored
+- bass PrEnergySumHcLastMonth = no data stored
+- bass PrEnergySumHcLastMonth = no data stored
+- bass PrEnergySumHcThisMonth = no data stored
+- bass PrEnergySumHcThisMonth = no data stored
+- bass PrEnergySumHwc = 14
+- bass PrEnergySumHwc = no data stored
+- bass PrEnergySumHwcLastMonth = no data stored
+- bass PrEnergySumHwcLastMonth = no data stored
+- bass PrEnergySumHwcThisMonth = no data stored
+- bass PrEnergySumHwcThisMonth = no data stored
+- bass PrFuelSum = no data stored
+- bass PrFuelSum = no data stored
+- bass PrFuelSumHc = no data stored
+- bass PrFuelSumHc = no data stored
+- bass PrFuelSumHcLastMonth = no data stored
+- bass PrFuelSumHcLastMonth = no data stored
+- bass PrFuelSumHcThisMonth = no data stored
+- bass PrFuelSumHcThisMonth = no data stored
+- bass PrFuelSumHwc = no data stored
+- bass PrFuelSumHwc = no data stored
+- bass PrFuelSumHwcLastMonth = no data stored
+- bass PrFuelSumHwcLastMonth = no data stored
+- bass PrFuelSumHwcThisMonth = no data stored
+- bass PrFuelSumHwcThisMonth = no data stored
+- bass PumpAdditionalTime = no data stored
+- bass PumpAdditionalTime = no data stored
+- bass SFMode = no data stored
+- bass SFMode = no data stored
+- bass SolarYieldTotal = 0
+- bass SolarYieldTotal = no data stored
+- bass SystemFlowTemp = no data stored
+- bass TariffTimer_Friday = no data stored
+- bass TariffTimer_Friday = no data stored
+- bass TariffTimer_Monday = no data stored
+- bass TariffTimer_Monday = no data stored
+- bass TariffTimer_Saturday = no data stored
+- bass TariffTimer_Saturday = no data stored
+- bass TariffTimer_Sunday = no data stored
+- bass TariffTimer_Sunday = no data stored
+- bass TariffTimer_Thursday = no data stored
+- bass TariffTimer_Thursday = no data stored
+- bass TariffTimer_Tuesday = no data stored
+- bass TariffTimer_Tuesday = no data stored
+- bass TariffTimer_Wednesday = no data stored
+- bass TariffTimer_Wednesday = no data stored
+- bass Time = no data stored
+- bass Time = no data stored
+- bass VentilationDay = no data stored
+- bass VentilationDay = no data stored
+- bass VentilationNight = no data stored
+- bass VentilationNight = no data stored
+- bass VentilationTimer_Friday = no data stored
+- bass VentilationTimer_Friday = no data stored
+- bass VentilationTimer_Monday = no data stored
+- bass VentilationTimer_Monday = no data stored
+- bass VentilationTimer_Saturday = no data stored
+- bass VentilationTimer_Saturday = no data stored
+- bass VentilationTimer_Sunday = no data stored
+- bass VentilationTimer_Sunday = no data stored
+- bass VentilationTimer_Thursday = no data stored
+- bass VentilationTimer_Thursday = no data stored
+- bass VentilationTimer_Tuesday = no data stored
+- bass VentilationTimer_Tuesday = no data stored
+- bass VentilationTimer_Wednesday = no data stored
+- bass VentilationTimer_Wednesday = no data stored
+- bass WaterPressure = no data stored
+- bass YieldTotal = 35
+- bass YieldTotal = no data stored
+- bass Z1ActualRoomTempDesired = no data stored
+- bass Z1ActualRoomTempDesired = no data stored
+- bass Z1BankHolidayEndPeriod = no data stored
+- bass Z1BankHolidayEndPeriod = no data stored
+- bass Z1BankHolidayStartPeriod = no data stored
+- bass Z1BankHolidayStartPeriod = no data stored
+- bass Z1CoolingTemp = no data stored
+- bass Z1CoolingTemp = no data stored
+- bass Z1CoolingTimer_Friday = no data stored
+- bass Z1CoolingTimer_Friday = no data stored
+- bass Z1CoolingTimer_Monday = no data stored
+- bass Z1CoolingTimer_Monday = no data stored
+- bass Z1CoolingTimer_Saturday = no data stored
+- bass Z1CoolingTimer_Saturday = no data stored
+- bass Z1CoolingTimer_Sunday = no data stored
+- bass Z1CoolingTimer_Sunday = no data stored
+- bass Z1CoolingTimer_Thursday = no data stored
+- bass Z1CoolingTimer_Thursday = no data stored
+- bass Z1CoolingTimer_Tuesday = no data stored
+- bass Z1CoolingTimer_Tuesday = no data stored
+- bass Z1CoolingTimer_Wednesday = no data stored
+- bass Z1CoolingTimer_Wednesday = no data stored
+- bass Z1DayTemp = no data stored
+- bass Z1DayTemp = no data stored
+- bass Z1HolidayEndPeriod = no data stored
+- bass Z1HolidayEndPeriod = no data stored
+- bass Z1HolidayStartPeriod = no data stored
+- bass Z1HolidayStartPeriod = no data stored
+- bass Z1HolidayTemp = no data stored
+- bass Z1HolidayTemp = no data stored
+- bass Z1Name1 = no data stored
+- bass Z1Name1 = no data stored
+- bass Z1Name2 = no data stored
+- bass Z1Name2 = no data stored
+- bass Z1NightTemp = no data stored
+- bass Z1NightTemp = no data stored
+- bass Z1OpMode = no data stored
+- bass Z1OpMode = no data stored
+- bass Z1OpModeCooling = no data stored
+- bass Z1OpModeCooling = no data stored
+- bass Z1QuickVetoTemp = no data stored
+- bass Z1QuickVetoTemp = no data stored
+- bass Z1RoomTemp = no data stored
+- bass Z1RoomZoneMapping = no data stored
+- bass Z1RoomZoneMapping = no data stored
+- bass Z1SFMode = no data stored
+- bass Z1SFMode = no data stored
+- bass Z1Shortname = no data stored
+- bass Z1Shortname = no data stored
+- bass Z1Timer_Friday = no data stored
+- bass Z1Timer_Friday = no data stored
+- bass Z1Timer_Monday = no data stored
+- bass Z1Timer_Monday = no data stored
+- bass Z1Timer_Saturday = no data stored
+- bass Z1Timer_Saturday = no data stored
+- bass Z1Timer_Sunday = no data stored
+- bass Z1Timer_Sunday = no data stored
+- bass Z1Timer_Thursday = no data stored
+- bass Z1Timer_Thursday = no data stored
+- bass Z1Timer_Tuesday = no data stored
+- bass Z1Timer_Tuesday = no data stored
+- bass Z1Timer_Wednesday = no data stored
+- bass Z1Timer_Wednesday = no data stored
+- bass Z1ValveStatus = no data stored
+- bass Z1ValveStatus = no data stored
+- bass Z2ActualRoomTempDesired = no data stored
+- bass Z2ActualRoomTempDesired = no data stored
+- bass Z2BankHolidayEndPeriod = no data stored
+- bass Z2BankHolidayEndPeriod = no data stored
+- bass Z2BankHolidayStartPeriod = no data stored
+- bass Z2BankHolidayStartPeriod = no data stored
+- bass Z2CoolingTemp = no data stored
+- bass Z2CoolingTemp = no data stored
+- bass Z2CoolingTimer_Friday = no data stored
+- bass Z2CoolingTimer_Friday = no data stored
+- bass Z2CoolingTimer_Monday = no data stored
+- bass Z2CoolingTimer_Monday = no data stored
+- bass Z2CoolingTimer_Saturday = no data stored
+- bass Z2CoolingTimer_Saturday = no data stored
+- bass Z2CoolingTimer_Sunday = no data stored
+- bass Z2CoolingTimer_Sunday = no data stored
+- bass Z2CoolingTimer_Thursday = no data stored
+- bass Z2CoolingTimer_Thursday = no data stored
+- bass Z2CoolingTimer_Tuesday = no data stored
+- bass Z2CoolingTimer_Tuesday = no data stored
+- bass Z2CoolingTimer_Wednesday = no data stored
+- bass Z2CoolingTimer_Wednesday = no data stored
+- bass Z2DayTemp = no data stored
+- bass Z2DayTemp = no data stored
+- bass Z2HolidayEndPeriod = no data stored
+- bass Z2HolidayEndPeriod = no data stored
+- bass Z2HolidayStartPeriod = no data stored
+- bass Z2HolidayStartPeriod = no data stored
+- bass Z2HolidayTemp = no data stored
+- bass Z2HolidayTemp = no data stored
+- bass Z2Name1 = no data stored
+- bass Z2Name1 = no data stored
+- bass Z2Name2 = no data stored
+- bass Z2Name2 = no data stored
+- bass Z2NightTemp = no data stored
+- bass Z2NightTemp = no data stored
+- bass Z2OpMode = no data stored
+- bass Z2OpMode = no data stored
+- bass Z2OpModeCooling = no data stored
+- bass Z2OpModeCooling = no data stored
+- bass Z2QuickVetoTemp = no data stored
+- bass Z2QuickVetoTemp = no data stored
+- bass Z2RoomTemp = no data stored
+- bass Z2RoomZoneMapping = no data stored
+- bass Z2RoomZoneMapping = no data stored
+- bass Z2SFMode = no data stored
+- bass Z2SFMode = no data stored
+- bass Z2Shortname = no data stored
+- bass Z2Shortname = no data stored
+- bass Z2Timer_Friday = no data stored
+- bass Z2Timer_Friday = no data stored
+- bass Z2Timer_Monday = no data stored
+- bass Z2Timer_Monday = no data stored
+- bass Z2Timer_Saturday = no data stored
+- bass Z2Timer_Saturday = no data stored
+- bass Z2Timer_Sunday = no data stored
+- bass Z2Timer_Sunday = no data stored
+- bass Z2Timer_Thursday = no data stored
+- bass Z2Timer_Thursday = no data stored
+- bass Z2Timer_Tuesday = no data stored
+- bass Z2Timer_Tuesday = no data stored
+- bass Z2Timer_Wednesday = no data stored
+- bass Z2Timer_Wednesday = no data stored
+- bass Z2ValveStatus = no data stored
+- bass Z2ValveStatus = no data stored
+- bass Z3ActualRoomTempDesired = no data stored
+- bass Z3ActualRoomTempDesired = no data stored
+- bass Z3BankHolidayEndPeriod = no data stored
+- bass Z3BankHolidayEndPeriod = no data stored
+- bass Z3BankHolidayStartPeriod = no data stored
+- bass Z3BankHolidayStartPeriod = no data stored
+- bass Z3CoolingTemp = no data stored
+- bass Z3CoolingTemp = no data stored
+- bass Z3CoolingTimer_Friday = no data stored
+- bass Z3CoolingTimer_Friday = no data stored
+- bass Z3CoolingTimer_Monday = no data stored
+- bass Z3CoolingTimer_Monday = no data stored
+- bass Z3CoolingTimer_Saturday = no data stored
+- bass Z3CoolingTimer_Saturday = no data stored
+- bass Z3CoolingTimer_Sunday = no data stored
+- bass Z3CoolingTimer_Sunday = no data stored
+- bass Z3CoolingTimer_Thursday = no data stored
+- bass Z3CoolingTimer_Thursday = no data stored
+- bass Z3CoolingTimer_Tuesday = no data stored
+- bass Z3CoolingTimer_Tuesday = no data stored
+- bass Z3CoolingTimer_Wednesday = no data stored
+- bass Z3CoolingTimer_Wednesday = no data stored
+- bass Z3DayTemp = no data stored
+- bass Z3DayTemp = no data stored
+- bass Z3HolidayEndPeriod = no data stored
+- bass Z3HolidayEndPeriod = no data stored
+- bass Z3HolidayStartPeriod = no data stored
+- bass Z3HolidayStartPeriod = no data stored
+- bass Z3HolidayTemp = no data stored
+- bass Z3HolidayTemp = no data stored
+- bass Z3Name1 = no data stored
+- bass Z3Name1 = no data stored
+- bass Z3Name2 = no data stored
+- bass Z3Name2 = no data stored
+- bass Z3NightTemp = no data stored
+- bass Z3NightTemp = no data stored
+- bass Z3OpMode = no data stored
+- bass Z3OpMode = no data stored
+- bass Z3OpModeCooling = no data stored
+- bass Z3OpModeCooling = no data stored
+- bass Z3QuickVetoTemp = no data stored
+- bass Z3QuickVetoTemp = no data stored
+- bass Z3RoomTemp = no data stored
+- bass Z3RoomZoneMapping = no data stored
+- bass Z3RoomZoneMapping = no data stored
+- bass Z3SFMode = no data stored
+- bass Z3SFMode = no data stored
+- bass Z3Shortname = no data stored
+- bass Z3Shortname = no data stored
+- bass Z3Timer_Friday = no data stored
+- bass Z3Timer_Friday = no data stored
+- bass Z3Timer_Monday = no data stored
+- bass Z3Timer_Monday = no data stored
+- bass Z3Timer_Saturday = no data stored
+- bass Z3Timer_Saturday = no data stored
+- bass Z3Timer_Sunday = no data stored
+- bass Z3Timer_Sunday = no data stored
+- bass Z3Timer_Thursday = no data stored
+- bass Z3Timer_Thursday = no data stored
+- bass Z3Timer_Tuesday = no data stored
+- bass Z3Timer_Tuesday = no data stored
+- bass Z3Timer_Wednesday = no data stored
+- bass Z3Timer_Wednesday = no data stored
+- bass Z3ValveStatus = no data stored
+- bass Z3ValveStatus = no data stored
+- Broadcast Datetime = no data stored
+- Broadcast Error = no data stored
+- Broadcast HwcStatus = no data stored
+- Broadcast Id = no data stored
+- Broadcast IdAnswer = no data stored
+- Broadcast IdQuery = no data stored
+- Broadcast Load = no data stored
+- Broadcast Outsidetemp = 26.000
+- Broadcast Queryexistence =  (empty for 31fe07fe00 / )
+- Broadcast Signoflife = no data stored
+- Broadcast Vdatetime = 01:41:38;20.08.2026
+- Broadcast Vdatetime = no data stored
+- ctlv2 ManualCoolingEndDate = 28.10.2026
+- ctlv2 ManualCoolingEndDate = no data stored
+- ctlv2 ManualCoolingStartDate = 28.07.2026
+- ctlv2 ManualCoolingStartDate = no data stored
+- ctlv2 z1RoomHumidity = 49
+- General Valuerange = no data stored
+- hmu AirIntakeTemp = no data stored
+- hmu BuildingCircuitFlow = 1732
+- hmu BuildingPumpHours = no data stored
+- hmu BuildingPumpHours = no data stored
+- hmu BuildingPumpStarts = no data stored
+- hmu BuildingPumpStarts = no data stored
+- hmu Clearerrorhistory = no data stored
+- hmu CompressorHours = no data stored
+- hmu CompressorHours = no data stored
+- hmu CompressorHysteresisCooling = no data stored
+- hmu CompressorHysteresisHc = no data stored
+- hmu CompressorStarts = no data stored
+- hmu CompressorStarts = no data stored
+- hmu ConsumptionThisYear10 = no data stored
+- hmu ConsumptionThisYear11 = no data stored
+- hmu ConsumptionThisYear12 = no data stored
+- hmu ConsumptionThisYear1 = no data stored
+- hmu ConsumptionThisYear2 = no data stored
+- hmu ConsumptionThisYear3 = no data stored
+- hmu ConsumptionThisYear4 = no data stored
+- hmu ConsumptionThisYear5 = no data stored
+- hmu ConsumptionThisYear6 = no data stored
+- hmu ConsumptionThisYear7 = no data stored
+- hmu ConsumptionThisYear8 = no data stored
+- hmu ConsumptionThisYear9 = no data stored
+- 'hmu ConsumptionTotal =  (ERR: invalid position for 3108b516021802 / 00)'
+- hmu CopHc = 1.0
+- hmu CopHcMonth = 1.0
+- hmu CopHwc = 3.6
+- hmu CopHwcMonth = 3.6
+- hmu CurrentCompressorUtil = 44.19
+- hmu CurrentConsumedPower = 0.0
+- hmu Currenterror = -;-;-;-;-
+- hmu CurrentYieldPower = 0.0
+- hmu DateTime = nosignal;-:-:-;-.-.-;-
+- hmu EEVSteps = no data stored
+- hmu EEVSteps = no data stored
+- hmu EnableiveMonitorMain = no data stored
+- hmu EnableTestCompressorExitTemp = no data stored
+- hmu EnableTestCompressorIntakeTemp = no data stored
+- hmu EnableTestCompressorSpeed = no data stored
+- hmu EnableTestCondensateTemp = no data stored
+- hmu EnableTestEEVPosition = no data stored
+- hmu EnableTestEEVTemp = no data stored
+- hmu EnableTestEvaporationTemp = no data stored
+- hmu EnableTestFlowTemp = no data stored
+- hmu EnableTestHighPress = no data stored
+- hmu EnableTestReturnTemp = no data stored
+- hmu EnableTestWaterThroughput = no data stored
+- hmu EnergyIntegral = 29
+- hmu Errorhistory = no data stored
+- hmu Fan1Hours = no data stored
+- hmu Fan1Hours = no data stored
+- hmu Fan1Starts = no data stored
+- hmu Fan1Starts = no data stored
+- hmu Fan2Hours = no data stored
+- hmu Fan2Hours = no data stored
+- hmu Fan2Starts = no data stored
+- hmu Fan2Starts = no data stored
+- hmu FlowPressure = no data stored
+- 'hmu FlowTemp =  (ERR: invalid position for 3108b51a0405ff3220 / 02ff01)'
+- hmu FourWayValveHours = no data stored
+- hmu FourWayValveHours = no data stored
+- hmu FourWayValveSwitches = no data stored
+- hmu FourWayValveSwitches = no data stored
+- hmu FourWayValveSwitchingOperations = no data stored
+- hmu FourWayValveSwitchingOperations = no data stored
+- hmu HcBivalencePoint = no data stored
+- hmu HcModeActive = no data stored
+- hmu HeatCurve = no data stored
+- hmu Hours = no data stored
+- hmu HoursCool = 0
+- hmu HoursHc = no data stored
+- hmu HoursHwc = no data stored
+- hmu HwcBivalencePoint = no data stored
+- hmu HwcChargeHysteresis = no data stored
+- hmu HwcMode = no data stored
+- hmu HwcModeActive = no data stored
+- hmu ImmersionHeaterMode = no data stored
+- hmu LiveMonitorAirIntakeTemp = no data stored
+- hmu LiveMonitorCurrentCompressorUtil = no data stored
+- hmu LiveMonitorCurrentConsumedPower = no data stored
+- hmu LiveMonitorCurrentSupplyTemp = no data stored
+- hmu LiveMonitorCurrentYieldPower = no data stored
+- hmu LiveMonitorDesiredSupplyTemp = no data stored
+- hmu LiveMonitorMain = no data stored
+- hmu MaxFlowTemp = no data stored
+- hmu MinFlowTemp = no data stored
+- hmu RunDataAirInletTemp = 35.6875
+- hmu RunDataBuildingCPumpPower = 90
+- hmu RunDataCompressorInletTemp = 12.1875
+- hmu RunDataCompressorOutletTemp = 64.1875
+- hmu RunDataCompressorSpeed = 49
+- hmu RunDataEEVOutletTemp = 41.0625
+- hmu RunDataEEVPositionAbs = 0
+- hmu RunDataElectricPowerConsumption = no data stored
+- hmu RunDataFan1Speed = 0.0
+- hmu RunDataFan2Speed = 0.0
+- hmu RunDataFlowTemp = no data stored
+- hmu RunDataHighPressure = 26
+- hmu RunDataReturnTemp = no data stored
+- 'hmu RunDataStatuscode =  (ERR: invalid position for 3108b50905540200530d / 040208530d)'
+- hmu RunStats4PortValveHours = 541
+- hmu RunStats4PortValveSwitches = 30
+- hmu RunStatsBuildingCPumpStarts = 38
+- hmu RunStatsBuildingPumpHours = 411
+- hmu RunStatsCompressorHc = no data stored
+- hmu RunStatsCompressorHours = 385
+- hmu RunStatsCompressorHwc = no data stored
+- hmu RunStatsCompressorStarts = 86
+- hmu RunStatsFan1Hours = 387
+- hmu RunStatsFan1Starts = 86
+- hmu RunStatsFan2Hours = 0
+- hmu RunStatsFan2Starts = 0
+- hmu RunStatsHcHours = 0
+- hmu RunStatsHMUHours = 557
+- hmu RunStatsHwcHours = 14
+- hmu SetMode = auto;15.0;-;-;1;1;1;0;0;1
+- hmu SetMode = no data stored
+- hmu SourcePressure = no data stored
+- 'hmu SourceTempOutput =  (ERR: invalid position for 3108b51a0405ff3227 / 02ff01)'
+- hmu StatBuildingPumpHours = no data stored
+- hmu StatBuildingPumpStarts = no data stored
+- hmu StatCompressorHours = no data stored
+- hmu StatCompressorStarts = no data stored
+- hmu State = no data stored
+- hmu StatEEVSteps = no data stored
+- hmu StatFan1Hours = no data stored
+- hmu StatFan1Starts = no data stored
+- hmu StatFourWayValveHours = no data stored
+- hmu StatFourWayValveSwitchingOperations = no data stored
+- hmu Status01 = 15.0;16.0;26.000;-;42.5;off
+- hmu Status02 = no data stored
+- hmu Status16 = no data stored
+- 'hmu Status =  (ERR: invalid position for 3108b5110103 / 00)'
+- hmu StatusCirPump = on
+- hmu SummerSwitchOffTemp = no data stored
+- hmu TargetFlowTemp = no data stored
+- hmu TargetTempHc = no data stored
+- hmu TargetTempHwc = no data stored
+- hmu TestAirIntakeTemp = no data stored
+- hmu TestBuildingPumpPower = no data stored
+- hmu TestBuildingWaterPress = no data stored
+- hmu TestCompressorExitTemp = no data stored
+- hmu TestCompressorInletTemp = no data stored
+- hmu TestCompressorSpeed = no data stored
+- hmu TestCondensateTemp = no data stored
+- hmu TestCondensateTrayHeater = no data stored
+- hmu TestCondensorInletTemp = no data stored
+- hmu TestCondensorOutletTemp = no data stored
+- hmu TestCylinderTemp = no data stored
+- hmu TestDCFStatus = no data stored
+- hmu TestEEVOutletTemp = no data stored
+- hmu TestEEVPosition = no data stored
+- hmu TestEEVTemp = no data stored
+- hmu TestEvaporationTemp = no data stored
+- hmu TestFan1 = no data stored
+- hmu TestFan2 = no data stored
+- hmu TestFlowTemp = no data stored
+- hmu TestFlowTempImmersionHeater = no data stored
+- hmu TestFourWayValve = no data stored
+- hmu TestHeatingCoilCompressor = no data stored
+- hmu TestHighPress = no data stored
+- hmu TestHighPressureSwitch = no data stored
+- hmu TestImmersionHeaterSafetyCutOut = no data stored
+- hmu TestLockoutContactS20 = no data stored
+- hmu TestLockoutContactS21 = no data stored
+- hmu TestLowPress = no data stored
+- hmu TestMA1Output = no data stored
+- hmu TestMIInput = no data stored
+- hmu TestMO2Output = no data stored
+- hmu TestMO3Output = no data stored
+- hmu TestOutdoorTemp = no data stored
+- hmu TestOverheatingActualValue = no data stored
+- hmu TestOverheatingTargetValue = no data stored
+- hmu TestPrioritySwitchingValve = no data stored
+- hmu TestReturnTemp = no data stored
+- hmu TestSubcoolingActualValue = no data stored
+- hmu TestSubcoolingTargetValue = no data stored
+- hmu TestSystemTemp = no data stored
+- hmu TestTempSwitchCompressorOutlet = no data stored
+- hmu TestWaterThroughput = no data stored
+- hmu TotalEnergyUsage = 309
+- hmu YieldCoolDay = 0.0
+- hmu YieldHc = 0
+- hmu YieldHcDay = 0.0
+- hmu YieldHcMonth = no data stored
+- hmu YieldHwc = 36
+- hmu YieldHwcDay = no data stored
+- hmu YieldHwcMonth = no data stored
+- hmu YieldThisYear10 = no data stored
+- hmu YieldThisYear11 = no data stored
+- hmu YieldThisYear12 = no data stored
+- hmu YieldThisYear1 = no data stored
+- hmu YieldThisYear2 = no data stored
+- hmu YieldThisYear3 = no data stored
+- hmu YieldThisYear4 = no data stored
+- hmu YieldThisYear5 = no data stored
+- hmu YieldThisYear6 = no data stored
+- hmu YieldThisYear7 = no data stored
+- hmu YieldThisYear8 = no data stored
+- hmu YieldThisYear9 = no data stored
+- 'hmu YieldTotal =  (ERR: invalid position for 3108b516021801 / 00)'
+- Memory Eeprom = no data stored
+- Memory Eeprom = no data stored
+- Memory Ram = no data stored
+- Memory Ram = no data stored
+- Scan Id = no data stored
+- scan.08  = Vaillant;HMU00;0129;2204
+- Scan.08 Id = 21;25;34;SERIAL_HMU_VWZIO_XXX;3130;321665;N6
+- scan.15  = Vaillant;BASS3;0708;4304
+- Scan.15 Id = 21;25;13;SERIAL_BASS_XXX;0082;009877;N8
+- scan.76  = Vaillant;VWZIO;0102;0504
+- Scan.76 Id = 21;25;34;SERIAL_HMU_VWZIO_XXX;3130;321665;N6
+- vwzio EnableTestHwcTemp = no data stored
+- vwzio EnableTestOutdoorTemp = no data stored
+- vwzio EnableTestThreeWayValve = no data stored
+- vwzio TestHwcTemp = no data stored
+- vwzio TestOutdoorTemp = no data stored
+- vwzio TestThreeWayValve = no data stored
+- ''
+before_registers:
+- circuit: Broadcast
+  name: Datetime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Error
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: Broadcast
+  name: HwcStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Id
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: IdAnswer
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: IdQuery
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Load
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Outsidetemp
+  fields:
+  - value
+  values:
+  - '26.000'
+  writable: false
+  has_data: true
+- circuit: Broadcast
+  name: Queryexistence
+  fields:
+  - value
+  values:
+  - (empty for 31fe07fe00 / )
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Signoflife
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Vdatetime
+  fields:
+  - value
+  values:
+  - 01:41:38;20.08.2026
+  writable: false
+  has_data: true
+- circuit: Broadcast
+  name: Vdatetime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: WaterPressure
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: General
+  name: Valuerange
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Eeprom
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Eeprom
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Ram
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Ram
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Scan
+  name: Id
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Scan.08
+  name: Id
+  fields:
+  - value
+  values:
+  - 21;25;34;SERIAL_HMU_VWZIO_XXX;3130;321665;N6
+  writable: false
+  has_data: true
+- circuit: Scan.15
+  name: Id
+  fields:
+  - value
+  values:
+  - 21;25;13;SERIAL_BASS_XXX;0082;009877;N8
+  writable: false
+  has_data: true
+- circuit: Scan.76
+  name: Id
+  fields:
+  - value
+  values:
+  - 21;25;34;SERIAL_HMU_VWZIO_XXX;3130;321665;N6
+  writable: false
+  has_data: true
+- circuit: bass
+  name: AdaptHeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: AdaptHeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CcTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Clearerrorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: ContinuosHeating
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: ContinuosHeating
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CylinderChargeHyst
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CylinderChargeHyst
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CylinderChargeOffset
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: CylinderChargeOffset
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Date
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Date
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: DisplayedOutsideTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: FrostOverRideTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: FrostOverRideTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: GlobalSystemOff
+  fields:
+  - value
+  values:
+  - 'no'
+  writable: false
+  has_data: true
+- circuit: bass
+  name: GlobalSystemOff
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1AutoOffMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1AutoOffMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1CircuitType
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1ExcessTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1ExcessTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1FlowTemp
+  fields:
+  - value
+  values:
+  - '14.5'
+  writable: false
+  has_data: true
+- circuit: bass
+  name: Hc1HeatCurve
+  fields:
+  - value
+  values:
+  - '0.6'
+  writable: false
+  has_data: true
+- circuit: bass
+  name: Hc1HeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - '48'
+  writable: false
+  has_data: true
+- circuit: bass
+  name: Hc1MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1MixerMovement
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1PumpStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1PumpStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1Status
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1Status
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc1SummerTempLimit
+  fields:
+  - value
+  values:
+  - '28'
+  writable: false
+  has_data: true
+- circuit: bass
+  name: Hc1SummerTempLimit
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2AutoOffMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2AutoOffMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2CircuitType
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2ExcessTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2ExcessTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2FlowTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2HeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2HeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2MixerMovement
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2PumpStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2PumpStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2Status
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2Status
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2SummerTempLimit
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc2SummerTempLimit
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3AutoOffMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3AutoOffMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3CircuitType
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3ExcessTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3ExcessTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3FlowTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3HeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3HeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3MixerMovement
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3PumpStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3PumpStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3Status
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3Status
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3SummerTempLimit
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Hc3SummerTempLimit
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HcStorageTempBottom
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HcStorageTempTop
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HolidayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HolidayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcBankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcBankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcBankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcBankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcFlowTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcLockTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcLockTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcMaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcMaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcOpMode
+  fields:
+  - value
+  values:
+  - day
+  writable: false
+  has_data: true
+- circuit: bass
+  name: HwcOpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcParallelLoading
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcParallelLoading
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcSFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcSFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcStorageTemp
+  fields:
+  - value
+  values:
+  - '44'
+  writable: false
+  has_data: true
+- circuit: bass
+  name: HwcStorageTempBottom
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcStorageTempTop
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTempDesired
+  fields:
+  - value
+  values:
+  - '48'
+  writable: false
+  has_data: true
+- circuit: bass
+  name: HwcTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HwcTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HydraulicScheme
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: HydraulicScheme
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Installer1
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Installer1
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Installer2
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Installer2
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: KeyCodeforConfigMenu
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: KeyCodeforConfigMenu
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: MaintenanceDate
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: MaintenanceDate
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: MaintenanceDue
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: ManualCooling
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020000000600 / 00)'
+  writable: false
+  has_data: false
+- circuit: bass
+  name: ManualCooling
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: MaxCylinderChargeTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: MaxCylinderChargeTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: MaxRoomHumidity
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: MaxRoomHumidity
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: MultiRelaySetting
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: MultiRelaySetting
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: NoiseReductionTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: OpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: OpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: OpModeCooling
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: OpModeCooling
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: OpModeEffect
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: OpModeEffect
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: OpModeVentilation
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: OpModeVentilation
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: OutsideTempAvg
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: OutsideTempAvg
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PhoneNumber1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PhoneNumber1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PhoneNumber2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PhoneNumber2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySum
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020000005c00 / 00)'
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySum
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySumHc
+  fields:
+  - value
+  values:
+  - '2'
+  writable: false
+  has_data: true
+- circuit: bass
+  name: PrEnergySumHc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySumHcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySumHcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySumHcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySumHcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySumHwc
+  fields:
+  - value
+  values:
+  - '14'
+  writable: false
+  has_data: true
+- circuit: bass
+  name: PrEnergySumHwc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySumHwcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySumHwcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySumHwcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrEnergySumHwcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSum
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSum
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHwc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHwc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHwcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHwcLastMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHwcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PrFuelSumHwcThisMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PumpAdditionalTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: PumpAdditionalTime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: SFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: SFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: SolarYieldTotal
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: bass
+  name: SolarYieldTotal
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: SystemFlowTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: TariffTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Time
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Time
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationDay
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationDay
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationNight
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationNight
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: VentilationTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: WaterPressure
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: YieldTotal
+  fields:
+  - value
+  values:
+  - '35'
+  writable: false
+  has_data: true
+- circuit: bass
+  name: YieldTotal
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1CoolingTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1DayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1DayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1HolidayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1HolidayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Name1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Name1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Name2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Name2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1NightTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1NightTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1OpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1OpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1OpModeCooling
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1OpModeCooling
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1QuickVetoTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1QuickVetoTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1RoomTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1SFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1SFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1Timer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1ValveStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z1ValveStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2CoolingTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2DayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2DayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2HolidayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2HolidayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Name1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Name1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Name2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Name2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2NightTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2NightTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2OpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2OpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2OpModeCooling
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2OpModeCooling
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2QuickVetoTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2QuickVetoTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2RoomTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2SFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2SFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2Timer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2ValveStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z2ValveStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3BankHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3BankHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3CoolingTimer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3DayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3DayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3HolidayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3HolidayTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Name1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Name1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Name2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Name2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3NightTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3NightTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3OpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3OpMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3OpModeCooling
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3OpModeCooling
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3QuickVetoTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3QuickVetoTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3RoomTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3RoomZoneMapping
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3SFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3SFMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Shortname
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Friday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Monday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Saturday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Sunday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Thursday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Tuesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3Timer_Wednesday
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3ValveStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: bass
+  name: Z3ValveStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: AdaptHeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: CcTimer_Config
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: CcTimer_Timeframes
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: ContinuousHeating
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: CylinderChargeHyst
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: CylinderChargeOffset
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Date
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: DisplayedOutsideTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: FrostOverRideTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1AutoOffMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1CircuitType
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1CoolingEnabled
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1CoolingFlowTempMin
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1DewPointMonitoring
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1DewPointOffset
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1ExcessTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1HeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1MixerMovement
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1PumpStatus
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1RoomTempModulation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1Status
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc1SummerTempLimit
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2AutoOffMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2CircuitType
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2ExcessTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2HeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2MixerMovement
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2PumpStatus
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2Status
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc2SummerTempLimit
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3AutoOffMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3CircuitType
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3ExcessTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3HeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3MixerMovement
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3PumpStatus
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3Status
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Hc3SummerTempLimit
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HcStorageTempBottom
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: ctlv2
+  name: HcStorageTempTop
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: ctlv2
+  name: HwcFlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcLockTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcMaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcOpMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcParallelLoading
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcSFMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcSfMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcStorageTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcStorageTempBottom
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcStorageTempTop
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HwcTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: HydraulicScheme
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: ManualCoolingEndDate
+  fields:
+  - value
+  values:
+  - 28.10.2026
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: ManualCoolingEndDate
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: ManualCoolingStartDate
+  fields:
+  - value
+  values:
+  - 28.07.2026
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: ManualCoolingStartDate
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: MaxCylinderChargeTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: MaxRoomHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: MultiRelaySetting
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: OutsideTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: OutsideTempAvg
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySum
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHcLastMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHcThisMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHwcLastMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHwcThisMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: SystemFlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: WaterPressure
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingManualTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingOpMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingSetbackTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1DayTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1HolidayTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1NightTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1OpMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1QuickVetoDuration
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1QuickVetoEndDate
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1QuickVetoEndTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1QuickVetoTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1RoomTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z1SFMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: Z2RoomTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: ctlv2
+  name: z1RoomHumidity
+  fields:
+  - value
+  values:
+  - '49'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: AirIntakeTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: BuildingCircuitFlow
+  fields:
+  - value
+  values:
+  - '1732'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: BuildingCircuitPumpSpeed
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: BuildingPumpHours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: BuildingPumpHours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: BuildingPumpStarts
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: BuildingPumpStarts
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Clearerrorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CompressorHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: hmu
+  name: CompressorHc.cycles
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: CompressorHc.runtime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: CompressorHours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CompressorHours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CompressorHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: hmu
+  name: CompressorHwc.cycles
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: CompressorHwc.runtime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: CompressorHysteresisCooling
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CompressorHysteresisHc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CompressorStarts
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CompressorStarts
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear10
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear11
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear12
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear3
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear4
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear5
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear6
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear7
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear8
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionThisYear9
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ConsumptionTotal
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3108b516021802 / 00)'
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CopCooling
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: CopCoolingMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: CopHc
+  fields:
+  - value
+  values:
+  - '1.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopHcMonth
+  fields:
+  - value
+  values:
+  - '1.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopHwc
+  fields:
+  - value
+  values:
+  - '3.6'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopHwcMonth
+  fields:
+  - value
+  values:
+  - '3.6'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CurrentCompressorUtil
+  fields:
+  - value
+  values:
+  - '44.19'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CurrentConsumedPower
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CurrentYieldPower
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - -;-;-;-;-
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: DateTime
+  fields:
+  - value
+  values:
+  - nosignal;-:-:-;-.-.-;-
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: EEVSteps
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EEVSteps
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableTestCompressorExitTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableTestCompressorIntakeTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableTestCompressorSpeed
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableTestCondensateTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableTestEEVPosition
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableTestEEVTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableTestEvaporationTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableTestFlowTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableTestHighPress
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableTestReturnTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableTestWaterThroughput
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnableiveMonitorMain
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: EnergyIntegral
+  fields:
+  - value
+  values:
+  - '29'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Fan1Hours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Fan1Hours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Fan1Starts
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Fan1Starts
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Fan2Hours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Fan2Hours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Fan2Starts
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Fan2Starts
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FlowPressure
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FlowTemp
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3108b51a0405ff3220 / 02ff01)'
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FlowTemperature
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: FourWayValveHours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FourWayValveHours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FourWayValveSwitches
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FourWayValveSwitches
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FourWayValveSwitchingOperations
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FourWayValveSwitchingOperations
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: HcBivalencePoint
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: HcModeActive
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: HeatCurve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Hours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: HoursCool
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: HoursHc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: HoursHwc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: HwcBivalencePoint
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: HwcChargeHysteresis
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: HwcMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: HwcModeActive
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: ImmersionHeaterMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: LiveMonitorAirIntakeTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: LiveMonitorCurrentCompressorUtil
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: LiveMonitorCurrentConsumedPower
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: LiveMonitorCurrentSupplyTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: LiveMonitorCurrentYieldPower
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: LiveMonitorDesiredSupplyTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: LiveMonitorMain
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: MaxFlowTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: MinFlowTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: PowerConsumptionHmu
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: hmu
+  name: RunDataAirInletTemp
+  fields:
+  - value
+  values:
+  - '35.6875'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataBuildingCPumpPower
+  fields:
+  - value
+  values:
+  - '90'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataCompressorInletTemp
+  fields:
+  - value
+  values:
+  - '12.1875'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataCompressorOutletTemp
+  fields:
+  - value
+  values:
+  - '64.1875'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataCompressorSpeed
+  fields:
+  - value
+  values:
+  - '49'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataEEVOutletTemp
+  fields:
+  - value
+  values:
+  - '41.0625'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataEEVPositionAbs
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataElectricPowerConsumption
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: RunDataFan1Speed
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataFan2Speed
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataFlowTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: RunDataHighPressure
+  fields:
+  - value
+  values:
+  - '26'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataLowPressure
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: hmu
+  name: RunDataReturnTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: RunDataStatuscode
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: RunStats4PortValveHours
+  fields:
+  - value
+  values:
+  - '541'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStats4PortValveSwitches
+  fields:
+  - value
+  values:
+  - '30'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsBuildingCPumpStarts
+  fields:
+  - value
+  values:
+  - '38'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsBuildingPumpHours
+  fields:
+  - value
+  values:
+  - '411'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsCompressorHc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: RunStatsCompressorHc.cycles
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: RunStatsCompressorHc.runtime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: RunStatsCompressorHours
+  fields:
+  - value
+  values:
+  - '385'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsCompressorHwc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: RunStatsCompressorHwc.cycles
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: RunStatsCompressorHwc.runtime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: RunStatsCompressorStarts
+  fields:
+  - value
+  values:
+  - '86'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan1Hours
+  fields:
+  - value
+  values:
+  - '387'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan1Starts
+  fields:
+  - value
+  values:
+  - '86'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan2Hours
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan2Starts
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsHMUHours
+  fields:
+  - value
+  values:
+  - '557'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsHcHours
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsHwcHours
+  fields:
+  - value
+  values:
+  - '14'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: SetMode
+  fields:
+  - value
+  values:
+  - auto;15.0;-;-;1;1;1;0;0;1
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: SetMode
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: SourcePressure
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: SourceTempInput
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: SourceTempOutput
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3108b51a0405ff3227 / 02ff01)'
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatBuildingPumpHours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatBuildingPumpStarts
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatCompressorHours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatCompressorStarts
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatEEVSteps
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatElectricEnergySum
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: StatElectricEnergySumCool
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: StatElectricEnergySumHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: StatElectricEnergySumHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: StatEnvironmentEnergySum
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: StatEnvironmentEnergySumCool
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: StatEnvironmentEnergySumHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: StatEnvironmentEnergySumHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: StatFan1Hours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatFan1Starts
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatFourWayValveHours
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatFourWayValveSwitchingOperations
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: State
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Status
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3108b5110103 / 00)'
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Status01
+  fields:
+  - value
+  values:
+  - 15.0;16.0;26.000;-;42.5;off
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: Status01.pumpstate
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: Status01.temp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: Status01.temp_1
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: Status01.temp_2
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: hmu
+  name: Status01.temp_3
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: hmu
+  name: Status01.temp_4
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: hmu
+  name: Status02
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Status16
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatusCirPump
+  fields:
+  - value
+  values:
+  - 'on'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: SummerSwitchOffTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: SupplyTempWeighted
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: TargetFlowTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TargetTempHc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TargetTempHwc
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestAirIntakeTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestBuildingPumpPower
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestBuildingWaterPress
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestCompressorExitTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestCompressorInletTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestCompressorSpeed
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestCondensateTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestCondensateTrayHeater
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestCondensorInletTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestCondensorOutletTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestCylinderTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestDCFStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestEEVOutletTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestEEVPosition
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestEEVTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestEvaporationTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestFan1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestFan2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestFlowTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestFlowTempImmersionHeater
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestFourWayValve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestHeatingCoilCompressor
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestHighPress
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestHighPressureSwitch
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestImmersionHeaterSafetyCutOut
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestLockoutContactS20
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestLockoutContactS21
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestLowPress
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestMA1Output
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestMIInput
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestMO2Output
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestMO3Output
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestOutdoorTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestOverheatingActualValue
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestOverheatingTargetValue
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestPrioritySwitchingValve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestReturnTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestSubcoolingActualValue
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestSubcoolingTargetValue
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestSystemTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestTempSwitchCompressorOutlet
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TestWaterThroughput
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: TotalEnergyUsage
+  fields:
+  - value
+  values:
+  - '309'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldCoolDay
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldCooling
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: YieldCoolingMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: hmu
+  name: YieldHc
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHcDay
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHcMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldHwc
+  fields:
+  - value
+  values:
+  - '36'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHwcDay
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldHwcMonth
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear1
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear10
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear11
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear12
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear2
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear3
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear4
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear5
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear6
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear7
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear8
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldThisYear9
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: YieldTotal
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3108b516021801 / 00)'
+  writable: false
+  has_data: false
+- circuit: v32
+  name: BypassPosition
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: ExhaustAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: ExhaustAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: MaxAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: MinAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: OutsideAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: SupplyAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: VentilationLevelDay
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: VentilationLevelNight
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: YieldMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: YieldToday
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: YieldTotal
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: v32
+  name: YieldYear
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: vr_71
+  name: Clearerrorhistory
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: vr_71
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: vr_71
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: vr_71
+  name: Mc1Operation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: vr_71
+  name: Mc2Operation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: vr_71
+  name: Mc3Operation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: vr_71
+  name: SensorData1
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: vr_71
+  name: SensorData2
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: vr_71
+  name: SetActorState
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+- circuit: vwz
+  name: TestHwcTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: vwz
+  name: TestOutdoorTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: vwz
+  name: TestThreeWayValve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: true
+  from_map: true
+  disabled: true
+- circuit: vwzio
+  name: EnableTestHwcTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vwzio
+  name: EnableTestOutdoorTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vwzio
+  name: EnableTestThreeWayValve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vwzio
+  name: TestHwcTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vwzio
+  name: TestOutdoorTemp
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: vwzio
+  name: TestThreeWayValve
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false

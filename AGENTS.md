@@ -76,6 +76,10 @@ telegrams; capture them with `grab` and mine the unknown ones for new registers.
   a fresh grab.
 - Register candidates found this way must be verified against ebusd (message format,
   read-back value) before adding a `define -r` to `_define_custom_registers()`.
+- **Live-verificatie geldt alleen voor de eigen hardware.** Eén grabbage op de eigen
+  bus is live testbaar. Data afkomstig van anderen (dumps, gists, issue snippets,
+  upstream threads) is **nooit** live testbaar — behandel die als community-data (zie
+  "Community Data" hieronder), niet als eigen-live-verificatie.
 
 ## Upstream Issues/PRs as a Register Source
 
@@ -96,10 +100,34 @@ CSV snippets, `define` strings, `find` output, and per-hardware field layouts th
 - When a promising thread is found, open it (`gh issue view <n> --comments`) and read
   the full conversation before trusting a snippet. Prefer definitions that the reporter
   verified against a live device.
-- Always cross-check candidates against a live ebusd (message format + read-back value)
-  before adding a `define -r` to `_define_custom_registers()` or a `REGISTER_MAP`/
-  `MULTI_FIELD_FIELDS` entry. Do not fabricate layouts from a single untested comment.
 - Never modify or upload ebusd CSV files and never set `--configpath`; that is addon-side.
+
+## Community Data (user/upstream dumps)
+
+Data from users and upstream threads (discovery dumps, gists, `find` output, CSV or
+`define` snippets) can **never** be live-tested — the hardware is not ours. That does
+not mean the data stays out of the code; it means we adopt it conservatively so the
+integration keeps working for every other setup.
+
+When adding registers, devices, or metadata derived from community data:
+
+- Add the capture as a fixture under `tests/fixtures/community/` and drive the new code
+  from that fixture (see "Test Fixtures"). The fixture replaces live verification as the
+  correctness gate.
+- Add the entity/register through the existing data-driven paths (`REGISTER_MAP`,
+  `MULTI_FIELD_FIELDS`, `_define_custom_registers()`, device-type tables) so it is
+  covered by the same discovery/entity-factory logic as everything else. Do not bolt on
+  one-off register-specific code paths.
+- Keep changes additive and opt-in: enabling a community register/device must not change
+  behavior for hardware that does not expose it, and must not crash discovery or entity
+  generation when the register is absent.
+- Prefer conservative metadata: only map layouts and read-back values that are explicit
+  in the capture. Do not fabricate field layouts from a single untested snippet.
+- Add a regression test that loads the fixture and asserts the expected register/entity
+  appears on the discovered device graph without error.
+- If the data is incomplete or ambiguous, prefer a discovery-only or YAML-override
+  approach over a hardcoded production path, and flag the uncertainty to the owner
+  rather than guessing in code.
 
 ## Known Limitations
 
@@ -110,11 +138,12 @@ CSV snippets, `define` strings, `find` output, and per-hardware field layouts th
 ## Test Fixtures
 
 - ebusd `find` output and discovery dumps are captured as fixtures in `tests/fixtures/`. There is no `data-dump/` directory anymore; all community and local captures live in `tests/fixtures/`.
-- `tests/fixtures/community/` holds third-party captures: discovery-dump YAML files (`flexotherm_discovery.yaml`, `arotherm_plus_2zone_discovery.yaml`, `arotherm_plus_basv3_discovery.yaml`, `arotherm_pro7_discovery.yaml`) and plain `find` output (`basv_find.txt`, `v32_find.txt`, `flexocompact_find.txt`, `szflo_ebusctl_info.txt`, `second_ebusctl_info.txt`, `dumpvalues.yaml`).
+- `tests/fixtures/community/` holds third-party captures: discovery-dump YAML files (`flexotherm_discovery.yaml`, `arotherm_plus_2zone_discovery.yaml`, `arotherm_plus_basv3_discovery.yaml`, `arotherm_pro7_discovery.yaml`, `geniaset_bass3_discovery.yaml`) and plain `find` output (`basv_find.txt`, `v32_find.txt`, `flexocompact_find.txt`, `szflo_ebusctl_info.txt`, `second_ebusctl_info.txt`, `dumpvalues.yaml`).
 - `dumpvalues.yaml` records multi-field register field names and is the reference for `MULTI_FIELD_MAP` in `tests/fake_ebusd.py`. Keep the two in sync.
 - Load fixtures in tests with `load_find_lines("community/<name>")` for `find` output and `load_discovery_dump("community/<name>")` for discovery-dump YAML; both live in `tests/fake_ebusd.py`. Discovery-dump YAML fixtures need `pyyaml` (installed in CI).
 - Open GitHub issues may reference specific community dumps. When investigating an issue, load the matching fixture and confirm the register behavior on the discovered device graph before changing production code.
 - New community captures should be added under `tests/fixtures/community/` as discovery-dump YAML (preferred, keeps metadata and `raw_find_lines`) with a fixture-load test, never as a separate `data-dump/` folder.
+- **Fixtures are the correctness gate for community data.** A fixture-driven regression test replaces live ebusd verification for anything derived from user/upstream captures. Prefer this over asking for live access; only the owner's own hardware can ever be live-verified.
 
 ## Validation
 
