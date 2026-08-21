@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.1 - 2026-08-21
+
+### Fixed
+
+- **GeniaSet BASS3 controller recognized as a heating controller (#79).** The
+  `bass` / `bass3` circuits are now explicitly classified in the discovery
+  device-type tables, so a GeniaSet BASS3 is deterministically treated as a
+  heating controller instead of relying on register-based categorization alone.
+  This is backed by a new community discovery-dump fixture
+  (`tests/fixtures/community/geniaset_bass3_discovery.yaml`) with regression
+  tests covering the device graph and DHW register discovery.
+
 ## 1.4.0 - 2026-08-19
 
 ### Added
