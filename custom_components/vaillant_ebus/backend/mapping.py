@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from .models import RegisterMeta
 
 # Multi-field registers: register key -> field names in semicolon order of the
@@ -259,6 +261,34 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Yield Cooling Today",
         device_class="energy",
         unit="kWh",
+    ),
+    # Runtime-defined b516 cooling-energy registers (issue #50). The bus
+    # reports Wh; the unit stays Wh because ebusd returns the raw EXP value.
+    "hmu.CoolEnvYieldTotal": RegisterMeta(
+        friendly_name="Cooling Energy Total",
+        device_class="energy",
+        unit="Wh",
+        state_class="total_increasing",
+        icon="mdi:snowflake",
+    ),
+    "hmu.CoolEnvYieldDay": RegisterMeta(
+        friendly_name="Cooling Energy Today",
+        device_class="energy",
+        unit="Wh",
+        icon="mdi:snowflake",
+    ),
+    "hmu.CoolEnvYieldMonth": RegisterMeta(
+        friendly_name="Cooling Energy Month",
+        device_class="energy",
+        unit="Wh",
+        icon="mdi:snowflake",
+    ),
+    "hmu.CoolElecConsTotal": RegisterMeta(
+        friendly_name="Cooling Electricity Total",
+        device_class="energy",
+        unit="Wh",
+        state_class="total_increasing",
+        icon="mdi:snowflake",
     ),
     "hmu.YieldCooling": RegisterMeta(
         friendly_name="Yield Cooling",
@@ -1489,6 +1519,22 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         entity_category="diagnostic",
     ),
 }
+
+
+# Encode the W/V/QQ date bytes of the b516 energy-statistics API (upstream
+# john30/ebusd-configuration issue #490). W is a month nibble that restarts at
+# 0 for the last five months of the year, V a day nibble, and QQ counts
+# half-years since 2000 plus one from August onwards. Verified live against a
+# B516-capable HMU.
+def b516_date_bytes(now: datetime) -> str:
+    qq = (now.year - 2000) * 2
+    if now.month >= 8:
+        qq += 1
+        w = (now.month - 8) * 2
+    else:
+        w = now.month * 2
+    v = now.day - 16 if now.day > 15 else now.day
+    return f"{(w << 4) | v:02x}{qq:02x}"
 
 
 # Look up RegisterMeta by circuit.name, return empty meta if unknown

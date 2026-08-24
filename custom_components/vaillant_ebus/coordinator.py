@@ -21,7 +21,7 @@ from .backend.analysis_service import AnalysisResult, AnalysisService
 from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService
 from .backend.ebus_service import EbusService
 from .backend.entity_factory import EntityDescription, EntityFactoryService
-from .backend.mapping import REGISTER_MAP, split_multi_field
+from .backend.mapping import REGISTER_MAP, b516_date_bytes, split_multi_field
 from .backend.models import (
     CIRCUIT_NAMES,
     COMPRESSOR_STATUS_LABELS,
@@ -482,6 +482,15 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Definitions may target hardware not present on this bus. ebusd
         # reports those as unavailable; fallback/entity filtering handles that.
         # Keep only definitions verified by upstream or community evidence here.
+        #
+        # The b516 cooling-energy registers (Z=5 usage code, upstream issue
+        # #490) are absent from the shipped HW5103 CSV (upstream issue #600).
+        # They report environmental yield / electric consumption for cooling
+        # regardless of compressor operation, so they also cover passive
+        # brine cooling. Verified live against ebusd; values are Wh. Day and
+        # Month variants carry a date payload that must be refreshed on each
+        # (re)connect.
+        date_bytes = b516_date_bytes(datetime.now())
         defines = [
             "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800"
             ",value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity",
@@ -493,6 +502,18 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ",02010000da00,value,m,HDA:3",
             "w,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
             ",02010000db00,value,m,HDA:3",
+            "r,hmu,CoolEnvYieldTotal,CoolEnvYieldTotal,31,08,B516"
+            ",1000ffff02050000,value,,IGN:7,,,,value,,EXP,,Wh"
+            ",hmu Cooling Env Yield Total",
+            "r,hmu,CoolElecConsTotal,CoolElecConsTotal,31,08,B516"
+            ",1000ffff03050000,value,,IGN:7,,,,value,,EXP,,Wh"
+            ",hmu Cooling Electric Consumption",
+            f"r,hmu,CoolEnvYieldDay,CoolEnvYieldDay,31,08,B516"
+            f",1001ffff0205{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
+            f",hmu Cooling Env Yield Today",
+            f"r,hmu,CoolEnvYieldMonth,CoolEnvYieldMonth,31,08,B516"
+            f",1002ffff0205{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
+            f",hmu Cooling Env Yield This Month",
         ]
         defined = 0
         unavailable = 0
