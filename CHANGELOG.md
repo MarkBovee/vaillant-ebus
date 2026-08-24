@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.4.4 - 2026-08-24
+
+### Added
+
+- **Cooling-energy registers via runtime-defined b516 statistics (#50).** The
+  b516 energy-statistics API on the HMU supports a cooling usage code
+  (`Z=5`, upstream `john30/ebusd-configuration` issue #490), but the shipped
+  HW5103 CSV definitions omit the family (upstream issue #600), so heat pumps
+  report `ERR: element not found` for every cooling total. Four registers are
+  now injected at startup via the existing runtime-definition mechanism and
+  verified live against ebusd:
+
+  - `hmu.CoolEnvYieldTotal` — environmental yield used for cooling, lifetime
+    (Wh, total increasing)
+  - `hmu.CoolEnvYieldDay` — environmental yield for cooling today (Wh)
+  - `hmu.CoolEnvYieldMonth` — environmental yield for cooling this month (Wh)
+  - `hmu.CoolElecConsTotal` — electric consumption used for cooling, lifetime
+    (Wh, total increasing)
+
+  Unlike the compressor-based counters (`YieldCoolDay`, `HoursCool`), these
+  measure the thermal energy exchanged with the building regardless of
+  compressor operation, so they also cover passive brine cooling. The day and
+  month variants carry a date payload that is re-encoded from the current
+  date on every (re)connect; the encoding helper (`b516_date_bytes`) is unit
+  tested against known dates including the live-verified 2026-08-24 case.
+
 ## 1.4.3 - 2026-08-24
 
 ### Fixed
