@@ -39,6 +39,22 @@ DISCOVERY = importlib.util.module_from_spec(DISCOVERY_SPEC)
 sys.modules["vaillant_ebus.backend.discovery_service"] = DISCOVERY
 DISCOVERY_SPEC.loader.exec_module(DISCOVERY)
 
+MAPPING_SPEC = importlib.util.spec_from_file_location(
+    "vaillant_ebus.backend.mapping", BACKEND_PATH / "mapping.py"
+)
+assert MAPPING_SPEC and MAPPING_SPEC.loader
+MAPPING = importlib.util.module_from_spec(MAPPING_SPEC)
+sys.modules["vaillant_ebus.backend.mapping"] = MAPPING
+MAPPING_SPEC.loader.exec_module(MAPPING)
+
+ENTITY_SPEC = importlib.util.spec_from_file_location(
+    "vaillant_ebus.backend.entity_factory", BACKEND_PATH / "entity_factory.py"
+)
+assert ENTITY_SPEC and ENTITY_SPEC.loader
+ENTITY = importlib.util.module_from_spec(ENTITY_SPEC)
+sys.modules["vaillant_ebus.backend.entity_factory"] = ENTITY
+ENTITY_SPEC.loader.exec_module(ENTITY)
+
 DiscoveryService = DISCOVERY.DiscoveryService
 DeviceType = DISCOVERY.DeviceType
 
@@ -57,3 +73,21 @@ def test_geniaset_bass3_dhw_registers_discovered() -> None:
     graph = DiscoveryService.build_device_graph(GENIASET_LINES)
     for key in ("bass.HwcOpMode", "bass.HwcStorageTemp", "bass.HwcTempDesired"):
         assert key in graph.raw_registers, f"missing {key}"
+
+
+# bass/dhw (live Hwc registers) and hmu/dhw (no data) both map to the logical
+# "dhw" device name; the merge must keep the live bass registers as entities
+# so water_heater gets a current temperature (GitHub issue #79).
+def test_geniaset_bass3_dhw_entities_survive_sub_device_merge() -> None:
+    graph = DiscoveryService.build_device_graph(GENIASET_LINES)
+    dhw = graph.nodes["dhw"]
+    assert dhw.has_data is True
+    assert "bass.HwcStorageTemp" in dhw.registers
+
+    by_key = {e.key: e for e in ENTITY.EntityFactoryService().generate(graph)}
+    for reg in (
+        "bass.HwcStorageTemp.value",
+        "bass.HwcTempDesired.value",
+        "bass.HwcOpMode.value",
+    ):
+        assert reg in by_key, f"live DHW register must be an entity: {reg}"

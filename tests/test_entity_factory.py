@@ -728,9 +728,11 @@ class TestStatEnergyRegisters:
         assert "hmu.StatElectricEnergySumCool.value" not in by_key
         assert "hmu.StatEnvironmentEnergySumCool.value" not in by_key
 
-    # flexoTHERM v1.3.3 dump (issue #50): daily cooling yield + runtime are
-    # live (YieldCoolDay=0.0, HoursCool=0), while cumulative cooling totals
-    # return "element not found" and must stay hidden.
+    # flexoTHERM v1.3.3 dump (issue #50), captured during an active passive
+    # (brine) cooling cycle: flow temp ~19 °C at 31 °C outside, releaseCooling=1,
+    # but RunDataStatuscode=0 — the compressor never runs, so the compressor-based
+    # counters stay at 0 (YieldCoolDay=0.0, HoursCool=0) and cumulative cooling
+    # totals return "element not found" and must stay hidden.
     def test_flexotherm_133_cooling_daily_yield_entities(self) -> None:
         graph = DiscoveryService.build_device_graph(
             load_find_lines("community/flexotherm_133_cooling_discovery.yaml")
@@ -752,6 +754,27 @@ class TestStatEnergyRegisters:
             "hmu.CopCoolingMonth.value",
         ):
             assert reg not in by_key, f"element-not-found register must stay hidden: {reg}"
+
+    # flexoTHERM v1.3.3 dump (issue #50): ctlv3/dhw (live Hwc registers) and
+    # hmu/dhw (all no-data) both map to the logical "dhw" device name. The
+    # later one used to overwrite the live node, hiding the DHW sensors and
+    # leaving water_heater without a current temperature.
+    def test_flexotherm_dhw_sub_device_merge_keeps_live_registers(self) -> None:
+        graph = DiscoveryService.build_device_graph(
+            load_find_lines("community/flexotherm_133_cooling_discovery.yaml")
+        )
+        dhw = graph.nodes.get("dhw")
+        assert dhw is not None
+        assert dhw.has_data, "dhw node must keep the live variant's data"
+        assert "ctlv3.HwcStorageTemp" in dhw.registers
+        by_key = {e.key: e for e in EntityFactoryService().generate(graph)}
+        for reg in (
+            "ctlv3.HwcStorageTemp.value",
+            "ctlv3.HwcTempDesired.value",
+            "ctlv3.HwcOpMode.value",
+        ):
+            entity = by_key.get(reg)
+            assert entity is not None, f"live DHW register must be an entity: {reg}"
 
     # flexoCOMPACT (air/water aroTHERM with active cooling) reports cooling
     # energy live on both hmu and ctlv2; both get hmu energy metadata (issue #50).
