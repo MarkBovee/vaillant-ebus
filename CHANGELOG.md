@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.4.3 - 2026-08-24
+
+### Fixed
+
+- **DHW sub-device collision hid live hot-water registers (#50, #79).** When two
+  source circuits mapped to the same logical device name — for example
+  `ctlv3/dhw` with live registers and `hmu/dhw` without any data — the later,
+  data-less sub-device overwrote the live node during discovery. The affected
+  registers (`HwcStorageTemp`, `HwcTempDesired`, `HwcOpMode`) were silently
+  dropped from the device graph, so no DHW sensor entities were generated and
+  `water_heater` stayed without a current temperature. Sub-devices sharing a
+  logical name are now merged instead of overwritten. Verified against three
+  community fixtures: flexoTHERM (issue #50), GeniaSet BASS3 (issue #79), and
+  aroTHERM Plus two-zone (no regression).
+- **Corrected the cooling-context note for the flexoTHERM v1.3.3 dump (#50).**
+  The dump was captured during an active passive (brine) cooling cycle — flow
+  temperature around 19 °C at 31 °C outside, `releaseCooling` enabled — while
+  the compressor never ran (`RunDataStatuscode = 0`). The compressor-based
+  counters (`YieldCoolDay`, `HoursCool`) therefore stay at zero by design and
+  cannot represent passive-cooling energy; regression test comments now record
+  this context.
+
 ## 1.4.2 - 2026-08-21
 
 ### Fixed

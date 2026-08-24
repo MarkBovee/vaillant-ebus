@@ -193,6 +193,22 @@ class DiscoveryService:
             if not regs:
                 continue
             assigned_regs.update(regs)
+            existing = nodes.get(sub_name)
+            if existing is not None:
+                # Two source circuits can map to one logical device name (for
+                # example ctlv3/dhw and hmu/dhw both become "dhw"). Merge their
+                # registers so a live variant is not silently dropped by the
+                # later, data-less one.
+                merged = list(existing.registers)
+                merged.extend(rk for rk in regs if rk not in set(existing.registers))
+                nodes[sub_name] = DeviceNode(
+                    circuit=sub_name,
+                    device_type=existing.device_type,
+                    registers=merged,
+                    has_data=existing.has_data
+                    or any(raw_registers.get(rk) is not None for rk in regs),
+                )
+                continue
             nodes[sub_name] = DeviceNode(
                 circuit=sub_name,
                 device_type=d_type,
