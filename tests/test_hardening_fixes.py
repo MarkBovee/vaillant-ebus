@@ -44,6 +44,12 @@ if not hasattr(_const, "PLATFORMS"):
 if not hasattr(_const, "SENSITIVE_FIELDS"):
     _const.SENSITIVE_FIELDS = frozenset()
 
+# __init__.py imports voluptuous at module scope and builds the entry
+# selector with vol.Optional; CI does not install it, so stub the parts
+# used at import time (Schema/Required are only reached at runtime).
+_vol = MagicMock()
+tc.sys.modules.setdefault("voluptuous", _vol)
+
 DUMP_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.dump_service", COMPONENT_PATH / "dump_service.py")
 assert DUMP_SPEC and DUMP_SPEC.loader
 DUMP = importlib.util.module_from_spec(DUMP_SPEC)
