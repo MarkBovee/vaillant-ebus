@@ -1,5 +1,84 @@
 # Changelog
 
+## 1.5.1 - 2026-08-25
+
+### Added
+
+- **Mode-aware target temperature, live-verified against ctlv2 hardware.**
+  `async_set_temperature` now follows mypyllant semantics: time-controlled
+  (auto) zones start a quick veto (`Z*QuickVetoTemp` + `Z*QuickVetoDuration`),
+  manual/day zones write `Z*DayTemp` directly, and an active boost updates the
+  veto temperature only. Previously every change wrote the day temp, which the
+  controller ignores in auto mode.
+- **Restart-proof BOOST detection.** The BOOST preset now combines the
+  optimistic local timer with device-side truth: idle zones report
+  `QuickVetoEndDate 01.01.2019`, active vetoes report a future date plus end
+  time. A user-cancelled veto stays suppressed until the reported end changes,
+  so a HA restart no longer resurrects or drops boost state.
+- **Optimistic setpoint bridging the controller's apply latency.** Measured
+  ~30–60 s between an accepted write and its appearance on the bus. Requested
+  target temperatures show immediately and clear on device confirmation or
+  after a settle window; one delayed confirm refresh pulls the confirming
+  registers instead of waiting for the next poll.
+- **Multi-entry service dispatch.** All integration services register once at
+  integration scope and resolve their coordinator per call: an explicit
+  `entry_id` wins, a single loaded entry is used automatically, and ambiguous
+  calls fail loudly instead of silently targeting the last-loaded entry.
+  `services.yaml` documents the optional selector.
+- **Backend command validation.** Read/write/define reject empty identifiers
+  and CR/LF injection at the transport boundary; values keep their ebusd syntax
+  including spaces and semicolons.
+- **Analysis auto-enables per-field entities.** When background analysis finds
+  a live multi-field register, its per-field sensor entities are enabled along
+  with the raw value, matching what the entity factory generates.
+
+### Fixed
+
+- **b516 day queries use the correct half-month block.** The date payload of
+  the runtime-defined b516 statistics kept W on the month's even value for
+  days 16–31, so `CoolEnvYieldDay` asked the device for a day in the first
+  half of the month (Aug 24 was decoded as Aug 8) and roughly half of each
+  month returned another day's counter. The encoder now flips to the month's
+  odd W value with `V = day − 16` per the upstream issue #490 table, checked
+  against the thread's worked examples (Feb 23 2025 → `5732`, Aug 24 2026 →
+  `1835`) and verified live against an HMU across the day-15/day-16 boundary.
+  Month totals accept either W value, so `CoolEnvYieldMonth` is unaffected.
+- **Python 3.12/3.13 import crash.** Unparenthesized multi-except clauses
+  (PEP 758, Python 3.14-only) are parenthesized throughout, restoring imports
+  on every released Home Assistant version.
+- **TCP response interleaving.** Write/read-back and multi-line `find`
+  transactions hold the stream lock for their complete exchange; reconnect is
+  single-flighted and re-dials even when a stale writer object survives a
+  transport error, so self-healing can no longer be a silent no-op.
+- **Discovery dump directory race.** Directory creation is now awaited before
+  the YAML write lands; it previously ran fire-and-forget and could crash the
+  dump when the directory did not exist yet.
+- **Silent persistence failures are visible.** Cache save/load failures log
+  path and reason without exposing values; a missing cache file on first run
+  stays silent.
+- **Partial entity writes stop early.** Multi-register sequences abort at the
+  first failed write instead of stacking dependent writes on a broken
+  assumption, and entities refresh only after full success.
+- **Sentinel values no longer leak into entities.** `-`, `empty`,
+  `no data stored`, `unknown`, and `unavailable` map to unavailable states in
+  select, switch, and binary_sensor platforms.
+- **Compressor idle handling follows the heat-pump circuit.** Idle detection
+  and stale-value zeroing resolve the status and power/speed registers on the
+  discovered heat-pump circuit instead of hardcoding `hmu`, so setups whose
+  heat pump answers on another circuit no longer leak stale values while idle.
+- **Options flow actually applies settings.** `scan_interval` changes take
+  effect, connection edits reload the entry via an update listener, and an
+  emptied host field keeps the stored value instead of disabling the
+  connection.
+- Typing corrections surfaced by a strict-mypy baseline pass (result dataclass
+  fields, narrowed graph merge, honest sensor value types); remaining findings
+  require a typed homeassistant environment in CI and are tracked separately.
+
+### Removed
+
+- The production-dead `RegisterService` and its test suite; discovery-service
+  dead symbols. Entity creation runs through the shared factory path only.
+
 ## 1.5.0 - 2026-08-24
 
 ### Added

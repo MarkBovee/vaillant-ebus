@@ -47,3 +47,6 @@ discovery_dumps/
 
 # GitHub inbox local state
 .gh-inbox-state.json
+
+# Disposable upstream research evidence cache
+.research-scratch/

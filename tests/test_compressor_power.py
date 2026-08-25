@@ -16,7 +16,7 @@ SPEC.loader.exec_module(MODELS)
 EbusdRegister = MODELS.EbusdRegister
 compressor_is_idle = MODELS.compressor_is_idle
 zero_idle_registers = MODELS.zero_idle_registers
-COMPRESSOR_ZERO_REGISTERS = MODELS.COMPRESSOR_ZERO_REGISTERS
+COMPRESSOR_ZERO_REGISTER_NAMES = MODELS.COMPRESSOR_ZERO_REGISTER_NAMES
 
 
 # Build a register dict entry with given key and string value
@@ -72,7 +72,8 @@ def test_zero_idle_registers_clears_all() -> None:
         ]
     )
     zero_idle_registers(regs)
-    for key in COMPRESSOR_ZERO_REGISTERS:
+    for name in COMPRESSOR_ZERO_REGISTER_NAMES:
+        key = f"hmu.{name}"
         assert regs[key].value["value"] == "0", f"{key} not zeroed"
         assert regs[key].has_data, f"{key} has_data not set"
 
@@ -122,3 +123,27 @@ def test_zero_idle_registers_skips_on_hwc_active_string() -> None:
     )
     zero_idle_registers(regs)
     assert regs["hmu.CurrentConsumedPower"].value["value"] == "1.8"
+
+
+# A resolved non-"hmu" heat-pump circuit zeroes its own registers
+def test_zero_idle_registers_non_hmu_circuit() -> None:
+    regs = dict(
+        [
+            _register("um.CurrentConsumedPower", "3.2"),
+            _register("um.RunDataStatuscode", "100"),
+        ]
+    )
+    zero_idle_registers(regs, "um")
+    assert regs["um.CurrentConsumedPower"].value["value"] == "0"
+
+
+# Default call ignores circuits other than "hmu" (no silent cross-circuit zeroing)
+def test_default_call_ignores_other_circuits() -> None:
+    regs = dict(
+        [
+            _register("um.CurrentConsumedPower", "3.2"),
+            _register("um.RunDataStatuscode", "100"),
+        ]
+    )
+    zero_idle_registers(regs)
+    assert regs["um.CurrentConsumedPower"].value["value"] == "3.2"

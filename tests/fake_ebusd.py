@@ -246,7 +246,7 @@ class FakeEbusdServer:
                 response = self._handle_command(raw)
                 writer.write((response + "\n").encode())
                 await writer.drain()
-        except TimeoutError, ConnectionError, OSError:
+        except (TimeoutError, ConnectionError, OSError):
             pass
         finally:
             writer.close()

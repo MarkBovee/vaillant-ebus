@@ -12,6 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .backend.entity_factory import EntityDescription
+from .backend.models import is_no_data_value
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
@@ -83,10 +84,10 @@ class EbusdBinarySensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEnti
 
     @property
     def is_on(self) -> bool | None:
-        # Return binary state from ebusd data
+        # Return binary state; ebusd sentinels mean "unknown", not off.
         data = self.coordinator.data.get("ebusd", {})
         raw = data.get(self._desc.key)
-        if raw is None:
+        if raw is None or is_no_data_value(str(raw)):
             return None
         return raw.strip().lower() in BINARY_TRUE_VALUES
 

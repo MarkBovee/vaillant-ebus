@@ -9,9 +9,7 @@
 ## Architecture
 
 - `custom_components/vaillant_ebus/coordinator.py` owns connection lifecycle, discovery, polling, caching, and runtime register definitions.
-- `custom_components/vaillant_ebus/backend/ebus_service.py` provides the ebusd transport.
-- `backend/discovery_service.py` builds the discovered device graph.
-- `backend/register_service.py` handles register reads and writes.
+- `custom_components/vaillant_ebus/backend/ebus_service.py` provides the ebusd transport and handles register reads and writes (writes are verified by read-back).
 - `backend/entity_factory.py` maps the discovered graph to Home Assistant entity descriptions.
 - `backend/mapping.py` contains register metadata such as names, icons, units, and limits.
 - Platform modules in `custom_components/vaillant_ebus/` expose the generated entities to Home Assistant.

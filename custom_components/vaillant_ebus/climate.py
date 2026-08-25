@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -18,6 +19,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
@@ -48,7 +50,15 @@ COOLING_STATES = frozenset(
 )
 
 DATE_FMT = "%d.%m.%Y"
+TIME_FMT = "%H:%M:%S"
 HOLIDAY_RESET = "01.01.2015"
+
+# Measured against live ctlv2 hardware (2026-08-24): quick-veto writes return
+# done immediately, but the controller applies them with roughly 30-60 s
+# latency before QuickVetoEndDate/EndTime reflect the veto. The confirm
+# refresh pulls data once inside that settle window; the optimistic target
+# bridges the gap in the UI.
+QUICK_VETO_CONFIRM_DELAY = timedelta(seconds=35)
 
 # Registers that gate per-zone features on the zone's owning circuit.
 COOLING_REGISTER = "CoolingTemp"
@@ -133,6 +143,14 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         self._attr_name = "Home" if zone == "z1" else f"Zone {zone[1:]}"
         self._optimistic_hvac_mode: HVACMode | None = None
         self._quick_veto_until: datetime | None = None
+        # Optimistic target temperature shown until device data confirms it or
+        # the settle window expires (see QUICK_VETO_CONFIRM_DELAY).
+        self._optimistic_target: float | None = None
+        self._optimistic_target_until: datetime | None = None
+        self._cancel_confirm_refresh: Callable[[], None] | None = None
+        # End of the veto that the user explicitly cancelled; while the device
+        # still reports exactly this end, BOOST stays suppressed.
+        self._boost_suppressed_end: datetime | None = None
 
     # HVAC modes are computed per zone from the discovery graph: COOL only where
     # the zone's cooling register exists. Computed dynamically so a cache-seeded
@@ -159,9 +177,21 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     def current_temperature(self) -> float | None:
         return _float(_value(self.coordinator, f"{self._zn}RoomTemp", self._circuit))
 
-    # Target temperature: quick veto temp (boost) or actual/target, filtered to valid range
+    # Target temperature: optimistic value after a write, then quick veto temp
+    # (boost), actual/target, filtered to valid range, finally day temp.
     @property
     def target_temperature(self) -> float | None:
+        now = datetime.now()
+        if (
+            self._optimistic_target is not None
+            and self._optimistic_target_until is not None
+            and now < self._optimistic_target_until
+        ):
+            return self._optimistic_target
+        return self._reported_target()
+
+    # Target derived purely from device data (no optimistic override).
+    def _reported_target(self) -> float | None:
         if self.preset_mode == PRESET_BOOST:
             qv = _float(_value(self.coordinator, f"{self._zn}QuickVetoTemp", self._circuit))
             if qv is not None and 5 <= qv <= 30:
@@ -215,23 +245,62 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             return HVACAction.COOLING
         return HVACAction.IDLE
 
-    # Current preset: boost (QV active), away (holiday period), or none
+    # Current preset: boost (QV active), away (holiday period), or none.
+    # Boost comes from either the local optimistic timer or device-side veto
+    # end data, so a restart with an active veto still shows BOOST.
     @property
     def preset_mode(self) -> str | None:
-        if self._quick_veto_until and self._quick_veto_until > datetime.now():
+        now = datetime.now()
+        if self._quick_veto_until and self._quick_veto_until > now:
+            return PRESET_BOOST
+        if self._device_boost_active(now):
             return PRESET_BOOST
         h_start = _value(self.coordinator, f"{self._zn}HolidayStartPeriod", self._circuit)
         h_end = _value(self.coordinator, f"{self._zn}HolidayEndPeriod", self._circuit)
         if h_start and h_end and h_start != HOLIDAY_RESET:
             try:
-                now = datetime.now().date()
+                today = now.date()
                 start = datetime.strptime(h_start, DATE_FMT).date()
                 end = datetime.strptime(h_end, DATE_FMT).date()
-                if start <= now <= end:
+                if start <= today <= end:
                     return PRESET_AWAY
             except ValueError:
                 pass
         return PRESET_NONE
+
+    # Device-side quick-veto end as datetime, or None when no future end is
+    # reported. Verified live on ctlv2 (2026-08-24): idle zones report the
+    # past sentinel date 01.01.2019; an active veto reports today/future.
+    def _device_boost_end(self) -> datetime | None:
+        end_date = _value(self.coordinator, f"{self._zn}QuickVetoEndDate", self._circuit)
+        if not end_date:
+            return None
+        try:
+            day = datetime.strptime(end_date.strip(), DATE_FMT).date()
+        except ValueError:
+            return None
+        now = datetime.now()
+        end_time_raw = _value(self.coordinator, f"{self._zn}QuickVetoEndTime", self._circuit)
+        try:
+            end_time = datetime.strptime(end_time_raw.strip(), TIME_FMT).time() if end_time_raw else None
+        except ValueError:
+            end_time = None
+        if end_time is not None:
+            return datetime.combine(day, end_time)
+        # Date-only fallback: the veto runs through the end of its final day.
+        if day < now.date():
+            return None
+        return datetime.combine(day, datetime.max.time()).replace(microsecond=0)
+
+    # Whether the controller currently runs a quick veto we have not cancelled.
+    def _device_boost_active(self, now: datetime | None = None) -> bool:
+        now = now or datetime.now()
+        end = self._device_boost_end()
+        if end is None or end <= now:
+            return False
+        # A user-cancelled veto stays reported by the device until it expires;
+        # suppress BOOST while the reported end is unchanged from cancellation.
+        return not (self._boost_suppressed_end is not None and end == self._boost_suppressed_end)
 
     @property
     def available(self) -> bool:
@@ -306,15 +375,34 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         elif preset_mode != PRESET_AWAY and current == PRESET_AWAY:
             await self._cancel_holiday()
 
-    # Set target temperature: write zone day temp (manual) or quick veto temp (boost)
+    # Set target temperature following mypyllant semantics: boost active →
+    # update the veto temperature only; time-controlled (auto) mode → start a
+    # quick veto; manual/day modes → write the day temp directly.
     async def async_set_temperature(self, **kwargs: Any) -> None:
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is None:
             return
         if self.preset_mode == PRESET_BOOST:
-            await self._write(f"{self._zn}QuickVetoTemp", str(temp))
-        else:
-            await self._write(f"{self._zn}DayTemp", str(temp))
+            ok = await self._write(f"{self._zn}QuickVetoTemp", str(temp))
+            if ok:
+                self._apply_optimistic_target(float(temp))
+                self._schedule_confirm_refresh()
+            return
+        if self.hvac_mode == HVACMode.AUTO and not self._global_cooling_active():
+            await self._start_quick_veto(float(temp))
+            return
+        ok = await self._write(f"{self._zn}DayTemp", str(temp))
+        if ok:
+            self._apply_optimistic_target(float(temp))
+            self._schedule_confirm_refresh()
+
+    # Whether the heat pump currently reports an active cooling state. Quick
+    # vetoes are heating-side; after a restart the optimistic COOL mode is
+    # lost while OpMode reads "auto", so this gate prevents a heating veto
+    # from firing during manual cooling (worst case falls back to DayTemp).
+    def _global_cooling_active(self) -> bool:
+        comp = (_value(self.coordinator, "RunDataStatuscode", self.coordinator.heat_pump_circuit) or "").lower()
+        return comp in COOLING_STATES
 
     # Turn on by setting operation mode to auto
     async def async_turn_on(self) -> None:
@@ -324,24 +412,61 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     async def async_turn_off(self) -> None:
         await self._write(f"{self._zn}OpMode", "off")
 
-    # Clear optimistic mode when ebusd confirms, expire quick veto timer
+    # Clear optimistic mode/target when ebusd confirms, expire quick veto timer
     def _handle_coordinator_update(self) -> None:
-        if self._quick_veto_until and self._quick_veto_until <= datetime.now():
+        now = datetime.now()
+        if self._quick_veto_until and self._quick_veto_until <= now:
             self._quick_veto_until = None
+        if self._optimistic_target is not None:
+            if self._optimistic_target_until is not None and now >= self._optimistic_target_until:
+                self._optimistic_target = None
+            else:
+                reported = self._reported_target()
+                if reported is not None and abs(reported - self._optimistic_target) < 0.05:
+                    self._optimistic_target = None
         if self._optimistic_hvac_mode is not None:
             confirmed = _hvac_mode(_value(self.coordinator, f"{self._zn}OpMode", self._circuit))
             if confirmed == self._optimistic_hvac_mode:
                 self._optimistic_hvac_mode = None
         super()._handle_coordinator_update()
 
-    # Cancel quick veto: restore day temp, set duration to 0
+    # Show the requested target immediately after a successful write; cleared
+    # when device data confirms it or the settle window expires.
+    def _apply_optimistic_target(self, temp: float) -> None:
+        self._optimistic_target = temp
+        self._optimistic_target_until = datetime.now() + QUICK_VETO_CONFIRM_DELAY
+        self.async_write_ha_state()
+
+    # Pull fresh data once inside the controller's apply-latency window so
+    # QuickVetoEndDate/EndTime confirm (or retire) the optimistic state.
+    # One pending refresh is enough; later writes reuse it.
+    def _schedule_confirm_refresh(self) -> None:
+        if self._cancel_confirm_refresh is not None:
+            return
+
+        def _fire(_now: datetime) -> None:
+            self._cancel_confirm_refresh = None
+            self.hass.async_create_task(self.coordinator.async_request_refresh())
+
+        self._cancel_confirm_refresh = async_call_later(self.coordinator.hass, QUICK_VETO_CONFIRM_DELAY, _fire)
+
+    # Cancel quick veto: hold the current day temperature as the veto setpoint
+    # until expiry. Verified against live ctlv2 hardware (2026-08-24): writing
+    # QuickVetoDuration 0 does not cancel an active veto and QuickVetoEndDate
+    # is read-only ("ERR: element not found"), so overwriting the veto temp
+    # with DayTemp is the effective soft-cancel and the veto expires on its own.
     async def _cancel_quick_veto(self) -> None:
         self._quick_veto_until = None
+        end = self._device_boost_end()
+        if end is not None:
+            self._boost_suppressed_end = end
         self.async_write_ha_state()
         day_temp = _float(_value(self.coordinator, f"{self._zn}DayTemp", self._circuit))
         if day_temp is not None:
-            await self._write(f"{self._zn}QuickVetoTemp", str(day_temp))
-        await self._write(f"{self._zn}QuickVetoDuration", "0")
+            ok = await self._write(f"{self._zn}QuickVetoTemp", str(day_temp))
+            if ok:
+                self._apply_optimistic_target(day_temp)
+                self._schedule_confirm_refresh()
 
     # Start quick veto with specified temp or config-based default for N hours
     async def _start_quick_veto(self, temp_override: float | None = None) -> None:
@@ -357,9 +482,24 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             return
         options = self.coordinator._entry.options
         veto_duration = options.get("quick_veto_duration", 3)
+        # A deliberate new veto ends any cancellation suppression.
+        self._boost_suppressed_end = None
+        ok_temp = await self._write(f"{self._zn}QuickVetoTemp", str(veto_temp))
+        ok_duration = await self._write(f"{self._zn}QuickVetoDuration", str(veto_duration))
+        if not (ok_temp and ok_duration):
+            # Do not claim state the controller never received.
+            _LOGGER.warning(
+                "Quick veto start incomplete for %s (temp_ok=%s duration_ok=%s)",
+                self._zn,
+                ok_temp,
+                ok_duration,
+            )
+            return
         self._quick_veto_until = datetime.now() + timedelta(hours=veto_duration)
-        await self._write(f"{self._zn}QuickVetoTemp", str(veto_temp))
-        await self._write(f"{self._zn}QuickVetoDuration", str(veto_duration))
+        # Bridge the controller's apply latency: show the requested setpoint
+        # immediately and pull confirming data after the settle window.
+        self._apply_optimistic_target(float(veto_temp))
+        self._schedule_confirm_refresh()
         self.async_write_ha_state()
 
     # Start holiday period: set zone holiday start/end periods from today

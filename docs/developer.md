@@ -36,7 +36,6 @@ custom_components/vaillant_ebus/
 ├── backend/
 │   ├── ebus_service.py # EbusService — asyncio TCP transport
 │   ├── discovery_service.py # DeviceGraph construction from ebusd find output
-│   ├── register_service.py # Register parsing, reads, writes, and writeability
 │   ├── models.py       # Dataclasses (EbusdRegister, RegisterMeta, etc.)
 │   ├── mapping.py      # Register metadata (friendly names, icons, units)
 │   └── entity_factory.py # Dynamic entity generation from DeviceGraph

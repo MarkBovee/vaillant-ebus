@@ -26,10 +26,10 @@ def multi_field_fields(register_key: str) -> list[str] | None:
 def split_multi_field(register_key: str, raw: str | None) -> dict[str, str | None]:
     """Split a raw register value into named fields; keep the raw value under "value"."""
     fields = MULTI_FIELD_FIELDS.get(register_key)
+    values: dict[str, str | None] = {"value": raw}
     if not fields or raw is None:
-        return {"value": raw}
+        return values
     parts = raw.split(";")
-    values = {"value": raw}
     values.update(
         {field: parts[i] if i < len(parts) else None for i, field in enumerate(fields)}
     )
@@ -1524,8 +1524,10 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
 # Encode the W/V/QQ date bytes of the b516 energy-statistics API (upstream
 # john30/ebusd-configuration issue #490). W is a month nibble that restarts at
 # 0 for the last five months of the year, V a day nibble, and QQ counts
-# half-years since 2000 plus one from August onwards. Verified live against a
-# B516-capable HMU.
+# half-years since 2000 plus one from August onwards. Each month owns two W
+# values: days 1-15 stay on the even value (V=day), days 16-31 flip to the
+# odd value with V=day-16. Worked examples from the thread: Feb 23 2025 ->
+# "5732", Aug 24 2026 -> "1835".
 def b516_date_bytes(now: datetime) -> str:
     qq = (now.year - 2000) * 2
     if now.month >= 8:
@@ -1533,7 +1535,11 @@ def b516_date_bytes(now: datetime) -> str:
         w = (now.month - 8) * 2
     else:
         w = now.month * 2
-    v = now.day - 16 if now.day > 15 else now.day
+    if now.day > 15:
+        w += 1
+        v = now.day - 16
+    else:
+        v = now.day
     return f"{(w << 4) | v:02x}{qq:02x}"
 
 

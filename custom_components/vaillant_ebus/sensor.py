@@ -82,9 +82,12 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
         raw = data.get(self._desc.key)
         if raw is None or raw in ("-", "empty", "") or (raw and "no data stored" in raw):
             return getattr(self, "_cached_value", None)
+        # Numeric registers become floats; unitless text registers (status
+        # codes) keep their raw string so the UI still shows something useful.
+        val: float | str | None
         try:
             val = float(raw)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             if getattr(self, "_attr_native_unit_of_measurement", None):
                 val = None
             else:

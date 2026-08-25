@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime
 
 import yaml
@@ -87,7 +88,7 @@ async def _dump_registers(ebus, seen_keys: set[str] | None = None) -> tuple[list
         if len(parts) != 2:
             continue
         circuit, name = parts
-        entry: dict = {
+        map_entry: dict = {
             "circuit": circuit,
             "name": name,
             "fields": ["value"],
@@ -97,15 +98,15 @@ async def _dump_registers(ebus, seen_keys: set[str] | None = None) -> tuple[list
             "from_map": True,
         }
         if not meta.enabled:
-            entry["disabled"] = True
+            map_entry["disabled"] = True
         try:
             val = await ebus.read_register(circuit, name)
             if val:
-                entry["values"] = [_redact(val, name)]
-                entry["has_data"] = True
+                map_entry["values"] = [_redact(val, name)]
+                map_entry["has_data"] = True
         except Exception:
             pass
-        register_list.append(entry)
+        register_list.append(map_entry)
 
     register_list.sort(key=lambda r: (r["circuit"], r["name"]))
     return register_list, seen_keys, raw_lines
@@ -175,13 +176,14 @@ async def async_export_discovery_dump(
         except Exception as exc:
             _LOGGER.warning("Grab failed: %s", exc)
 
-    after_registers = []
+    after_registers: list[dict] = []
     after_raw_lines: list[str] = []
     if grab_duration > 0:
         after_registers, _, after_raw_lines = await _dump_registers(ebus)
 
     output_dir = hass.config.path(DOMAIN)
-    hass.async_add_executor_job(_mkdir, output_dir)
+    # Directory creation and the YAML write are ordered inside _persist_dump;
+    # a fire-and-forget mkdir here used to race the write.
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     filepath = f"{output_dir}/discovery_dump_{timestamp}.yaml"
 
@@ -208,7 +210,7 @@ async def async_export_discovery_dump(
         dump_data["after_registers"] = after_registers
         dump_data["raw_find_lines_after"] = after_raw_lines
 
-    await hass.async_add_executor_job(_write_yaml, filepath, dump_data)
+    await _persist_dump(hass, filepath, dump_data)
     _LOGGER.info("Discovery dump written to %s", filepath)
 
     persistent_notification.create(
@@ -224,6 +226,13 @@ def _mkdir(path: str) -> None:
     import os
 
     os.makedirs(path, exist_ok=True)
+
+
+# Ordered persistence: the directory must exist before the YAML write lands.
+async def _persist_dump(hass: HomeAssistant, filepath: str, dump_data: dict) -> None:
+    output_dir = os.path.dirname(filepath)
+    await hass.async_add_executor_job(_mkdir, output_dir)
+    await hass.async_add_executor_job(_write_yaml, filepath, dump_data)
 
 
 # Write YAML dump file with security header

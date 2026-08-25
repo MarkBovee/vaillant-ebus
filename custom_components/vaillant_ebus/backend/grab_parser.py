@@ -20,12 +20,12 @@ def parse_grab_lines(grab_lines: list[str]) -> list[dict]:
             continue
         payload, _, suffix = line.partition(" = ")
         count_and_label = suffix.strip()
-        count, _, label = count_and_label.partition(": ")
+        count, _, label_part = count_and_label.partition(": ")
         count = count.strip()
-        label = label.strip() or None
-        req, _, resp = payload.partition(" / ")
+        label_value: str | None = label_part.strip() or None
+        req, _, resp_part = payload.partition(" / ")
         req = req.strip()
-        resp = resp.strip() if resp else None
+        resp_value: str | None = resp_part.strip() if resp_part else None
         if len(req) < 8:
             continue
         telegrams.append(
@@ -34,9 +34,9 @@ def parse_grab_lines(grab_lines: list[str]) -> list[dict]:
                 "master": req[0:2],
                 "slave": req[2:4],
                 "sub": req[8:],
-                "resp": resp,
+                "resp": resp_value,
                 "count": count,
-                "label": label,
+                "label": label_value,
             }
         )
     return telegrams

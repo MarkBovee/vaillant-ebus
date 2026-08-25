@@ -59,14 +59,6 @@ DISCOVERY = importlib.util.module_from_spec(DISCOVERY_SPEC)
 sys.modules["vaillant_ebus.backend.discovery_service"] = DISCOVERY
 DISCOVERY_SPEC.loader.exec_module(DISCOVERY)
 
-REGISTER_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.register_service", BACKEND_PATH / "register_service.py"
-)
-assert REGISTER_SPEC and REGISTER_SPEC.loader
-REGISTER = importlib.util.module_from_spec(REGISTER_SPEC)
-sys.modules["vaillant_ebus.backend.register_service"] = REGISTER
-REGISTER_SPEC.loader.exec_module(REGISTER)
-
 ANALYSIS_SPEC = importlib.util.spec_from_file_location(
     "vaillant_ebus.backend.analysis_service", BACKEND_PATH / "analysis_service.py"
 )
@@ -1000,6 +992,107 @@ async def test_enable_registry_entities_respects_user_choice() -> None:
         result = await c._enable_registry_entities(["hmu.PowerConsumptionHmu"])
         assert result == ["sensor.power"]
         assert updated == ["sensor.power"]
+
+
+# Intent: multi-field registers must auto-enable their per-field entities too;
+# those unique ids carry a _{field} suffix matching EntityDescription.unique_id.
+async def test_enable_registry_entities_expands_multi_field_uids() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+
+        class _Entry:
+            def __init__(self, uid: str, config_entry_id: str, disabled_by: str | None = "integration") -> None:
+                self.unique_id = uid
+                self.config_entry_id = config_entry_id
+                self.disabled_by = disabled_by
+
+        updated: list[str] = []
+        registry = MagicMock()
+        registry.entities = {
+            "sensor.base": _Entry("ebusd_hmu_compressorhc", "entry-1", "integration"),
+            "sensor.runtime": _Entry("ebusd_hmu_compressorhc_runtime", "entry-1", "integration"),
+            "sensor.cycles": _Entry("ebusd_hmu_compressorhc_cycles", "entry-1", "integration"),
+        }
+        registry.async_update_entity = MagicMock(
+            side_effect=lambda entity_id, **kwargs: updated.append(entity_id)
+        )
+        from homeassistant.helpers import entity_registry
+
+        entity_registry.async_get = MagicMock(return_value=registry)
+
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        c.ebus = MagicMock()
+        c.ebus.is_connected = True
+        result = await c._enable_registry_entities(["hmu.CompressorHc"])
+        assert sorted(result) == ["sensor.base", "sensor.cycles", "sensor.runtime"]
+
+
+# Intent: the shared find-line parser must keep no-data sentinels out of the
+# polled register set — including unknown/unavailable/bare-empty values that
+# the old hand-rolled poll filter let through.
+async def test_poll_and_discovery_filter_sentinel_find_values() -> None:
+    lines = [
+        "ctlv2 Z1DayTemp = 21.5",
+        "ctlv2 SomeStatus = unknown",
+        "hmu CurrentYieldPower = unavailable",
+        "hmu FlowTemp = -",
+        "hmu CopCooling = no data stored",
+        "basv HcStorageTemp =  (empty for f115b5240602000000a000)",
+    ]
+    mock_ebus = MagicMock(spec=EbusService)
+    mock_ebus.is_connected = True
+    mock_ebus.version = "23.2"
+    mock_ebus.connect = AsyncMock()
+
+    async def dfn(d) -> str:
+        return "defined"
+
+    mock_ebus.define_register = dfn
+
+    async def find_regs():
+        return lines
+
+    mock_ebus.find_registers = find_regs
+
+    async def read_reg(circuit, name) -> None:
+        return None
+
+    mock_ebus.read_register = read_reg
+
+    module = sys.modules["vaillant_ebus.coordinator"]
+    orig_ebus = module.EbusService
+    module.EbusService = MagicMock(return_value=mock_ebus)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            c = VaillantCoordinator(_hass(tmpdir), _entry())
+            c.entity_factory = MagicMock()
+            c.entity_factory.generate.return_value = []
+            await c._ebusd_connect_and_discover()
+            # Discovery side: only live values reach the register set.
+            assert "ctlv2.Z1DayTemp" in c.registers
+            for absent in (
+                "ctlv2.SomeStatus",
+                "hmu.CurrentYieldPower",
+                "hmu.FlowTemp",
+                "hmu.CopCooling",
+                "basv.HcStorageTemp",
+            ):
+                assert absent not in c.registers, f"{absent} leaked via discovery"
+
+            # Poll side: same filter applies through the shared parser.
+            await c._async_update_data()
+            for absent in (
+                "ctlv2.SomeStatus",
+                "hmu.CurrentYieldPower",
+                "hmu.FlowTemp",
+                "hmu.CopCooling",
+                "basv.HcStorageTemp",
+            ):
+                assert absent not in c.registers, f"{absent} leaked via poll"
+    finally:
+        module.EbusService = orig_ebus
 
 
 # Intent: case-variant cache keys (HwcSfMode vs HwcSFMode) must not double-register.
