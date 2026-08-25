@@ -492,7 +492,7 @@ async def test_define_custom_registers_delegates_to_ebus() -> None:
         c.ebus = mock_ebus
         await c._define_custom_registers()
 
-        assert mock_ebus.define_register.call_count == 9
+        assert mock_ebus.define_register.call_count == 22
         calls = [c.args[0] for c in mock_ebus.define_register.call_args_list]
         assert any("z1RoomHumidity" in d for d in calls)
         assert any("ManualCoolingStartDate" in d and d.startswith("r5") for d in calls)
@@ -505,6 +505,26 @@ async def test_define_custom_registers_delegates_to_ebus() -> None:
         assert any("CoolElecConsTotal" in d and "1000ffff03050000" in d for d in calls)
         assert any(",B516,1001ffff0205" in d for d in calls)
         assert any(",B516,1002ffff0205" in d for d in calls)
+        # SourceTempInput runtime define (issue #49), layout verified upstream
+        # in john30/ebusd-configuration PR #565 on brine units.
+        assert any(
+            "SourceTempInput" in d and ",B51A,05ff3222,value,,IGN:3,,,,value,,D2C" in d for d in calls
+        )
+        # B524 heating-circuit state registers (Helianthus B524 register map,
+        # discussion #60): GG=0x02 messages with the documented RR and wire
+        # types (EXP for f32, ULG for u32).
+        assert any("Hc1FlowTempCalc" in d and ",B524,020002002000" in d for d in calls)
+        assert any("Hc1MixerPosition" in d and ",B524,020002002100" in d for d in calls)
+        assert any("Hc1Humidity" in d and ",B524,020002002200" in d and "EXP" in d for d in calls)
+        assert any("Hc1DewPointTemp" in d and ",B524,020002002300" in d for d in calls)
+        assert any("Hc1PumpHours" in d and ",B524,020002002400" in d and "ULG" in d for d in calls)
+        assert any("Hc1PumpStarts" in d and ",B524,020002002500" in d and "ULG" in d for d in calls)
+        assert any("Hc2FlowTempCalc" in d and ",B524,020002012000" in d for d in calls)
+        assert any("Hc2MixerPosition" in d and ",B524,020002012100" in d for d in calls)
+        assert any("Hc2Humidity" in d and ",B524,020002012200" in d and "EXP" in d for d in calls)
+        assert any("Hc2DewPointTemp" in d and ",B524,020002012300" in d for d in calls)
+        assert any("Hc2PumpHours" in d and ",B524,020002012400" in d and "ULG" in d for d in calls)
+        assert any("Hc2PumpStarts" in d and ",B524,020002012500" in d and "ULG" in d for d in calls)
 
 
 async def test_define_custom_registers_skips_when_not_connected() -> None:

@@ -571,6 +571,80 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Pump Status (HC1)",
         entity_type="binary_sensor",
     ),
+    # Runtime-defined B524 heating-circuit state registers (Helianthus B524
+    # register map, community capture via discussion #60). Absent from the
+    # shipped CSVs; wire types EXP (f32) / ULG (u32) and message layout
+    # verified against ebusd datatype.cpp and the compiled eBUS CSVs.
+    "ctlv2.Hc1FlowTempCalc": RegisterMeta(
+        friendly_name="Calculated Flow Temperature (HC1)",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "ctlv2.Hc1MixerPosition": RegisterMeta(
+        friendly_name="Mixer Position (HC1)",
+        unit="%",
+        icon="mdi:valve",
+    ),
+    "ctlv2.Hc1Humidity": RegisterMeta(
+        friendly_name="Humidity (HC1)",
+        device_class="humidity",
+        unit="%",
+        icon="mdi:water-percent",
+    ),
+    "ctlv2.Hc1DewPointTemp": RegisterMeta(
+        friendly_name="Dew Point Temperature (HC1)",
+        device_class="temperature",
+        unit="°C",
+        icon="mdi:thermometer-water",
+    ),
+    "ctlv2.Hc1PumpHours": RegisterMeta(
+        friendly_name="Pump Hours (HC1)",
+        unit="h",
+        state_class="total_increasing",
+        icon="mdi:clock-outline",
+        entity_category="diagnostic",
+    ),
+    "ctlv2.Hc1PumpStarts": RegisterMeta(
+        friendly_name="Pump Starts (HC1)",
+        state_class="total_increasing",
+        icon="mdi:counter",
+        entity_category="diagnostic",
+    ),
+    "ctlv2.Hc2FlowTempCalc": RegisterMeta(
+        friendly_name="Calculated Flow Temperature (HC2)",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "ctlv2.Hc2MixerPosition": RegisterMeta(
+        friendly_name="Mixer Position (HC2)",
+        unit="%",
+        icon="mdi:valve",
+    ),
+    "ctlv2.Hc2Humidity": RegisterMeta(
+        friendly_name="Humidity (HC2)",
+        device_class="humidity",
+        unit="%",
+        icon="mdi:water-percent",
+    ),
+    "ctlv2.Hc2DewPointTemp": RegisterMeta(
+        friendly_name="Dew Point Temperature (HC2)",
+        device_class="temperature",
+        unit="°C",
+        icon="mdi:thermometer-water",
+    ),
+    "ctlv2.Hc2PumpHours": RegisterMeta(
+        friendly_name="Pump Hours (HC2)",
+        unit="h",
+        state_class="total_increasing",
+        icon="mdi:clock-outline",
+        entity_category="diagnostic",
+    ),
+    "ctlv2.Hc2PumpStarts": RegisterMeta(
+        friendly_name="Pump Starts (HC2)",
+        state_class="total_increasing",
+        icon="mdi:counter",
+        entity_category="diagnostic",
+    ),
     "ctlv2.Z1ActualRoomTempDesired": RegisterMeta(
         friendly_name="Room Temperature Target (Z1)",
         device_class="temperature",

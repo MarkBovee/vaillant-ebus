@@ -25,7 +25,7 @@
 
 ## Runtime-Defined Registers
 
-Some supported registers are not returned by ebusd `find` and must be defined or probed at runtime. `ctlv2.z1RoomHumidity` is one confirmed example, not an exhaustive list.
+Some supported registers are not returned by ebusd `find` and must be defined or probed at runtime. `ctlv2.z1RoomHumidity` and `hmu.SourceTempInput` are confirmed examples, not an exhaustive list. `SourceTempInput`'s layout is verified upstream on brine units (john30/ebusd-configuration PR #565); on air/water units the B51A reply is a 3-byte stub, so the read fails and the register correctly stays unavailable.
 
 When functionality is missing, inspect the raw `find` output, discovery dump, ebusd metadata, and unmapped registers before adding a one-off implementation. Test each candidate directly against ebusd, confirm its message format and read-back value, and add only registers supported by the connected hardware.
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.5.2 - 2026-08-25
+
+### Added
+
+- **`SourceTempInput` runtime definition restored with an upstream-verified
+  layout (#49).** The register was attempted during v1.3.3 development but
+  never shipped. The layout (`B51A` / `05ff3222`, `IGN:3 + D2C`) is verified
+  live on brine units in `john30/ebusd-configuration` PR #565 (flexoTHERM and
+  flexoCOMPACT ground-source). On air/water units the B51A reply is a 3-byte
+  stub that cannot decode — the register correctly stays unavailable there,
+  and the decode error is filtered as no-data so nothing broken appears in
+  the UI.
+- **Bare `ERR:` read replies count as no-data.** Direct ebusd reads return
+  `ERR: ...` without parentheses; the shared no-data helper now recognizes
+  that form alongside the parenthesized `(ERR ...)` find output.
+- **B524 heating-circuit state sensors for HC1 and HC2 (discussion #60).**
+  Twelve read-only registers absent from the shipped CSVs are defined at
+  runtime from the Helianthus B524 register map: calculated flow temperature,
+  mixer position, circuit humidity, dew point temperature, pump hours, and
+  pump starts per circuit. Message layout (`OP=0x02 GG=0x02`, RR `0x20`–`0x25`)
+  is verified against the upstream `15.ctlv2.tsp` and compiled eBUS CSVs, and
+  the wire types (`EXP` f32, `ULG` u32) against ebusd `datatype.cpp`. The
+  layout is fixture-gated; hardware without the registers stays no-data.
+
 ## 1.5.1 - 2026-08-25
 
 ### Added
