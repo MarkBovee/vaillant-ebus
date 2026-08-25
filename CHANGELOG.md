@@ -15,6 +15,14 @@
 - **Bare `ERR:` read replies count as no-data.** Direct ebusd reads return
   `ERR: ...` without parentheses; the shared no-data helper now recognizes
   that form alongside the parenthesized `(ERR ...)` find output.
+- **B524 heating-circuit state sensors for HC1 and HC2 (discussion #60).**
+  Twelve read-only registers absent from the shipped CSVs are defined at
+  runtime from the Helianthus B524 register map: calculated flow temperature,
+  mixer position, circuit humidity, dew point temperature, pump hours, and
+  pump starts per circuit. Message layout (`OP=0x02 GG=0x02`, RR `0x20`–`0x25`)
+  is verified against the upstream `15.ctlv2.tsp` and compiled eBUS CSVs, and
+  the wire types (`EXP` f32, `ULG` u32) against ebusd `datatype.cpp`. The
+  layout is fixture-gated; hardware without the registers stays no-data.
 
 ## 1.5.1 - 2026-08-25
 

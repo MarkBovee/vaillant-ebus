@@ -458,6 +458,33 @@ def test_arotherm_plus_basv3_zones() -> None:
     assert graph.nodes["z3"].has_data is False
 
 
+# Helianthus B524 register map fixture (community capture via discussion #60):
+# the heating-circuit state registers (GG=0x02 RR=0x20..0x25) must appear on
+# the discovered graph once the runtime defines are in place.
+def test_helianthus_b524_circuit_registers_graph() -> None:
+    lines = load_find_lines("community/helianthus_b524_circuit_registers.yaml")
+    graph = DiscoveryService.build_device_graph(lines)
+    assert graph.nodes["ctlv2"].device_type == DeviceType.HEATING_CONTROLLER
+    for register in (
+        "ctlv2.Hc1FlowTempCalc",
+        "ctlv2.Hc1MixerPosition",
+        "ctlv2.Hc1Humidity",
+        "ctlv2.Hc1DewPointTemp",
+        "ctlv2.Hc1PumpHours",
+        "ctlv2.Hc1PumpStarts",
+        "ctlv2.Hc2FlowTempCalc",
+        "ctlv2.Hc2MixerPosition",
+        "ctlv2.Hc2Humidity",
+        "ctlv2.Hc2DewPointTemp",
+        "ctlv2.Hc2PumpHours",
+        "ctlv2.Hc2PumpStarts",
+    ):
+        assert register in graph.raw_registers, f"Missing {register}"
+    assert graph.raw_registers["ctlv2.Hc1FlowTempCalc"] == "40.1"
+    assert graph.raw_registers["ctlv2.Hc1PumpHours"] == "1234"
+    assert graph.raw_registers["ctlv2.Hc2PumpStarts"] == "234"
+
+
 def test_arotherm_pro7_graph() -> None:
     graph = _arotherm_pro7_graph()
     assert graph.nodes["ctlv3"].device_type == DeviceType.HEATING_CONTROLLER

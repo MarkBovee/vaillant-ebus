@@ -163,6 +163,31 @@ class TestEntityGeneration:
             assert e.key.startswith(f"{e.circuit}.{e.name}."), f"Bad key format: {e.key}"
             assert e.key.count(".") == 2, f"Key should have 2 dots: {e.key}"
 
+    # Helianthus B524 register map fixture (community capture via discussion
+    # #60): the runtime-defined heating-circuit state registers must generate
+    # entities with the documented metadata (units, device classes, counters
+    # as diagnostic total-increasing sensors).
+    def test_helianthus_b524_circuit_register_entities(self) -> None:
+        lines = load_find_lines("community/helianthus_b524_circuit_registers.yaml")
+        graph = DiscoveryService.build_device_graph(lines)
+        svc = EntityFactoryService()
+        result = svc.generate(graph)
+        by_name = {e.name: e for e in result}
+        assert by_name["Hc1FlowTempCalc"].meta.unit == "°C"
+        assert by_name["Hc1FlowTempCalc"].meta.device_class == "temperature"
+        assert by_name["Hc1MixerPosition"].meta.unit == "%"
+        assert by_name["Hc1Humidity"].meta.unit == "%"
+        assert by_name["Hc1Humidity"].meta.device_class == "humidity"
+        assert by_name["Hc1DewPointTemp"].meta.device_class == "temperature"
+        assert by_name["Hc1PumpHours"].meta.unit == "h"
+        assert by_name["Hc1PumpHours"].meta.state_class == "total_increasing"
+        assert by_name["Hc1PumpHours"].meta.entity_category == "diagnostic"
+        assert by_name["Hc1PumpStarts"].meta.state_class == "total_increasing"
+        assert by_name["Hc2FlowTempCalc"].meta.unit == "°C"
+        assert by_name["Hc2Humidity"].meta.device_class == "humidity"
+        assert by_name["Hc2PumpHours"].meta.unit == "h"
+        assert by_name["Hc2PumpStarts"].meta.entity_category == "diagnostic"
+
 
 class TestDeviceCircuitResolution:
     """Device circuit assignment from device graph."""

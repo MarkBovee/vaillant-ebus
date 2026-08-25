@@ -1,0 +1,34 @@
+# Discovery dump for vaillant_ebus
+# Review this file for sensitive information before sharing
+# Community capture: Helianthus B524 register map (d3vi1, discussion #60).
+# Layout of the B524 heating-circuit state registers (OP=0x02 GG=0x02,
+# RR=0x20..0x25) is documented in the register map with multiple independent
+# sources; the raw_find_lines below represent what ebusd find returns after
+# the runtime defines succeed. Wire types: EXP (f32) and ULG (u32 LE).
+metadata:
+  timestamp: '2026-08-25T00:00:00'
+  ebusd_version: null
+  register_count: 24
+  grab_duration: 0
+  dump_version: 3
+raw_find_lines:
+- ctlv2 Z1OpMode = auto
+- ctlv2 Z1RoomTemp = 21.5
+- ctlv2 Z1RoomZoneMapping = 1
+- ctlv2 Z2OpMode = auto
+- ctlv2 Z2RoomTemp = 22.0
+- ctlv2 Z2RoomZoneMapping = 2
+- ctlv2 Hc1FlowTemp = 39.5
+- ctlv2 Hc1FlowTempCalc = 40.1
+- ctlv2 Hc1MixerPosition = 0.0
+- ctlv2 Hc1Humidity = 51
+- ctlv2 Hc1DewPointTemp = 8.4
+- ctlv2 Hc1PumpHours = 1234
+- ctlv2 Hc1PumpStarts = 567
+- ctlv2 Hc2FlowTemp = 38.2
+- ctlv2 Hc2FlowTempCalc = 38.9
+- ctlv2 Hc2MixerPosition = 100.0
+- ctlv2 Hc2Humidity = 49
+- ctlv2 Hc2DewPointTemp = 7.1
+- ctlv2 Hc2PumpHours = 890
+- ctlv2 Hc2PumpStarts = 234
