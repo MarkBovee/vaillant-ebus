@@ -14,6 +14,12 @@ read_parameter:
       default: "value"
       selector:
         text:
+    entry_id:
+      name: Config Entry
+      description: Select the integration config entry when multiple are loaded. Optional with a single entry.
+      advanced: true
+      selector:
+        text:
 
 write_parameter:
   name: Write Parameter
@@ -31,18 +37,45 @@ write_parameter:
       required: true
       selector:
         text:
+    entry_id:
+      name: Config Entry
+      description: Select the integration config entry when multiple are loaded. Optional with a single entry.
+      advanced: true
+      selector:
+        text:
 
 refresh:
   name: Refresh
   description: Force re-read of all active registers.
+  fields:
+    entry_id:
+      name: Config Entry
+      description: Select the integration config entry when multiple are loaded. Optional with a single entry.
+      advanced: true
+      selector:
+        text:
 
 rediscover:
   name: Rediscover
   description: Re-run entity discovery via `find` command.
+  fields:
+    entry_id:
+      name: Config Entry
+      description: Select the integration config entry when multiple are loaded. Optional with a single entry.
+      advanced: true
+      selector:
+        text:
 
 analyze_registers:
   name: Analyze Registers
   description: Run background analysis on-demand to discover and enable new devices and entities.
+  fields:
+    entry_id:
+      name: Config Entry
+      description: Select the integration config entry when multiple are loaded. Optional with a single entry.
+      advanced: true
+      selector:
+        text:
 
 export_discovery_dump:
   name: Export Discovery Dump
@@ -58,3 +91,9 @@ export_discovery_dump:
           min: 0
           max: 300
           unit_of_measurement: seconds
+    entry_id:
+      name: Config Entry
+      description: Select the integration config entry when multiple are loaded. Optional with a single entry.
+      advanced: true
+      selector:
+        text:

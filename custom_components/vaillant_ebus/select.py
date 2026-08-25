@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .backend.entity_factory import EntityDescription
+from .backend.models import is_no_data_value
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
@@ -66,10 +67,13 @@ class EbusdSelect(CoordinatorEntity[VaillantCoordinator], SelectEntity):
 
     @property
     def current_option(self) -> str | None:
-        # Return current selected option from coordinator data
+        # Return current selected option; ebusd sentinels mean "unknown", not
+        # a selectable option.
         data = self.coordinator.data.get("ebusd", {})
         raw = data.get(self._desc.key)
-        return str(raw) if raw is not None else None
+        if raw is None or is_no_data_value(str(raw)):
+            return None
+        return str(raw)
 
     # Write selected option to ebusd and trigger refresh
     async def async_select_option(self, option: str) -> None:

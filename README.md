@@ -46,7 +46,6 @@ graph TD
   C[VaillantCoordinator lifecycle polling cache]
   E[EbusService TCP transport ebusd commands]
   D[DiscoveryService find output to DeviceGraph]
-  R[RegisterService parsing cache writeability]
   F[EntityFactoryService DeviceGraph to entities]
   P[HA platform modules sensor number climate etc]
   B[ebusd TCP API port 8888]
@@ -54,11 +53,9 @@ graph TD
   HA --> C
   C --> E
   C --> D
-  C --> R
   C --> F
   E <--> B
   D --> E
-  R --> E
   F --> P
 ```
 
@@ -67,7 +64,6 @@ graph TD
 | `VaillantCoordinator` | Orchestrates the connection lifecycle, runtime definitions, discovery, polling, cache, and entity refreshes. |
 | `EbusService` | Maintains the asyncio TCP connection and executes raw ebusd commands such as `find`, `read`, `write`, and `define`. |
 | `DiscoveryService` | Parses `find` output, filters unsupported data, and builds the discovered `DeviceGraph`. |
-| `RegisterService` | Parses register values, handles placeholders and cache hydration, and verifies writeability before writes. |
 | `EntityFactoryService` | Converts the discovered graph plus `REGISTER_MAP` metadata into Home Assistant entity descriptions. |
 | HA platform modules | Turn entity descriptions into native `sensor`, `number`, `select`, `switch`, `climate`, `water_heater`, `calendar`, and `datetime` entities. |
 

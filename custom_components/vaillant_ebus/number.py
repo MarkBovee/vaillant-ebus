@@ -77,7 +77,7 @@ class EbusdNumber(CoordinatorEntity[VaillantCoordinator], NumberEntity):
             return None
         try:
             return float(raw)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return None
 
     # Write value to ebusd and trigger refresh

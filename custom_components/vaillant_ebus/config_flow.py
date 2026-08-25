@@ -8,7 +8,7 @@ from typing import Any
 
 import aiohttp
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, OptionsFlow
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
@@ -174,13 +174,13 @@ class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
 
     # Return the options flow handler for this config entry
     @staticmethod
-    def async_get_options_flow(config_entry: dict[str, Any]) -> OptionsFlow:
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
         return VaillantOptionsFlow(config_entry)
 
 
 class VaillantOptionsFlow(OptionsFlow):
     # Initialize options flow with config entry
-    def __init__(self, config_entry: dict[str, Any]) -> None:
+    def __init__(self, config_entry: ConfigEntry) -> None:
         self._config_entry = config_entry
 
     # Menu: choose between settings and export dump
@@ -190,17 +190,31 @@ class VaillantOptionsFlow(OptionsFlow):
             menu_options=["settings", "export_dump"],
         )
 
-    # Settings form (host, port, scan interval, away, quick veto)
+    # Settings form. Connection fields (host/port/scan interval) belong to
+    # entry data — where the coordinator reads them — while behavior options
+    # stay in entry.options. Both are written in one async_update_entry so the
+    # update listener reloads the entry exactly once.
+    _OPTION_KEYS = (CONF_AWAY_DURATION, CONF_QUICK_VETO_DURATION, CONF_QUICK_VETO_TEMP, CONF_COOLING_DURATION)
+
     async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
-            host = user_input.get(CONF_EBUSD_HOST)
-            port = user_input.get(CONF_EBUSD_PORT)
-            if host and port:
-                current = self._config_entry.data
-                if host != current.get(CONF_EBUSD_HOST) or port != current.get(CONF_EBUSD_PORT):
-                    new_data = {**current, CONF_EBUSD_HOST: host, CONF_EBUSD_PORT: port}
-                    self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
-            return self.async_create_entry(title="", data=user_input)
+            data = dict(self._config_entry.data)
+            host = str(user_input.get(CONF_EBUSD_HOST) or "").strip()
+            # An emptied host keeps the stored value instead of silently
+            # disabling the connection.
+            if not host:
+                host = data.get(CONF_EBUSD_HOST, "")
+            if host:
+                data[CONF_EBUSD_HOST] = host
+            if user_input.get(CONF_EBUSD_PORT) is not None:
+                data[CONF_EBUSD_PORT] = user_input[CONF_EBUSD_PORT]
+            if user_input.get(CONF_SCAN_INTERVAL) is not None:
+                data[CONF_SCAN_INTERVAL] = user_input[CONF_SCAN_INTERVAL]
+            submitted_options = {key: user_input[key] for key in self._OPTION_KEYS if key in user_input}
+            # Merge so a connection-only change preserves stored behavior options.
+            merged_options = {**self._config_entry.options, **submitted_options}
+            self.hass.config_entries.async_update_entry(self._config_entry, data=data, options=merged_options)
+            return self.async_abort(reason="changes_saved")
 
         data = self._config_entry.data if hasattr(self._config_entry, "data") else self._config_entry
         options = self._config_entry.options if hasattr(self._config_entry, "options") else {}

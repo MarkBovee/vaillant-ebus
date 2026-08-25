@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from tests.fake_ebusd import FakeEbusdServer
 
 SERVICE_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend/ebus_service.py"
@@ -405,3 +407,44 @@ async def test_integration_define_register() -> None:
         resp = await s.define_register("r5,ctlv2,z1RoomHumidity,test")
         assert resp == "done"
         await s.disconnect()
+
+
+# Intent: after a transport failure the stale writer must be discarded and a
+# real redial attempted — a silent no-op reconnect is a regression (the stale
+# writer stays set because transport errors never clear it themselves).
+async def test_reconnect_clears_stale_writer_and_raises_when_dial_fails(monkeypatch) -> None:
+    s = EbusService(host="127.0.0.1", port=59999)
+    s._writer = MagicMock(spec=asyncio.StreamWriter)
+    s._reader = AsyncMock(spec=asyncio.StreamReader)
+    s._reconnect_delay = 0
+
+    async def _refuse(*args, **kwargs):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(asyncio, "open_connection", _refuse)
+    with pytest.raises(ConnectionError):
+        await s._reconnect()
+    assert s._writer is None
+    assert s.is_connected is False
+    assert s._reconnecting is False
+
+
+# Intent: concurrent reconnect callers must single-flight — only one dials.
+async def test_reconnect_guard_single_flight(monkeypatch) -> None:
+    s = EbusService(host="127.0.0.1", port=59999)
+    s._reconnect_delay = 0
+    calls = {"n": 0}
+
+    async def _slow_open(*args, **kwargs):
+        calls["n"] += 1
+        await asyncio.sleep(0.05)
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(asyncio, "open_connection", _slow_open)
+    results = await asyncio.gather(s._reconnect(), s._reconnect(), return_exceptions=True)
+    raised = [r for r in results if isinstance(r, ConnectionError)]
+    skipped = [r for r in results if r is False]
+    assert len(raised) == 1, f"expected exactly one redial attempt, got {calls['n']}"
+    assert len(skipped) == 1, "concurrent caller must be told its reconnect was skipped"
+    assert calls["n"] == 1
+    assert s._reconnecting is False

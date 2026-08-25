@@ -6,6 +6,23 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 
+# ebusd values that mean "no usable data" rather than a measured value.
+# Exact-match set; prefix/substring forms are handled by is_no_data_value().
+# "none" is deliberately excluded: RoomZoneMapping legitimately reports it.
+EBUSD_NO_DATA_VALUES: frozenset[str] = frozenset({"", "-", "empty", "unknown", "unavailable"})
+
+
+# Return whether an ebusd value carries no usable data: an exact sentinel,
+# a "no data stored..." reply, an "(empty ...)" placeholder, or an "(ERR...)" error.
+def is_no_data_value(raw: str | None) -> bool:
+    if raw is None:
+        return True
+    low = raw.strip().lower()
+    if low in EBUSD_NO_DATA_VALUES:
+        return True
+    return low.startswith("no data stored") or low.startswith("(empty ") or "(err" in low
+
+
 COMPRESSOR_ACTIVE_STATUS_CODES = {104, 114, 134}
 COMPRESSOR_STATUS_CODES = {
     34,
@@ -105,13 +122,15 @@ COMPRESSOR_STATUS_LABELS: dict[str, str] = {
 
 
 # Return whether current compressor state explicitly indicates idle.
-def compressor_is_idle(registers: Mapping[str, EbusdRegister]) -> bool:
-    status = registers.get("hmu.RunDataStatuscode")
+# hp_circuit lets callers whose heat pump answers on a non-"hmu" circuit
+# resolve the status/speed registers correctly.
+def compressor_is_idle(registers: Mapping[str, EbusdRegister], hp_circuit: str = "hmu") -> bool:
+    status = registers.get(f"{hp_circuit}.RunDataStatuscode")
     raw_status = status.value.get("value") if status else None
     if raw_status is not None:
         try:
             status_code = int(raw_status)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             if raw_status in _COMPRESSOR_ACTIVE_STATUS_STRINGS:
                 return False
             if raw_status in _COMPRESSOR_IDLE_STATUS_STRINGS:
@@ -125,34 +144,39 @@ def compressor_is_idle(registers: Mapping[str, EbusdRegister]) -> bool:
             return True
 
     signals: list[float] = []
-    for key in ("hmu.RunDataCompressorSpeed", "hmu.CurrentCompressorUtil"):
+    for key in (f"{hp_circuit}.RunDataCompressorSpeed", f"{hp_circuit}.CurrentCompressorUtil"):
         register = registers.get(key)
         raw_value = register.value.get("value") if register else None
+        if raw_value is None:
+            continue
         try:
             signals.append(float(raw_value))
-        except TypeError, ValueError:
+        except ValueError:
             continue
     return bool(signals) and all(value == 0 for value in signals)
 
 
-# Registers to zero out when compressor is idle (stale-value prevention).
-COMPRESSOR_ZERO_REGISTERS: set[str] = {
-    "hmu.CurrentConsumedPower",
-    "hmu.CurrentYieldPower",
-    "hmu.CurrentCompressorUtil",
-    "hmu.RunDataCompressorSpeed",
-    "hmu.RunDataFan1Speed",
-    "hmu.RunDataFan2Speed",
-    "hmu.RunDataEEVPositionAbs",
-}
+# Bare register names zeroed out when the compressor is idle (stale-value
+# prevention); they live on the resolved heat-pump circuit.
+COMPRESSOR_ZERO_REGISTER_NAMES: frozenset[str] = frozenset(
+    {
+        "CurrentConsumedPower",
+        "CurrentYieldPower",
+        "CurrentCompressorUtil",
+        "RunDataCompressorSpeed",
+        "RunDataFan1Speed",
+        "RunDataFan2Speed",
+        "RunDataEEVPositionAbs",
+    }
+)
 
 
-# Zero stale compressor-dependent registers when compressor is idle.
-def zero_idle_registers(registers: Mapping[str, EbusdRegister]) -> None:
-    if not compressor_is_idle(registers):
+# Zero stale compressor-dependent registers when the compressor is idle.
+def zero_idle_registers(registers: Mapping[str, EbusdRegister], hp_circuit: str = "hmu") -> None:
+    if not compressor_is_idle(registers, hp_circuit):
         return
-    for key in COMPRESSOR_ZERO_REGISTERS:
-        reg = registers.get(key)
+    for name in COMPRESSOR_ZERO_REGISTER_NAMES:
+        reg = registers.get(f"{hp_circuit}.{name}")
         if reg:
             reg.value["value"] = "0"
             reg.has_data = True

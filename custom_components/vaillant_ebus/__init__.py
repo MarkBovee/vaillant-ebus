@@ -7,6 +7,7 @@ import logging
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
 from . import repairs  # noqa: F401 — registers issue translation keys
@@ -16,8 +17,137 @@ from .dump_service import async_export_discovery_dump
 
 _LOGGER = logging.getLogger(__name__)
 
+# Shared optional selector so every service works unchanged on single-entry
+# installs and stays deterministic when multiple host/port entries exist.
+_ENTRY_SELECTOR: dict[vol.Optional, object] = {vol.Optional("entry_id"): cv.string}
 
-# Set up coordinator, forward platforms, register services.
+
+# Resolve the coordinator a service call targets: an explicit entry_id wins,
+# a single loaded entry is used automatically, anything else fails loudly so
+# calls never depend on which entry happened to load last.
+def _resolve_coordinator(hass: HomeAssistant, call: ServiceCall) -> VaillantCoordinator:
+    coordinators: dict[str, VaillantCoordinator] = hass.data.get(DOMAIN, {})
+    requested = call.data.get("entry_id")
+    if requested:
+        coordinator = coordinators.get(requested)
+        if coordinator is None:
+            raise HomeAssistantError(f"vaillant_ebus config entry '{requested}' is not loaded")
+        return coordinator
+    if len(coordinators) == 1:
+        return next(iter(coordinators.values()))
+    if not coordinators:
+        raise HomeAssistantError("no loaded vaillant_ebus config entries")
+    raise HomeAssistantError(
+        "multiple vaillant_ebus config entries are loaded; pass entry_id to select one"
+    )
+
+
+# Read a single register by circuit and name.
+async def _svc_read_parameter(hass: HomeAssistant, call: ServiceCall) -> None:
+    coordinator = _resolve_coordinator(hass, call)
+    circuit = call.data["circuit"]
+    name = call.data["name"]
+    field = call.data.get("field", "")
+    if coordinator.ebus:
+        value = await coordinator.ebus.read_register(circuit, name, field)
+        _LOGGER.info("read_parameter %s.%s = %s", circuit, name, value)
+
+
+# Write a value with read-after-write verification via the central write path.
+async def _svc_write_parameter(hass: HomeAssistant, call: ServiceCall) -> None:
+    coordinator = _resolve_coordinator(hass, call)
+    circuit = call.data["circuit"]
+    name = call.data["name"]
+    value = call.data["value"]
+    ok = await coordinator.async_write_register(circuit, name, value)
+    _LOGGER.info("write_parameter %s.%s=%s: success=%s", circuit, name, value, ok)
+
+
+# Force re-read all active registers.
+async def _svc_refresh(hass: HomeAssistant, call: ServiceCall) -> None:
+    coordinator = _resolve_coordinator(hass, call)
+    await coordinator.async_request_refresh()
+
+
+# Re-run entity discovery from scratch via the coordinator's public path.
+async def _svc_rediscover(hass: HomeAssistant, call: ServiceCall) -> None:
+    coordinator = _resolve_coordinator(hass, call)
+    await coordinator.async_request_rediscover()
+
+
+# Run background analysis on-demand: discover + enable new devices/entities.
+async def _svc_analyze(hass: HomeAssistant, call: ServiceCall) -> None:
+    coordinator = _resolve_coordinator(hass, call)
+    await coordinator.async_run_analysis()
+
+
+# Export full discovery dump to YAML, optionally with raw grab.
+async def _svc_export_discovery_dump(hass: HomeAssistant, call: ServiceCall) -> None:
+    coordinator = _resolve_coordinator(hass, call)
+    raw = call.data.get("grab_duration", 0)
+    grab_duration = min(max(int(raw), 0), 300)
+    await async_export_discovery_dump(hass, coordinator, grab_duration)
+
+
+# Register all services once at integration scope; they resolve their target
+# coordinator per call instead of closing over whichever entry set them up.
+async def _register_services(hass: HomeAssistant) -> None:
+    hass.services.async_register(
+        DOMAIN,
+        "read_parameter",
+        lambda call: _svc_read_parameter(hass, call),
+        schema=vol.Schema(
+            {
+                vol.Required("circuit"): cv.string,
+                vol.Required("name"): cv.string,
+                vol.Optional("field", default=""): cv.string,
+                **_ENTRY_SELECTOR,
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "write_parameter",
+        lambda call: _svc_write_parameter(hass, call),
+        schema=vol.Schema(
+            {
+                vol.Required("circuit"): cv.string,
+                vol.Required("name"): cv.string,
+                vol.Required("value"): cv.string,
+                **_ENTRY_SELECTOR,
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN, "refresh", lambda call: _svc_refresh(hass, call), schema=vol.Schema(dict(_ENTRY_SELECTOR))
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "rediscover",
+        lambda call: _svc_rediscover(hass, call),
+        schema=vol.Schema(dict(_ENTRY_SELECTOR)),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "analyze_registers",
+        lambda call: _svc_analyze(hass, call),
+        schema=vol.Schema(dict(_ENTRY_SELECTOR)),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "export_discovery_dump",
+        lambda call: _svc_export_discovery_dump(hass, call),
+        schema=vol.Schema({vol.Optional("grab_duration"): vol.Coerce(int), **_ENTRY_SELECTOR}),
+    )
+
+
+# Integration-scope setup: register services once for all config entries.
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:  # noqa: ARG001
+    await _register_services(hass)
+    return True
+
+
+# Set up coordinator, forward platforms.
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("Setting up vaillant_ebus entry: %s", entry.data)
     hass.data.setdefault(DOMAIN, {})
@@ -27,99 +157,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Read a single register by circuit and name.
-    async def svc_read_parameter(call: ServiceCall) -> None:
-        circuit = call.data["circuit"]
-        name = call.data["name"]
-        field = call.data.get("field", "")
-        if coordinator.ebus:
-            value = await coordinator.ebus.read_register(circuit, name, field)
-            _LOGGER.info("read_parameter %s.%s = %s", circuit, name, value)
+    # Reload the entry when data/options change so connection and behavior
+    # settings apply without restarting Home Assistant.
+    async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+        await hass.config_entries.async_reload(entry.entry_id)
 
-    # Write a value with read-after-write verification via the central write path.
-    async def svc_write_parameter(call: ServiceCall) -> None:
-        circuit = call.data["circuit"]
-        name = call.data["name"]
-        value = call.data["value"]
-        ok = await coordinator.async_write_register(circuit, name, value)
-        _LOGGER.info("write_parameter %s.%s=%s: success=%s", circuit, name, value, ok)
-
-    # Force re-read all active registers.
-    async def svc_refresh(call: ServiceCall) -> None:
-        await coordinator.async_request_refresh()
-
-    # Re-run entity discovery from scratch.
-    async def svc_rediscover(call: ServiceCall) -> None:
-        if coordinator.ebus:
-            await coordinator.ebus.disconnect()
-        coordinator.ebus = None
-        coordinator._ebusd_connected = False
-        coordinator._started = False
-        await coordinator.async_request_refresh()
-
-    # Run background analysis on-demand: discover + enable new devices/entities.
-    async def svc_analyze(call: ServiceCall) -> None:
-        await coordinator.async_run_analysis()
-
-    hass.services.async_register(
-        DOMAIN,
-        "read_parameter",
-        svc_read_parameter,
-        schema=vol.Schema(
-            {
-                vol.Required("circuit"): cv.string,
-                vol.Required("name"): cv.string,
-                vol.Optional("field", default=""): cv.string,
-            }
-        ),
-    )
-    hass.services.async_register(
-        DOMAIN,
-        "write_parameter",
-        svc_write_parameter,
-        schema=vol.Schema(
-            {
-                vol.Required("circuit"): cv.string,
-                vol.Required("name"): cv.string,
-                vol.Required("value"): cv.string,
-            }
-        ),
-    )
-    hass.services.async_register(DOMAIN, "refresh", svc_refresh, schema=vol.Schema({}))
-    hass.services.async_register(DOMAIN, "rediscover", svc_rediscover, schema=vol.Schema({}))
-    hass.services.async_register(DOMAIN, "analyze_registers", svc_analyze, schema=vol.Schema({}))
-
-    # Export full discovery dump to YAML, optionally with raw grab.
-    async def svc_export_discovery_dump(call: ServiceCall) -> None:
-        raw = call.data.get("grab_duration", 0)
-        grab_duration = min(max(int(raw), 0), 300)
-        await async_export_discovery_dump(hass, coordinator, grab_duration)
-
-    hass.services.async_register(
-        DOMAIN,
-        "export_discovery_dump",
-        svc_export_discovery_dump,
-        schema=vol.Schema(
-            {
-                vol.Optional("grab_duration"): vol.Coerce(int),
-            }
-        ),
-    )
-
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 
 
-# Tear down coordinator and unregister services.
+# Tear down the coordinator; integration-scope services stay available and
+# resolve against whatever entries remain loaded.
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    for service in (
-        "read_parameter",
-        "write_parameter",
-        "refresh",
-        "rediscover",
-        "analyze_registers",
-        "export_discovery_dump",
-    ):
-        hass.services.async_remove(DOMAIN, service)
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         coordinator = hass.data[DOMAIN].pop(entry.entry_id)

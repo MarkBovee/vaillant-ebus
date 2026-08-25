@@ -298,14 +298,89 @@ async def test_zone2_reads_own_registers() -> None:
         assert z1.current_temperature == 21.5
 
 
-# Intent: target-temperature writes go to the zone's own registers on its circuit.
-async def test_zone2_set_temperature_writes_z2_registers() -> None:
+# Intent: target-temperature writes follow mode semantics — time-controlled
+# (auto) zones start a quick veto; manual/day zones write day temp directly.
+async def test_zone2_set_temperature_auto_starts_quick_veto() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
-        coordinator = _coordinator(tmpdir, _graph_two_zone())
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(),
+            data={"ebusd": {"ctlv2.Z2OpMode.value": "auto"}},
+        )
         coordinator.async_write_register = AsyncMock(return_value=True)
         z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
         await z2.async_set_temperature(temperature=22.0)
-        coordinator.async_write_register.assert_awaited_once_with("ctlv2", "Z2DayTemp", "22.0")
+        calls = [(c.args[0], c.args[1], c.args[2]) for c in coordinator.async_write_register.call_args_list]
+        assert ("ctlv2", "Z2QuickVetoTemp", "22.0") in calls
+        assert ("ctlv2", "Z2QuickVetoDuration", "3") in calls
+        assert ("ctlv2", "Z2DayTemp", "22.0") not in calls
+
+
+async def test_zone1_set_temperature_day_writes_day_temp() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(),
+            data={"ebusd": {"ctlv2.Z1OpMode.value": "day"}},
+        )
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+        await z1.async_set_temperature(temperature=22.0)
+        calls = [(c.args[0], c.args[1], c.args[2]) for c in coordinator.async_write_register.call_args_list]
+        assert ("ctlv2", "Z1DayTemp", "22.0") in calls
+        assert ("ctlv2", "Z1QuickVetoTemp", "22.0") not in calls
+
+
+# Intent: an active device-side veto (survives restarts) reports BOOST and
+# routes temperature changes to a temp-only quick-veto update.
+async def test_device_side_veto_reports_boost_and_updates_temp_only() -> None:
+    from datetime import datetime, timedelta
+
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%d.%m.%Y")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(),
+            data={
+                "ebusd": {
+                    "ctlv2.Z2OpMode.value": "auto",
+                    "ctlv2.Z2QuickVetoEndDate.value": tomorrow,
+                    "ctlv2.Z2QuickVetoEndTime.value": "23:59:00",
+                    "ctlv2.Z2QuickVetoTemp.value": "21.0",
+                }
+            },
+        )
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
+        assert z2.preset_mode == "boost"
+        await z2.async_set_temperature(temperature=24.0)
+        writes = [(c.args[0], c.args[1]) for c in coordinator.async_write_register.call_args_list]
+        assert ("ctlv2", "Z2QuickVetoTemp") in writes
+        assert ("ctlv2", "Z2QuickVetoDuration") not in writes
+
+
+# Intent: the idle sentinel end date (01.01.2019) must never read as BOOST;
+# a temperature change then starts a fresh veto like any auto-mode zone.
+async def test_past_sentinel_end_date_reports_no_boost() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(),
+            data={
+                "ebusd": {
+                    "ctlv2.Z2OpMode.value": "auto",
+                    "ctlv2.Z2QuickVetoEndDate.value": "01.01.2019",
+                    "ctlv2.Z2QuickVetoTemp.value": "21.0",
+                }
+            },
+        )
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
+        assert z2.preset_mode == "none"
+        await z2.async_set_temperature(temperature=22.0)
+        calls = [(c.args[0], c.args[1], c.args[2]) for c in coordinator.async_write_register.call_args_list]
+        assert ("ctlv2", "Z2QuickVetoTemp", "22.0") in calls
+        assert ("ctlv2", "Z2QuickVetoDuration", "3") in calls
 
 
 # Intent: boost on a zone with quick-veto support writes the zone's veto registers.

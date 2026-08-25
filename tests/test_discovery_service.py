@@ -810,6 +810,13 @@ def test_parse_register_no_data() -> None:
     assert v is None
 
 
+def test_parse_register_sentinel_values() -> None:
+    # unknown/unavailable/bare-empty must be no-data everywhere (shared helper).
+    for raw in ("unknown", "unavailable", "-", "empty"):
+        _, _, value = DiscoveryService._parse_register(f"hmu SomeRegister = {raw}")
+        assert value is None, f"{raw!r} should parse as no-data"
+
+
 def test_parse_register_empty_with_meta() -> None:
     c, n, v = DiscoveryService._parse_register(
         "ctlv2 HcStorageTempBottom =  (empty for f115b5240602000000a000 / 080000a000ffffff7f)"

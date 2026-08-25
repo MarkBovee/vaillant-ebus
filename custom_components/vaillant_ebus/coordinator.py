@@ -19,9 +19,9 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from . import repairs
 from .backend.analysis_service import AnalysisResult, AnalysisService
 from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService
-from .backend.ebus_service import EbusService
+from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, EbusService
 from .backend.entity_factory import EntityDescription, EntityFactoryService
-from .backend.mapping import REGISTER_MAP, b516_date_bytes, split_multi_field
+from .backend.mapping import REGISTER_MAP, b516_date_bytes, multi_field_fields, split_multi_field
 from .backend.models import (
     CIRCUIT_NAMES,
     COMPRESSOR_STATUS_LABELS,
@@ -29,9 +29,9 @@ from .backend.models import (
     DeviceNode,
     DeviceType,
     EbusdRegister,
+    is_no_data_value,
     zero_idle_registers,
 )
-from .backend.register_service import RegisterService
 from .const import (
     CONF_EBUSD_HOST,
     CONF_EBUSD_PORT,
@@ -43,15 +43,6 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-EBUSD_STATUS_SUFFIXES: tuple[str, ...] = (
-    ";ok",
-    ";err",
-    ";inv",
-    ";too_small",
-    ";too_big",
-    ";nan",
-    ";unknown",
-)
 DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
 ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
@@ -61,11 +52,6 @@ PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 # defaults for these even on unused zones, so they cannot distinguish a real
 # zone from a ghost.
 ZONE_LIVE_REGISTERS: tuple[str, ...] = ("RoomTemp", "ActualRoomTempDesired")
-
-# ebusd values that mean "no usable data" rather than a measured value.
-ZONE_SENTINEL_VALUES: frozenset[str] = frozenset(
-    {"", "-", "empty", "unknown", "unavailable", "no data stored", "none"}
-)
 
 
 # Build the per-field value dict for a register (split multi-field values).
@@ -126,7 +112,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._heating_circuit = "ctlv2"
 
         self.ebus: EbusService | None = None
-        self.register: RegisterService | None = None
         self.discovery: DiscoveryService | None = None
         self.entity_factory = EntityFactoryService()
         self.registers: dict[str, EbusdRegister] = {}
@@ -197,22 +182,26 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     zones[zone] = node.circuit
         return zones
 
+    # Whether a raw zone-register value proves real data: anything the shared
+    # no-data helper rejects, except "none" which is a legitimate RoomZoneMapping
+    # value for unused zones and must not count as live data.
+    @staticmethod
+    def _zone_value_has_data(raw: str | None) -> bool:
+        return raw is not None and not is_no_data_value(raw) and raw.strip().lower() != "none"
+
     # Whether a discovered zone is a real heating zone rather than a ghost.
     def _zone_is_valid(self, circuit: str, zone: str) -> bool:
         if self._graph is None:
             return False
         zn = zone.upper()
         mapping = self._graph.raw_registers.get(f"{circuit}.{zn}RoomZoneMapping")
-        if mapping is not None:
-            normalized = mapping.strip().lower()
-            if normalized and normalized not in ZONE_SENTINEL_VALUES:
-                return True
+        if self._zone_value_has_data(mapping):
+            return True
         # Fall back to a measured value on a live register. Static defaults
         # (DayTemp/OpMode) and sentinel values (empty/unknown/no data stored)
         # do not prove the zone is real.
         for name in ZONE_LIVE_REGISTERS:
-            value = self._graph.raw_registers.get(f"{circuit}.{zn}{name}")
-            if value is not None and value.strip().lower() not in ZONE_SENTINEL_VALUES:
+            if self._zone_value_has_data(self._graph.raw_registers.get(f"{circuit}.{zn}{name}")):
                 return True
         return False
 
@@ -282,7 +271,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.warning("ebusd connect failed, will retry: %s", exc)
             return
         self.ebus = ebus
-        self.register = RegisterService(ebus)
         self.discovery = DiscoveryService(ebus)
         self._ebusd_connected = True
 
@@ -307,9 +295,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     # Apply a complete device graph from initial or delayed discovery.
     async def _apply_discovery_graph(self, graph: DeviceGraph, source: str) -> None:
-        is_delayed = source == "delayed" and self._graph is not None
-        if is_delayed:
-            graph = _merge_device_graphs(self._graph, graph)
+        # Delayed rediscovery merges into the known graph so existing entities
+        # survive; only registers that are still missing get added afterwards.
+        previous = self._graph if source == "delayed" else None
+        if previous is not None:
+            graph = _merge_device_graphs(previous, graph)
         self._graph = graph
 
         for rk, raw in graph.raw_registers.items():
@@ -336,7 +326,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.warning("%s fallback read failed: %s", source.capitalize(), exc)
 
         generated_entities = self.entity_factory.generate(graph)
-        if is_delayed:
+        if previous is not None:
             existing_entity_keys = {entity.key for entity in self.entities}
             additions = [entity for entity in generated_entities if entity.key not in existing_entity_keys]
             self.entities.extend(additions)
@@ -440,6 +430,16 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         await self._analyze_live_registers()
 
+    # Full rediscovery requested by the "rediscover" service: drop the ebusd
+    # connection so the next poll reconnects and discovers from scratch.
+    async def async_request_rediscover(self) -> None:
+        if self.ebus:
+            await self.ebus.disconnect()
+        self.ebus = None
+        self._ebusd_connected = False
+        self._started = False
+        await self.async_request_refresh()
+
     # Push newly discovered entity descriptions to the matching platform adder.
     def _add_new_entities(self, new_entities: list[EntityDescription]) -> None:
         by_type: dict[str, list[EntityDescription]] = {}
@@ -458,10 +458,16 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Enable entities that map to recently live registers (respect user choice).
     async def _enable_registry_entities(self, register_keys: list[str]) -> list[str]:
         registry = entity_registry.async_get(self.hass)
-        desired_uids = {
-            f"ebusd_{key.split('.')[0]}_{key.split('.', 1)[1].lower().replace(' ', '_')}"
-            for key in register_keys
-        }
+        desired_uids: set[str] = set()
+        for key in register_keys:
+            circuit, name = key.split(".", 1)
+            suffix = name.lower().replace(" ", "_")
+            desired_uids.add(f"ebusd_{circuit}_{suffix}")
+            # Multi-field registers also expose per-field entities whose
+            # unique ids carry a _{field} suffix; include those candidates so
+            # they are auto-enabled as well.
+            for field in multi_field_fields(key) or []:
+                desired_uids.add(f"ebusd_{circuit}_{suffix}_{field}")
         enabled: list[str] = []
         for entity_id, entry in registry.entities.items():
             if entry.config_entry_id != self._entry.entry_id:
@@ -566,7 +572,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     json.dump(values, f)
             await self.hass.async_add_executor_job(_write)
         except Exception:
-            pass
+            # Log the path and failure class only — never cache values.
+            _LOGGER.warning("Failed to save register cache to %s", self._cache_path, exc_info=True)
 
     async def _async_load_cache(self) -> dict[str, str]:
         try:
@@ -574,7 +581,12 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 with open(self._cache_path) as f:
                     return json.load(f)
             return await self.hass.async_add_executor_job(_read)
+        except FileNotFoundError:
+            # First run without a cache file is normal — not a failure.
+            return {}
         except Exception:
+            # Corrupt or unreadable cache falls back to empty; keep the reason visible.
+            _LOGGER.warning("Could not read register cache from %s; using empty cache", self._cache_path, exc_info=True)
             return {}
 
     def get_device_info(self, circuit: str) -> DeviceInfo:
@@ -748,19 +760,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 lines = await self.ebus.find_registers()
                 updated = 0
                 for line in lines:
-                    line = line.strip()
-                    if not line or "=" not in line:
+                    # Shared parser: sentinel/no-data values come back as None.
+                    circuit, name, val = DiscoveryService._parse_register(line)
+                    if not circuit or not name or val is None:
                         continue
-                    lhs, rhs = line.split("=", 1)
-                    parts = lhs.strip().split(" ", 1)
-                    circuit = parts[0]
-                    name = parts[1].strip() if len(parts) > 1 else ""
-                    if not circuit or not name:
-                        continue
-                    val = rhs.strip()
                     key = f"{circuit}.{name}"
-                    if val in ("-", "") or val.startswith(("(empty ", "no data stored")) or "(ERR" in val:
-                        continue
                     self._live_since_analysis.add(key)
                     if key not in self.registers:
                         self.registers[key] = EbusdRegister(
@@ -781,16 +785,18 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if poll_placeholders:
                     self._last_placeholder_poll = now
                 await self._fallback_read(include_placeholders=poll_placeholders)
-                zero_idle_registers(self.registers)
+                zero_idle_registers(self.registers, self.heat_pump_circuit)
                 if updated:
                     _LOGGER.info("Poll updated %d registers", updated)
                 return {"ebusd": await self._async_values_from_registers()}
-            except ConnectionError, TimeoutError, OSError:
+            except (ConnectionError, TimeoutError, OSError):
                 _LOGGER.warning("ebusd connection lost, reconnecting")
                 try:
-                    if self.ebus:
-                        await self.ebus._reconnect()
-                    await repairs.async_dismiss_ebusd_unreachable(self.hass)
+                    # Only dismiss the repair issue when this call actually
+                    # dialed; a skipped single-flight reconnect proves nothing.
+                    reconnected = await self.ebus._reconnect() if self.ebus else False
+                    if reconnected:
+                        await repairs.async_dismiss_ebusd_unreachable(self.hass)
                 except Exception as exc:
                     _LOGGER.error("ebusd reconnect failed: %s", exc)
                     await repairs.async_create_ebusd_unreachable(self.hass)
@@ -798,23 +804,22 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return {"ebusd": await self._async_values_from_registers()}
 
     # Write one or more registers through the central write path. Each write is
-    # verified by read-back; on any failure the already-written registers are
-    # reported but not rolled back. A single refresh fires after all writes.
+    # verified by read-back. Sequences are dependent: stop at the first failure
+    # instead of writing later registers on a broken assumption; refresh only
+    # after full success. Already-written registers are reported, not rolled back.
     async def async_write_registers(
         self,
         writes: list[tuple[str, str, str]],
     ) -> bool:
         if not self.ebus or not self.ebus.is_connected:
             return False
-        all_ok = True
         for circuit, name, value in writes:
             result = await self.ebus.write_register(circuit, name, value)
             if not result.success:
                 _LOGGER.warning("Write failed %s.%s=%s: %s", circuit, name, value, result.error_message)
-                all_ok = False
-        if all_ok:
-            await self.async_request_refresh()
-        return all_ok
+                return False
+        await self.async_request_refresh()
+        return True
 
     # Convenience wrapper for a single-register write through the central path.
     async def async_write_register(self, circuit: str, name: str, value: str) -> bool:

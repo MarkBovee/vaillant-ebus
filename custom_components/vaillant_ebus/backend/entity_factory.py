@@ -6,12 +6,11 @@ import logging
 from copy import copy
 from typing import Any
 
-from .mapping import REGISTER_MAP, RegisterMeta, get_meta, multi_field_fields, split_multi_field
-from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister
+from .mapping import REGISTER_MAP, get_meta, multi_field_fields, split_multi_field
+from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister, RegisterMeta, is_no_data_value
 
 _LOGGER = logging.getLogger(__name__)
 
-_PLACEHOLDER_VALUES = frozenset({"-", "empty", "", "unknown", "unavailable"})
 _DHW_PREFIXES = ("dhw", "hwc", "cylinder", "maxcylinder", "solar")
 
 
@@ -60,14 +59,12 @@ class EntityDescription:
 
     @property
     def entity_type(self) -> str:
-        """Return HA platform type (sensor, binary_sensor, etc.)."""
-        return self.meta.entity_type or ("binary_sensor" if self._is_binary else "sensor")
+        """Return HA platform type (sensor, binary_sensor, etc.).
 
-    @property
-    def _is_binary(self) -> bool:
-        """Heuristic: raw value looks like on/off/true/false."""
-        low = self.raw_value.lower().strip() if self.raw_value else ""
-        return low in ("on", "off", "true", "false", "1", "0", "yes", "no")
+        `generate()` always classifies before construction, so this is set
+        for every production entity.
+        """
+        return self.meta.entity_type
 
 
 def _is_numeric(value: str) -> bool:
@@ -75,7 +72,7 @@ def _is_numeric(value: str) -> bool:
     try:
         float(value)
         return True
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return False
 
 
@@ -144,7 +141,7 @@ def _determine_enabled_by_default(
         return False
     if raw_value is not None:
         rv = raw_value.strip().lower()
-        if rv in _PLACEHOLDER_VALUES or "no data" in rv:
+        if is_no_data_value(rv) or "no data" in rv:
             return False
     known_in_map = register_key in REGISTER_MAP
     if known_in_map:

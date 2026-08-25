@@ -13,6 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .backend.entity_factory import EntityDescription
+from .backend.models import is_no_data_value
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
@@ -78,10 +79,10 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        # Return boolean state from ebusd data
+        # Return boolean state; ebusd sentinels mean "unknown", not off.
         data = self.coordinator.data.get("ebusd", {})
         raw = data.get(self._desc.key)
-        if raw is None:
+        if raw is None or is_no_data_value(str(raw)):
             return None
         return raw.strip().lower() in SWITCH_ON_VALUES
 
@@ -108,7 +109,7 @@ def _parse_date(raw: str | None) -> date | None:
         return None
     try:
         return datetime.strptime(raw.strip(), "%d.%m.%Y").date()
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 

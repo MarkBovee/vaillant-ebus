@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from .models import DeviceGraph, DeviceNode, DeviceType
+from .models import DeviceGraph, DeviceNode, DeviceType, is_no_data_value
 
 if TYPE_CHECKING:
     from .ebus_service import EbusService
@@ -15,10 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
 ALWAYS_HIDDEN = {"memory"}
 HIDDEN_DEVICE_KEYWORDS = {"broadcast", "scan", "general"}
-HIDDEN_REGISTERS = frozenset({"hmu.FlowTemperature", "Broadcast.FlowTemp"})
 SECONDARY_ZONE_CIRCUITS = frozenset({"hc2", "hc3", "z2", "z3"})
-
-PLACEHOLDER_VALUES = frozenset({"-", "no data stored", "empty", "", "unknown", "unavailable"})
 
 
 class DiscoveryService:
@@ -59,11 +56,7 @@ class DiscoveryService:
         circuit = parts[0]
         name = parts[1].strip() if len(parts) > 1 else ""
         val = rhs.strip()
-        if val.lower() in PLACEHOLDER_VALUES:
-            return (circuit, name, None)
-        if val.lower().startswith("no data stored"):
-            return (circuit, name, None)
-        if val.startswith("(empty ") or "(ERR" in val:
+        if is_no_data_value(val):
             return (circuit, name, None)
         return (circuit, name, val)
 
@@ -87,16 +80,6 @@ class DiscoveryService:
             if {"MF", "ID", "SW", "HW"} <= metadata.keys():
                 return (lhs.strip(), metadata["ID"], metadata["SW"], metadata["HW"])
         return (lhs.strip(), parts[1].strip(), parts[2].strip(), parts[3].strip())
-
-    @staticmethod
-    def _infer_circuit_from_scan_type(scan_type: str) -> str:
-        low = scan_type.lower()
-        if low == "netx2":
-            return "Broadcast"
-        prefix = low.rstrip("0123456789")
-        if prefix in ("hmu", "hmux", "ctlv", "basv", "bai", "vwz", "vwzio", "sol"):
-            return prefix
-        return ""
 
     @staticmethod
     def _is_hidden(register_key: str, has_data: dict[str, bool] | None = None) -> bool:
@@ -230,25 +213,23 @@ class DiscoveryService:
             scan_sw = scan_info[1] if scan_info else ""
             scan_hw = scan_info[2] if scan_info else ""
 
-            regs: list[str] = []
+            own_regs: list[str] = []
             for rk in reg_keys:
                 if rk in assigned_regs:
                     continue
                 if DiscoveryService._is_hidden(rk, has_data):
                     continue
-                regs.append(rk)
+                own_regs.append(rk)
 
-            if any(kw in circuit.lower() for kw in HIDDEN_DEVICE_KEYWORDS):
-                continue
-            device_type = DiscoveryService.categorize_circuit(circuit, regs, scan_type)
-            circuit_has_data = any(raw_registers.get(rk) is not None for rk in regs)
+            device_type = DiscoveryService.categorize_circuit(circuit, own_regs, scan_type)
+            circuit_has_data = any(raw_registers.get(rk) is not None for rk in own_regs)
             if not circuit_has_data and device_type == DeviceType.UNKNOWN:
                 continue
 
             node = DeviceNode(
                 circuit=circuit,
                 device_type=device_type,
-                registers=regs,
+                registers=own_regs,
                 has_data=circuit_has_data,
                 scan_type=scan_type,
                 scan_sw=scan_sw,
