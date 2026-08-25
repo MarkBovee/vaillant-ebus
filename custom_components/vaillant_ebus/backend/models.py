@@ -13,14 +13,20 @@ EBUSD_NO_DATA_VALUES: frozenset[str] = frozenset({"", "-", "empty", "unknown", "
 
 
 # Return whether an ebusd value carries no usable data: an exact sentinel,
-# a "no data stored..." reply, an "(empty ...)" placeholder, or an "(ERR...)" error.
+# a "no data stored..." reply, an "(empty ...)" placeholder, an "(ERR...)" error,
+# or a bare "ERR: ..." reply from a direct read.
 def is_no_data_value(raw: str | None) -> bool:
     if raw is None:
         return True
     low = raw.strip().lower()
     if low in EBUSD_NO_DATA_VALUES:
         return True
-    return low.startswith("no data stored") or low.startswith("(empty ") or "(err" in low
+    return (
+        low.startswith("no data stored")
+        or low.startswith("(empty ")
+        or low.startswith("err:")
+        or "(err" in low
+    )
 
 
 COMPRESSOR_ACTIVE_STATUS_CODES = {104, 114, 134}

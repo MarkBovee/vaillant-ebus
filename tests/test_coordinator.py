@@ -492,7 +492,7 @@ async def test_define_custom_registers_delegates_to_ebus() -> None:
         c.ebus = mock_ebus
         await c._define_custom_registers()
 
-        assert mock_ebus.define_register.call_count == 9
+        assert mock_ebus.define_register.call_count == 10
         calls = [c.args[0] for c in mock_ebus.define_register.call_args_list]
         assert any("z1RoomHumidity" in d for d in calls)
         assert any("ManualCoolingStartDate" in d and d.startswith("r5") for d in calls)
@@ -505,6 +505,11 @@ async def test_define_custom_registers_delegates_to_ebus() -> None:
         assert any("CoolElecConsTotal" in d and "1000ffff03050000" in d for d in calls)
         assert any(",B516,1001ffff0205" in d for d in calls)
         assert any(",B516,1002ffff0205" in d for d in calls)
+        # SourceTempInput runtime define (issue #49), layout verified upstream
+        # in john30/ebusd-configuration PR #565 on brine units.
+        assert any(
+            "SourceTempInput" in d and ",B51A,05ff3222,value,,IGN:3,,,,value,,D2C" in d for d in calls
+        )
 
 
 async def test_define_custom_registers_skips_when_not_connected() -> None:

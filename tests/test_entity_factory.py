@@ -794,6 +794,12 @@ class TestStatEnergyRegisters:
             assert entity.meta.device_class == "energy", reg
             assert entity.meta.unit == "kWh", reg
             assert entity.meta.state_class == "total_increasing", reg
+        # SourceTempInput is returned by find on this air/water unit (issue #49)
+        # and must generate a temperature entity from the REGISTER_MAP metadata.
+        src = by_key.get("hmu.SourceTempInput.value")
+        assert src is not None, "missing hmu.SourceTempInput"
+        assert src.meta.device_class == "temperature"
+        assert src.meta.unit == "°C"
 
 
 class TestBuildingCircuitFlowUnit:

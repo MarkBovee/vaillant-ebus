@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.5.2 - 2026-08-25
+
+### Added
+
+- **`SourceTempInput` runtime definition restored with an upstream-verified
+  layout (#49).** The register was attempted during v1.3.3 development but
+  never shipped. The layout (`B51A` / `05ff3222`, `IGN:3 + D2C`) is verified
+  live on brine units in `john30/ebusd-configuration` PR #565 (flexoTHERM and
+  flexoCOMPACT ground-source). On air/water units the B51A reply is a 3-byte
+  stub that cannot decode — the register correctly stays unavailable there,
+  and the decode error is filtered as no-data so nothing broken appears in
+  the UI.
+- **Bare `ERR:` read replies count as no-data.** Direct ebusd reads return
+  `ERR: ...` without parentheses; the shared no-data helper now recognizes
+  that form alongside the parenthesized `(ERR ...)` find output.
+
 ## 1.5.1 - 2026-08-25
 
 ### Added

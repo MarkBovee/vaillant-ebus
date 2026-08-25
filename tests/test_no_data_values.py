@@ -29,6 +29,8 @@ def test_prefix_and_error_forms() -> None:
         "no data stored (hmu CurrentYieldPowerToday)",
         "(empty message)",
         "58.0 (ERR: element not found)",
+        "ERR: invalid position in decode",
+        "ERR: element not found",
     ):
         assert is_no_data_value(raw), f"{raw!r} should be no-data"
 

@@ -500,6 +500,46 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         defines = [
             "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800"
             ",value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity",
+            # B524 heating-circuit state registers (OP=0x02 GG=0x02, RR=0x20..0x25)
+            # absent from the shipped CSVs (verified against the installed find
+            # output and upstream 15.ctlv2.tsp). Layout documented in the
+            # Helianthus B524 register map (community capture via discussion
+            # #60); wire types EXP (f32) and ULG (u32 LE) confirmed against
+            # ebusd datatype.cpp and the compiled eBUS CSVs. All are read-only
+            # state (S) with no gates; absent hardware reports no data and
+            # stays filtered by the existing no-data handling.
+            "r5,ctlv2,Hc1FlowTempCalc,Hc1FlowTempCalc,31,15,B524"
+            ",020002002000,value,,IGN:4,,,,value,,EXP,,°C,Hc1 Calculated Flow Temp",
+            "r5,ctlv2,Hc1MixerPosition,Hc1MixerPosition,31,15,B524"
+            ",020002002100,value,,IGN:4,,,,value,,EXP,,%,Hc1 Mixer Position",
+            "r5,ctlv2,Hc1Humidity,Hc1Humidity,31,15,B524"
+            ",020002002200,value,,IGN:4,,,,value,,EXP,,%,Hc1 Humidity",
+            "r5,ctlv2,Hc1DewPointTemp,Hc1DewPointTemp,31,15,B524"
+            ",020002002300,value,,IGN:4,,,,value,,EXP,,°C,Hc1 Dew Point Temp",
+            "r5,ctlv2,Hc1PumpHours,Hc1PumpHours,31,15,B524"
+            ",020002002400,value,,IGN:4,,,,value,,ULG,,h,Hc1 Pump Hours",
+            "r5,ctlv2,Hc1PumpStarts,Hc1PumpStarts,31,15,B524"
+            ",020002002500,value,,IGN:4,,,,value,,ULG,,,Hc1 Pump Starts",
+            "r5,ctlv2,Hc2FlowTempCalc,Hc2FlowTempCalc,31,15,B524"
+            ",020002012000,value,,IGN:4,,,,value,,EXP,,°C,Hc2 Calculated Flow Temp",
+            "r5,ctlv2,Hc2MixerPosition,Hc2MixerPosition,31,15,B524"
+            ",020002012100,value,,IGN:4,,,,value,,EXP,,%,Hc2 Mixer Position",
+            "r5,ctlv2,Hc2Humidity,Hc2Humidity,31,15,B524"
+            ",020002012200,value,,IGN:4,,,,value,,EXP,,%,Hc2 Humidity",
+            "r5,ctlv2,Hc2DewPointTemp,Hc2DewPointTemp,31,15,B524"
+            ",020002012300,value,,IGN:4,,,,value,,EXP,,°C,Hc2 Dew Point Temp",
+            "r5,ctlv2,Hc2PumpHours,Hc2PumpHours,31,15,B524"
+            ",020002012400,value,,IGN:4,,,,value,,ULG,,h,Hc2 Pump Hours",
+            "r5,ctlv2,Hc2PumpStarts,Hc2PumpStarts,31,15,B524"
+            ",020002012500,value,,IGN:4,,,,value,,ULG,,,Hc2 Pump Starts",
+            # SourceTempInput is absent from the shipped CSVs (upstream issue
+            # #632, last compiled 2026-04-19). Layout verified live on brine
+            # units in john30/ebusd-configuration PR #565 (flexoTHERM and
+            # flexoCOMPACT ground-source); air/water units answer with a
+            # 3-byte stub and stay unavailable, which the ERR filtering keeps
+            # out of entity values.
+            "r,hmu,SourceTempInput,SourceTempInput,31,8,B51A,05ff3222"
+            ",value,,IGN:3,,,,value,,D2C,,°C,Source temp input",
             "r5,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524"
             ",02000000da00,value,,IGN:4,,,,value,,HDA:3",
             "r5,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
