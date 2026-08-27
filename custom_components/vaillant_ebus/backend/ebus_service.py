@@ -56,6 +56,18 @@ def _values_match(written: str, read_back: str) -> bool:
     return True
 
 
+# Parse ebusd 'info' response into key/value pairs. ebusd returns newline-
+# separated "key: value" lines; some lines bundle a second pair after ", ".
+def _parse_info_data(data: str) -> dict[str, str]:
+    info: dict[str, str] = {}
+    for line in data.splitlines():
+        for part in line.split(", "):
+            pair = part.split(": ", 1)
+            if len(pair) == 2:
+                info[pair[0].strip()] = pair[1].strip()
+    return info
+
+
 # Reject empty identifiers and CR/LF injection at the backend boundary, before
 # they are interpolated into protocol commands. Spaces and semicolons remain
 # valid inside register names and values (ebusd syntax).
@@ -112,6 +124,13 @@ class EbusService:
                 self._reconnect_delay = INITIAL_RECONNECT_DELAY
                 self._reconnect_count = 0
                 _LOGGER.info("Connected to ebusd at %s:%s", self._host, self._port)
+                try:
+                    info_result = await self._send_line_locked("info")
+                    parsed = _parse_info_data(info_result.data)
+                    if parsed.get("version"):
+                        self._version = parsed["version"]
+                except Exception:
+                    self._version = None
             except Exception as exc:
                 self._writer = None
                 self._reader = None
@@ -271,15 +290,7 @@ class EbusService:
         result = await self.send_command("info")
         if result.error:
             return {}
-        info: dict[str, str] = {}
-        data = result.data.strip()
-        if not data:
-            return info
-        for part in data.split(", "):
-            pair = part.split(": ", 1)
-            if len(pair) == 2:
-                info[pair[0].strip()] = pair[1].strip()
-        return info
+        return _parse_info_data(result.data)
 
     # Send 'define' command for runtime register definition
     async def define_register(self, definition: str) -> str:
