@@ -11,15 +11,23 @@ from enum import Enum
 # "none" is deliberately excluded: RoomZoneMapping legitimately reports it.
 EBUSD_NO_DATA_VALUES: frozenset[str] = frozenset({"", "-", "empty", "unknown", "unavailable"})
 
+# Sensor fault statuses from the Vaillant sensor enum (Values_sensor in the
+# upstream ebusd configuration: ok=0, circuit=85, cutoff=170). Registers whose
+# trailing sensor-status field reports a fault (e.g. "116.06;circuit",
+# "-60.44;cutoff") carry no usable measurement: the sensor is not present.
+SENSOR_FAULT_STATUSES: frozenset[str] = frozenset({"circuit", "cutoff"})
+
 
 # Return whether an ebusd value carries no usable data: an exact sentinel,
 # a "no data stored..." reply, an "(empty ...)" placeholder, an "(ERR...)" error,
-# or a bare "ERR: ..." reply from a direct read.
+# a bare "ERR: ..." reply from a direct read, or a sensor-fault status.
 def is_no_data_value(raw: str | None) -> bool:
     if raw is None:
         return True
     low = raw.strip().lower()
     if low in EBUSD_NO_DATA_VALUES:
+        return True
+    if low.endswith((";circuit", ";cutoff")) or low in SENSOR_FAULT_STATUSES:
         return True
     return (
         low.startswith("no data stored")

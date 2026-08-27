@@ -492,7 +492,7 @@ async def test_define_custom_registers_delegates_to_ebus() -> None:
         c.ebus = mock_ebus
         await c._define_custom_registers()
 
-        assert mock_ebus.define_register.call_count == 22
+        assert mock_ebus.define_register.call_count == 27
         calls = [c.args[0] for c in mock_ebus.define_register.call_args_list]
         assert any("z1RoomHumidity" in d for d in calls)
         assert any("ManualCoolingStartDate" in d and d.startswith("r5") for d in calls)
@@ -505,6 +505,14 @@ async def test_define_custom_registers_delegates_to_ebus() -> None:
         assert any("CoolElecConsTotal" in d and "1000ffff03050000" in d for d in calls)
         assert any(",B516,1001ffff0205" in d for d in calls)
         assert any(",B516,1002ffff0205" in d for d in calls)
+        # Daily electric for cooling (issue #50 follow-up) plus the lifetime and
+        # daily electric counters for heating (Z=3) and DHW (Z=4) on the same
+        # b516 statistics API.
+        assert any("CoolElecConsDay" in d and ",B516,1001ffff0305" in d for d in calls)
+        assert any("HcElecConsTotal" in d and "1000ffff03030000" in d for d in calls)
+        assert any("HcElecConsDay" in d and ",B516,1001ffff0303" in d for d in calls)
+        assert any("HwcElecConsTotal" in d and "1000ffff03040000" in d for d in calls)
+        assert any("HwcElecConsDay" in d and ",B516,1001ffff0304" in d for d in calls)
         # SourceTempInput runtime define (issue #49), layout verified upstream
         # in john30/ebusd-configuration PR #565 on brine units.
         assert any(

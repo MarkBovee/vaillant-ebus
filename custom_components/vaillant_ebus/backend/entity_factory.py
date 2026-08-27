@@ -290,6 +290,9 @@ class EntityFactoryService:
                 if field_names:
                     field_values = split_multi_field(rk, raw)
                     for field_name in field_names:
+                        if field_name == "value":
+                            # Single-field mappings reuse the base entity.
+                            continue
                         field_raw = field_values.get(field_name)
                         field_meta = get_meta(circuit, name, field_name)
                         field_override = overrides.get(f"{rk}.{field_name}") or {}

@@ -560,6 +560,31 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             f"r,hmu,CoolEnvYieldMonth,CoolEnvYieldMonth,31,08,B516"
             f",1002ffff0205{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
             f",hmu Cooling Env Yield This Month",
+            # Daily electric consumption for cooling (issue #50 follow-up: the
+            # integration only exposed the lifetime electric total, while the
+            # myPyllant app shows a daily "Consumed Electrical Energy Cooling"
+            # value). Same b516 API with the electric usage code (Y=3) and the
+            # daily X=1 selector, so the layout matches the verified cooling
+            # family; date payload refreshes per connect like CoolEnvYieldDay.
+            f"r,hmu,CoolElecConsDay,CoolElecConsDay,31,08,B516"
+            f",1001ffff0305{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
+            f",hmu Cooling Electric Consumption Today",
+            # Lifetime and daily electric consumption for the heating (Z=3) and
+            # hot-water (Z=4) domains, same b516 statistics API (upstream issue
+            # #490). Conservative extension of the live-verified cooling layout
+            # (Y=3 electric); absent hardware reports no data and stays hidden.
+            "r,hmu,HcElecConsTotal,HcElecConsTotal,31,08,B516"
+            ",1000ffff03030000,value,,IGN:7,,,,value,,EXP,,Wh"
+            ",hmu Heating Electric Consumption",
+            f"r,hmu,HcElecConsDay,HcElecConsDay,31,08,B516"
+            f",1001ffff0303{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
+            f",hmu Heating Electric Consumption Today",
+            "r,hmu,HwcElecConsTotal,HwcElecConsTotal,31,08,B516"
+            ",1000ffff03040000,value,,IGN:7,,,,value,,EXP,,Wh"
+            ",hmu DHW Electric Consumption",
+            f"r,hmu,HwcElecConsDay,HwcElecConsDay,31,08,B516"
+            f",1001ffff0304{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
+            f",hmu DHW Electric Consumption Today",
         ]
         defined = 0
         unavailable = 0
@@ -744,12 +769,12 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 value = await self.ebus.read_register(circuit, name)
                 was_new = key not in self.registers
-                if value and (value.startswith(("or:", "ERR:", "no data stored")) or "read [-" in value):
+                if value and (is_no_data_value(value) or value.startswith("or:") or "read [-" in value):
                     value = None
                 if value is None:
                     cache = await self._async_load_cache()
                     cached = cache.get(f"{circuit}.{name}.value")
-                    if cached is not None:
+                    if cached is not None and not is_no_data_value(cached):
                         value = cached
                 if value is not None:
                     read_with_data += 1

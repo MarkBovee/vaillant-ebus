@@ -100,26 +100,68 @@ def test_b516_cooling_register_entities() -> None:
         "hmu CoolEnvYieldDay = 8000",
         "hmu CoolEnvYieldMonth = 139818",
         "hmu CoolElecConsTotal = 153000",
+        "hmu CoolElecConsDay = 1200",
+        "hmu HcElecConsTotal = 2400000",
+        "hmu HcElecConsDay = 18000",
+        "hmu HwcElecConsTotal = 950000",
+        "hmu HwcElecConsDay = 7000",
+        # CSV/find-based electric registers that supplement the b516 counters.
+        "hmu ConsumptionTotal = 12345",
+        "hmu RunDataElectricPowerConsumption = 1500",
+        "hmu LiveMonitorCurrentConsumedPower = 15",
+        "hmu StatSolarEnergySum = 0",
+        "hmu StatSolarEnergySumHc = 0",
+        "hmu StatSolarEnergySumHwc = 0",
     ]
     graph = DiscoveryService.build_device_graph(lines)
     entities = EntityFactoryService().generate(graph)
     by_key = {e.key: e for e in entities}
 
     expected_names = {
-        "hmu.CoolEnvYieldTotal.value": "Cooling Energy Total",
-        "hmu.CoolEnvYieldDay.value": "Cooling Energy Today",
-        "hmu.CoolEnvYieldMonth.value": "Cooling Energy Month",
-        "hmu.CoolElecConsTotal.value": "Cooling Electricity Total",
+        "hmu.CoolEnvYieldTotal.value": ("Cooling Energy Total", "Wh"),
+        "hmu.CoolEnvYieldDay.value": ("Cooling Energy Today", "Wh"),
+        "hmu.CoolEnvYieldMonth.value": ("Cooling Energy Month", "Wh"),
+        "hmu.CoolElecConsTotal.value": ("Cooling Electricity Total", "Wh"),
+        "hmu.CoolElecConsDay.value": ("Cooling Electricity Today", "Wh"),
+        "hmu.HcElecConsTotal.value": ("Heating Electricity Total", "Wh"),
+        "hmu.HcElecConsDay.value": ("Heating Electricity Today", "Wh"),
+        "hmu.HwcElecConsTotal.value": ("DHW Electricity Total", "Wh"),
+        "hmu.HwcElecConsDay.value": ("DHW Electricity Today", "Wh"),
+        "hmu.ConsumptionTotal.value": ("Electrical Energy Consumption", "kWh"),
+        "hmu.StatSolarEnergySum.value": ("Solar Energy Sum", "kWh"),
+        "hmu.StatSolarEnergySumHc.value": ("Solar Energy Sum (Heating)", "kWh"),
+        "hmu.StatSolarEnergySumHwc.value": ("Solar Energy Sum (DHW)", "kWh"),
     }
-    for key, friendly in expected_names.items():
+    for key, (friendly, unit) in expected_names.items():
         entity = by_key.get(key)
         assert entity is not None, f"{key} must be an entity"
         assert entity.meta.friendly_name == friendly
         assert entity.entity_type == "sensor"
         assert entity.meta.device_class == "energy"
-        assert entity.meta.unit == "Wh"
+        assert entity.meta.unit == unit
 
-    assert by_key["hmu.CoolEnvYieldTotal.value"].meta.state_class == "total_increasing"
-    assert by_key["hmu.CoolElecConsTotal.value"].meta.state_class == "total_increasing"
-    # Daily/monthly yields reset, so they must not be marked total_increasing.
-    assert by_key["hmu.CoolEnvYieldDay.value"].meta.state_class != "total_increasing"
+    # Lifetime totals are monotonic; daily counters reset each day.
+    for key in (
+        "hmu.CoolEnvYieldTotal.value",
+        "hmu.CoolElecConsTotal.value",
+        "hmu.HcElecConsTotal.value",
+        "hmu.HwcElecConsTotal.value",
+        "hmu.ConsumptionTotal.value",
+        "hmu.StatSolarEnergySum.value",
+        "hmu.StatSolarEnergySumHc.value",
+        "hmu.StatSolarEnergySumHwc.value",
+    ):
+        assert by_key[key].meta.state_class == "total_increasing"
+    for key in (
+        "hmu.CoolEnvYieldDay.value",
+        "hmu.CoolElecConsDay.value",
+        "hmu.HcElecConsDay.value",
+        "hmu.HwcElecConsDay.value",
+    ):
+        assert by_key[key].meta.state_class != "total_increasing"
+
+    # Power registers use the power device class with the upstream units.
+    assert by_key["hmu.RunDataElectricPowerConsumption.value"].meta.device_class == "power"
+    assert by_key["hmu.RunDataElectricPowerConsumption.value"].meta.unit == "W"
+    assert by_key["hmu.LiveMonitorCurrentConsumedPower.value"].meta.device_class == "power"
+    assert by_key["hmu.LiveMonitorCurrentConsumedPower.value"].meta.unit == "kW"
