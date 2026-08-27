@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.5.4 - 2026-08-27
+
+### Added
+
+- **Read-only cooling-program calendars (#92).** The bus carries separate
+  per-day cooling schedules (`Z1CoolingTimer_*` / `Z2CoolingTimer_*`) alongside
+  the heating (`CcTimer`), zone (`Z1Timer`), and DHW (`HwcTimer`) programs, which
+  is what the Vaillant app uses for heating and cooling intervals independently.
+  Adds additive **"Cooling Program"** and **"Cooling Program 2"** calendar
+  entities that populate from those registers and stay empty on hardware that
+  does not expose them. The write side (setting intervals from Home Assistant)
+  remains a follow-up.
+
+### Fixed
+
+- **DHW boost switch/water-heater state (#31).** `HwcSFMode` reports "load"
+  while the cylinder is actively charging even after boost is turned off, so a
+  switch reading the raw register could never flip back to off until the charge
+  finished. The boost switch and water heater now track the desired DHW boost
+  state (falling back to the raw register on first load), so the switch reflects
+  a toggle immediately. The `HwcSFMode` write is now verified non-strictly
+  (ebusd answers "done" while the physical state lags the accepted write); all
+  other writes keep strict read-back verification. MichaelLachmann's boost
+  on/off discovery dumps were adopted as community fixtures with a regression
+  test.
+
 ## 1.5.3 - 2026-08-27
 
 ### Added
