@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.5.3 - 2026-08-27
+
+### Added
+
+- **Daily electric consumption for cooling, heating, and DHW (#50).** The b516
+  statistics API now also defines daily electric counters (`CoolElecConsDay`,
+  `HcElecConsDay`, `HwcElecConsDay`) alongside the existing lifetime totals,
+  so the daily `Consumed Electrical Energy Cooling` value shown in the
+  myPyllant app has a matching sensor. Lifetime electric totals for heating
+  (`HcElecConsTotal`) and DHW (`HwcElecConsTotal`) are added as well, using
+  the same live-verified layout (upstream issue john30/ebusd-configuration
+  #490; X=0 total / X=1 day, Y=3 electric, Z=3 heating / Z=4 hot water /
+  Z=5 cooling).
+- **Additional electric registers from the standard `find` output (#50).**
+  `hmu.ConsumptionTotal` (kWh), `hmu.RunDataElectricPowerConsumption` (W),
+  `hmu.LiveMonitorCurrentConsumedPower` (kW), and the `hmu.StatSolarEnergySum*`
+  family (kWh) now get proper metadata. These supplement the runtime-defined
+  b516 counters and stay opt-in: entities appear only when the discovery graph
+  carries the register with data.
+
+### Fixed
+
+- **v32 gas boiler (ecoTEC plus via VR32) register handling (#83).** Registers
+  from the bai CSV now get proper metadata (temperatures in °C, hour counters
+  as `duration` with `total_increasing`, pump power in W, water pressure in
+  bar), multi-field values are split (`ReturnTemp` no longer shows
+  `55.31;64650;ok`, `Status01`/`Status02` become individual sensors), and
+  sensor-fault values (`;circuit`, `;cutoff`) are treated as no data instead
+  of exposing bogus readings like `HwcTemp = 116.06;circuit`. Ventilation-only
+  registers (e.g. `BypassPosition`, `ExhaustAirHumidity`) stay absent on
+  boiler setups, guarded by a new community fixture test.
+
 ## 1.5.2 - 2026-08-25
 
 ### Added

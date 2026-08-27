@@ -35,9 +35,33 @@ def test_prefix_and_error_forms() -> None:
         assert is_no_data_value(raw), f"{raw!r} should be no-data"
 
 
+# Sensor fault statuses (Values_sensor enum: circuit=85, cutoff=170) mean the
+# sensor is not present, so the register carries no usable measurement.
+def test_sensor_fault_statuses_are_no_data() -> None:
+    for raw in (
+        "116.06;circuit",
+        "-60.44;cutoff",
+        "circuit",
+        "cutoff",
+    ):
+        assert is_no_data_value(raw), f"{raw!r} should be no-data"
+
+
 # Real measured values and legitimate domain strings stay live
 def test_live_values_pass() -> None:
-    for raw in ("21.5", "none", "on", "off", "day", "auto", "58.0;1200"):
+    for raw in (
+        "21.5",
+        "none",
+        "on",
+        "off",
+        "day",
+        "auto",
+        "58.0;1200",
+        "55.31;64650;ok",
+        "47.06;ok",
+        "1.771;ok",
+        "43.5;53.5;-;-;62.0;off",
+    ):
         assert not is_no_data_value(raw), f"{raw!r} should stay live"
 
 
