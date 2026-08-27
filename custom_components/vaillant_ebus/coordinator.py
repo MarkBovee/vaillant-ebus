@@ -110,6 +110,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._started = False
         self._ebusd_connected = False
         self._heating_circuit = "ctlv2"
+        # Desired DHW boost state (True when boost was requested). HwcSFMode
+        # reports "load" while the cylinder charges even after boost is turned
+        # off, so the switch/water-heater report this desired value instead of
+        # the raw register. None until the user toggles boost.
+        self.dhw_boost_desired: bool | None = None
 
         self.ebus: EbusService | None = None
         self.discovery: DiscoveryService | None = None
@@ -875,11 +880,12 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_write_registers(
         self,
         writes: list[tuple[str, str, str]],
+        strict_verify: bool = True,
     ) -> bool:
         if not self.ebus or not self.ebus.is_connected:
             return False
         for circuit, name, value in writes:
-            result = await self.ebus.write_register(circuit, name, value)
+            result = await self.ebus.write_register(circuit, name, value, strict_verify=strict_verify)
             if not result.success:
                 _LOGGER.warning("Write failed %s.%s=%s: %s", circuit, name, value, result.error_message)
                 return False
@@ -887,8 +893,10 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return True
 
     # Convenience wrapper for a single-register write through the central path.
-    async def async_write_register(self, circuit: str, name: str, value: str) -> bool:
-        return await self.async_write_registers([(circuit, name, value)])
+    async def async_write_register(
+        self, circuit: str, name: str, value: str, strict_verify: bool = True
+    ) -> bool:
+        return await self.async_write_registers([(circuit, name, value)], strict_verify=strict_verify)
 
     async def async_stop(self) -> None:
         if self._cancel_delayed_rediscovery:

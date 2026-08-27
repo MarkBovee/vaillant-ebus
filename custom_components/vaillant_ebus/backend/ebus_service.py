@@ -27,6 +27,35 @@ def _strip_suffix(value: str) -> str:
     return value
 
 
+# Normalize a register value for write/read-back comparison. ebusd echoes
+# multi-field registers with ";" separators while callers write them with
+# spaces, and numeric fields may gain or lose trailing zeros. Split on either
+# separator and compare field-wise so only real value changes are flagged.
+def _value_tokens(value: str) -> list[str]:
+    return [tok for tok in value.replace(";", " ").split() if tok]
+
+
+# Compare a written value against the ebusd read-back, tolerating separator
+# and numeric-format differences but not actual value changes. Used to detect
+# writes that ebusd accepted but did not apply (e.g. HwcSFMode stays "load"
+# after writing "auto" while a boost cycle is still running).
+def _values_match(written: str, read_back: str) -> bool:
+    written_tokens = _value_tokens(written)
+    read_tokens = _value_tokens(read_back)
+    if len(written_tokens) != len(read_tokens):
+        return False
+    for expected, actual in zip(written_tokens, read_tokens):
+        if expected == actual:
+            continue
+        try:
+            if float(expected) == float(actual):
+                continue
+        except ValueError:
+            pass
+        return False
+    return True
+
+
 # Reject empty identifiers and CR/LF injection at the backend boundary, before
 # they are interpolated into protocol commands. Spaces and semicolons remain
 # valid inside register names and values (ebusd syntax).
@@ -200,8 +229,14 @@ class EbusService:
         raw = result.data.strip()
         return _strip_suffix(raw) if raw else None
 
-    # Write a value to an ebusd register, verify by read-back
-    async def write_register(self, circuit: str, name: str, value: str) -> WriteResult:
+    # Write a value to an ebusd register, verify by read-back. When
+    # strict_verify is False a read-back that does not match the written value
+    # is logged but not treated as a failure. This is used for registers whose
+    # physical state lags the accepted write (e.g. HwcSFMode keeps reporting
+    # "load" while the cylinder finishes charging after boost is turned off).
+    async def write_register(
+        self, circuit: str, name: str, value: str, strict_verify: bool = True
+    ) -> WriteResult:
         _validate_identifier("circuit", circuit)
         _validate_identifier("register name", name)
         cmd = f"write -c {circuit} {name} {value}"
@@ -216,6 +251,19 @@ class EbusService:
             return WriteResult(success=False, error_message="Write verification returned empty")
         if verified and verified.startswith("ERR:"):
             return WriteResult(success=False, error_message=f"Write verification failed: {verified}")
+        if verified and not _values_match(value, verified):
+            _LOGGER.warning(
+                "Write verification mismatch %s.%s: wrote %r, read back %r",
+                circuit,
+                name,
+                value,
+                verified,
+            )
+            if strict_verify:
+                return WriteResult(
+                    success=False,
+                    error_message=f"Write verification mismatch: wrote {value!r}, read back {verified!r}",
+                )
         return WriteResult(success=True, verified_value=verified)
 
     # Send 'info' command and parse key=value response
