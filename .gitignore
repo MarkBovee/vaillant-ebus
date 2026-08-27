@@ -42,6 +42,7 @@ captures/
 /scripts/
 strings.json
 data-dump/
+.analysis/
 discovery_dumps/
 
 

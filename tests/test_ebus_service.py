@@ -137,12 +137,65 @@ async def test_write_register_success() -> None:
             TimeoutError(),  # drain for write
             b"done\n",  # write response
             TimeoutError(),  # drain for read-back
-            b"1\n",  # read-back
+            b"auto;17;-;-;1;1;1;0;0;1\n",  # read-back (semicolon form)
         ]
     )
     result = await s.write_register("hmu", "SetMode", "auto 17 - - 1 1 1 0 0 1")
     assert result.success
-    assert result.verified_value == "1"
+    assert result.verified_value == "auto;17;-;-;1;1;1;0;0;1"
+
+
+# write_register: read-back that does not match the written value fails.
+# Covers the DHW boost case where ebusd answers "done" but the controller
+# keeps HwcSFMode on "load" while a boost cycle is still running.
+async def test_write_register_readback_mismatch_fails() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(
+        side_effect=[
+            TimeoutError(),  # drain for write
+            b"done\n",  # write response
+            TimeoutError(),  # drain for read-back
+            b"load\n",  # read-back: value did not change
+        ]
+    )
+    result = await s.write_register("basv", "HwcSFMode", "auto")
+    assert not result.success
+    assert "Write verification mismatch" in result.error_message
+    assert "load" in result.error_message
+
+
+# write_register: with strict_verify=False a read-back mismatch is logged but
+# not treated as a failure. Used for HwcSFMode, whose physical state lags the
+# accepted write while the cylinder is still charging.
+async def test_write_register_readback_mismatch_non_strict() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(
+        side_effect=[
+            TimeoutError(),  # drain for write
+            b"done\n",  # write response
+            TimeoutError(),  # drain for read-back
+            b"load\n",  # read-back: value did not change yet
+        ]
+    )
+    result = await s.write_register("basv", "HwcSFMode", "auto", strict_verify=False)
+    assert result.success
+    assert result.verified_value == "load"
+
+
+# write_register: numeric formatting differences are tolerated
+async def test_write_register_readback_numeric_tolerance() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(
+        side_effect=[
+            TimeoutError(),
+            b"done\n",
+            TimeoutError(),
+            b"23.50\n",  # written as 23.5
+        ]
+    )
+    result = await s.write_register("ctlv2", "Z1DayTemp", "23.5")
+    assert result.success
+    assert result.verified_value == "23.50"
 
 
 # write_register: connection error propagates as failure

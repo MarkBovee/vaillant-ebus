@@ -122,7 +122,7 @@ async def test_write_register_preserves_values_with_spaces_and_semicolons() -> N
     svc.send_command = AsyncMock(
         side_effect=[
             EBUS.SendResult(data="done"),
-            EBUS.SendResult(data="21;5 ok"),
+            EBUS.SendResult(data="a b;c"),
         ]
     )
     result = await svc.write_register("hmu", "HwcTempDesired", "a b;c")

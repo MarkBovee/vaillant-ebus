@@ -199,9 +199,15 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         self._attr_icon = "mdi:water-boiler"
         self._attr_device_info = coordinator.get_device_info("dhw")
 
-    # True when HwcSFMode register equals "load"
+    # True when DHW boost was requested (desired state), falling back to the
+    # raw HwcSFMode register on first load. The raw register reports "load"
+    # while the cylinder charges even after boost is turned off, so the desired
+    # state is the authoritative source once a toggle has happened.
     @property
     def is_on(self) -> bool | None:
+        desired = self.coordinator.dhw_boost_desired
+        if desired is not None:
+            return desired
         data = self.coordinator.data.get("ebusd", {})
         raw = data.get(f"{self.coordinator.heating_circuit}.HwcSFMode.value")
         if raw is None:
@@ -210,11 +216,17 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
 
     # Write "load" to HwcSFMode to start DHW boost
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self.coordinator.async_write_register(self.coordinator.heating_circuit, "HwcSFMode", "load")
+        self.coordinator.dhw_boost_desired = True
+        await self.coordinator.async_write_register(
+            self.coordinator.heating_circuit, "HwcSFMode", "load", strict_verify=False
+        )
 
     # Write "auto" to HwcSFMode to stop DHW boost
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self.coordinator.async_write_register(self.coordinator.heating_circuit, "HwcSFMode", "auto")
+        self.coordinator.dhw_boost_desired = False
+        await self.coordinator.async_write_register(
+            self.coordinator.heating_circuit, "HwcSFMode", "auto", strict_verify=False
+        )
 
 
 class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):

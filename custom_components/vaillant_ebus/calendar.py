@@ -19,6 +19,11 @@ SCHEDULES = {
     "Heating Program": "CcTimer",
     "Zone Program": "Z1Timer",
     "Domestic Hot Water Program": "HwcTimer",
+    # Additive: empty on hardware without cooling-timer registers. The bus
+    # carries separate per-day cooling schedules (Z1/Z2CoolingTimer_*), which
+    # the Vaillant app uses for heating/cooling intervals independently.
+    "Cooling Program": "Z1CoolingTimer",
+    "Cooling Program 2": "Z2CoolingTimer",
 }
 
 
