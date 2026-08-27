@@ -452,6 +452,17 @@ async def test_integration_get_info() -> None:
         await s.disconnect()
 
 
+# Integration: connect populates the cached version from the info banner, so
+# discovery-dump metadata carries the ebusd version instead of null.
+async def test_connect_populates_version() -> None:
+    async with FakeEbusdServer() as fake:
+        s = EbusService(host=fake.host, port=fake.port)
+        await s.connect()
+        assert s.version
+        assert "ebusd" in s.version
+        await s.disconnect()
+
+
 # Integration: connect and define register
 async def test_integration_define_register() -> None:
     async with FakeEbusdServer() as fake:
