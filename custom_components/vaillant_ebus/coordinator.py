@@ -46,6 +46,7 @@ _LOGGER = logging.getLogger(__name__)
 DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
 ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
+ENERGY_POLL_INTERVAL = timedelta(minutes=5)
 
 # Registers whose live (non-sentinel) value marks a discovered zone as
 # genuinely present. DayTemp/OpMode are excluded: ebusd reports static
@@ -95,12 +96,17 @@ def _merge_entities(
     existing: list[EntityDescription],
     additions: list[EntityDescription],
 ) -> list[EntityDescription]:
-    known = {entity.key for entity in existing}
+    known = {(entity.entity_type, entity.unique_id): entity for entity in existing}
     merged = list(existing)
     for entity in additions:
-        if entity.key not in known:
+        identity = (entity.entity_type, entity.unique_id)
+        if identity not in known:
             merged.append(entity)
-            known.add(entity.key)
+            known[identity] = entity
+        else:
+            # Cache spelling may differ from find; loaded entities keep this
+            # description object, so update its lookup key without re-adding it.
+            known[identity].name = entity.name
     return merged
 
 
@@ -129,6 +135,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._cancel_analysis: Callable[[], None] | None = None
         self._analysis_scheduled = False
         self._last_placeholder_poll = datetime.min
+        self._last_energy_poll = datetime.min
+        self._runtime_definitions: dict[str, str] = {}
         self._analysis = AnalysisService()
         self.entity_adders: dict[str, Callable[[list[EntityDescription]], None]] = {}
         self._post_discovery_callbacks: list[Callable[[], None]] = []
@@ -278,6 +286,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.ebus = ebus
         self.discovery = DiscoveryService(ebus)
         self._ebusd_connected = True
+        self._runtime_definitions.clear()
+        self._last_energy_poll = datetime.min
 
         version = ebus.version
         if version:
@@ -331,22 +341,23 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.warning("%s fallback read failed: %s", source.capitalize(), exc)
 
         generated_entities = self.entity_factory.generate(graph)
-        if previous is not None:
-            existing_entity_keys = {entity.key for entity in self.entities}
-            additions = [entity for entity in generated_entities if entity.key not in existing_entity_keys]
-            self.entities.extend(additions)
-            self._add_new_entities(additions)
-        else:
-            self.entities = generated_entities
+        existing_entity_keys = {(entity.entity_type, entity.unique_id) for entity in self.entities}
+        additions = [entity for entity in generated_entities
+                     if (entity.entity_type, entity.unique_id) not in existing_entity_keys]
+        # Platforms can already be loaded from cache, even on "initial" discovery.
+        # Retain known keys across reconnects to avoid adding the same entity twice.
+        self.entities = _merge_entities(self.entities, generated_entities)
+        self._add_new_entities(additions)
         platform_counts: dict[str, int] = {}
         for entity in self.entities:
             ptype = str(entity.entity_type or "sensor")
             platform_counts[ptype] = platform_counts.get(ptype, 0) + 1
         _LOGGER.info(
-            "Generated %d entity descriptions after %s ebusd discovery: %s",
+            "Generated %d entity descriptions after %s ebusd discovery: %s (%d new entities)",
             len(self.entities),
             source,
             ", ".join(f"{count} {ptype}" for ptype, count in sorted(platform_counts.items())),
+            len(additions),
         )
         self.async_update_listeners()
         for callback in self._post_discovery_callbacks:
@@ -438,6 +449,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Full rediscovery requested by the "rediscover" service: drop the ebusd
     # connection so the next poll reconnects and discovers from scratch.
     async def async_request_rediscover(self) -> None:
+        _LOGGER.info("Manual ebusd rediscovery requested; reconnecting and rebuilding the discovery graph")
         if self.ebus:
             await self.ebus.disconnect()
         self.ebus = None
@@ -499,8 +511,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # They report environmental yield / electric consumption for cooling
         # regardless of compressor operation, so they also cover passive
         # brine cooling. Verified live against ebusd; values are Wh. Day and
-        # Month variants carry a date payload that must be refreshed on each
-        # (re)connect.
+        # Month variants carry a date payload that must also roll over while
+        # connected. Only changed or previously failed definitions are sent.
         date_bytes = b516_date_bytes(datetime.now())
         defines = [
             "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800"
@@ -570,7 +582,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # myPyllant app shows a daily "Consumed Electrical Energy Cooling"
             # value). Same b516 API with the electric usage code (Y=3) and the
             # daily X=1 selector, so the layout matches the verified cooling
-            # family; date payload refreshes per connect like CoolEnvYieldDay.
+            # family; date payload rolls over like CoolEnvYieldDay.
             f"r,hmu,CoolElecConsDay,CoolElecConsDay,31,08,B516"
             f",1001ffff0305{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
             f",hmu Cooling Electric Consumption Today",
@@ -594,24 +606,29 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         defined = 0
         unavailable = 0
         for definition in defines:
-            name = definition.split(",", 2)[2]
+            access, circuit, name = definition.split(",", 3)[:3]
+            key = f"{access}.{circuit}.{name}"
+            if self._runtime_definitions.get(key) == definition:
+                continue
             try:
                 resp = await self.ebus.define_register(definition)
                 if resp.startswith("ERR:"):
                     unavailable += 1
                     _LOGGER.debug("Runtime register unavailable: %s (%s)", name, resp)
                 else:
+                    self._runtime_definitions[key] = definition
                     defined += 1
                     _LOGGER.debug("Runtime register defined: %s", name)
             except Exception as exc:
                 unavailable += 1
                 _LOGGER.warning("Failed to define register: %s", exc)
-        _LOGGER.info(
-            "Runtime register definitions complete: %d defined, %d unavailable, %d total",
-            defined,
-            unavailable,
-            len(defines),
-        )
+        if defined or unavailable:
+            _LOGGER.info(
+                "Runtime register definitions complete: %d defined, %d unavailable, %d total",
+                defined,
+                unavailable,
+                len(defines),
+            )
 
     async def _async_values_from_registers(self, registers: list[EbusdRegister] | None = None) -> dict[str, str]:
         values: dict[str, str] = {}
@@ -721,7 +738,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     return rk.split(".", 1)[0]
         return None
 
-    async def _fallback_read(self, include_placeholders: bool = False) -> None:
+    async def _fallback_read(self, include_placeholders: bool = False, include_energy: bool = False) -> None:
         if not self.ebus or not self.ebus.is_connected:
             return
         graph_keys = self._last_find_keys
@@ -742,6 +759,16 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if key not in seen:
                 seen.add(key)
                 candidates.append(key)
+
+        # Plain-r B516 definitions are not polled by ebusd. Re-read supported
+        # counters even after find has cached their first value (#53/#97).
+        if include_energy and self._graph:
+            for definition in self._runtime_definitions.values():
+                access, circuit, name, _, _, _, message = definition.split(",", 7)[:7]
+                register = self.registers.get(f"{circuit}.{name}")
+                if (access == "r" and message == "B516" and circuit in self._graph.nodes
+                        and register is not None and register.has_data):
+                    _add(circuit, name)
 
         # Map-driven reads: registers with metadata not yet in the graph.
         for key in REGISTER_MAP:
@@ -798,7 +825,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.debug("Fallback read %s = %s", key, value)
             except Exception as exc:
                 _LOGGER.warning("Fallback read failed: %s (%s)", key, exc)
-        if added and self._graph:
+        if self._graph:
+            graph_added = 0
             for key, register in self.registers.items():
                 if not register.has_data or key in self._graph.raw_registers:
                     continue
@@ -810,9 +838,16 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     node.registers.append(key)
                 node.has_data = True
                 self._last_find_keys.add(key)
-            _LOGGER.info("Fallback read added %d register(s) to discovery", added)
-        else:
-            _LOGGER.info("Fallback read complete: %d/%d registers with data", read_with_data, len(candidates))
+                graph_added += 1
+            if graph_added:
+                _LOGGER.info("Fallback read added %d register(s) to discovery", graph_added)
+                generated = self.entity_factory.generate(self._graph)
+                known = {(entity.entity_type, entity.unique_id) for entity in self.entities}
+                additions = [entity for entity in generated if (entity.entity_type, entity.unique_id) not in known]
+                self.entities = _merge_entities(self.entities, generated)
+                self._add_new_entities(additions)
+        _LOGGER.info("Fallback read complete: %d/%d registers with data (%d new)",
+                     read_with_data, len(candidates), added)
 
     async def _async_update_data(self) -> dict[str, Any]:
         if not self._cache_seeded:
@@ -827,6 +862,10 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if self.ebus and self.ebus.is_connected:
             try:
+                now = datetime.now()
+                poll_energy = now - self._last_energy_poll >= ENERGY_POLL_INTERVAL
+                if poll_energy:
+                    await self._define_custom_registers()
                 lines = await self.ebus.find_registers()
                 updated = 0
                 for line in lines:
@@ -850,11 +889,12 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self.registers[key].has_data = True
                         updated += 1
                 self._last_find_keys = {k for k in self.registers}
-                now = datetime.now()
                 poll_placeholders = now - self._last_placeholder_poll >= PLACEHOLDER_POLL_INTERVAL
                 if poll_placeholders:
                     self._last_placeholder_poll = now
-                await self._fallback_read(include_placeholders=poll_placeholders)
+                await self._fallback_read(include_placeholders=poll_placeholders, include_energy=poll_energy)
+                if poll_energy:
+                    self._last_energy_poll = now
                 zero_idle_registers(self.registers, self.heat_pump_circuit)
                 if updated:
                     _LOGGER.info("Poll updated %d registers", updated)
@@ -866,6 +906,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     # dialed; a skipped single-flight reconnect proves nothing.
                     reconnected = await self.ebus._reconnect() if self.ebus else False
                     if reconnected:
+                        self._runtime_definitions.clear()
+                        self._last_energy_poll = datetime.min
                         await repairs.async_dismiss_ebusd_unreachable(self.hass)
                 except Exception as exc:
                     _LOGGER.error("ebusd reconnect failed: %s", exc)

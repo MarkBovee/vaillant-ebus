@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.5.5 - 2026-09-05
+
+### Fixed
+
+- **Energy counters no longer require a reload (#53, #97).** Supported
+  runtime-defined B516 energy counters are actively read every five minutes,
+  rather than relying on ebusd's unpolled cache. Daily and monthly definitions
+  refresh their date payload during operation, including across month boundaries.
+  Cached counters recover after no-data discovery, and runtime definitions are
+  restored after an ebusd transport reconnect.
+- **Rediscovery adds newly found entities to Home Assistant (#96).** Initial,
+  manual, and delayed discovery now publish additions to loaded platforms without
+  duplicating existing entities. Newly readable fallback registers also generate
+  entities. Discovery logs include the number of new entities; use
+  `export_discovery_dump`, not `rediscover`, to export a capture.
+- **Cached register name casing no longer creates duplicate entities.** Live
+  discovery updates the existing entity's lookup key when ebusd uses different
+  capitalization from the saved cache.
+- **Discovery dumps include the ebusd version (#95).** Dump metadata now uses
+  the connected transport's version instead of leaving it empty.
+
 ## 1.5.4 - 2026-08-27
 
 ### Added
