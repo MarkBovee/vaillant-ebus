@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from tests.fake_ebusd import FakeEbusdServer, load_find_lines
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -394,6 +396,7 @@ async def test_delayed_rediscovery_adds_new_platform_entities() -> None:
         mock_ebus.read_register = AsyncMock(return_value=None)
         coordinator.ebus = mock_ebus
         await coordinator._apply_discovery_graph(_make_graph(), "initial")
+        additions.reset_mock()
 
         await coordinator._apply_discovery_graph(
             DeviceGraph(
@@ -413,6 +416,164 @@ async def test_delayed_rediscovery_adds_new_platform_entities() -> None:
 
         additions.assert_called_once()
         assert additions.call_args.args[0][0].key == "v32.SupplyAirTemp.value"
+
+
+@pytest.mark.parametrize("seed_cache", [False, True])
+async def test_initial_discovery_pushes_new_entities_once(seed_cache, caplog) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        initial = DISCOVERY.DiscoveryService.build_device_graph(["hmu OutsideTemp = 18.5"])
+        if seed_cache:
+            c._graph = initial
+            c.entities = c.entity_factory.generate(initial)
+        else:
+            await c._apply_discovery_graph(initial, "initial")
+        adder = MagicMock()
+        c.register_entity_adder("sensor", adder)
+        fresh = DISCOVERY.DiscoveryService.build_device_graph(
+            ["hmu OutsideTemp = 18.5", "hmu FlowTemp = 35"]
+        )
+        with caplog.at_level("INFO", logger="vaillant_ebus.coordinator"):
+            await c._apply_discovery_graph(fresh, "initial")
+            await c._apply_discovery_graph(initial, "initial")
+            await c._apply_discovery_graph(fresh, "initial")
+        adder.assert_called_once()
+        assert [e.key for e in adder.call_args.args[0]] == ["hmu.FlowTemp.value"]
+        assert "0 new entities" in caplog.text
+
+
+async def test_runtime_energy_refreshes_without_reload(monkeypatch) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c.ebus.read_register = AsyncMock(return_value=None)
+        names = ("CoolElecConsDay", "HcElecConsDay", "HwcElecConsDay", "CoolEnvYieldMonth")
+        lines = [f"hmu {name} = 100" for name in names]
+        c.ebus.find_registers = AsyncMock(return_value=lines)
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+        monkeypatch.setattr(COORDINATOR, "REGISTER_MAP", {
+            f"hmu.{name}": MAPPING.REGISTER_MAP[f"hmu.{name}"] for name in names
+        })
+        await c._define_custom_registers()
+        c.ebus.read_register = AsyncMock(return_value="200")
+        values = await c._async_update_data()
+        for name in names:
+            assert values["ebusd"][f"hmu.{name}.value"] == "200"
+        c.ebus.read_register.reset_mock()
+        # A normal poll inside the energy interval uses ebusd's updated cache.
+        c.ebus.find_registers.return_value = [f"hmu {name} = 200" for name in names]
+        await c._async_update_data()
+        c.ebus.read_register.assert_not_awaited()
+        c._last_energy_poll = datetime.min
+        c.ebus.read_register.return_value = "300"
+        values = await c._async_update_data()
+        assert values["ebusd"]["hmu.CoolElecConsDay.value"] == "300"
+
+
+async def test_runtime_definitions_roll_over_and_retry_failures(monkeypatch) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        clock = MagicMock()
+        clock.now.return_value = datetime(2026, 8, 31, 23, 59)
+        monkeypatch.setattr(COORDINATOR, "datetime", clock)
+        await c._define_custom_registers()
+        c.ebus.define_register.reset_mock()
+        await c._define_custom_registers()
+        c.ebus.define_register.assert_not_awaited()
+        clock.now.return_value = datetime(2026, 9, 1)
+        c.ebus.define_register.return_value = "ERR: temporarily unavailable"
+        await c._define_custom_registers()
+        assert c.ebus.define_register.await_count == 5
+        c.ebus.define_register.reset_mock()
+        c.ebus.define_register.return_value = "done"
+        await c._define_custom_registers()
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        assert len(definitions) == 5
+        date_bytes = MAPPING.b516_date_bytes(clock.now.return_value)
+        assert all(f"{date_bytes},value" in definition for definition in definitions)
+
+
+async def test_fallback_new_register_publishes_entity_once(monkeypatch) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(["hmu OutsideTemp = 18.5"])
+        c.entities = c.entity_factory.generate(c._graph)
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.read_register = AsyncMock(return_value="200")
+        key = "hmu.CoolElecConsDay"
+        monkeypatch.setattr(COORDINATOR, "REGISTER_MAP", {key: MAPPING.REGISTER_MAP[key]})
+        adder = MagicMock()
+        c.register_entity_adder("sensor", adder)
+        await c._fallback_read()
+        await c._apply_discovery_graph(c._graph, "initial")
+        adder.assert_called_once()
+        assert [e.key for e in adder.call_args.args[0]] == [f"{key}.value"]
+
+
+async def test_live_discovery_updates_cached_case_variant_without_duplicate() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._async_load_cache = AsyncMock(return_value={"ctlv2.HwcSfMode.value": "auto"})
+        await c._async_seed_entities_from_cache()
+        description = next(e for e in c.entities if e.name == "HwcSfMode")
+        adder = MagicMock()
+        c.register_entity_adder(description.entity_type, adder)
+        graph = DISCOVERY.DiscoveryService.build_device_graph(["ctlv2 HwcSFMode = load"])
+        await c._apply_discovery_graph(graph, "initial")
+        adder.assert_not_called()
+        assert description.key == "ctlv2.HwcSFMode.value"
+        assert len({e.unique_id for e in c.entities}) == len(c.entities)
+        values = await c._async_values_from_registers()
+        assert values[description.key] == "load"
+
+
+async def test_cached_energy_recovers_after_no_data_discovery(monkeypatch) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        key = "hmu.CoolElecConsDay"
+        c._async_load_cache = AsyncMock(return_value={f"{key}.value": "100"})
+        await c._async_seed_entities_from_cache()
+        c._cache_seeded = c._ebusd_connected = True
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c.ebus.read_register = AsyncMock(return_value=None)
+        monkeypatch.setattr(COORDINATOR, "REGISTER_MAP", {key: MAPPING.REGISTER_MAP[key]})
+        await c._define_custom_registers()
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            ["hmu OutsideTemp = 18.5", "hmu CoolElecConsDay = no data stored"]
+        )
+        await c._apply_discovery_graph(graph, "initial")
+        c.ebus.find_registers = AsyncMock(return_value=["hmu CoolElecConsDay = 100"])
+        c.ebus.read_register.return_value = "200"
+        values = await c._async_update_data()
+        assert values["ebusd"][f"{key}.value"] == "200"
+        assert key in c._graph.raw_registers
+
+
+async def test_transport_reconnect_invalidates_runtime_definitions() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        await c._define_custom_registers()
+        c.ebus.find_registers = AsyncMock(side_effect=ConnectionError())
+        c.ebus._reconnect = AsyncMock(return_value=True)
+        await c._async_update_data()
+        assert not c._runtime_definitions
+        assert c._last_energy_poll == datetime.min
+        c.ebus.define_register.reset_mock()
+        await c._define_custom_registers()
+        assert c.ebus.define_register.await_count == 27
 
 
 async def test_apply_discovery_logs_entity_platform_breakdown(caplog) -> None:
