@@ -139,13 +139,19 @@ def _determine_enabled_by_default(
     """Determine if entity should be enabled by default in HA."""
     if not meta.enabled:
         return False
+    known_in_map = register_key in REGISTER_MAP
+    mapped_variant = not known_in_map and any(
+        f"{circuit}.{register_key.split('.', 1)[1]}" in REGISTER_MAP
+        for circuit in ("ctlv2", "hmu")
+    )
     if raw_value is not None:
         rv = raw_value.strip().lower()
         if is_no_data_value(rv) or "no data" in rv:
             return False
-    known_in_map = register_key in REGISTER_MAP
+    if raw_value is None and not known_in_map and not mapped_variant:
+        return False
     if known_in_map:
-        return True
+        return raw_value is not None
     if node_has_data:
         return True
     if raw_value is not None:
@@ -212,6 +218,13 @@ def _redistribute_device_assignments(
                 continue
         elif name_lower.startswith(_DHW_PREFIXES) and "dhw" in graph.nodes:
             entity._device_circuit = "dhw"
+        elif name_lower == "hydraulicscheme" and entity.circuit.lower() == "sc":
+            controller = next(
+                (node.circuit for node in graph.nodes.values() if node.device_type == DeviceType.HEATING_CONTROLLER),
+                None,
+            )
+            if controller:
+                entity._device_circuit = controller
 
         redistributed.append(entity)
 

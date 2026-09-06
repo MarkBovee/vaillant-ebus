@@ -224,6 +224,16 @@ async def test_persist_dump_creates_directory_before_write(tmp_path: Path) -> No
     assert target.exists()
 
 
+async def test_export_dump_reports_disconnected_ebusd(tmp_path: Path) -> None:
+    hass = MagicMock()
+    hass.config.path.return_value = str(tmp_path)
+    coordinator = MagicMock()
+    coordinator.ebus = None
+
+    with pytest.raises(HomeAssistantError, match="ebusd is not connected"):
+        await DUMP.async_export_discovery_dump(hass, coordinator)
+
+
 # --- multi-entry service dispatch ---
 
 

@@ -29,6 +29,8 @@
         "title": "Vaillant eBUS Options",
         "menu_options": {
           "settings": "Settings",
+          "purge_entities": "Purge Stale Entities",
+          "rediscover": "Rediscover eBUS",
           "export_dump": "Export Discovery Dump"
         }
       },
@@ -51,11 +53,31 @@
         "data": {
           "grab_duration": "Raw traffic capture (seconds)"
         }
+      },
+      "purge_entities": {
+        "title": "Purge Stale Entities",
+        "description": "This will remove {count} Vaillant eBUS entities currently unknown or belonging to devices no longer present in current discovery, plus empty Vaillant eBUS devices.",
+        "data": {
+          "confirm": "I understand that stale entity registry entries will be removed"
+        }
+      },
+      "rediscover": {
+        "title": "Rediscover eBUS",
+        "description": "Reconnect to ebusd and rebuild the Vaillant device and entity discovery graph.",
+        "data": {
+          "confirm": "I understand that eBUS discovery will run again"
+        }
       }
     },
     "abort": {
       "export_started": "Discovery dump export started. The YAML file is written in the background — a notification will appear when it is ready.",
-      "changes_saved": "Settings saved and applied — the integration is reloading."
+      "changes_saved": "Settings saved and applied — the integration is reloading.",
+      "entities_purged": "Stale entity registry entries were removed.",
+      "purge_not_confirmed": "Stale entities were not removed.",
+      "purge_unavailable": "Purge was refused because active discovery data is unavailable.",
+      "rediscover_started": "eBUS rediscovery started. Entities will reappear as discovery completes.",
+      "rediscover_unavailable": "Rediscovery was refused because the integration is not loaded.",
+      "rediscover_not_confirmed": "eBUS rediscovery was not started."
     }
   }
 }

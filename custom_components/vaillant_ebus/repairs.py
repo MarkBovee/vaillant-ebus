@@ -12,6 +12,7 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 ISSUE_EBUSD_UNREACHABLE = "ebusd_unreachable"
+ISSUE_DETECTION_INCOMPLETE = "detection_incomplete"
 
 
 async def async_create_ebusd_unreachable(hass: HomeAssistant) -> None:
@@ -30,3 +31,8 @@ async def async_create_ebusd_unreachable(hass: HomeAssistant) -> None:
 async def async_dismiss_ebusd_unreachable(hass: HomeAssistant) -> None:
     """Dismiss the ebusd unreachable repair issue."""
     ir.async_delete_issue(hass, DOMAIN, ISSUE_EBUSD_UNREACHABLE)
+
+
+async def async_dismiss_detection_incomplete(hass: HomeAssistant) -> None:
+    """Remove stale detection issues after a successful discovery."""
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_DETECTION_INCOMPLETE)

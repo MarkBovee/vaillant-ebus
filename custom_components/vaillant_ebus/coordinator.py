@@ -13,6 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
@@ -43,6 +44,11 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _registry_matches_description(registry_unique_id: str, description_unique_id: str) -> bool:
+    """Match HA's config-entry-prefixed ID to integration entity ID."""
+    return registry_unique_id == description_unique_id or registry_unique_id.endswith(f"_{description_unique_id}")
+
+
 DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
 ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
@@ -58,6 +64,19 @@ ZONE_LIVE_REGISTERS: tuple[str, ...] = ("RoomTemp", "ActualRoomTempDesired")
 # Build the per-field value dict for a register (split multi-field values).
 def _register_values(register_key: str, raw: str | None) -> dict[str, str | None]:
     return split_multi_field(register_key, raw)
+
+
+def _usable_register_value(register_key: str, raw: str | None) -> str | None:
+    """Reject ebusd sentinels and invalid source-temperature stub values."""
+    if raw is None or is_no_data_value(raw):
+        return None
+    if register_key.lower() == "hmu.sourcetempinput":
+        try:
+            if float(raw) < -100:
+                return None
+        except ValueError:
+            return None
+    return raw
 
 
 # Merge a delayed graph without removing devices that initial discovery found.
@@ -141,7 +160,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entity_adders: dict[str, Callable[[list[EntityDescription]], None]] = {}
         self._post_discovery_callbacks: list[Callable[[], None]] = []
 
-        scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL)
+        options = entry.options if isinstance(entry.options, dict) else {}
+        scan_interval = options.get(
+            CONF_SCAN_INTERVAL,
+            entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_EBUSD_POLL_INTERVAL),
+        )
         super().__init__(
             hass,
             _LOGGER,
@@ -241,7 +264,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         seen_keys: set[str] = set()
 
         for cache_key, cached_value in cache.items():
-            if cached_value is None or not cached_value.strip():
+            if cached_value is None or not cached_value.strip() or is_no_data_value(cached_value):
                 continue
             parts = cache_key.split(".")
             if len(parts) < 2:
@@ -305,6 +328,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         await self._apply_discovery_graph(graph, "initial")
+        await repairs.async_dismiss_detection_incomplete(self.hass)
         self._schedule_delayed_rediscovery()
         self._schedule_analysis()
 
@@ -347,6 +371,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Platforms can already be loaded from cache, even on "initial" discovery.
         # Retain known keys across reconnects to avoid adding the same entity twice.
         self.entities = _merge_entities(self.entities, generated_entities)
+        self._disable_no_data_registry_entities(generated_entities)
         self._add_new_entities(additions)
         platform_counts: dict[str, int] = {}
         for entity in self.entities:
@@ -472,6 +497,38 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except Exception as exc:
                 _LOGGER.warning("Entity adder failed for %s: %s", entity_type, exc)
 
+    # Disable existing no-data entities after rediscovery; analysis re-enables
+    # them when the register later returns a real value.
+    def _disable_no_data_registry_entities(self, descriptions: list[EntityDescription]) -> None:
+        registry = entity_registry.async_get(self.hass)
+        disabled = 0
+        for description in descriptions:
+            if description.enabled_by_default or description.raw_value:
+                continue
+            for entity_id, entry in registry.entities.items():
+                if entry.config_entry_id != self._entry.entry_id or not _registry_matches_description(
+                    entry.unique_id, description.unique_id
+                ):
+                    continue
+                if entry.disabled_by is None:
+                    registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
+                    disabled += 1
+        if disabled:
+            _LOGGER.info("Disabled %d no-data entities after discovery", disabled)
+
+    def disable_no_data_entities(self) -> None:
+        """Disable restored entities whose current descriptions have no data."""
+        self._disable_no_data_registry_entities(self.entities)
+        registry = entity_registry.async_get(self.hass)
+        for entity_id, entry in registry.entities.items():
+            if (
+                entry.config_entry_id == self._entry.entry_id
+                and entry.platform == DOMAIN
+                and entry.unique_id.lower().endswith("_ebusd_hmu_tmpb516montheven")
+                and entry.disabled_by is None
+            ):
+                registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
+
     # Enable entities that map to recently live registers (respect user choice).
     async def _enable_registry_entities(self, register_keys: list[str]) -> list[str]:
         registry = entity_registry.async_get(self.hass)
@@ -489,7 +546,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for entity_id, entry in registry.entities.items():
             if entry.config_entry_id != self._entry.entry_id:
                 continue
-            if entry.unique_id not in desired_uids:
+            if not any(_registry_matches_description(entry.unique_id, uid) for uid in desired_uids):
                 continue
             if entry.disabled_by != "integration":
                 continue
@@ -801,12 +858,14 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 value = await self.ebus.read_register(circuit, name)
                 was_new = key not in self.registers
-                if value and (is_no_data_value(value) or value.startswith("or:") or "read [-" in value):
+                value = _usable_register_value(key, value)
+                if value and (value.startswith("or:") or "read [-" in value):
                     value = None
                 if value is None:
                     cache = await self._async_load_cache()
                     cached = cache.get(f"{circuit}.{name}.value")
-                    if cached is not None and not is_no_data_value(cached):
+                    cached = _usable_register_value(key, cached)
+                    if cached is not None:
                         value = cached
                 if value is not None:
                     read_with_data += 1
@@ -874,6 +933,9 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if not circuit or not name or val is None:
                         continue
                     key = f"{circuit}.{name}"
+                    val = _usable_register_value(key, val)
+                    if val is None:
+                        continue
                     self._live_since_analysis.add(key)
                     if key not in self.registers:
                         self.registers[key] = EbusdRegister(
@@ -893,6 +955,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if poll_placeholders:
                     self._last_placeholder_poll = now
                 await self._fallback_read(include_placeholders=poll_placeholders, include_energy=poll_energy)
+                self._disable_no_data_registry_entities(self.entities)
                 if poll_energy:
                     self._last_energy_poll = now
                 zero_idle_registers(self.registers, self.heat_pump_circuit)

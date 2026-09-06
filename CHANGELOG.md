@@ -1,5 +1,59 @@
 # Changelog
 
+## 1.6.0 - 2026-09-06
+
+### Added
+
+- **HA-MCP-first inspection workflow.** Project guidance now requires HA-MCP
+  as the primary read-only method for inspecting live Home Assistant state,
+  diagnostics, devices, entities, and logs.
+- **Rediscover eBUS from Options.** The Options Flow now exposes a confirmed
+  **Rediscover eBUS** action that reconnects to ebusd and rebuilds the device
+  and entity discovery graph.
+- **Purge stale entities from Options.** The **Purge Stale Entities** action
+  removes only Vaillant eBUS registry entries that are no longer present in
+  the current discovery graph and requires explicit confirmation.
+
+### Fixed
+
+- **Stale device assignment.** `sc.HydraulicScheme` is assigned to the
+  Vaillant sensoCOMFORT heating controller instead of creating a separate
+  empty `Vaillant sc` device.
+- **No-data entity lifecycle.** Unknown and unavailable registry entities are
+  integration-disabled without depending on a state object already existing
+  during setup. User-disabled entities remain untouched and live registers can
+  be enabled again when data appears.
+- **Invalid registry disabler value.** Entity registry updates now use
+  Home Assistant's `RegistryEntryDisabler.INTEGRATION` enum.
+- **Invalid `SourceTempInput` stubs.** Air/water B51A stub values such as
+  `-1011.06` are filtered before discovery and remain unavailable.
+- **Stale detection repair.** Successful discovery clears obsolete
+  `detection_incomplete` repair issues.
+- **Scan interval consistency.** Runtime coordinator setup now honors the
+  configured Options Flow value before falling back to entry data.
+- **Placeholder defaults.** Unknown registers without usable data no longer
+  become enabled entities merely because their device has other live data;
+  mapped hardware variants and live energy registers remain supported.
+
+- **Solar controller placeholder device is suppressed.** Registers whose
+  semicolon-separated fields are all no-data placeholders no longer make an
+  otherwise empty circuit appear as a device. This removes the unsupported
+  `sc` ghost device without hiding real live values.
+- **Purge safety.** Entity purge refuses to run without an active ebusd
+  connection and non-empty current discovery data.
+
+- **Purge cannot remove all entities.** The purge action now refuses to run
+  unless ebusd is connected and current discovery produced entities.
+
+- **Unknown cache values no longer create entities.** Cache seeding ignores
+  `unknown`, `unavailable`, `empty`, and `-` sentinel values instead of treating
+  them as discovered register data.
+- **Discovery dump failures are visible.** Export now raises a Home Assistant
+  error and creates a persistent notification when ebusd is disconnected,
+  instead of silently doing nothing.
+- **aroTHERM Pro 7 return temperature metadata.** `hmux`/`hmux0`
+  `RunDataReturnTemp` values now render as temperature sensors.
+
 ## 1.5.5 - 2026-09-05
 
 ### Fixed
