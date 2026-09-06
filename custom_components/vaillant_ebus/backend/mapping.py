@@ -163,6 +163,11 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         device_class="temperature",
         unit="°C",
     ),
+    "hmu.RunDataReturnTemp": RegisterMeta(
+        friendly_name="Return Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
     "hmu.RunDataBuildingCPumpPower": RegisterMeta(
         friendly_name="Building Circulation Pump Speed",
         unit="%",

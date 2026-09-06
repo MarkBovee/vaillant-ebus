@@ -107,7 +107,10 @@ sys.modules["homeassistant"] = mock_homeassistant
 sys.modules["homeassistant.config_entries"] = mock_homeassistant.config_entries
 sys.modules["homeassistant.core"] = mock_homeassistant.core
 sys.modules["homeassistant.helpers"] = mock_homeassistant.helpers
+mock_homeassistant.helpers.entity_registry = MagicMock()
+mock_homeassistant.helpers.entity_registry.RegistryEntryDisabler = MagicMock(INTEGRATION="integration")
 sys.modules["homeassistant.helpers.device_registry"] = mock_homeassistant.helpers.device_registry
+sys.modules["homeassistant.helpers.entity_registry"] = mock_homeassistant.helpers.entity_registry
 sys.modules["homeassistant.helpers.event"] = mock_homeassistant.helpers.event
 sys.modules["homeassistant.helpers.update_coordinator"] = mock_homeassistant.helpers.update_coordinator
 sys.modules["homeassistant.const"] = MagicMock()
@@ -116,6 +119,7 @@ sys.modules["homeassistant.const"] = MagicMock()
 repairs_module = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("vaillant_ebus.repairs", None))
 repairs_module.async_dismiss_ebusd_unreachable = AsyncMock()
 repairs_module.async_create_ebusd_unreachable = AsyncMock()
+repairs_module.async_dismiss_detection_incomplete = AsyncMock()
 sys.modules["vaillant_ebus.repairs"] = repairs_module
 
 const_module = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("vaillant_ebus.const", None))
@@ -223,6 +227,30 @@ async def test_coordinator_seeds_from_cache_with_cached_values() -> None:
         assert c.registers.get("ctlv2.Z1DayTemp")
         assert c.registers["ctlv2.Z1DayTemp"].value.get("value") == "21.0"
         assert c.registers["ctlv2.Z1DayTemp"].has_data is True
+
+
+async def test_coordinator_does_not_seed_no_data_cache_values() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cache_path = Path(tmpdir) / "vaillant_ebus" / "register_cache.json"
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "hmu.FlowTemp.value": "unknown",
+                    "hmu.ReturnTemp.value": "unavailable",
+                    "hmu.Status01.value": "22.0;22.0;-;-;-;off",
+                }
+            )
+        )
+
+        hass = _hass(tmpdir)
+        hass.config.path.return_value = str(cache_path)
+        coordinator = VaillantCoordinator(hass, _entry())
+        await coordinator._async_seed_entities_from_cache()
+
+        assert "hmu.FlowTemp" not in coordinator.registers
+        assert "hmu.ReturnTemp" not in coordinator.registers
+        assert "hmu.Status01" in coordinator.registers
 
 
 # Intent: recover Z2 entities from cache before ebusd completes live discovery.

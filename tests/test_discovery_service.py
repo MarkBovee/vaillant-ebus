@@ -360,6 +360,12 @@ def test_address_and_empty_unknown_circuits_are_suppressed() -> None:
     assert graph.nodes["vwz"].device_type == DeviceType.PASSIVE_COOLING
 
 
+def test_internal_b516_helper_register_is_hidden() -> None:
+    graph = DiscoveryService.build_device_graph(["hmu TmpB516MonthEven = 139818"])
+    assert "hmu.TmpB516MonthEven" in graph.raw_registers
+    assert "hmu.TmpB516MonthEven" not in graph.nodes["hmu"].registers
+
+
 
 # =============================================================================
 # D. Community fixture tests
@@ -391,6 +397,15 @@ def test_flexotherm_device_graph() -> None:
     assert graph.nodes["hmu"].scan_type == "HMU00"
     assert graph.nodes["ctlv3"].scan_type in ("CTLV3", "")
     assert "hmu.SourceTempOutput" in graph.raw_registers or "hmu.SourceTempOutput" in graph.placeholder_registers
+    assert "hmu.SourceTempInput" not in graph.raw_registers
+    assert "hmu.SourceTempInput" not in graph.placeholder_registers
+
+
+def test_invalid_source_temperature_stub_is_suppressed() -> None:
+    graph = DiscoveryService.build_device_graph(
+        ["hmu SourceTempInput = -1011.06", "hmu FlowTemp = 35.0"]
+    )
+
     assert "hmu.SourceTempInput" not in graph.raw_registers
     assert "hmu.SourceTempInput" not in graph.placeholder_registers
 
@@ -922,7 +937,7 @@ async def test_integration_arotherm_has_data() -> None:
         assert graph.nodes["z3"].has_data is False
         assert graph.nodes["hc2"].has_data is False
         assert graph.nodes["hc3"].has_data is False
-        assert len(graph.raw_registers) == 77
+        assert len(graph.raw_registers) == 75
 
 
 async def test_integration_basv_controller_type() -> None:

@@ -10,6 +10,7 @@ from datetime import datetime
 import yaml
 from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 
 from .backend.grab_parser import parse_grab_lines, unknown_telegrams
 from .backend.mapping import REGISTER_MAP
@@ -162,8 +163,15 @@ async def async_export_discovery_dump(
 ) -> None:
     ebus = coordinator.ebus
     if not ebus or not ebus.is_connected:
-        _LOGGER.error("Cannot export dump: ebusd not connected")
-        return
+        message = "Cannot export discovery dump because ebusd is not connected."
+        _LOGGER.error(message)
+        persistent_notification.create(
+            hass,
+            message,
+            title="Vaillant eBUS Discovery Dump Failed",
+            notification_id="vaillant_ebus_discovery_dump_error",
+        )
+        raise HomeAssistantError(message)
 
     before_registers, seen, raw_find_lines = await _dump_registers(ebus)
 

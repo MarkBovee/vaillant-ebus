@@ -276,6 +276,10 @@ class TestEnabledByDefault:
         result = _determine_enabled_by_default("unknown.RegName", "42", True, RegisterMeta(enabled=True))
         assert result is True
 
+    def test_enabled_by_default_unknown_placeholder_is_disabled(self) -> None:
+        result = _determine_enabled_by_default("unknown.RegName", None, True, RegisterMeta(enabled=True))
+        assert result is False
+
     def test_enabled_by_default_placeholder_not_known(self) -> None:
         result = _determine_enabled_by_default("unknown.RegName", "-", False, RegisterMeta(enabled=True))
         assert result is False
@@ -398,6 +402,21 @@ class TestResolveDeviceCircuit:
         graph = _build_graph()
         node = graph.nodes["hmu"]
         assert _resolve_device_circuit("hmu.Status01", node, graph) == "hmu"
+
+    def test_sc_hydraulic_scheme_belongs_to_controller(self) -> None:
+        graph = _build_graph()
+        graph.nodes["sc"] = DeviceNode(
+            circuit="sc",
+            device_type=DeviceType.UNKNOWN,
+            registers=["sc.HydraulicScheme"],
+            has_data=True,
+        )
+        graph.raw_registers["sc.HydraulicScheme"] = "8"
+
+        entities = EntityFactoryService().generate(graph)
+
+        entity = next(e for e in entities if e.key == "sc.HydraulicScheme.value")
+        assert entity.device_circuit == "ctlv2"
 
     def test_no_parent_returns_own(self) -> None:
         graph = _build_graph()
@@ -561,6 +580,11 @@ class TestSourceTempMetadata:
 
     def test_source_temp_output_metadata(self) -> None:
         meta = get_meta("hmu", "SourceTempOutput")
+        assert meta.device_class == "temperature"
+        assert meta.unit == "°C"
+
+    def test_run_data_return_temperature_metadata(self) -> None:
+        meta = get_meta("hmux0", "RunDataReturnTemp")
         assert meta.device_class == "temperature"
         assert meta.unit == "°C"
 

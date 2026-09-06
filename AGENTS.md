@@ -6,6 +6,13 @@
 - The integration connects directly to the local ebusd TCP interface on port `8888`; it does not use MQTT or cloud services.
 - Registers and devices are discovered from ebusd at runtime. The project is intended as a drop-in replacement for `mypyllant-component`.
 
+## Home Assistant Inspection
+
+- Use the connected HA-MCP server as the primary method for inspecting the live Home Assistant instance. Start with `ha_get_overview`, `ha_search`, `ha_get_integration`, `ha_get_device`, `ha_get_logs`, and `ha_get_system_health` as appropriate.
+- Inspect the `vaillant_ebus` config entry, devices, entities, diagnostics, and logs through HA-MCP before using SSH, REST, or direct storage access.
+- Treat HA-MCP reads as the default verification path after code changes and deployments. Use SSH only when HA-MCP cannot expose the required detail, or for the documented deployment and registry-maintenance workflows.
+- Prefer read-only HA-MCP tools for diagnosis. Do not use HA-MCP write/delete tools unless the user explicitly requests the state or registry change.
+
 ## Architecture
 
 - `custom_components/vaillant_ebus/coordinator.py` owns connection lifecycle, discovery, polling, caching, and runtime register definitions.

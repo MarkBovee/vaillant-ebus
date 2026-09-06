@@ -47,6 +47,10 @@ def test_sensor_fault_statuses_are_no_data() -> None:
         assert is_no_data_value(raw), f"{raw!r} should be no-data"
 
 
+def test_all_placeholder_fields_are_no_data() -> None:
+    assert is_no_data_value("-;-;-;-;-")
+
+
 # Real measured values and legitimate domain strings stay live
 def test_live_values_pass() -> None:
     for raw in (

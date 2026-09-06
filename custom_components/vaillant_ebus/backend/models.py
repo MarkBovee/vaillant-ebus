@@ -29,6 +29,8 @@ def is_no_data_value(raw: str | None) -> bool:
         return True
     if low.endswith((";circuit", ";cutoff")) or low in SENSOR_FAULT_STATUSES:
         return True
+    if ";" in low and all(part.strip() in EBUSD_NO_DATA_VALUES for part in low.split(";")):
+        return True
     return (
         low.startswith("no data stored")
         or low.startswith("(empty ")

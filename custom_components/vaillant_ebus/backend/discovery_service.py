@@ -15,6 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
 ALWAYS_HIDDEN = {"memory"}
 HIDDEN_DEVICE_KEYWORDS = {"broadcast", "scan", "general"}
+HIDDEN_REGISTER_NAMES = {"tmpb516montheven"}
 SECONDARY_ZONE_CIRCUITS = frozenset({"hc2", "hc3", "z2", "z3"})
 
 
@@ -58,6 +59,12 @@ class DiscoveryService:
         val = rhs.strip()
         if is_no_data_value(val):
             return (circuit, name, None)
+        if circuit.lower() == "hmu" and name.lower() == "sourcetempinput":
+            try:
+                if float(val) < -100:
+                    return (circuit, name, None)
+            except ValueError:
+                return (circuit, name, None)
         return (circuit, name, val)
 
     @staticmethod
@@ -92,6 +99,8 @@ class DiscoveryService:
         circuit, name = register_key.split(".", 1)
         c_lower = circuit.lower()
         n_lower = name.lower()
+        if n_lower in HIDDEN_REGISTER_NAMES:
+            return True
         if c_lower.startswith("scan"):
             return True
         if c_lower in ALWAYS_HIDDEN or any(kw in c_lower for kw in HIDDEN_DEVICE_KEYWORDS):
@@ -153,6 +162,11 @@ class DiscoveryService:
             circuit, name, value = DiscoveryService._parse_register(line)
             if not circuit or not name:
                 continue
+
+            if circuit.lower() == "hmu" and name.lower() == "sourcetempinput":
+                raw_value = line.split("=", 1)[1].strip()
+                if value is None and raw_value:
+                    continue
 
             register_key = f"{circuit}.{name}"
             if value is not None:

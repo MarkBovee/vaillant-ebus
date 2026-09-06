@@ -156,6 +156,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = coordinator
     await coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    coordinator.disable_no_data_entities()
 
     # Reload the entry when data/options change so connection and behavior
     # settings apply without restarting Home Assistant.

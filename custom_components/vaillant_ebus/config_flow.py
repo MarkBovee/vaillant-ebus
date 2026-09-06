@@ -10,6 +10,8 @@ import aiohttp
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry, entity_registry
 
 from .const import (
     CONF_AWAY_DURATION,
@@ -50,6 +52,13 @@ async def _get_host_ip() -> str:
 
 
 _LOGGER = logging.getLogger(__name__)
+PURGE_ENTITY_SUFFIXES = ("_tmpb516montheven",)
+
+
+def _current_device_circuits(coordinator: Any) -> set[str]:
+    """Return device circuits present in current discovery, including placeholders."""
+    graph = getattr(coordinator, "_graph", None)
+    return set(graph.nodes) if graph is not None else set()
 
 
 # Attempt a TCP connect + state command against one ebusd candidate.
@@ -183,11 +192,124 @@ class VaillantOptionsFlow(OptionsFlow):
     def __init__(self, config_entry: ConfigEntry) -> None:
         self._config_entry = config_entry
 
-    # Menu: choose between settings and export dump
+    # Menu: choose between settings, maintenance actions, and export dump
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         return self.async_show_menu(
             step_id="init",
-            menu_options=["settings", "export_dump"],
+            menu_options=["settings", "purge_entities", "rediscover", "export_dump"],
+        )
+
+    async def async_step_purge_entities(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Remove registry entities no longer present in current discovery."""
+        if user_input is not None:
+            if not user_input.get("confirm"):
+                return self.async_abort(reason="purge_not_confirmed")
+            coordinator = self.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id)
+            current_circuits = _current_device_circuits(coordinator) if coordinator else set()
+            if not coordinator or not coordinator.ebus or not coordinator.ebus.is_connected or not current_circuits:
+                _LOGGER.error("Refusing to purge Vaillant eBUS entities without active discovery")
+                return self.async_abort(reason="purge_unavailable")
+            registry = entity_registry.async_get(self.hass)
+            devices = device_registry.async_get(self.hass)
+            active_device_ids = {
+                device_id
+                for device_id, device in devices.devices.items()
+                if self._config_entry.entry_id in device.config_entries
+                and any(
+                    identifier[0] == DOMAIN and identifier[1] in current_circuits
+                    for identifier in device.identifiers
+                )
+            }
+            removed = 0
+            for entity_id, entry in list(registry.entities.items()):
+                state = self.hass.states.get(entity_id)
+                is_internal_helper = entry.unique_id.lower().endswith(PURGE_ENTITY_SUFFIXES)
+                if (
+                    entry.config_entry_id == self._config_entry.entry_id
+                    and entry.platform == DOMAIN
+                    and (
+                        is_internal_helper
+                        or (state is not None and state.state == "unknown")
+                        or (
+                            entry.device_id is not None
+                            and entry.device_id not in active_device_ids
+                        )
+                    )
+                ):
+                    registry.async_remove(entity_id)
+                    removed += 1
+            remaining_device_ids = {
+                entry.device_id for entry in registry.entities.values() if entry.device_id
+            }
+            removed_devices = 0
+            for device_id, device in list(devices.devices.items()):
+                if (
+                    self._config_entry.entry_id in device.config_entries
+                    and any(identifier[0] == DOMAIN for identifier in device.identifiers)
+                    and device_id not in remaining_device_ids
+                ):
+                    devices.async_remove_device(device_id)
+                    removed_devices += 1
+            _LOGGER.info(
+                "Purged %d stale Vaillant eBUS entities and %d ghost devices",
+                removed,
+                removed_devices,
+            )
+            return self.async_abort(reason="entities_purged")
+
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id)
+        current_circuits = _current_device_circuits(coordinator) if coordinator else set()
+        registry = entity_registry.async_get(self.hass)
+        devices = device_registry.async_get(self.hass)
+        active_device_ids = {
+            device_id
+            for device_id, device in devices.devices.items()
+            if self._config_entry.entry_id in device.config_entries
+            and any(
+                identifier[0] == DOMAIN and identifier[1] in current_circuits
+                for identifier in device.identifiers
+            )
+        }
+        stale_count = sum(
+            1
+            for entry in registry.entities.values()
+            if (
+                entry.config_entry_id == self._config_entry.entry_id
+                and entry.platform == DOMAIN
+                and (
+                    (
+                        (state := self.hass.states.get(entry.entity_id)) is not None
+                        and state.state == "unknown"
+                    )
+                    or (
+                        entry.device_id is not None
+                        and entry.device_id not in active_device_ids
+                    )
+                )
+            )
+        )
+        return self.async_show_form(
+            step_id="purge_entities",
+            description_placeholders={"count": str(stale_count)},
+            data_schema=vol.Schema({vol.Required("confirm", default=False): cv.boolean}),
+        )
+
+    async def async_step_rediscover(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Reconnect to ebusd and rebuild the discovery graph."""
+        if user_input is not None:
+            if not user_input.get("confirm"):
+                return self.async_abort(reason="rediscover_not_confirmed")
+            coordinator = self.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id)
+            if coordinator is None:
+                _LOGGER.error("Refusing to rediscover Vaillant eBUS without a loaded coordinator")
+                return self.async_abort(reason="rediscover_unavailable")
+            await coordinator.async_request_rediscover()
+            return self.async_abort(reason="rediscover_started")
+
+        return self.async_show_form(
+            step_id="rediscover",
+            description_placeholders={"host": str(self._config_entry.data.get(CONF_EBUSD_HOST, "ebusd"))},
+            data_schema=vol.Schema({vol.Required("confirm", default=False): cv.boolean}),
         )
 
     # Settings form. Connection fields (host/port/scan interval) belong to
