@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.2 - 2026-09-08
+
+### Added
+
+- **eloBLOCK mode override service.** Added `set_mode_override` and
+  `clear_mode_override` services for the B510 thermostat override, including a
+  50-second keep-alive while enabled.
+- **eloBLOCK gas-entity filtering.** Confirmed eloBLOCK hardware now disables
+  gas and combustion-only BAI entities by default without hiding them from
+  discovery.
+
 ## 1.6.1 - 2026-09-08
 
 ### Added

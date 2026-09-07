@@ -6,6 +6,38 @@ from datetime import datetime
 
 from .models import RegisterMeta
 
+# BAI registers that are gas/combustion-specific and do not apply to the
+# electric eloBLOCK. They remain discoverable, but are disabled by default
+# when the confirmed eloBLOCK part number is present.
+ELOBLOCK_GAS_REGISTERS: frozenset[str] = frozenset(
+    {
+        "Gasvalve",
+        "Gasvalve3UC",
+        "GasvalveASICFeedback",
+        "GasvalveUC",
+        "ExternGasvalve",
+        "Fluegasvalve",
+        "FluegasvalveOpen",
+        "FanSpeed",
+        "FanMaxSpeedOperation",
+        "FanMinSpeedOperation",
+        "TargetFanSpeed",
+        "TargetFanSpeedOutput",
+        "Flame",
+        "FlameSensingASIC",
+        "Ignitor",
+        "IonisationVoltageLevel",
+        "AverageIgnitiontime",
+        "MaxIgnitiontime",
+        "CounterStartattempts1",
+        "CounterStartattempts2",
+        "CounterStartAttempts3",
+        "CounterStartAttempts4",
+        "HcStarts",
+        "HwcStarts",
+    }
+)
+
 # Multi-field registers: register key -> field names in semicolon order of the
 # raw ebusd value. Field names follow the ebusd CSV definitions.
 # Source: ebusd vaillant CSV (08.hmu.csv) + community dumps.

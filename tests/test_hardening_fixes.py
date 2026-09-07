@@ -305,7 +305,9 @@ async def test_async_setup_registers_all_services_with_entry_selector() -> None:
         "write_parameter",
         "refresh",
         "rediscover",
-        "analyze_registers",
-        "export_discovery_dump",
-    }
+            "analyze_registers",
+            "export_discovery_dump",
+            "set_mode_override",
+            "clear_mode_override",
+        }
     assert set(registered) == expected

@@ -44,6 +44,59 @@ write_parameter:
       selector:
         text:
 
+set_mode_override:
+  name: Set Mode Override
+  description: Write eloBLOCK B510 thermostat override and optionally keep it alive.
+  fields:
+    flow_temperature:
+      name: Flow Temperature
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 90
+          step: 0.5
+          unit_of_measurement: °C
+    storage_temperature:
+      name: Storage Temperature
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 90
+          step: 0.5
+          unit_of_measurement: °C
+    mode:
+      name: Heating Mode
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 255
+          step: 1
+    keep_alive:
+      name: Keep Alive
+      default: true
+      selector:
+        boolean:
+    entry_id:
+      name: Config Entry
+      description: Select the integration config entry when multiple are loaded.
+      advanced: true
+      selector:
+        text:
+
+clear_mode_override:
+  name: Clear Mode Override
+  description: Stop sending the eloBLOCK B510 thermostat override.
+  fields:
+    entry_id:
+      name: Config Entry
+      description: Select the integration config entry when multiple are loaded.
+      advanced: true
+      selector:
+        text:
+
 refresh:
   name: Refresh
   description: Force re-read of all active registers.

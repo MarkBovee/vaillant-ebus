@@ -6,7 +6,7 @@ import logging
 from copy import copy
 from typing import Any
 
-from .mapping import REGISTER_MAP, get_meta, multi_field_fields, split_multi_field
+from .mapping import ELOBLOCK_GAS_REGISTERS, REGISTER_MAP, get_meta, multi_field_fields, split_multi_field
 from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister, RegisterMeta, is_no_data_value
 
 _LOGGER = logging.getLogger(__name__)
@@ -159,6 +159,17 @@ def _determine_enabled_by_default(
     return False
 
 
+def _is_eloblock(graph: DeviceGraph) -> bool:
+    """Identify the confirmed eloBLOCK VE 28 BAI hardware."""
+    for key, raw in graph.raw_registers.items():
+        if not key.lower().endswith(".partnumberbox"):
+            continue
+        normalized = "".join(character for character in (raw or "").lower() if character.isalnum())
+        if normalized == "0020260270":
+            return True
+    return False
+
+
 def _resolve_device_circuit(
     register_key: str,
     node: DeviceNode,
@@ -241,6 +252,7 @@ class EntityFactoryService:
     ) -> list[EntityDescription]:
         """Generate HA entity descriptions from a device graph."""
         overrides = yaml_overrides or {}
+        eloblock = _is_eloblock(graph)
         seen: set[str] = set()
         entities: list[EntityDescription] = []
 
@@ -274,6 +286,8 @@ class EntityFactoryService:
                     "enabled",
                     _determine_enabled_by_default(rk, raw, node.has_data, meta),
                 )
+                if eloblock and circuit.lower() == "bai" and name in ELOBLOCK_GAS_REGISTERS:
+                    entity_enabled = False
 
                 dummy_reg = EbusdRegister(
                     circuit=circuit,
