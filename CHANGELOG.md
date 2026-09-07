@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.1 - 2026-09-08
+
+### Added
+
+- **eloBLOCK VE 28 support coverage.** Added metadata and fixture-driven
+  discovery coverage for observed BAI temperature, pressure, heating-stage,
+  status, and energy registers from issue #103.
+- **HMUX0 status coverage.** Added parsed flow/return temperatures for HMUX0
+  `Status01` alongside the confirmed yield/COP fixture coverage from issue #99.
+
 ## 1.6.0 - 2026-09-06
 
 ### Added
@@ -34,6 +44,9 @@
 - **Placeholder defaults.** Unknown registers without usable data no longer
   become enabled entities merely because their device has other live data;
   mapped hardware variants and live energy registers remain supported.
+- **HMUX0 yield/COP coverage.** Added fixture-driven coverage for HMUX0
+  `RunDataReturnTemp`, heating/DHW yield counters, and heating/DHW COP sensors
+  reported in issue #99.
 
 - **Solar controller placeholder device is suppressed.** Registers whose
   semicolon-separated fields are all no-data placeholders no longer make an

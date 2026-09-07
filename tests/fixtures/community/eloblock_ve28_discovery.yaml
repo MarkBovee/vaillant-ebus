@@ -1,0 +1,19 @@
+# Community discovery capture from issue #103 (Vaillant eloBLOCK VE 28).
+metadata:
+  source: github-issue-103
+  device: Vaillant eloBLOCK VE 28
+  hardware: HW7503
+  software: SW0109
+  circuit: bai
+raw_find_lines:
+  - "bai FlowTemp = 28.69;ok"
+  - "bai FlowTempDesired = 0.00"
+  - "bai StorageTemp = 56.12;ok"
+  - "bai StorageTempDesired = 39.00"
+  - "bai WaterPressure = 0.850;ok"
+  - "bai Status01 = 28.5;0.0;21.812;0.0;55.5;off"
+  - "bai HeatingStage1 = off"
+  - "bai HeatingStage3 = off"
+  - "bai ActiveStages = 192"
+  - "bai PrEnergySumHc1 = no data stored"
+  - "bai PrEnergySumHwc1 = no data stored"

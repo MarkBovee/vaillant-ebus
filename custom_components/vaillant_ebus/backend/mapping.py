@@ -11,6 +11,8 @@ from .models import RegisterMeta
 # Source: ebusd vaillant CSV (08.hmu.csv) + community dumps.
 MULTI_FIELD_FIELDS: dict[str, list[str]] = {
     "hmu.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
+    "hmux0.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
+    "bai.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
     "hmu.CompressorHc": ["runtime", "cycles"],
     "hmu.CompressorHwc": ["runtime", "cycles"],
     "hmu.RunStatsCompressorHc": ["runtime", "cycles"],
@@ -84,6 +86,44 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         enabled=False,
     ),
     "hmu.Status01.pumpstate": RegisterMeta(
+        friendly_name="Pump State",
+        entity_type="binary_sensor",
+        entity_category="diagnostic",
+    ),
+    "hmux0.Status01": RegisterMeta(
+        friendly_name="Status",
+        icon="mdi:information",
+        entity_category="diagnostic",
+    ),
+    "hmux0.Status01.temp": RegisterMeta(
+        friendly_name="Flow Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "hmux0.Status01.temp_1": RegisterMeta(
+        friendly_name="Return Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "hmux0.Status01.temp_2": RegisterMeta(
+        friendly_name="Outside Temperature",
+        device_class="temperature",
+        unit="°C",
+        enabled=False,
+    ),
+    "hmux0.Status01.temp_3": RegisterMeta(
+        friendly_name="Hot Water Temperature",
+        device_class="temperature",
+        unit="°C",
+        enabled=False,
+    ),
+    "hmux0.Status01.temp_4": RegisterMeta(
+        friendly_name="Storage Temperature",
+        device_class="temperature",
+        unit="°C",
+        enabled=False,
+    ),
+    "hmux0.Status01.pumpstate": RegisterMeta(
         friendly_name="Pump State",
         entity_type="binary_sensor",
         entity_category="diagnostic",
@@ -278,6 +318,56 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Yield Cooling Today",
         device_class="energy",
         unit="kWh",
+    ),
+    # eloBLOCK VE 28 / BAI00 community capture (issue #103).
+    "bai.FlowTemp": RegisterMeta(
+        friendly_name="Flow Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "bai.FlowTempDesired": RegisterMeta(
+        friendly_name="Flow Temperature Desired",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "bai.StorageTemp": RegisterMeta(
+        friendly_name="Storage Temperature",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "bai.StorageTempDesired": RegisterMeta(
+        friendly_name="Storage Temperature Desired",
+        device_class="temperature",
+        unit="°C",
+    ),
+    "bai.WaterPressure": RegisterMeta(
+        friendly_name="Water Pressure",
+        device_class="pressure",
+        unit="bar",
+    ),
+    "bai.HeatingStage1": RegisterMeta(
+        friendly_name="Heating Element Stage 1",
+        entity_type="binary_sensor",
+    ),
+    "bai.HeatingStage3": RegisterMeta(
+        friendly_name="Heating Element Stage 3",
+        entity_type="binary_sensor",
+    ),
+    "bai.ActiveStages": RegisterMeta(
+        friendly_name="Active Heating Stages",
+        entity_category="diagnostic",
+    ),
+    "bai.PrEnergySumHc1": RegisterMeta(
+        friendly_name="Heating Energy Stage 1",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+    ),
+    "bai.PrEnergySumHwc1": RegisterMeta(
+        friendly_name="Hot Water Energy Stage 1",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
     ),
     # Runtime-defined b516 cooling-energy registers (issue #50). The bus
     # reports Wh; the unit stays Wh because ebusd returns the raw EXP value.
