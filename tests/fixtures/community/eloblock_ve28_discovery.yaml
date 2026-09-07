@@ -17,3 +17,7 @@ raw_find_lines:
   - "bai ActiveStages = 192"
   - "bai PrEnergySumHc1 = no data stored"
   - "bai PrEnergySumHwc1 = no data stored"
+  - "bai PartnumberBox = 00 20 26 02 70"
+  - "bai Gasvalve = off"
+  - "bai FanSpeed = off"
+  - "bai Flame = off"

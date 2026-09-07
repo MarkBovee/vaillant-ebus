@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
-from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from . import repairs
@@ -156,6 +156,8 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_placeholder_poll = datetime.min
         self._last_energy_poll = datetime.min
         self._runtime_definitions: dict[str, str] = {}
+        self._cancel_set_mode_override: Callable[[], None] | None = None
+        self._set_mode_override_payload: str | None = None
         self._analysis = AnalysisService()
         self.entity_adders: dict[str, Callable[[list[EntityDescription]], None]] = {}
         self._post_discovery_callbacks: list[Callable[[], None]] = []
@@ -574,6 +576,13 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         defines = [
             "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800"
             ",value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity",
+            # eloBLOCK B510 thermostat override. It is harmless on hardware
+            # without BAI; ebusd reports it unavailable and filters it out.
+            "wi,bai,SetModeOverride,Operation Mode,,08,B510,00"
+            ",hcmode,,UCH,,,,flowtempdesired,,D1C,,,,hwctempdesired,,D1C"
+            ",,,,hwcflowtempdesired,,UCH,,,,setmode1,,UCH,,,,disablehc,,BI0"
+            ",,,,disablehwctapping,,BI1,,,,disablehwcload,,BI2,,,,setmode2,,UCH"
+            ",,,,remoteControlHcPump,,BI0,,,,releaseBackup,,BI1,,,,releaseCooling,,BI2",
             # B524 heating-circuit state registers (OP=0x02 GG=0x02, RR=0x20..0x25)
             # absent from the shipped CSVs (verified against the installed find
             # output and upstream 15.ctlv2.tsp). Layout documented in the
@@ -1003,7 +1012,43 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> bool:
         return await self.async_write_registers([(circuit, name, value)], strict_verify=strict_verify)
 
+    async def async_set_mode_override(
+        self,
+        flow_temperature: float,
+        storage_temperature: float,
+        mode: int = 0,
+        keep_alive: bool = True,
+    ) -> bool:
+        """Write eloBLOCK B510 override and optionally refresh it periodically."""
+        if not self.ebus or not self.ebus.is_connected:
+            return False
+        payload = f"{mode};{flow_temperature:g};{storage_temperature:g};-;-;0;0;0;-;0;0;0"
+        ok = await self.async_write_register("bai", "SetModeOverride", payload, strict_verify=False)
+        if not ok:
+            return False
+        self.async_clear_mode_override()
+        self._set_mode_override_payload = payload if keep_alive else None
+        if keep_alive:
+            self._cancel_set_mode_override = async_track_time_interval(
+                self.hass, self._async_keep_mode_override_alive, timedelta(seconds=50)
+            )
+        return True
+
+    async def _async_keep_mode_override_alive(self, _now: datetime) -> None:
+        if not self._set_mode_override_payload or not self.ebus or not self.ebus.is_connected:
+            return
+        await self.async_write_register(
+            "bai", "SetModeOverride", self._set_mode_override_payload, strict_verify=False
+        )
+
+    def async_clear_mode_override(self) -> None:
+        if self._cancel_set_mode_override:
+            self._cancel_set_mode_override()
+            self._cancel_set_mode_override = None
+        self._set_mode_override_payload = None
+
     async def async_stop(self) -> None:
+        self.async_clear_mode_override()
         if self._cancel_delayed_rediscovery:
             self._cancel_delayed_rediscovery()
             self._cancel_delayed_rediscovery = None

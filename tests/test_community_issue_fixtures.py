@@ -20,6 +20,9 @@ def test_eloblock_ve28_exposes_observed_bai_registers() -> None:
     assert entities["bai.WaterPressure.value"].meta.unit == "bar"
     assert entities["bai.Status01.temp"].meta.device_class == "temperature"
     assert entities["bai.Status01.temp_1"].meta.device_class == "temperature"
+    assert entities["bai.Gasvalve.value"].enabled_by_default is False
+    assert entities["bai.FanSpeed.value"].enabled_by_default is False
+    assert entities["bai.Flame.value"].enabled_by_default is False
 
 
 def test_hmux0_latest_issue99_values_keep_entity_metadata() -> None:

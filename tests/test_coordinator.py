@@ -601,7 +601,7 @@ async def test_transport_reconnect_invalidates_runtime_definitions() -> None:
         assert c._last_energy_poll == datetime.min
         c.ebus.define_register.reset_mock()
         await c._define_custom_registers()
-        assert c.ebus.define_register.await_count == 27
+        assert c.ebus.define_register.await_count == 28
 
 
 async def test_apply_discovery_logs_entity_platform_breakdown(caplog) -> None:
@@ -681,7 +681,7 @@ async def test_define_custom_registers_delegates_to_ebus() -> None:
         c.ebus = mock_ebus
         await c._define_custom_registers()
 
-        assert mock_ebus.define_register.call_count == 27
+        assert mock_ebus.define_register.call_count == 28
         calls = [c.args[0] for c in mock_ebus.define_register.call_args_list]
         assert any("z1RoomHumidity" in d for d in calls)
         assert any("ManualCoolingStartDate" in d and d.startswith("r5") for d in calls)
@@ -813,6 +813,28 @@ async def test_fallback_read_no_ebus_skips() -> None:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
         c.ebus = None
         await c._fallback_read()
+
+
+async def test_set_mode_override_writes_payload_and_schedules_keep_alive() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.write_register = AsyncMock(return_value=WriteResult(success=True, verified_value="done"))
+        c.ebus = mock_ebus
+
+        c.async_request_refresh = AsyncMock()
+        c._cancel_set_mode_override = MagicMock()
+
+        assert await c.async_set_mode_override(55, 45) is True
+        mock_ebus.write_register.assert_awaited_once_with(
+            "bai", "SetModeOverride", "0;55;45;-;-;0;0;0;-;0;0;0", strict_verify=False
+        )
+        assert c._set_mode_override_payload == "0;55;45;-;-;0;0;0;-;0;0;0"
+        assert c._cancel_set_mode_override is not None
+
+        c.async_clear_mode_override()
+        assert c._set_mode_override_payload is None
 
 
 async def test_fallback_read_polls_known_placeholders() -> None:

@@ -63,6 +63,23 @@ async def _svc_write_parameter(hass: HomeAssistant, call: ServiceCall) -> None:
     _LOGGER.info("write_parameter %s.%s=%s: success=%s", circuit, name, value, ok)
 
 
+# Write the eloBLOCK B510 thermostat override and keep it alive while enabled.
+async def _svc_set_mode_override(hass: HomeAssistant, call: ServiceCall) -> None:
+    coordinator = _resolve_coordinator(hass, call)
+    ok = await coordinator.async_set_mode_override(
+        call.data["flow_temperature"],
+        call.data["storage_temperature"],
+        call.data.get("mode", 0),
+        call.data.get("keep_alive", True),
+    )
+    if not ok:
+        raise HomeAssistantError("SetModeOverride write failed")
+
+
+async def _svc_clear_mode_override(hass: HomeAssistant, call: ServiceCall) -> None:
+    _resolve_coordinator(hass, call).async_clear_mode_override()
+
+
 # Force re-read all active registers.
 async def _svc_refresh(hass: HomeAssistant, call: ServiceCall) -> None:
     coordinator = _resolve_coordinator(hass, call)
@@ -117,6 +134,26 @@ async def _register_services(hass: HomeAssistant) -> None:
                 **_ENTRY_SELECTOR,
             }
         ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "set_mode_override",
+        lambda call: _svc_set_mode_override(hass, call),
+        schema=vol.Schema(
+            {
+                vol.Required("flow_temperature"): vol.Coerce(float),
+                vol.Required("storage_temperature"): vol.Coerce(float),
+                vol.Optional("mode", default=0): vol.Coerce(int),
+                vol.Optional("keep_alive", default=True): cv.boolean,
+                **_ENTRY_SELECTOR,
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "clear_mode_override",
+        lambda call: _svc_clear_mode_override(hass, call),
+        schema=vol.Schema(dict(_ENTRY_SELECTOR)),
     )
     hass.services.async_register(
         DOMAIN, "refresh", lambda call: _svc_refresh(hass, call), schema=vol.Schema(dict(_ENTRY_SELECTOR))
