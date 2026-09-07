@@ -1,0 +1,13 @@
+hmux0 RunDataReturnTemp = 28.2184
+hmux0 RunDataStatuscode = (ERR: invalid position for 3108b50905540200530d / 040208530d)
+hmux0 Status01 = 31.5;28.0;19.797;-;47.5;off
+hmux0 YieldHc = 4662
+hmux0 YieldHcDay = 10.3
+hmux0 YieldHcMonth = 10.3
+hmux0 YieldHwc = 614
+hmux0 YieldHwcDay = 2.3
+hmux0 YieldHwcMonth = 18.7
+hmux0 CopHc = 3.5
+hmux0 CopHcMonth = 4.0
+hmux0 CopHwc = 2.8
+hmux0 CopHwcMonth = 3.1

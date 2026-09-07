@@ -1,0 +1,12 @@
+scan.08  = Vaillant;HMUX0;0303;0504
+hmux0 RunDataReturnTemp = 33.6021
+hmux0 YieldHc = 4652
+hmux0 YieldHcDay = 0.0
+hmux0 YieldHcMonth = 0.0
+hmux0 YieldHwc = 611
+hmux0 YieldHwcDay = 1.8
+hmux0 YieldHwcMonth = 15.0
+hmux0 CopHc = 3.5
+hmux0 CopHcMonth = 1.0
+hmux0 CopHwc = 2.8
+hmux0 CopHwcMonth = 3.1

@@ -588,6 +588,30 @@ class TestSourceTempMetadata:
         assert meta.device_class == "temperature"
         assert meta.unit == "°C"
 
+    def test_hmux0_yield_and_cop_entities_from_issue_99_fixture(self) -> None:
+        graph = DiscoveryService.build_device_graph(load_find_lines("community/hmux0_yield_cop_find.txt"))
+        entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+        for register in (
+            "RunDataReturnTemp",
+            "YieldHc",
+            "YieldHcDay",
+            "YieldHcMonth",
+            "YieldHwc",
+            "YieldHwcDay",
+            "YieldHwcMonth",
+            "CopHc",
+            "CopHcMonth",
+            "CopHwc",
+            "CopHwcMonth",
+        ):
+            entity = entities.get(f"hmux0.{register}.value")
+            assert entity is not None, register
+            assert entity.enabled_by_default is True, register
+
+        assert entities["hmux0.RunDataReturnTemp.value"].meta.device_class == "temperature"
+        assert entities["hmux0.RunDataReturnTemp.value"].meta.unit == "°C"
+
 
 class TestStateClassSemantics:
     """State class renders history as line graph (issue #54)."""
