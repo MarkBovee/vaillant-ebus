@@ -187,9 +187,27 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def heating_circuit(self) -> str:
         if self._graph:
-            for node in self._graph.nodes.values():
-                if node.device_type == DeviceType.HEATING_CONTROLLER:
+            controllers = [
+                node for node in self._graph.nodes.values() if node.device_type == DeviceType.HEATING_CONTROLLER
+            ]
+            # Prefer controller carrying climate/DHW registers. Some boilers
+            # expose a BAI controller before the CTLV controller in discovery.
+            control_registers = {
+                "HwcTempDesired",
+                "HwcStorageTemp",
+                "HwcOpMode",
+                "Z1DayTemp",
+                "Z1OpMode",
+            }
+            for node in controllers:
+                if any(register.rsplit(".", 1)[-1] in control_registers for register in node.registers):
                     return node.circuit
+            for prefix in ("ctlv", "basv", "bass"):
+                for node in controllers:
+                    if node.circuit.lower().startswith(prefix):
+                        return node.circuit
+            if controllers:
+                return controllers[0].circuit
         return self._heating_circuit
 
     @property
