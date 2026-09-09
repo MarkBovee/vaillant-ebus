@@ -319,7 +319,6 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.info("ebusd version: %s", version)
 
         await self._define_custom_registers()
-
         try:
             graph = await self.discovery.discover()
         except Exception as exc:
@@ -329,6 +328,13 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.warning("ebusd discovery failed: %s", exc)
             return
 
+        # HW5103 Status07 is gated in _define_custom_registers by scan identity.
+        # The first discovery supplies scan identity for hardware-specific additions.
+        self._graph = graph
+        await self._define_custom_registers()
+        # Refresh once so newly defined registers enter the initial graph.
+        if any(key.endswith(".Status07") for key in self._runtime_definitions):
+            graph = await self.discovery.discover()
         await self._apply_discovery_graph(graph, "initial")
         await repairs.async_dismiss_detection_incomplete(self.hass)
         self._schedule_delayed_rediscovery()
@@ -669,6 +675,40 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             f",1001ffff0304{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
             f",hmu DHW Electric Consumption Today",
         ]
+        hmu = self._graph.nodes.get("hmu") if self._graph else None
+        if hmu and hmu.scan_type.upper() == "HMU00" and hmu.scan_hw == "5103":
+            # Upstream ebusd-configuration PR #614, confirmed for HW5103.
+            # Status07 is active-read because this HW5103 variant polls b511/07;
+            # unsupported hardware returns ERR and remains absent from entities.
+            defines.append(
+                "r,hmu,Status07,Status07,31,08,B511,07"
+                ",power,,UCH,,%,,dailyenvyield,,UIN,10,kWh,"
+                ",display_b0_heaterenabled,,BI0,0=off;1=on,,"
+                ",display_b1,,BI1,0=off;1=on,,"
+                ",display_b2_backupheater,,BI2,0=off;1=on,,"
+                ",display_b3,,BI3,0=off;1=on,,"
+                ",display_b4,,BI4,0=off;1=on,,"
+                ",display_b5_noisereduction,,BI5,0=off;1=on,,"
+                ",display_b6_dhwecomode,,BI6,0=off;1=on,,"
+                ",display_b7,,BI7,0=off;1=on,,"
+                ",heatermain_b0,,BI0,0=off;1=on,,"
+                ",heatermain_b1_error,,BI1,0=off;1=on,,"
+                ",heatermain_b2,,BI2,0=off;1=on,,"
+                ",heatermain_b3_heating,,BI3,0=off;1=on,,"
+                ",heatermain_b4_cooling,,BI4,0=off;1=on,,"
+                ",heatermain_b5_pressureloss,,BI5,0=off;1=on,,"
+                ",heatermain_b6,,BI6,0=off;1=on,,"
+                ",heatermain_b7_warmwater,,BI7,0=off;1=on,,"
+                ",displaypressure,,UCH,30,bar,,"
+                ",heaterbackup_b0,,BI0,0=off;1=on,,"
+                ",heaterbackup_b1_error,,BI1,0=off;1=on,,"
+                ",heaterbackup_b2,,BI2,0=off;1=on,,"
+                ",heaterbackup_b3_heating,,BI3,0=off;1=on,,"
+                ",heaterbackup_b4_cooling,,BI4,0=off;1=on,,"
+                ",heaterbackup_b5_pressureloss,,BI5,0=off;1=on,,"
+                ",heaterbackup_b6,,BI6,0=off;1=on,,"
+                ",heaterbackup_b7_warmwater,,BI7,0=off;1=on,,"
+            )
         defined = 0
         unavailable = 0
         for definition in defines:

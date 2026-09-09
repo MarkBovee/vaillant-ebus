@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.7.0 - 2026-09-09
+
+### Added
+
+- **HW5103 Status07 support.** Adds upstream-evidenced `b511 07` runtime
+  decoding for HMU00 HW5103 systems, including Quiet mode
+  (`display_b5_noisereduction`), heating, cooling, DHW, pressure-loss, and
+  backup-heater status bit entities.
+- **Improved discovery dump analysis.** Adds dump schema v4 metadata,
+  normalized register categories, before/after changes, grouped telegrams,
+  and backward-compatible legacy normalization.
+
+## Unreleased
+
+### Added
+
+- **Live dump evidence analysis.** Added fixture-backed notes for the VWZIO
+  `b511 01`/`Status01` strong-assumption match against upstream PR #598,
+  while keeping the address-only mapping discovery-only until a stable VWZIO
+  circuit path is available.
+- **Structured discovery dump analysis.** New dumps include integration metadata,
+  normalized register categories, before/after register changes, and grouped
+  known/unknown telegram traffic while preserving the existing raw YAML fields.
+- **Backward-compatible dump normalization.** Legacy dumps, including files
+  without `dump_version`, can be normalized through one analysis pipeline;
+  unknown future versions are preserved and reported as unsupported.
+
 ## 1.6.3 - 2026-09-09
 
 ### Fixed

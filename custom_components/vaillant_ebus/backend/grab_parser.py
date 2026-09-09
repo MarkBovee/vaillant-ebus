@@ -33,6 +33,7 @@ def parse_grab_lines(grab_lines: list[str]) -> list[dict]:
                 "msgid": req[4:8],
                 "master": req[0:2],
                 "slave": req[2:4],
+                "request": req,
                 "sub": req[8:],
                 "resp": resp_value,
                 "count": count,

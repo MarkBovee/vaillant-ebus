@@ -44,6 +44,8 @@ if not hasattr(_const, "PLATFORMS"):
     _const.PLATFORMS = ("climate", "sensor", "select", "switch", "binary_sensor", "number", "button")
 if not hasattr(_const, "SENSITIVE_FIELDS"):
     _const.SENSITIVE_FIELDS = frozenset()
+if not hasattr(_const, "INTEGRATION_VERSION"):
+    _const.INTEGRATION_VERSION = "1.7.0"
 
 # __init__.py imports voluptuous at module scope and builds the entry
 # selector with vol.Optional; CI does not install it, so stub the parts
@@ -233,6 +235,12 @@ async def test_export_dump_reports_disconnected_ebusd(tmp_path: Path) -> None:
 
     with pytest.raises(HomeAssistantError, match="ebusd is not connected"):
         await DUMP.async_export_discovery_dump(hass, coordinator)
+
+
+def test_dump_redacts_sensitive_register_names() -> None:
+    DUMP.SENSITIVE_FIELDS = {"serial"}
+    assert DUMP._redact("secret-value", "SerialNumber") == "<redacted>"
+    assert DUMP._redact("normal-value", "Status") == "normal-value"
 
 
 # --- multi-entry service dispatch ---
