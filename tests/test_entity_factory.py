@@ -365,6 +365,22 @@ class TestRegisterMapFallback:
         result = svc.generate(graph)
         assert len(result) == 0, "Empty graph → no entities"
 
+    def test_field_entry_is_not_treated_as_register(self) -> None:
+        graph = DeviceGraph(
+            nodes={
+                "ctlv3": DeviceNode(
+                    circuit="ctlv3",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=["ctlv3.Status01.temp"],
+                    has_data=True,
+                )
+            },
+            raw_registers={"ctlv3.Status01.temp": "21.5"},
+            placeholder_registers=set(),
+        )
+
+        assert EntityFactoryService().generate(graph) == []
+
     def test_unmapped_composite_register_is_not_exposed_as_raw_sensor(self) -> None:
         graph = DeviceGraph(
             nodes={

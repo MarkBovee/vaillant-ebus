@@ -29,6 +29,23 @@
 - `CIRCUIT_NAMES` is the only place for hardcoded circuit-to-label descriptions used by the Home Assistant UI.
 - Values such as `-`, `no data stored`, and `empty` represent unavailable ebusd data. They must not be exposed as normal sensor values.
 - Keep filtering for unsupported circuits, secondary zones, broadcast registers, and no-data devices consistent with the existing discovery and entity-factory logic. Do not create virtual entities for unsupported hardware.
+- **Discovered-circuit resolution is mandatory.** Runtime fallback reads, runtime
+  definitions, dump `REGISTER_MAP` probes, writes, and entity data lookup must
+  target the circuit actually discovered on the bus. Resolve logical metadata
+  aliases through the `DeviceGraph` and scan identity (for example `ctlv1`,
+  `ctlv3`, `basv3`, or another controller), never by assuming `ctlv2`, `hmu`,
+  `bai`, or a numeric circuit. This must work for every supported controller and
+  heat-pump variant.
+- **Field entries are not ebusd registers.** Mapping keys such as
+  `Status01.temp`, `Status01.pumpstate`, or `Status07.displaypressure` are
+  parsed fields of a parent register, not independent registers to poll or
+  include in discovery dumps. Strip field suffixes before fallback reads and
+  dump probes; resolve and read only parent register names.
+- **No hardcoded hardware workaround for circuit aliases.** A new device or
+  firmware variant must be supported by scan metadata and graph-driven alias
+  resolution, with fixture coverage for the discovered circuit and absent-path
+  coverage. Do not add another literal `ctlvN`, `hmu`, or `bai` fallback for one
+  user's hardware.
 
 ## Runtime-Defined Registers
 
