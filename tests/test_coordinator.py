@@ -343,6 +343,21 @@ async def test_heat_pump_circuit_resolves_hmux0() -> None:
         assert c.heating_circuit == "ctlv3"
 
 
+async def test_legacy_register_aliases_resolve_to_discovered_circuits() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = _make_graph()
+        assert c.resolve_register_circuit("ctlv2") == "ctlv2"
+        assert c.resolve_register_circuit("hmu") == "hmu"
+
+        controller = c._graph.nodes.pop("ctlv2")
+        controller.circuit = "ctlv3"
+        controller.registers = ["ctlv3.Z1OpMode"]
+        controller.scan_type = "CTLV3"
+        c._graph.nodes["ctlv3"] = controller
+        assert c.resolve_register_circuit("ctlv2") == "ctlv3"
+
+
 # Intent: re-run discovery once after ebusd has had time to populate live values.
 async def test_connect_schedules_one_delayed_rediscovery() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
