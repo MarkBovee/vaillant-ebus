@@ -21,7 +21,7 @@
   normalized register categories, before/after changes, grouped telegrams,
   and backward-compatible legacy normalization.
 
-## 1.8.0 - 2026-09-09
+## 1.7.2 - 2026-09-09
 
 ### Added
 
