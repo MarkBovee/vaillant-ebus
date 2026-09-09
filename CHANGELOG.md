@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.3 - 2026-09-09
+
+### Fixed
+
+- **Async service execution.** Integration services now register real async
+  callbacks, preventing `coroutine was never awaited` warnings when services
+  are run from Home Assistant Actions.
+- **Controller holiday reset handling.** `01.01.2015` and `01.01.2019` are
+  treated as unset holiday values for DHW, zone, climate, and datetime entities.
+
+### Added
+
+- Added fixture coverage for aroTHERM Pro Quiet-mode captures, HMUX0 DHW and
+  holiday data, and ecoTEC/VRT380 controller variants.
+
 ## 1.6.2 - 2026-09-08
 
 ### Added

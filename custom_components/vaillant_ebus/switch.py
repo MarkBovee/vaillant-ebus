@@ -22,6 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 SWITCH_ON_VALUES = {"1", "on", "true", "yes"}
 FAR_FUTURE = "01.01.2099"
 UNSET_DATE = "01.01.2015"
+UNSET_DATES = frozenset(("01.01.2015", "01.01.2019"))
 
 
 # Create switch entities and away-mode switch
@@ -115,6 +116,8 @@ def _parse_date(raw: str | None) -> date | None:
 
 # Check if today falls within holiday period
 def _is_holiday_active(start_raw: str | None, end_raw: str | None) -> bool:
+    if start_raw in UNSET_DATES or end_raw in UNSET_DATES:
+        return False
     start = _parse_date(start_raw)
     end = _parse_date(end_raw)
     if start is None or end is None:

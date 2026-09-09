@@ -110,29 +110,39 @@ CSV snippets, `define` strings, `find` output, and per-hardware field layouts th
 ## Community Data (user/upstream dumps)
 
 Data from users and upstream threads (discovery dumps, gists, `find` output, CSV or
-`define` snippets) can **never** be live-tested — the hardware is not ours. That does
-not mean the data stays out of the code; it means we adopt it conservatively so the
-integration keeps working for every other setup.
+`define` snippets) can **never** be live-tested — the hardware is not ours. Strong
+evidence from captures may still justify a conservative production assumption when
+that assumption is isolated, fixture-covered, and safe when the register is absent
+or returns no data.
 
 When adding registers, devices, or metadata derived from community data:
 
 - Add the capture as a fixture under `tests/fixtures/community/` and drive the new code
   from that fixture (see "Test Fixtures"). The fixture replaces live verification as the
   correctness gate.
+- Classify each inferred mapping as `confirmed`, `strong assumption`, or `speculative`.
+  `Confirmed` means the register name and value/layout are explicit. `Strong assumption`
+  means multiple consistent observations or a clear before/after correlation supports the
+  mapping. `Speculative` means evidence is insufficient for production code.
 - Add the entity/register through the existing data-driven paths (`REGISTER_MAP`,
   `MULTI_FIELD_FIELDS`, `_define_custom_registers()`, device-type tables) so it is
   covered by the same discovery/entity-factory logic as everything else. Do not bolt on
   one-off register-specific code paths.
+- `Confirmed` and `strong assumption` mappings may enter production when they use those
+  existing data-driven paths. Document the evidence and keep inferred entities unavailable
+  unless the expected register/value is actually discovered.
 - Keep changes additive and opt-in: enabling a community register/device must not change
   behavior for hardware that does not expose it, and must not crash discovery or entity
   generation when the register is absent.
-- Prefer conservative metadata: only map layouts and read-back values that are explicit
-  in the capture. Do not fabricate field layouts from a single untested snippet.
+- Prefer conservative metadata: map layouts and read-back values explicit in the capture;
+  for strong assumptions, document the evidence and do not fabricate a field layout from
+  an isolated or contradictory snippet.
 - Add a regression test that loads the fixture and asserts the expected register/entity
   appears on the discovered device graph without error.
+- For inferred mappings, also assert that the absent-register path remains safe.
 - If the data is incomplete or ambiguous, prefer a discovery-only or YAML-override
-  approach over a hardcoded production path, and flag the uncertainty to the owner
-  rather than guessing in code.
+  approach until evidence reaches `strong assumption`, and flag the uncertainty to the
+  owner rather than presenting it as verified hardware behavior.
 
 ## Known Limitations
 

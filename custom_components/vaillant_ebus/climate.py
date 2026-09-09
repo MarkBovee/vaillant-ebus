@@ -52,6 +52,7 @@ COOLING_STATES = frozenset(
 DATE_FMT = "%d.%m.%Y"
 TIME_FMT = "%H:%M:%S"
 HOLIDAY_RESET = "01.01.2015"
+HOLIDAY_RESET_VALUES = frozenset(("01.01.2015", "01.01.2019"))
 
 # Measured against live ctlv2 hardware (2026-08-24): quick-veto writes return
 # done immediately, but the controller applies them with roughly 30-60 s
@@ -257,7 +258,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             return PRESET_BOOST
         h_start = _value(self.coordinator, f"{self._zn}HolidayStartPeriod", self._circuit)
         h_end = _value(self.coordinator, f"{self._zn}HolidayEndPeriod", self._circuit)
-        if h_start and h_end and h_start != HOLIDAY_RESET:
+        if h_start and h_end and h_start not in HOLIDAY_RESET_VALUES and h_end not in HOLIDAY_RESET_VALUES:
             try:
                 today = now.date()
                 start = datetime.strptime(h_start, DATE_FMT).date()

@@ -106,7 +106,7 @@ for _name in ("switch", "water_heater"):
     sys.modules[f"vaillant_ebus.{_name}"] = _mod
     _spec.loader.exec_module(_mod)
 
-from vaillant_ebus.switch import HwcBoostSwitch  # noqa: E402
+from vaillant_ebus.switch import HwcBoostSwitch, _is_holiday_active  # noqa: E402
 from vaillant_ebus.water_heater import EbusdWaterHeater  # noqa: E402
 
 
@@ -167,3 +167,8 @@ def test_water_heater_current_operation_boost_desired() -> None:
     assert wh.current_operation == "boost"
     wh2 = EbusdWaterHeater(_coordinator(dhw_boost_desired=False, sfmode="load"), _entry())
     assert wh2.current_operation == "auto"
+
+
+def test_holiday_reset_values_are_not_active() -> None:
+    assert _is_holiday_active("01.01.2015", "01.01.2015") is False
+    assert _is_holiday_active("01.01.2019", "01.01.2019") is False

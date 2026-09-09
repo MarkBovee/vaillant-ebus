@@ -42,6 +42,13 @@ def _resolve_coordinator(hass: HomeAssistant, call: ServiceCall) -> VaillantCoor
     )
 
 
+def _service_handler(hass: HomeAssistant, handler):
+    async def callback(call: ServiceCall) -> None:
+        await handler(hass, call)
+
+    return callback
+
+
 # Read a single register by circuit and name.
 async def _svc_read_parameter(hass: HomeAssistant, call: ServiceCall) -> None:
     coordinator = _resolve_coordinator(hass, call)
@@ -112,7 +119,7 @@ async def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         "read_parameter",
-        lambda call: _svc_read_parameter(hass, call),
+        _service_handler(hass, _svc_read_parameter),
         schema=vol.Schema(
             {
                 vol.Required("circuit"): cv.string,
@@ -125,7 +132,7 @@ async def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         "write_parameter",
-        lambda call: _svc_write_parameter(hass, call),
+        _service_handler(hass, _svc_write_parameter),
         schema=vol.Schema(
             {
                 vol.Required("circuit"): cv.string,
@@ -138,7 +145,7 @@ async def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         "set_mode_override",
-        lambda call: _svc_set_mode_override(hass, call),
+        _service_handler(hass, _svc_set_mode_override),
         schema=vol.Schema(
             {
                 vol.Required("flow_temperature"): vol.Coerce(float),
@@ -152,28 +159,28 @@ async def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         "clear_mode_override",
-        lambda call: _svc_clear_mode_override(hass, call),
+        _service_handler(hass, _svc_clear_mode_override),
         schema=vol.Schema(dict(_ENTRY_SELECTOR)),
     )
     hass.services.async_register(
-        DOMAIN, "refresh", lambda call: _svc_refresh(hass, call), schema=vol.Schema(dict(_ENTRY_SELECTOR))
+        DOMAIN, "refresh", _service_handler(hass, _svc_refresh), schema=vol.Schema(dict(_ENTRY_SELECTOR))
     )
     hass.services.async_register(
         DOMAIN,
         "rediscover",
-        lambda call: _svc_rediscover(hass, call),
+        _service_handler(hass, _svc_rediscover),
         schema=vol.Schema(dict(_ENTRY_SELECTOR)),
     )
     hass.services.async_register(
         DOMAIN,
         "analyze_registers",
-        lambda call: _svc_analyze(hass, call),
+        _service_handler(hass, _svc_analyze),
         schema=vol.Schema(dict(_ENTRY_SELECTOR)),
     )
     hass.services.async_register(
         DOMAIN,
         "export_discovery_dump",
-        lambda call: _svc_export_discovery_dump(hass, call),
+        _service_handler(hass, _svc_export_discovery_dump),
         schema=vol.Schema({vol.Optional("grab_duration"): vol.Coerce(int), **_ENTRY_SELECTOR}),
     )
 

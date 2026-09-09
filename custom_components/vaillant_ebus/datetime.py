@@ -16,9 +16,14 @@ from .coordinator import VaillantCoordinator
 
 DATE_FMT = "%d.%m.%Y"
 TIME_FMT = "%H:%M:%S"
-HOLIDAY_RESET = "01.01.2015"
+HOLIDAY_RESET_VALUES = frozenset(("01.01.2015", "01.01.2019"))
 
 DEFAULT_TIME = "00:00:00"
+
+
+def _is_holiday_reset(value: object) -> bool:
+    """Return whether controller value represents an unset holiday period."""
+    return str(value) in HOLIDAY_RESET_VALUES
 
 HOLIDAY_ENTITIES = [
     ("Z1 Holiday Start", "Z1HolidayStartPeriod", "mdi:calendar-start", "z1"),
@@ -72,7 +77,7 @@ class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEn
         c = self.coordinator.heating_circuit
         end_date = data.get(f"{c}.Z1QuickVetoEndDate.value")
         end_time = data.get(f"{c}.Z1QuickVetoEndTime.value")
-        if not end_date or not end_time or end_date == HOLIDAY_RESET:
+        if not end_date or not end_time or _is_holiday_reset(end_date):
             return None
         try:
             naive = datetime.strptime(f"{end_date} {end_time}", f"{DATE_FMT} {TIME_FMT}")
@@ -105,7 +110,7 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity)
     @property
     def native_value(self) -> datetime | None:
         raw = self.coordinator.data.get("ebusd", {}).get(f"{self.coordinator.heating_circuit}.{self._register}.value")
-        if not raw or str(raw) == HOLIDAY_RESET:
+        if not raw or _is_holiday_reset(raw):
             return None
         try:
             naive = datetime.strptime(f"{raw} {DEFAULT_TIME}", f"{DATE_FMT} {TIME_FMT}")
