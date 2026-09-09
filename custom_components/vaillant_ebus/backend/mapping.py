@@ -43,6 +43,10 @@ ELOBLOCK_GAS_REGISTERS: frozenset[str] = frozenset(
 # Source: ebusd vaillant CSV (08.hmu.csv) + community dumps.
 MULTI_FIELD_FIELDS: dict[str, list[str]] = {
     "hmu.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
+    "hmu.Status00": [
+        "supplytemp", "waterpressure", "compressormodulation", "compressorstate",
+        "heatingstate", "field6", "defrost", "compressorpower",
+    ],
     "hmu.Status07": [
         "power", "dailyenvyield", "display_b0_heaterenabled", "display_b1",
         "display_b2_backupheater", "display_b3", "display_b4", "display_b5_noisereduction",
@@ -59,6 +63,7 @@ MULTI_FIELD_FIELDS: dict[str, list[str]] = {
     "hmu.CompressorHwc": ["runtime", "cycles"],
     "hmu.RunStatsCompressorHc": ["runtime", "cycles"],
     "hmu.RunStatsCompressorHwc": ["runtime", "cycles"],
+    "hmu.RunDataElPowerConsumption": ["value"],
     # v32 gas boiler (ecoTEC plus via VR32, bai.308523.inc + hcmode.inc).
     # Status01/Status02 share the hmu Status01 layout (hcmode.inc B511).
     # Single-field sensor registers expose only the first field; the trailing
@@ -98,6 +103,31 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Status",
         icon="mdi:information",
         entity_category="diagnostic",
+    ),
+    "hmu.Status00": RegisterMeta(
+        friendly_name="Compressor Status",
+        icon="mdi:information",
+        entity_category="diagnostic",
+    ),
+    "hmu.Status00.supplytemp": RegisterMeta(
+        friendly_name="Status Flow Temperature", device_class="temperature", unit="°C"
+    ),
+    "hmu.Status00.waterpressure": RegisterMeta(
+        friendly_name="Status Water Pressure", device_class="pressure", unit="bar"
+    ),
+    "hmu.Status00.compressormodulation": RegisterMeta(
+        friendly_name="Status Compressor Modulation", unit="%"
+    ),
+    "hmu.Status00.compressorstate": RegisterMeta(friendly_name="Status Compressor State"),
+    "hmu.Status00.heatingstate": RegisterMeta(friendly_name="Status Heating State"),
+    "hmu.Status00.defrost": RegisterMeta(
+        friendly_name="Defrost Active", entity_type="binary_sensor"
+    ),
+    "hmu.Status00.compressorpower": RegisterMeta(
+        friendly_name="Status Compressor Power", unit="%"
+    ),
+    "hmu.RunDataElPowerConsumption": RegisterMeta(
+        friendly_name="Electrical Power Consumption", device_class="power", unit="W"
     ),
     "hmu.Status01.temp": RegisterMeta(
         friendly_name="Flow Temperature",

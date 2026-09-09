@@ -647,6 +647,22 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # out of entity values.
             "r,hmu,SourceTempInput,SourceTempInput,31,8,B51A,05ff3222"
             ",value,,IGN:3,,,,value,,D2C,,°C,Source temp input",
+            # HMUX0 HW0504 community capture: upstream issue #249 / PR #330
+            # identifies B511/00 as the multi-field compressor status block.
+            # Unsupported variants return an empty response and remain filtered.
+            "r,hmu,Status00,Status00,31,8,B511,00"
+            ",supplytemp,,D2C,,°C,,waterpressure,,UCH,10,bar,,"
+            "compressormodulation,,UCH,,%,,compressorstate,,UCH,"
+            "0=off;1=heating_prerun;4=heating;5=heating_overrun;24=hot_water;"
+            "110=defrosting,,heatingstate,,UCH,8=off;9=heating,,"
+            "field6,,UCH,,,defrost,,UCH,0=inactive;32=active,,"
+            "compressorpower,,percent1,,%,,HMUX0 Status00",
+            # HMUX0 HW0504 community capture: upstream issue #522 identifies
+            # B509/540200/5b0d as diagnostic electrical power in watts.
+            # This is additive; absent hardware returns no data.
+            "r,hmu,RunDataElPowerConsumption,RunDataElPowerConsumption,31,8,B509"
+            ",055402005b0d,value,,IGN:4,,,,value,,EXP,,W,"
+            "HMUX0 electrical power consumption",
             "r5,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524"
             ",02000000da00,value,,IGN:4,,,,value,,HDA:3",
             "r5,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524"
@@ -694,6 +710,13 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             f",hmu DHW Electric Consumption Today",
         ]
         hmu = self._graph.nodes.get("hmu") if self._graph else None
+        if not (hmu and hmu.scan_type.upper() == "HMUX0" and hmu.scan_hw == "0504"):
+            defines = [
+                definition
+                for definition in defines
+                if ",Status00," not in definition
+                and ",RunDataElPowerConsumption," not in definition
+            ]
         if hmu and hmu.scan_type.upper() == "HMU00" and hmu.scan_hw == "5103":
             # Upstream ebusd-configuration PR #614, confirmed for HW5103.
             # Status07 is active-read because this HW5103 variant polls b511/07;

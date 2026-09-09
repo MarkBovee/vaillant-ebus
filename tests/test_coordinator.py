@@ -508,6 +508,7 @@ async def test_status07_definition_is_gated_to_hm5103() -> None:
         c.ebus.is_connected = True
         c.ebus.define_register = AsyncMock(return_value="done")
         c._graph = _make_graph()
+        c._graph.nodes["hmu"].scan_type = "HMU00"
         c._graph.nodes["hmu"].scan_hw = "5103"
 
         await c._define_custom_registers()
@@ -516,6 +517,44 @@ async def test_status07_definition_is_gated_to_hm5103() -> None:
         status07 = next(definition for definition in definitions if ",Status07," in definition)
         assert ",B511,07," in status07
         assert "display_b5_noisereduction" in status07
+
+
+async def test_hmux0_strong_assumption_definitions_are_additive() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = _make_graph()
+        c._graph.nodes["hmu"].scan_type = "HMUX0"
+        c._graph.nodes["hmu"].scan_hw = "0504"
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        status00 = next(definition for definition in definitions if ",Status00," in definition)
+        power = next(
+            definition for definition in definitions if ",RunDataElPowerConsumption," in definition
+        )
+        assert ",B511,00," in status00
+        assert "defrost,,UCH,0=inactive;32=active" in status00
+        assert ",B509,055402005b0d," in power
+        assert ",value,,EXP,,W," in power
+
+
+async def test_hmux0_strong_assumption_definitions_skip_other_hardware() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = _make_graph()
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        assert not any(",Status00," in definition for definition in definitions)
+        assert not any(",RunDataElPowerConsumption," in definition for definition in definitions)
 
 
 async def test_status07_definition_skips_other_hmu_hardware() -> None:
