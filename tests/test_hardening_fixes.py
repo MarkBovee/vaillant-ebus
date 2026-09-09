@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
+import inspect
 import sys
 import tempfile
 from pathlib import Path
@@ -311,3 +312,16 @@ async def test_async_setup_registers_all_services_with_entry_selector() -> None:
             "clear_mode_override",
         }
     assert set(registered) == expected
+
+
+async def test_registered_service_handlers_are_async_callbacks() -> None:
+    hass = MagicMock()
+    registered: dict[str, object] = {}
+
+    def _register(domain, name, handler, schema=None):  # noqa: ARG001
+        registered[name] = handler
+
+    hass.services.async_register.side_effect = _register
+    await INIT.async_setup(hass, {})
+
+    assert all(inspect.iscoroutinefunction(handler) for handler in registered.values())

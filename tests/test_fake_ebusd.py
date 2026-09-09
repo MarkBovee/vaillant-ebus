@@ -51,6 +51,12 @@ async def test_arotherm_fixture_loads() -> None:
         ("community/arotherm_plus_ctlv2_cooling_discovery.yaml", 50),
         ("community/geniaset_bass3_discovery.yaml", 50),
         ("community/flexotherm_133_cooling_discovery.yaml", 50),
+        ("community/arotherm_pro7_quiet_off_idle_discovery.yaml", 50),
+        ("community/arotherm_pro7_quiet_off_heating_discovery.yaml", 50),
+        ("community/arotherm_pro7_quiet_on_heating_discovery.yaml", 50),
+        ("community/arotherm_hmux0_dhw_holiday_discovery.yaml", 50),
+        ("community/ecotec_vrt380_15700_discovery.yaml", 50),
+        ("community/ecotec_vrt380_ctlv2_discovery.yaml", 50),
     ],
 )
 async def test_all_fixtures_load(fixture: str, min_registers: int) -> None:

@@ -29,6 +29,7 @@ OPERATION_MODES = ["off", "auto", "manual", "boost"]
 
 DATE_FMT = "%d.%m.%Y"
 HOLIDAY_RESET = "01.01.2015"
+HOLIDAY_RESET_VALUES = frozenset(("01.01.2015", "01.01.2019"))
 
 
 # Look up a string value from coordinator ebusd data by register name
@@ -87,7 +88,7 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
     def is_away_mode_on(self) -> bool | None:
         h_start = _value(self.coordinator, "HwcHolidayStartPeriod")
         h_end = _value(self.coordinator, "HwcHolidayEndPeriod")
-        if not h_start or not h_end:
+        if not h_start or not h_end or h_start in HOLIDAY_RESET_VALUES or h_end in HOLIDAY_RESET_VALUES:
             return None
         try:
             now = date.today()

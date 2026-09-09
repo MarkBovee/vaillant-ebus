@@ -6,7 +6,10 @@ TMP = "/tmp/_rel"
 os.makedirs(TMP, exist_ok=True)
 
 for root, dirs, files in os.walk("custom_components/vaillant_ebus"):
+    dirs[:] = [directory for directory in dirs if directory != "__pycache__"]
     for f in files:
+        if f.endswith(".pyc"):
+            continue
         fp = os.path.join(root, f)
         rel = os.path.relpath(fp, "custom_components/vaillant_ebus")
         dst = os.path.join(TMP, rel)
