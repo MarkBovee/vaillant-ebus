@@ -271,6 +271,10 @@ class EntityFactoryService:
 
                 circuit, name = rk.split(".", 1)
                 raw = graph.raw_registers.get(rk)
+                # Keys containing a second dot are parsed fields of a parent
+                # register, not standalone ebusd registers.
+                if "." in name:
+                    continue
                 base_meta = get_meta(circuit, name)
 
                 # Date-like empty sentinel is not a supported entity value;
