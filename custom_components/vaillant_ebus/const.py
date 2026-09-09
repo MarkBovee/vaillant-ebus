@@ -2,10 +2,24 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from homeassistant.const import Platform
 
 DOMAIN = "vaillant_ebus"
-INTEGRATION_VERSION = "1.7.0"
+
+
+def _read_manifest_version() -> str:
+    """Read version from manifest so dump metadata cannot drift."""
+    try:
+        manifest = json.loads(Path(__file__).with_name("manifest.json").read_text())
+        return str(manifest["version"])
+    except (OSError, KeyError, TypeError, ValueError):
+        return "unknown"
+
+
+INTEGRATION_VERSION = _read_manifest_version()
 CONF_EBUSD_HOST = "ebusd_host"
 CONF_EBUSD_PORT = "ebusd_port"
 CONF_SCAN_INTERVAL = "scan_interval"

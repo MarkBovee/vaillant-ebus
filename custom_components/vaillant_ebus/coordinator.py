@@ -218,6 +218,14 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     return node.circuit
         return "hmu"
 
+    def resolve_register_circuit(self, circuit: str) -> str:
+        """Resolve legacy map circuits to circuits discovered on this bus."""
+        if circuit == "ctlv2":
+            return self.heating_circuit
+        if circuit == "hmu":
+            return self.heat_pump_circuit
+        return circuit
+
     # Active heating zones (zone id -> hosting circuit) derived from the
     # discovery graph. A zone counts as active when it has a room-zone mapping
     # (ZNRoomZoneMapping with a value other than none/empty) or live data on a
@@ -923,8 +931,10 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not meta.enabled or key in graph_keys:
                 continue
             map_circuit, name = key.split(".", 1)
+            if "." in name:
+                continue
             circuit = self._fallback_candidate(name)
-            _add(circuit or map_circuit, name)
+            _add(circuit or self.resolve_register_circuit(map_circuit), name)
 
         # Placeholder reads: discovered no-data registers whose metadata
         # resolves via the circuit alias (15-minute interval).

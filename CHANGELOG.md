@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.7.4 - 2026-09-09
+
+### Fixed
+
+- **Discovered controller circuits.** Resolve legacy `ctlv2`/`hmu` metadata and
+  fallback reads to the actual controller and heat-pump circuits discovered on
+  the bus, including `ctlv1`, `ctlv3`, `basv`, and other variants.
+- **Discovery dump fallbacks.** Do not poll field-level mapping keys as raw
+  registers or emit generic `ctlv2`/`hmu` fallback entries when another circuit
+  is discovered.
+- **Dump metadata.** Read integration version from `manifest.json` and include
+  parsed ebusd `info` data. Addon options such as `seed_mqtt_cfg` and
+  `commandline_options` are explicitly marked unavailable because ebusd does
+  not expose them over TCP.
+
 ## 1.7.3 - 2026-09-09
 
 ### Added

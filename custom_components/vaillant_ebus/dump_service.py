@@ -15,6 +15,7 @@ from homeassistant.exceptions import HomeAssistantError
 from .backend.dump_analysis import CURRENT_DUMP_VERSION, normalize_dump
 from .backend.grab_parser import parse_grab_lines, unknown_telegrams
 from .backend.mapping import REGISTER_MAP
+from .backend.models import is_no_data_value
 from .const import DOMAIN, INTEGRATION_VERSION, SENSITIVE_FIELDS
 from .coordinator import VaillantCoordinator
 
@@ -56,14 +57,18 @@ def _parse_find_lines(raw_lines: list[str]) -> list[dict]:
                 "fields": ["value"],
                 "values": [val],
                 "writable": False,
-                "has_data": val not in ("-", "") and not val.startswith(("(empty ", "(ERR", "no data stored")),
+                "has_data": not is_no_data_value(val),
             }
         )
     return result
 
 
 # Collect discovered + REGISTER_MAP registers into serializable dicts
-async def _dump_registers(ebus, seen_keys: set[str] | None = None) -> tuple[list[dict], set[str], list[str]]:
+async def _dump_registers(
+    ebus,
+    seen_keys: set[str] | None = None,
+    circuit_aliases: dict[str, str] | None = None,
+) -> tuple[list[dict], set[str], list[str]]:
     raw_lines = await ebus.find_registers()
     discovered = _parse_find_lines(raw_lines)
     if seen_keys is None:
@@ -83,15 +88,20 @@ async def _dump_registers(ebus, seen_keys: set[str] | None = None) -> tuple[list
         }
         register_list.append(entry)
 
+    aliases = circuit_aliases or {}
     for key, meta in REGISTER_MAP.items():
-        if key in seen_keys:
-            continue
         parts = key.split(".", 1)
         if len(parts) != 2:
             continue
         circuit, name = parts
+        if "." in name:
+            continue
+        target_circuit = aliases.get(circuit, circuit)
+        target_key = f"{target_circuit}.{name}"
+        if key in seen_keys or target_key in seen_keys:
+            continue
         map_entry: dict = {
-            "circuit": circuit,
+            "circuit": target_circuit,
             "name": name,
             "fields": ["value"],
             "values": [None],
@@ -102,10 +112,10 @@ async def _dump_registers(ebus, seen_keys: set[str] | None = None) -> tuple[list
         if not meta.enabled:
             map_entry["disabled"] = True
         try:
-            val = await ebus.read_register(circuit, name)
+            val = await ebus.read_register(target_circuit, name)
             if val:
                 map_entry["values"] = [_redact(val, name)]
-                map_entry["has_data"] = True
+                map_entry["has_data"] = not is_no_data_value(val)
         except Exception:
             pass
         register_list.append(map_entry)
@@ -174,7 +184,11 @@ async def async_export_discovery_dump(
         )
         raise HomeAssistantError(message)
 
-    before_registers, seen, raw_find_lines = await _dump_registers(ebus)
+    aliases = {
+        "ctlv2": coordinator.heating_circuit,
+        "hmu": coordinator.heat_pump_circuit,
+    }
+    before_registers, seen, raw_find_lines = await _dump_registers(ebus, circuit_aliases=aliases)
 
     grab_lines = []
     if grab_duration > 0:
@@ -188,13 +202,14 @@ async def async_export_discovery_dump(
     after_registers: list[dict] = []
     after_raw_lines: list[str] = []
     if grab_duration > 0:
-        after_registers, _, after_raw_lines = await _dump_registers(ebus)
+        after_registers, _, after_raw_lines = await _dump_registers(ebus, circuit_aliases=aliases)
 
     output_dir = hass.config.path(DOMAIN)
     # Directory creation and the YAML write are ordered inside _persist_dump;
     # a fire-and-forget mkdir here used to race the write.
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     filepath = f"{output_dir}/discovery_dump_{timestamp}.yaml"
+    ebusd_info = await ebus.get_info()
 
     dump_data: dict = {
         "metadata": {
@@ -204,6 +219,12 @@ async def async_export_discovery_dump(
             "grab_duration": grab_duration,
             "dump_version": CURRENT_DUMP_VERSION,
             "integration_version": INTEGRATION_VERSION,
+            "ebusd_info": ebusd_info,
+            "ebusd_configuration": {
+                "available": False,
+                "reason": "ebusd info does not expose addon command-line options or seed_mqtt_cfg",
+                "requested_fields": ["seed_mqtt_cfg", "commandline_options"],
+            },
         },
         "raw_find_lines": raw_find_lines,
         "before_registers": before_registers,
