@@ -43,6 +43,16 @@ ELOBLOCK_GAS_REGISTERS: frozenset[str] = frozenset(
 # Source: ebusd vaillant CSV (08.hmu.csv) + community dumps.
 MULTI_FIELD_FIELDS: dict[str, list[str]] = {
     "hmu.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
+    "hmu.Status07": [
+        "power", "dailyenvyield", "display_b0_heaterenabled", "display_b1",
+        "display_b2_backupheater", "display_b3", "display_b4", "display_b5_noisereduction",
+        "display_b6_dhwecomode", "display_b7", "heatermain_b0", "heatermain_b1_error",
+        "heatermain_b2", "heatermain_b3_heating", "heatermain_b4_cooling",
+        "heatermain_b5_pressureloss", "heatermain_b6", "heatermain_b7_warmwater",
+        "displaypressure", "heaterbackup_b0", "heaterbackup_b1_error", "heaterbackup_b2",
+        "heaterbackup_b3_heating", "heaterbackup_b4_cooling", "heaterbackup_b5_pressureloss",
+        "heaterbackup_b6", "heaterbackup_b7_warmwater",
+    ],
     "hmux0.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
     "bai.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
     "hmu.CompressorHc": ["runtime", "cycles"],
@@ -1928,6 +1938,47 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Clear Error History",
         icon="mdi:delete",
         entity_category="diagnostic",
+    ),
+    "hmu.Status07": RegisterMeta(
+        friendly_name="Display Status",
+        icon="mdi:information",
+        entity_category="diagnostic",
+    ),
+    "hmu.Status07.power": RegisterMeta(
+        friendly_name="Display Compressor Power", device_class="power", unit="%"
+    ),
+    "hmu.Status07.dailyenvyield": RegisterMeta(
+        friendly_name="Display Environmental Yield Today", device_class="energy", unit="kWh"
+    ),
+    "hmu.Status07.display_b5_noisereduction": RegisterMeta(
+        friendly_name="Quiet Mode", entity_type="binary_sensor", icon="mdi:volume-off"
+    ),
+    "hmu.Status07.display_b0_heaterenabled": RegisterMeta(
+        friendly_name="Main Heater Enabled", entity_type="binary_sensor"
+    ),
+    "hmu.Status07.display_b2_backupheater": RegisterMeta(
+        friendly_name="Backup Heater Active", entity_type="binary_sensor"
+    ),
+    "hmu.Status07.display_b6_dhwecomode": RegisterMeta(
+        friendly_name="DHW Eco Mode", entity_type="binary_sensor"
+    ),
+    "hmu.Status07.heatermain_b1_error": RegisterMeta(
+        friendly_name="Comfort Protection Error", entity_type="binary_sensor", entity_category="diagnostic"
+    ),
+    "hmu.Status07.heatermain_b3_heating": RegisterMeta(
+        friendly_name="Heating Active", entity_type="binary_sensor"
+    ),
+    "hmu.Status07.heatermain_b4_cooling": RegisterMeta(
+        friendly_name="Cooling Active", entity_type="binary_sensor"
+    ),
+    "hmu.Status07.heatermain_b5_pressureloss": RegisterMeta(
+        friendly_name="Pressure Loss", entity_type="binary_sensor", entity_category="diagnostic"
+    ),
+    "hmu.Status07.heatermain_b7_warmwater": RegisterMeta(
+        friendly_name="DHW Active", entity_type="binary_sensor"
+    ),
+    "hmu.Status07.displaypressure": RegisterMeta(
+        friendly_name="Display System Pressure", device_class="pressure", unit="bar"
     ),
 }
 

@@ -501,6 +501,37 @@ async def test_runtime_energy_refreshes_without_reload(monkeypatch) -> None:
         assert values["ebusd"]["hmu.CoolElecConsDay.value"] == "300"
 
 
+async def test_status07_definition_is_gated_to_hm5103() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = _make_graph()
+        c._graph.nodes["hmu"].scan_hw = "5103"
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        status07 = next(definition for definition in definitions if ",Status07," in definition)
+        assert ",B511,07," in status07
+        assert "display_b5_noisereduction" in status07
+
+
+async def test_status07_definition_skips_other_hmu_hardware() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = _make_graph()
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        assert not any(",Status07," in definition for definition in definitions)
+
+
 async def test_runtime_definitions_roll_over_and_retry_failures(monkeypatch) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())

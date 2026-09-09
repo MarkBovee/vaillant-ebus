@@ -79,12 +79,46 @@ telegrams; capture them with `grab` and mine the unknown ones for new registers.
 - Dumps capture them as `unknown_telegrams` (and `labeled_telegrams`) next to the
   raw `grab` lines. When a dump exists, prefer mining its `unknown_telegrams` over
   a fresh grab.
-- Register candidates found this way must be verified against ebusd (message format,
-  read-back value) before adding a `define -r` to `_define_custom_registers()`.
+- Register candidates found this way must have message format and layout evidence
+  before adding a `define -r` to `_define_custom_registers()`; owner hardware live
+  verification is preferred but not mandatory when upstream/community evidence is
+  strong and the hardware scope is explicit.
+- A register with a strong upstream/community layout match may be added through
+  `_define_custom_registers()` even when the installed ebusd CSV does not expose it.
+  This is the preferred path for community-supported opt-in registers; never modify
+  or upload addon CSV files. The definition must hardcode the verified circuit/address
+  and message layout, be additive, and tolerate an absent or `ERR` response without
+  creating a normal entity.
+- Before adding a runtime definition, confirm all of the following: the evidence
+  telegram master/slave and message/sub-address match the candidate; the response
+  byte length and field offsets match; the value has plausible units/range; hardware
+  and firmware scope is explicit; and the definition does not introduce active polling
+  that can alter bus behaviour unless active reads are explicitly required and safe.
+  Prefer passive `u` definitions for passively observed telegrams. Add the definition
+  only after a fixture-backed test covers both the decoded value and absent-register
+  path.
 - **Live-verificatie geldt alleen voor de eigen hardware.** Eén grabbage op de eigen
   bus is live testbaar. Data afkomstig van anderen (dumps, gists, issue snippets,
   upstream threads) is **nooit** live testbaar — behandel die als community-data (zie
   "Community Data" hieronder), niet als eigen-live-verificatie.
+- During dump analysis, search every useful unknown telegram and unmapped live register
+  in `john30/ebusd-configuration` issues and pull requests before classifying it as
+  unsupported. Search by register name, message ID, sub-address, and distinctive payload
+  fragments where useful. Use `tools/search_upstream.sh`, including `--comments` and
+  `--all` when appropriate; do not limit the search to the repository's CSV/TSP files.
+- Treat upstream matches as evidence, not local live verification. Upstream/community
+  evidence may be sufficient for production when classified `confirmed` or `strong
+  assumption`, hardware scope is explicit, and absent-register behavior is safe. Open
+  promising issues or PRs
+  with `gh issue view <number> --comments` and read the complete conversation before using
+  a snippet. Record the upstream URL, hardware context, and whether the mapping is
+  `confirmed`, `strong assumption`, or `speculative`.
+- For a local live dump, correlate upstream candidates against the local telegram's master,
+  slave, message ID, sub-address, response layout, and observed value. A name match alone
+  is insufficient for production code.
+- Add the relevant upstream evidence and local capture as fixture-backed analysis notes when
+  a candidate moves toward production. Keep candidates without a matching layout or safe
+  absent-register behavior discovery-only until evidence improves.
 
 ## Upstream Issues/PRs as a Register Source
 

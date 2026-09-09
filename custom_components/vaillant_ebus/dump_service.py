@@ -12,9 +12,10 @@ from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
+from .backend.dump_analysis import CURRENT_DUMP_VERSION, normalize_dump
 from .backend.grab_parser import parse_grab_lines, unknown_telegrams
 from .backend.mapping import REGISTER_MAP
-from .const import DOMAIN, SENSITIVE_FIELDS
+from .const import DOMAIN, INTEGRATION_VERSION, SENSITIVE_FIELDS
 from .coordinator import VaillantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -201,7 +202,8 @@ async def async_export_discovery_dump(
             "ebusd_version": ebus.version,
             "register_count": len(after_registers or before_registers),
             "grab_duration": grab_duration,
-            "dump_version": 3,
+            "dump_version": CURRENT_DUMP_VERSION,
+            "integration_version": INTEGRATION_VERSION,
         },
         "raw_find_lines": raw_find_lines,
         "before_registers": before_registers,
@@ -212,11 +214,16 @@ async def async_export_discovery_dump(
             telegrams = parse_grab_lines(grab_lines)
             dump_data["labeled_telegrams"] = [t for t in telegrams if t["label"]]
             dump_data["unknown_telegrams"] = unknown_telegrams(grab_lines)
+            dump_data["traffic"] = normalize_dump(dump_data)["traffic"]
         except Exception as exc:  # pragma: no cover - defensive
             _LOGGER.warning("Failed to parse grab telegrams: %s", exc)
     if after_registers:
         dump_data["after_registers"] = after_registers
         dump_data["raw_find_lines_after"] = after_raw_lines
+
+    dump_data["registers"] = normalize_dump(dump_data)["registers"]
+    if after_registers:
+        dump_data["changes"] = normalize_dump(dump_data)["changes"]
 
     await _persist_dump(hass, filepath, dump_data)
     _LOGGER.info("Discovery dump written to %s", filepath)
