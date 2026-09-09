@@ -383,6 +383,32 @@ async def test_past_sentinel_end_date_reports_no_boost() -> None:
         assert ("ctlv2", "Z2QuickVetoDuration", "3") in calls
 
 
+def test_future_holiday_period_is_not_away_and_active_period_is_away() -> None:
+    from datetime import date, timedelta
+
+    today = date.today()
+    future = {
+        "ctlv2.Z1OpMode.value": "auto",
+        "ctlv2.Z1HolidayStartPeriod.value": (today + timedelta(days=1)).strftime("%d.%m.%Y"),
+        "ctlv2.Z1HolidayEndPeriod.value": (today + timedelta(days=7)).strftime("%d.%m.%Y"),
+    }
+    active = {
+        "ctlv2.Z1OpMode.value": "auto",
+        "ctlv2.Z1HolidayStartPeriod.value": (today - timedelta(days=1)).strftime("%d.%m.%Y"),
+        "ctlv2.Z1HolidayEndPeriod.value": (today + timedelta(days=1)).strftime("%d.%m.%Y"),
+    }
+    with tempfile.TemporaryDirectory() as tmpdir:
+        future_zone = EbusdClimate(
+            _coordinator(tmpdir, _graph_two_zone(), {"ebusd": future}), _entry(), "z1", "ctlv2"
+        )
+        active_zone = EbusdClimate(
+            _coordinator(tmpdir, _graph_two_zone(), {"ebusd": active}), _entry(), "z1", "ctlv2"
+        )
+
+        assert future_zone.preset_mode == "none"
+        assert active_zone.preset_mode == "away"
+
+
 # Intent: boost on a zone with quick-veto support writes the zone's veto registers.
 async def test_zone2_boost_writes_quick_veto() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:

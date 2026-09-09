@@ -83,6 +83,18 @@ def test_hmux0_dhw_holiday_capture_keeps_controller_values_and_sentinels_unavail
     assert "ctlv3.PrEnergySumHwc.value" in entities
 
 
+def test_hmux0_holiday_capture_keeps_future_zone_holiday_values() -> None:
+    """Controller holiday dates must survive discovery as ctlv3 values."""
+    dump = load_discovery_dump("community/arotherm_hmux0_dhw_holiday_discovery.yaml")
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/arotherm_hmux0_dhw_holiday_discovery.yaml")
+    )
+
+    assert dump["metadata"]["dump_version"] == 3
+    assert graph.raw_registers["ctlv3.Z1HolidayStartPeriod"] == "26.09.2026"
+    assert graph.raw_registers["ctlv3.Z1HolidayEndPeriod"] == "09.10.2027"
+
+
 @pytest.mark.parametrize(
     "fixture",
     (

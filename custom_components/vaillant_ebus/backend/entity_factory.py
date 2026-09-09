@@ -273,6 +273,18 @@ class EntityFactoryService:
                 raw = graph.raw_registers.get(rk)
                 base_meta = get_meta(circuit, name)
 
+                # Date-like empty sentinel is not a supported entity value;
+                # unlike normal no-data placeholders it cannot become useful
+                # through later polling and should not create a device.
+                if raw and raw.strip() == "-.-.-":
+                    continue
+
+                # Do not expose opaque multi-field ebusd values as a raw sensor.
+                # Registers with an explicit MULTI_FIELD_FIELDS mapping still
+                # generate their parsed field entities below.
+                if raw and ";" in raw and not multi_field_fields(rk) and not base_meta.friendly_name:
+                    continue
+
                 override = overrides.get(rk) or {}
                 meta = _merge_overrides(base_meta, override)
 

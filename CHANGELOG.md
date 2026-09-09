@@ -21,7 +21,7 @@
   normalized register categories, before/after changes, grouped telegrams,
   and backward-compatible legacy normalization.
 
-## 1.7.2 - 2026-09-09
+## 1.7.3 - 2026-09-09
 
 ### Added
 
@@ -31,6 +31,16 @@
 - **Unknown-telegram investigation workflow.** Documents systematic candidate
   inventory, upstream issue/PR searches, byte-level correlation, rate-limit
   handling, and evidence classification for community captures.
+
+### Fixed
+
+- **Composite register filtering.** Do not expose opaque multi-field values as
+  raw sensors when no field mapping exists, and ignore empty date sentinels such
+  as `-.-.-` so they do not create entities or devices.
+- **Device naming.** Give BAI and solar-controller circuits descriptive device
+  names instead of exposing raw circuit identifiers.
+- **Holiday regression coverage.** Verify future and active holiday periods and
+  controller-side values from HMUX0/CTLV fixtures.
 
 ## Unreleased
 
