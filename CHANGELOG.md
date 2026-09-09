@@ -21,6 +21,17 @@
   normalized register categories, before/after changes, grouped telegrams,
   and backward-compatible legacy normalization.
 
+## 1.8.0 - 2026-09-09
+
+### Added
+
+- **HMUX0 HW0504 telemetry.** Adds fixture- and upstream-backed runtime
+  definitions for `Status00` and `RunDataElPowerConsumption`, gated strictly
+  to HMUX0 HW0504 hardware so other HMU variants are unaffected.
+- **Unknown-telegram investigation workflow.** Documents systematic candidate
+  inventory, upstream issue/PR searches, byte-level correlation, rate-limit
+  handling, and evidence classification for community captures.
+
 ## Unreleased
 
 ### Added

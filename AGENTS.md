@@ -106,6 +106,33 @@ telegrams; capture them with `grab` and mine the unknown ones for new registers.
   unsupported. Search by register name, message ID, sub-address, and distinctive payload
   fragments where useful. Use `tools/search_upstream.sh`, including `--comments` and
   `--all` when appropriate; do not limit the search to the repository's CSV/TSP files.
+- **Unknown-telegram investigation is mandatory, not optional.** For every unknown
+  telegram that is relevant to the user request, create a candidate row before drawing
+  a conclusion. At minimum record: local dump(s), master, slave, message ID, sub-address,
+  request bytes, response length, response bytes, observed state(s), and occurrence
+  count. Deduplicate identical `(slave, message ID, sub-address)` candidates, but retain
+  state-specific payloads and counts.
+- Search each candidate systematically, not only by a guessed register name. Run
+  `tools/search_upstream.sh --comments --all` for: the complete message ID (`b511`),
+  message ID plus sub-address (`b511 0101`), request/payload fragments with and without
+  spaces, slave/device identifiers (`HMUX0`, `HW0504`), and any candidate name found in
+  search results. Also search relevant hardware terms and feature terms separately (for
+  example `Quiet mode`, `NoiseReduction`, `DeicingActive`). A zero-result search is
+  evidence only for that query, never proof that no mapping exists.
+- Search result handling must survive GitHub search rate limits. Cache command output,
+  reduce parallel requests, wait and retry when GitHub returns HTTP 403, and use direct
+  `gh issue view <number> --comments` / `gh pr view <number> --comments` for promising
+  threads. If search remains blocked, report the blocked queries and do not classify the
+  candidate as unsupported solely because of the failure.
+- Inspect every promising issue and PR in full, including comments. Extract exact CSV,
+  TSP, `define -r`, message/sub-address, field layout, hardware, firmware, and live-test
+  evidence. Then compare those fields with the local candidate byte-for-byte: master/slave,
+  message ID, sub-address, response length, field offsets, encoding, and plausible values.
+- Before concluding that no mapping exists, explicitly report the candidate inventory,
+  all upstream query variants attempted, matching threads (or confirmed no matches), and
+  why each candidate is `confirmed`, `strong assumption`, `speculative`, or remains
+  `discovery-only`. Never summarize this as merely “no unknown registers found” when the
+  dump contains unknown telegrams.
 - Treat upstream matches as evidence, not local live verification. Upstream/community
   evidence may be sufficient for production when classified `confirmed` or `strong
   assumption`, hardware scope is explicit, and absent-register behavior is safe. Open
