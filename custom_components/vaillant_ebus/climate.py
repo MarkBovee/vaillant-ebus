@@ -344,7 +344,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             today = datetime.now().date()
             end = today + timedelta(days=days)
             writes = [
-                ("ctlv2", "ManualCoolingEndDate", end.strftime(DATE_FMT)),
+                (self.coordinator.heating_circuit, "ManualCoolingEndDate", end.strftime(DATE_FMT)),
                 (self._circuit, f"{self._zn}OpMode", "auto"),
             ]
             return await self.coordinator.async_write_registers(writes)
@@ -357,7 +357,9 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # The controller manages the start date itself.
     async def _cancel_manual_cooling(self) -> bool:
         try:
-            return await self.coordinator.async_write_register("ctlv2", "ManualCoolingEndDate", HOLIDAY_RESET)
+            return await self.coordinator.async_write_register(
+                self.coordinator.heating_circuit, "ManualCoolingEndDate", HOLIDAY_RESET
+            )
         except Exception as exc:
             _LOGGER.exception("cancel manual cooling failed: %s", exc)
             return False
