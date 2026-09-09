@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.1 - 2026-09-09
+
+### Fixed
+
+- **Controller circuit selection.** Prefer the controller carrying climate and
+  DHW registers, and prefer `ctlv`/`basv`/`bass` controllers over `bai` when
+  multiple controller circuits are discovered. This restores DHW entities and
+  writes on installations where `bai` is discovered before `ctlv2`.
+
 ## 1.7.0 - 2026-09-09
 
 ### Added

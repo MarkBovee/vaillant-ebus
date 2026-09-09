@@ -1039,6 +1039,28 @@ async def test_heating_circuit_from_graph() -> None:
         assert c.heating_circuit == "ctlv2"
 
 
+async def test_heating_circuit_prefers_controller_with_control_registers() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        graph = _make_graph()
+        graph.nodes = {
+            "bai": DeviceNode(
+                circuit="bai",
+                device_type=DeviceType.HEATING_CONTROLLER,
+                registers=["bai.FlowTemp", "bai.StorageTemp"],
+                has_data=True,
+            ),
+            "ctlv0": DeviceNode(
+                circuit="ctlv0",
+                device_type=DeviceType.HEATING_CONTROLLER,
+                registers=["ctlv0.HwcTempDesired", "ctlv0.HwcOpMode"],
+                has_data=True,
+            ),
+        }
+        c._graph = graph
+        assert c.heating_circuit == "ctlv0"
+
+
 async def test_heating_circuit_fallback_no_graph() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
