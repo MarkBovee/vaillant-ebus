@@ -9,7 +9,9 @@ from enum import Enum
 # ebusd values that mean "no usable data" rather than a measured value.
 # Exact-match set; prefix/substring forms are handled by is_no_data_value().
 # "none" is deliberately excluded: RoomZoneMapping legitimately reports it.
-EBUSD_NO_DATA_VALUES: frozenset[str] = frozenset({"", "-", "empty", "unknown", "unavailable"})
+EBUSD_NO_DATA_VALUES: frozenset[str] = frozenset(
+    {"", "-", "empty", "unknown", "unavailable", "-.-.-"}
+)
 
 # Sensor fault statuses from the Vaillant sensor enum (Values_sensor in the
 # upstream ebusd configuration: ok=0, circuit=85, cutoff=170). Registers whose
@@ -201,6 +203,8 @@ def zero_idle_registers(registers: Mapping[str, EbusdRegister], hp_circuit: str 
 CIRCUIT_NAMES: dict[str, str] = {
     "hmu": "Vaillant aroTHERM heat pump",
     "basv": "Vaillant BASV2 Heating Control",
+    "bai": "Vaillant boiler controller",
+    "sc": "Vaillant solar controller",
     "z1": "Zone 1",
     "dhw": "Boiler (DHW)",
     "hc1": "Heating Circuit 1",

@@ -18,7 +18,7 @@ is_no_data_value = MODELS.is_no_data_value
 
 # Exact sentinel values carry no usable data
 def test_exact_sentinels() -> None:
-    for raw in ("", "-", "empty", "unknown", "unavailable"):
+    for raw in ("", "-", "empty", "unknown", "unavailable", "-.-.-"):
         assert is_no_data_value(raw), f"{raw!r} should be no-data"
 
 

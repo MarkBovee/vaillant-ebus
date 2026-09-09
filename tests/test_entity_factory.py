@@ -365,6 +365,38 @@ class TestRegisterMapFallback:
         result = svc.generate(graph)
         assert len(result) == 0, "Empty graph → no entities"
 
+    def test_unmapped_composite_register_is_not_exposed_as_raw_sensor(self) -> None:
+        graph = DeviceGraph(
+            nodes={
+                "bai": DeviceNode(
+                    circuit="bai",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=["bai.SetModeOverride"],
+                    has_data=True,
+                )
+            },
+            raw_registers={"bai.SetModeOverride": "0;55.0;45.0;-;-;0;0;0;-;0;0;0"},
+            placeholder_registers=set(),
+        )
+
+        assert EntityFactoryService().generate(graph) == []
+
+    def test_empty_date_value_is_not_exposed_as_sensor(self) -> None:
+        graph = DeviceGraph(
+            nodes={
+                "sc": DeviceNode(
+                    circuit="sc",
+                    device_type=DeviceType.SOLAR,
+                    registers=["sc.Date"],
+                    has_data=True,
+                )
+            },
+            raw_registers={"sc.Date": "-.-.-"},
+            placeholder_registers=set(),
+        )
+
+        assert EntityFactoryService().generate(graph) == []
+
 
 class TestBackwardCompatibility:
     """EntityDescription structure compatibility."""

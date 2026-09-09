@@ -206,6 +206,13 @@ async def test_coordinator_creates_entity_factory() -> None:
         assert isinstance(c.entity_factory, EntityFactoryService)
 
 
+async def test_device_names_for_bai_and_sc_are_descriptive() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        assert c.get_device_info("bai")["name"] == "Vaillant boiler controller"
+        assert c.get_device_info("sc")["name"] == "Vaillant solar controller"
+
+
 async def test_coordinator_seeds_from_cache() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
