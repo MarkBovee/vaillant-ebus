@@ -46,6 +46,23 @@
   resolution, with fixture coverage for the discovered circuit and absent-path
   coverage. Do not add another literal `ctlvN`, `hmu`, or `bai` fallback for one
   user's hardware.
+- **A discovered node is not proof of device role.** Runtime-defined fallback
+  registers can leave a stale alias node (for example a bare `ctlv2`) on a bus
+  whose real controller is a different variant (`ctlv3`). Resolve the controller
+  from the circuit that owns the control/DHW registers, and treat an exact node
+  as authoritative only when it is that owner. An exact node must never
+  short-circuit a unique, control-owning controller.
+- **A register's owner is its source circuit, not the node that lists it.**
+  Logical sub-devices aggregate registers under a parent (the `dhw` node owns
+  `ctlv3.HwcOpMode` while the `ctlv3` node lists no `Hwc*` registers). Identify
+  the owning circuit from each register's source circuit in
+  `DeviceGraph.raw_registers`.
+- **Never collapse "unavailable" into a default.** Sentinel/`no data stored`
+  means unavailable; a valid value looked up under the wrong circuit is a
+  resolution bug, not a data problem. Coercing `None` to a default hides it.
+  Likewise an explicit "unset" sentinel (for example holiday reset dates) is a
+  legitimate absent/false state, not `unknown`; only genuinely missing data is
+  unknown.
 
 ## Runtime-Defined Registers
 
@@ -64,6 +81,13 @@ r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800,value,,IGN:4,,,,v
 Use `EbusService.define_register()` for runtime definitions. Do not replace them with CSV uploads or an addon `--configpath` override.
 
 When changing `_fallback_read()`, preserve entity regeneration after newly readable registers are added.
+
+When a hardware variant's upstream CSV is absent or only partially compatible,
+define a minimal, evidence-backed runtime set instead of aliasing a generic CSV
+(the `08.hmux0.csv -> 08.hmu.csv` symlink for HMUX0 is the documented example).
+Keep the shared register families that the capture proves work, and drop only the
+layouts the capture proves incompatible. Never blanket-drop a whole family, and
+never copy a generic CSV wholesale.
 
 ## Climate Compatibility
 
@@ -237,6 +261,18 @@ When adding registers, devices, or metadata derived from community data:
 - Open GitHub issues may reference specific community dumps. When investigating an issue, load the matching fixture and confirm the register behavior on the discovered device graph before changing production code.
 - New community captures should be added under `tests/fixtures/community/` as discovery-dump YAML (preferred, keeps metadata and `raw_find_lines`) with a fixture-load test, never as a separate `data-dump/` folder.
 - **Fixtures are the correctness gate for community data.** A fixture-driven regression test replaces live ebusd verification for anything derived from user/upstream captures. Prefer this over asking for live access; only the owner's own hardware can ever be live-verified.
+- **Do not hand-trim a capture to "relevant" records.** Stripping apparently
+  unrelated entries can mask the bug: an issue #99 resolution regression only
+  reproduces because the real dump still carries the stale alias records. Keep
+  every raw `find` line the capture provides.
+- A discovery dump can carry both pre- and post-definition `find` output. Use the
+  post-definition lines (`load_find_lines(name, after=True)`) when a test asserts
+  the effective runtime state after the integration's `define` pass, and the raw
+  lines when it asserts the initial discovery state.
+- A regression test for reported invalid values should assert both rejection
+  (out-of-range/absurd decode becomes unavailable) and preservation (a plausible
+  value stays available); reject only the specific field, never clamp or
+  transform.
 
 ## Validation
 
