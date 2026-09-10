@@ -322,25 +322,74 @@ async def test_heat_pump_circuit_resolves_hmux0() -> None:
                 "hmux0": DeviceNode(
                     circuit="hmux0",
                     device_type=DeviceType.HEAT_PUMP,
-                    registers=["hmux0.RunDataStatuscode"],
+                    registers=["hmux0.RunDataStatuscode", "hmux0.RunDataReturnTemp", "hmux0.YieldHc", "hmux0.CopHc"],
                     has_data=True,
                     scan_type="HMUX0",
+                    scan_sw="0303",
+                    scan_hw="0504",
                 ),
                 "ctlv3": DeviceNode(
                     circuit="ctlv3",
                     device_type=DeviceType.HEATING_CONTROLLER,
-                    registers=["ctlv3.Z1OpMode"],
+                    registers=["ctlv3.Z1OpMode", "ctlv3.HwcStorageTemp", "ctlv3.HwcTempDesired", "ctlv3.HwcOpMode"],
                     has_data=True,
                     scan_type="CTLV3",
+                    scan_sw="0808",
+                    scan_hw="8004",
                     parent="hmux0",
                 ),
             },
-            raw_registers={"hmux0.RunDataStatuscode": "standby", "ctlv3.Z1OpMode": "day"},
+            raw_registers={
+                "hmux0.RunDataStatuscode": "standby",
+                "hmux0.RunDataReturnTemp": "28.2184",
+                "hmux0.YieldHc": "4662",
+                "hmux0.CopHc": "3.5",
+                "ctlv3.Z1OpMode": "day",
+                "ctlv3.HwcStorageTemp": "42.0",
+                "ctlv3.HwcTempDesired": "50",
+                "ctlv3.HwcOpMode": "auto",
+            },
             placeholder_registers=set(),
         )
         c._graph = graph
         assert c.heat_pump_circuit == "hmux0"
         assert c.heating_circuit == "ctlv3"
+        assert c.resolve_register_circuit("hmu") == "hmux0"
+        assert c.resolve_register_circuit("ctlv2") == "ctlv3"
+
+
+async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = AsyncMock()
+        c.ebus.is_connected = True
+        c._graph = DeviceGraph(
+            nodes={
+                "hmux0": DeviceNode(
+                    circuit="hmux0",
+                    device_type=DeviceType.HEAT_PUMP,
+                    registers=[],
+                    has_data=True,
+                    scan_type="HMUX0",
+                    scan_sw="0303",
+                    scan_hw="0504",
+                )
+            },
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+        c.ebus.define_register = AsyncMock(return_value="done")
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        hmux0 = [definition for definition in definitions if ",hmux0," in definition]
+        assert len(hmux0) == 11
+        assert all(",hmu," not in definition for definition in hmux0)
+        assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0)
+        assert any(",hmux0,YieldHc," in definition for definition in hmux0)
+        assert any(",hmux0,CopHwcMonth," in definition for definition in hmux0)
+
 
 
 async def test_legacy_register_aliases_resolve_to_discovered_circuits() -> None:

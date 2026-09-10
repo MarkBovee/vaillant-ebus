@@ -77,10 +77,33 @@ def test_hmux0_dhw_holiday_capture_keeps_controller_values_and_sentinels_unavail
     entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
 
     assert dump["raw_find_lines"]
+    assert graph.nodes["hmux0"].device_type.name == "HEAT_PUMP"
+    assert graph.nodes["ctlv3"].device_type.name == "HEATING_CONTROLLER"
+
+    # DHW and controller values are on ctlv3
+    assert graph.raw_registers["ctlv3.HwcStorageTemp"] == "42"
+    assert graph.raw_registers["ctlv3.HwcTempDesired"] == "50"
+    assert graph.raw_registers["ctlv3.HwcOpMode"] == "auto"
+    assert graph.raw_registers["ctlv3.HwcSFMode"] == "auto"
     assert graph.raw_registers["ctlv3.HwcHolidayStartPeriod"] == "01.01.2015"
     assert graph.raw_registers["ctlv3.HwcHolidayEndPeriod"] == "01.01.2015"
     assert graph.raw_registers["ctlv3.PrEnergySumHwc"] == "327"
+
+    assert "ctlv3.HwcStorageTemp.value" in entities
+    assert entities["ctlv3.HwcStorageTemp.value"].meta.device_class == "temperature"
+    assert entities["ctlv3.HwcStorageTemp.value"].meta.unit == "°C"
+    assert "ctlv3.HwcTempDesired.value" in entities
+    assert "ctlv3.HwcOpMode.value" in entities
     assert "ctlv3.PrEnergySumHwc.value" in entities
+
+    # HMUX0 heat pump telemetry
+    assert "hmux0.CopHc.value" in entities
+    assert "hmux0.CopHwc.value" in entities
+    assert "hmux0.BuildingCircuitFlow.value" in entities
+
+    # Invalid position registers in discovery must have no data and be classified as placeholder
+    assert "hmux0.ConsumptionTotal" in graph.placeholder_registers
+    assert "hmux0.ConsumptionTotal" not in graph.raw_registers
 
 
 def test_hmux0_holiday_capture_keeps_future_zone_holiday_values() -> None:

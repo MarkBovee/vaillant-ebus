@@ -659,6 +659,11 @@ class TestSourceTempMetadata:
 
         assert entities["hmux0.RunDataReturnTemp.value"].meta.device_class == "temperature"
         assert entities["hmux0.RunDataReturnTemp.value"].meta.unit == "°C"
+        assert entities["hmux0.YieldHc.value"].meta.device_class == "energy"
+        assert entities["hmux0.YieldHc.value"].meta.unit == "kWh"
+        assert entities["hmux0.YieldHc.value"].meta.state_class == "total_increasing"
+        assert entities["hmux0.CopHc.value"].meta.device_class == ""
+        assert entities["hmux0.CopHc.value"].meta.state_class == "measurement"
 
 
 class TestStateClassSemantics:

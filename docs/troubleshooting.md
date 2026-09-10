@@ -71,6 +71,21 @@ To clean manually:
 - Some registers are read-only by hardware design (eBUS spec limitation)
 - The integration returns a clear error message with the ebusd response
 
+## HMUX0 heat pump variants (aroTHERM VWL 55/8.2 etc.)
+
+Some aroTHERM heat pumps scan as `HMUX0` (e.g. `MF=Vaillant;ID=HMUX0;SW=0303;HW=0504`).
+Because upstream ebusd configuration matching may not automatically associate `HMUX0` with `08.hmu.csv`, ebusd might not load message definitions for the heat pump circuit.
+
+This is an **ebusd configuration matching issue**, not a limitation of this Home Assistant integration.
+To make ebusd load the definitions, create a configuration alias in the local ebusd configuration directory:
+
+```bash
+# In your local ebusd configuration directory (e.g. /config/ebusd-configuration/de/vaillant/):
+ln -s 08.hmu.csv 08.hmux0.csv
+```
+
+Once ebusd loads `08.hmux0.csv`, the integration automatically discovers and polls all supported HMUX0 telemetry (`RunDataReturnTemp`, `Yield*`, `Cop*`, flow/return temperatures). Note that some registers in `08.hmu.csv` (such as `YieldThisYear*` or `YieldTotal`) may return `(ERR: invalid position ...)` on HMUX0 HW0504 because the payload layout differs; the integration safely classifies these as unavailable without affecting valid registers.
+
 ## Need more help
 
 Enable debug logging in `config/configuration.yaml`:
