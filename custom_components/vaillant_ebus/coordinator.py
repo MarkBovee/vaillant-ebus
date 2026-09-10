@@ -54,6 +54,22 @@ ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 ENERGY_POLL_INTERVAL = timedelta(minutes=5)
 
+HMUX0_RUNTIME_REGISTERS = frozenset(
+    {
+        "RunDataReturnTemp",
+        "YieldHc",
+        "YieldHcDay",
+        "YieldHcMonth",
+        "YieldHwc",
+        "YieldHwcDay",
+        "YieldHwcMonth",
+        "CopHc",
+        "CopHcMonth",
+        "CopHwc",
+        "CopHwcMonth",
+    }
+)
+
 # Registers whose live (non-sentinel) value marks a discovered zone as
 # genuinely present. DayTemp/OpMode are excluded: ebusd reports static
 # defaults for these even on unused zones, so they cannot distinguish a real
@@ -359,7 +375,11 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._graph = graph
         await self._define_custom_registers()
         # Refresh once so newly defined registers enter the initial graph.
-        if any(key.endswith(".Status07") for key in self._runtime_definitions):
+        if any(
+            key.endswith(".Status07")
+            or key.rsplit(".", 1)[-1] in HMUX0_RUNTIME_REGISTERS
+            for key in self._runtime_definitions
+        ):
             graph = await self.discovery.discover()
         await self._apply_discovery_graph(graph, "initial")
         await repairs.async_dismiss_detection_incomplete(self.hass)
@@ -717,6 +737,45 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             f",1001ffff0304{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
             f",hmu DHW Electric Consumption Today",
         ]
+        heat_pump = next(
+            (
+                node
+                for node in (self._graph.nodes.values() if self._graph else [])
+                if node.device_type == DeviceType.HEAT_PUMP
+                and node.scan_type.upper() == "HMUX0"
+                and node.scan_sw == "0303"
+                and node.scan_hw == "0504"
+            ),
+            None,
+        )
+        if heat_pump:
+            circuit = heat_pump.circuit
+            defines.extend(
+                [
+                    f"r,{circuit},RunDataReturnTemp,RunDataReturnTemp,31,08,B509,5402000609"
+                    ",value,,IGN:4,,,,value,,D2C,,°C,HMUX0 return temperature",
+                    f"r,{circuit},YieldHc,YieldHc,31,08,B51A,05ff3210"
+                    ",value,,IGN:3,,,,value,,UIN,,kWh,HMUX0 heating yield",
+                    f"r,{circuit},YieldHcDay,YieldHcDay,31,08,B51A,05ff3200"
+                    ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 heating yield today",
+                    f"r,{circuit},YieldHcMonth,YieldHcMonth,31,08,B51A,05ff320e"
+                    ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 heating yield this month",
+                    f"r,{circuit},YieldHwc,YieldHwc,31,08,B51A,05ff3216"
+                    ",value,,IGN:3,,,,value,,UIN,,kWh,HMUX0 DHW yield",
+                    f"r,{circuit},YieldHwcDay,YieldHwcDay,31,08,B51A,05ff3202"
+                    ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 DHW yield today",
+                    f"r,{circuit},YieldHwcMonth,YieldHwcMonth,31,08,B51A,05ff3212"
+                    ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 DHW yield this month",
+                    f"r,{circuit},CopHc,CopHc,31,08,B51A,05ff3211"
+                    ",value,,IGN:3,,,,value,,UIN,10,,HMUX0 heating COP",
+                    f"r,{circuit},CopHcMonth,CopHcMonth,31,08,B51A,05ff320f"
+                    ",value,,IGN:3,,,,value,,UIN,10,,HMUX0 heating COP this month",
+                    f"r,{circuit},CopHwc,CopHwc,31,08,B51A,05ff3217"
+                    ",value,,IGN:3,,,,value,,UIN,10,,HMUX0 DHW COP",
+                    f"r,{circuit},CopHwcMonth,CopHwcMonth,31,08,B51A,05ff3213"
+                    ",value,,IGN:3,,,,value,,UIN,10,,HMUX0 DHW COP this month",
+                ]
+            )
         hmu = self._graph.nodes.get("hmu") if self._graph else None
         if not (hmu and hmu.scan_type.upper() == "HMUX0" and hmu.scan_hw == "0504"):
             defines = [

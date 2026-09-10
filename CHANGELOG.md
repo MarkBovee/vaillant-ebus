@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.5 - 2026-09-10
+
+### Fixed
+
+- **HMUX0 HW0504 telemetry and DHW separation (#99).** Verified full end-to-end
+  resolution of HMUX0 telemetry (`RunDataReturnTemp`, heating/DHW `Yield*`,
+  heating/DHW `Cop*`) alongside CTLV3 DHW and controller management.
+- **DHW and Holiday handling.** Reinforced regression testing and documentation
+  for reset sentinels (`01.01.2015`, `01.01.2019`) preventing false active holiday
+  states, and confirmed `water_heater` entity behavior against live CTLV3 registers.
+- **HMUX0 configuration documentation.** Documented the ebusd configuration
+  alias requirement (`08.hmux0.csv -> 08.hmu.csv`) in troubleshooting guidance,
+  clarifying that this is an upstream ebusd scan matching workaround and explaining
+  that `(ERR: invalid position ...)` responses on unsupported registers are safely
+  classified as unavailable.
+
 ## 1.7.4 - 2026-09-09
 
 ### Fixed

@@ -172,3 +172,24 @@ def test_water_heater_current_operation_boost_desired() -> None:
 def test_holiday_reset_values_are_not_active() -> None:
     assert _is_holiday_active("01.01.2015", "01.01.2015") is False
     assert _is_holiday_active("01.01.2019", "01.01.2019") is False
+
+
+def test_water_heater_properties_and_holiday_handling() -> None:
+    c = _coordinator(dhw_boost_desired=None, sfmode="auto")
+    c.data["ebusd"].update(
+        {
+            "basv.HwcStorageTemp.value": "48.5",
+            "basv.HwcTempDesired.value": "52",
+            "basv.HwcHolidayStartPeriod.value": "01.01.2015",
+            "basv.HwcHolidayEndPeriod.value": "01.01.2015",
+        }
+    )
+    wh = EbusdWaterHeater(c, _entry())
+    assert wh.current_temperature == 48.5
+    assert wh.target_temperature == 52.0
+    assert wh.current_operation == "auto"
+    assert wh.is_away_mode_on is None
+    # Test 01.01.2019 reset sentinel as well
+    c.data["ebusd"]["basv.HwcHolidayStartPeriod.value"] = "01.01.2019"
+    c.data["ebusd"]["basv.HwcHolidayEndPeriod.value"] = "01.01.2019"
+    assert wh.is_away_mode_on is None
