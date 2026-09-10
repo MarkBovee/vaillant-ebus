@@ -32,6 +32,7 @@ from .backend.models import (
     EbusdRegister,
     ResolutionStatus,
     is_no_data_value,
+    is_valid_hmux0_return_temperature,
     zero_idle_registers,
 )
 from .const import (
@@ -88,7 +89,7 @@ class CoordinatorState(TypedDict):
 
 
 def _usable_register_value(register_key: str, raw: str | None) -> str | None:
-    """Reject ebusd sentinels and invalid source-temperature stub values."""
+    """Reject ebusd sentinels and known invalid temperature decodes."""
     if raw is None or is_no_data_value(raw):
         return None
     if register_key.lower() == "hmu.sourcetempinput":
@@ -97,6 +98,8 @@ def _usable_register_value(register_key: str, raw: str | None) -> str | None:
                 return None
         except ValueError:
             return None
+    if register_key.lower() == "hmux0.rundatareturntemp" and not is_valid_hmux0_return_temperature(raw):
+        return None
     return raw
 
 
@@ -352,7 +355,6 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if version:
             _LOGGER.info("ebusd version: %s", version)
 
-        await self._define_custom_registers()
         try:
             graph = await self.discovery.discover()
         except Exception as exc:
@@ -362,15 +364,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             _LOGGER.warning("ebusd discovery failed: %s", exc)
             return
 
-        # HW5103 Status07 is gated in _define_custom_registers by scan identity.
-        # The first discovery supplies scan identity for hardware-specific additions.
+        # Scan-only nodes preserve identity when ebusd has no matching CSV. Runtime
+        # definitions are therefore always resolved from discovered ownership.
         self._graph = graph
         await self._define_custom_registers()
-        # Refresh once so newly defined registers enter the initial graph.
-        if any(
-            key.endswith(".Status07") or key.rsplit(".", 1)[-1] in HMUX0_RUNTIME_REGISTERS
-            for key in self._runtime_definitions
-        ):
+        # Refresh once so every newly defined register enters the initial graph.
+        # This also avoids polling generic HMU definitions before scan discovery
+        # can identify an HMUX0 device.
+        if self._runtime_definitions:
             graph = await self.discovery.discover()
         await self._apply_discovery_graph(graph, "initial")
         await repairs.async_dismiss_detection_incomplete(self.hass)
@@ -720,6 +721,18 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             f",hmu DHW Electric Consumption Today",
         ]
 
+        heat_pump = self._graph.heat_pump_result().node if self._graph is not None else None
+        is_hmux0_0303_0504 = bool(
+            heat_pump
+            and heat_pump.scan_type.upper() == "HMUX0"
+            and heat_pump.scan_sw == "0303"
+            and heat_pump.scan_hw == "0504"
+        )
+        # Generic HMU layouts are not valid for this HMUX0 variant. Define only
+        # the independently evidenced HMUX0 register set below.
+        if heat_pump and heat_pump.scan_type.upper() == "HMUX0":
+            defines = [definition for definition in defines if definition.split(",", 3)[1] != "hmu"]
+
         # Resolve logical definition circuits only after discovery identifies their owners.
         # Drop definitions whose logical owner is ambiguous instead of guessing.
         def _resolve_definition_circuit(definition: str) -> str | None:
@@ -742,13 +755,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return ",".join(parts)
 
         defines = [definition for definition in (_resolve_definition_circuit(item) for item in defines) if definition]
-        heat_pump = self._graph.heat_pump_result().node if self._graph is not None else None
-        if (
-            heat_pump
-            and heat_pump.scan_type.upper() == "HMUX0"
-            and heat_pump.scan_sw == "0303"
-            and heat_pump.scan_hw == "0504"
-        ):
+        if is_hmux0_0303_0504:
+            assert heat_pump is not None
             circuit = heat_pump.circuit
             defines.extend(
                 [
@@ -774,7 +782,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     ",value,,IGN:3,,,,value,,UIN,10,,HMUX0 DHW COP this month",
                 ]
             )
-        if not (heat_pump and heat_pump.scan_type.upper() == "HMUX0" and heat_pump.scan_hw == "0504"):
+        if not is_hmux0_0303_0504:
             defines = [
                 definition
                 for definition in defines
@@ -975,7 +983,12 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return candidates[0]
         return None
 
-    async def _fallback_read(self, include_placeholders: bool = False, include_energy: bool = False) -> None:
+    async def _fallback_read(
+        self,
+        include_placeholders: bool = False,
+        include_energy: bool = False,
+        skip_cache: set[str] | None = None,
+    ) -> None:
         if not self.ebus or not self.ebus.is_connected:
             return
         graph_keys = self._last_find_keys
@@ -1065,7 +1078,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     cache = await self._async_load_cache()
                     cached = cache.get(f"{circuit}.{name}.value")
                     cached = _usable_register_value(key, cached)
-                    if cached is not None:
+                    if cached is not None and key not in (skip_cache or set()):
                         value = cached
                 if value is not None:
                     read_with_data += 1
@@ -1128,12 +1141,21 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     await self._define_custom_registers()
                 lines = await self.ebus.find_registers()
                 updated = 0
+                invalid_values: set[str] = set()
                 for line in lines:
                     # Shared parser: sentinel/no-data values come back as None.
                     circuit, name, val = DiscoveryService._parse_register(line)
-                    if not circuit or not name or val is None:
+                    if not circuit or not name:
                         continue
                     key = f"{circuit}.{name}"
+                    if val is None:
+                        if key.lower() == "hmux0.rundatareturntemp":
+                            raw = line.split("=", 1)[1].strip()
+                            if not is_no_data_value(raw):
+                                invalid_values.add(key)
+                            if key in self.registers:
+                                self.registers[key].value["value"] = None
+                        continue
                     val = _usable_register_value(key, val)
                     if val is None:
                         continue
@@ -1155,7 +1177,11 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 poll_placeholders = now - self._last_placeholder_poll >= PLACEHOLDER_POLL_INTERVAL
                 if poll_placeholders:
                     self._last_placeholder_poll = now
-                await self._fallback_read(include_placeholders=poll_placeholders, include_energy=poll_energy)
+                await self._fallback_read(
+                    include_placeholders=poll_placeholders,
+                    include_energy=poll_energy,
+                    skip_cache=invalid_values,
+                )
                 self._disable_no_data_registry_entities(self.entities)
                 if poll_energy:
                     self._last_energy_poll = now
@@ -1189,6 +1215,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self,
         writes: list[tuple[str, str, str]],
         strict_verify: bool = True,
+        refresh: bool = True,
     ) -> bool:
         if not self.ebus or not self.ebus.is_connected:
             return False
@@ -1201,12 +1228,20 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if not result.success:
                 _LOGGER.warning("Write failed %s.%s=%s: %s", circuit, name, value, result.error_message)
                 return False
-        await self.async_request_refresh()
+        if refresh:
+            await self.async_request_refresh()
         return True
 
     # Convenience wrapper for a single-register write through the central path.
-    async def async_write_register(self, circuit: str, name: str, value: str, strict_verify: bool = True) -> bool:
-        return await self.async_write_registers([(circuit, name, value)], strict_verify=strict_verify)
+    async def async_write_register(
+        self,
+        circuit: str,
+        name: str,
+        value: str,
+        strict_verify: bool = True,
+        refresh: bool = True,
+    ) -> bool:
+        return await self.async_write_registers([(circuit, name, value)], strict_verify=strict_verify, refresh=refresh)
 
     async def async_set_mode_override(
         self,

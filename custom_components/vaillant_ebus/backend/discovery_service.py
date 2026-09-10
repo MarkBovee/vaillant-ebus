@@ -6,7 +6,7 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, NamedTuple
 
-from .models import DeviceGraph, DeviceNode, DeviceType, is_no_data_value
+from .models import DeviceGraph, DeviceNode, DeviceType, is_no_data_value, is_valid_hmux0_return_temperature
 
 if TYPE_CHECKING:
     from .ebus_service import EbusService
@@ -84,6 +84,9 @@ class DiscoveryService:
                 if float(val) < -100:
                     return ParsedRegister(circuit, name, None)
             except ValueError:
+                return ParsedRegister(circuit, name, None)
+        if circuit.lower() == "hmux0" and name.lower() == "rundatareturntemp":
+            if not is_valid_hmux0_return_temperature(val):
                 return ParsedRegister(circuit, name, None)
         return ParsedRegister(circuit, name, val)
 
@@ -170,17 +173,18 @@ class DiscoveryService:
     def build_device_graph(find_lines: list[str]) -> DeviceGraph:
         raw_registers: dict[str, str] = {}
         placeholder_registers: set[str] = set()
-        scan_entries: list[ScanEntry] = []
+        scan_entries = [scan for line in find_lines if (scan := DiscoveryService._parse_scan(line)) is not None]
+        suppress_hmu_alias = _is_hmux0_0303_0504_without_hmu(scan_entries)
         regs_by_circuit: dict[str, list[str]] = {}
 
         for line in find_lines:
-            scan = DiscoveryService._parse_scan(line)
-            if scan is not None:
-                scan_entries.append(scan)
+            if DiscoveryService._parse_scan(line) is not None:
                 continue
 
             circuit, name, value = DiscoveryService._parse_register(line)
             if not circuit or not name:
+                continue
+            if suppress_hmu_alias and circuit.lower() == "hmu":
                 continue
 
             if circuit.lower() == "hmu" and name.lower() == "sourcetempinput":
@@ -281,6 +285,23 @@ class DiscoveryService:
                         node.heating_circuits.append(f"hc{zn}")
 
             nodes[circuit] = node
+
+        # A scan is evidence of a physical device even if ebusd has no matching
+        # CSV yet. Retain its identity so narrowly scoped runtime definitions can
+        # bootstrap that device without guessing a different circuit name.
+        for circuit, metadata in _scan_only_circuits(scan_entries, regs_by_circuit).items():
+            if circuit in nodes:
+                continue
+            device_type = DiscoveryService.categorize_circuit(circuit, [], metadata.scan_type)
+            if device_type == DeviceType.UNKNOWN:
+                continue
+            nodes[circuit] = DeviceNode(
+                circuit=circuit,
+                device_type=device_type,
+                scan_type=metadata.scan_type,
+                scan_sw=metadata.scan_sw,
+                scan_hw=metadata.scan_hw,
+            )
 
         _apply_relationships(nodes, sub_devices)
 
@@ -540,6 +561,48 @@ def _match_scan_to_circuits(
             claimed.add(scan_type.lower())
 
     return result
+
+
+def _scan_only_circuits(
+    scan_entries: Sequence[ScanEntry], regs_by_circuit: dict[str, list[str]]
+) -> dict[str, ScanMetadata]:
+    """Expose an HMUX0 scan when ebusd does not expose an HMUX0 circuit."""
+    if any(_normalize_name(circuit) == "hmux0" for circuit in regs_by_circuit):
+        return {}
+    scans: dict[str, ScanMetadata] = {}
+    conflicts: set[str] = set()
+    for entry in scan_entries:
+        key = _normalize_name(entry.scan_type)
+        if key in conflicts or key != "hmux0":
+            continue
+        current = scans.get(key)
+        if current is None:
+            scans[key] = ScanMetadata(entry.scan_type, entry.scan_sw, entry.scan_hw)
+            continue
+        if (current.scan_sw and entry.scan_sw and current.scan_sw != entry.scan_sw) or (
+            current.scan_hw and entry.scan_hw and current.scan_hw != entry.scan_hw
+        ):
+            scans.pop(key, None)
+            conflicts.add(key)
+            continue
+        scans[key] = ScanMetadata(
+            current.scan_type,
+            current.scan_sw or entry.scan_sw,
+            current.scan_hw or entry.scan_hw,
+        )
+    result: dict[str, ScanMetadata] = {}
+    for circuit, metadata in scans.items():
+        if _categorize_by_scan_type(circuit, metadata.scan_type) is not None:
+            result[circuit] = metadata
+    return result
+
+
+def _is_hmux0_0303_0504_without_hmu(scan_entries: Sequence[ScanEntry]) -> bool:
+    """Identify confirmed HMUX0 hardware without an independently scanned HMU."""
+    hmux0 = [entry for entry in scan_entries if _normalize_name(entry.scan_type) == "hmux0"]
+    if not hmux0 or any(entry.scan_sw != "0303" or entry.scan_hw != "0504" for entry in hmux0):
+        return False
+    return not any(_name_family(entry.scan_type) == "hmu" for entry in scan_entries)
 
 
 # Link discovered logical devices to their source circuit and heat-pump parents.

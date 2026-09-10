@@ -147,7 +147,7 @@ COORDINATOR = importlib.util.module_from_spec(COORDINATOR_SPEC)
 sys.modules["vaillant_ebus.coordinator"] = COORDINATOR
 COORDINATOR_SPEC.loader.exec_module(COORDINATOR)
 
-from vaillant_ebus.coordinator import VaillantCoordinator, _register_values  # noqa: E402
+from vaillant_ebus.coordinator import VaillantCoordinator, _register_values, _usable_register_value  # noqa: E402
 
 
 def _hass(cache_dir: str) -> MagicMock:
@@ -418,11 +418,13 @@ async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0 = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0) == 23
+        assert len(hmux0) == 11
         assert all(",hmu," not in definition for definition in hmux0)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0)
         assert any(",hmux0,CopHwcMonth," in definition for definition in hmux0)
+        assert not any(",Status00," in definition for definition in definitions)
+        assert not any(",RunDataElPowerConsumption," in definition for definition in definitions)
 
 
 # Intent: keep legacy runtime definition templates on their discovered owner.
@@ -573,7 +575,7 @@ async def test_connect_schedules_one_delayed_rediscovery() -> None:
         assert calls[1].args[1] == timedelta(minutes=15)
         delayed_callback = calls[0].args[2]
         await delayed_callback(datetime.now())
-        assert mock_discovery.discover.await_count == 2
+        assert mock_discovery.discover.await_count == 3
         schedule.assert_called()
 
 
@@ -713,28 +715,7 @@ async def test_status07_definition_is_gated_to_hm5103() -> None:
         assert "display_b5_noisereduction" in status07
 
 
-async def test_hmux0_strong_assumption_definitions_are_additive() -> None:
-    with tempfile.TemporaryDirectory() as tmpdir:
-        c = VaillantCoordinator(_hass(tmpdir), _entry())
-        c.ebus = MagicMock(spec=EbusService)
-        c.ebus.is_connected = True
-        c.ebus.define_register = AsyncMock(return_value="done")
-        c._graph = _make_graph()
-        c._graph.nodes["hmu"].scan_type = "HMUX0"
-        c._graph.nodes["hmu"].scan_hw = "0504"
-
-        await c._define_custom_registers()
-
-        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
-        status00 = next(definition for definition in definitions if ",Status00," in definition)
-        power = next(definition for definition in definitions if ",RunDataElPowerConsumption," in definition)
-        assert ",B511,00," in status00
-        assert "defrost,,UCH,0=inactive;32=active" in status00
-        assert ",B509,055402005b0d," in power
-        assert ",value,,EXP,,W," in power
-
-
-async def test_hmux0_strong_assumption_definitions_skip_other_hardware() -> None:
+async def test_hmux0_unproven_definitions_are_not_enabled() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
         c.ebus = MagicMock(spec=EbusService)
@@ -793,7 +774,7 @@ async def test_hmux0_runtime_definitions_use_issue99_fixture_metadata() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_defs = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_defs) == 23
+        assert len(hmux0_defs) == 11
         assert all(",hmu," not in definition for definition in hmux0_defs)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0_defs)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0_defs)
@@ -826,6 +807,145 @@ async def test_hmux0_other_firmware_gets_scan_metadata_without_yield_definitions
         assert not any(",hmux0," in definition for definition in definitions)
         assert not any(",Status00," in definition for definition in definitions)
         assert not any(",RunDataElPowerConsumption," in definition for definition in definitions)
+
+
+async def test_hmux0_scan_bootstrap_defines_only_confirmed_registers() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            ["scan.08 = Vaillant;HMUX0;0303;0504", "ctlv3 HwcOpMode = auto"]
+        )
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        hmux0_definitions = [definition for definition in definitions if ",hmux0," in definition]
+        assert len(hmux0_definitions) == 11
+        assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
+
+
+async def test_hmux0_scan_bootstrap_rediscovers_defined_registers() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        initial_lines = ["scan.08 = Vaillant;HMUX0;0303;0504", "ctlv3 HwcOpMode = auto"]
+        defined_lines = [
+            *initial_lines,
+            "hmux0 RunDataReturnTemp = 28.2184",
+            "hmux0 YieldHc = 4662",
+            "hmux0 CopHc = 3.5",
+        ]
+        first_graph = DISCOVERY.DiscoveryService.build_device_graph(initial_lines)
+        final_graph = DISCOVERY.DiscoveryService.build_device_graph(defined_lines)
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.version = "26.1"
+        mock_ebus.connect = AsyncMock()
+        mock_ebus.define_register = AsyncMock(return_value="done")
+        mock_ebus.read_register = AsyncMock(return_value=None)
+        discovery = MagicMock()
+        discovery.discover = AsyncMock(side_effect=(first_graph, final_graph))
+        module = sys.modules["vaillant_ebus.coordinator"]
+        original_ebus = module.EbusService
+        original_discovery = module.DiscoveryService
+        module.EbusService = MagicMock(return_value=mock_ebus)
+        module.DiscoveryService = MagicMock(return_value=discovery)
+        try:
+            await c._ebusd_connect_and_discover()
+        finally:
+            module.EbusService = original_ebus
+            module.DiscoveryService = original_discovery
+
+        assert discovery.discover.await_count == 2
+        definitions = [call.args[0] for call in mock_ebus.define_register.await_args_list]
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 11
+        assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
+        assert c.heat_pump_circuit == "hmux0"
+        assert c.heating_circuit == "ctlv3"
+        assert c._graph is not None
+        assert c._graph.raw_registers["hmux0.RunDataReturnTemp"] == "28.2184"
+
+
+async def test_hmux0_scan_bootstrap_ignores_generic_hmu_alias_definitions() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            [
+                "scan.08 = Vaillant;HMUX0;0303;0504",
+                "hmu YieldTotal =  (ERR: invalid position)",
+                "ctlv3 HwcOpMode = auto",
+            ]
+        )
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 11
+        assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
+
+
+@pytest.mark.parametrize("raw", ("1082.88", "-423.75"))
+def test_usable_value_rejects_invalid_hmux0_return_temperature(raw: str) -> None:
+    assert _usable_register_value("hmux0.RunDataReturnTemp", raw) is None
+
+
+@pytest.mark.parametrize("raw", ("28.0172", "28.2184"))
+def test_usable_value_keeps_valid_hmux0_return_temperature(raw: str) -> None:
+    assert _usable_register_value("hmux0.RunDataReturnTemp", raw) == raw
+
+
+async def test_hmux0_return_temperature_clears_after_invalid_poll() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(["hmux0 RunDataReturnTemp = 28.2184"])
+        c.registers["hmux0.RunDataReturnTemp"] = EbusdRegister(
+            circuit="hmux0",
+            name="RunDataReturnTemp",
+            fields=["value"],
+            value={"value": "28.2184"},
+            has_data=True,
+        )
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.find_registers = AsyncMock(return_value=["hmux0 RunDataReturnTemp = -423.75"])
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c._last_energy_poll = datetime.now()
+
+        values = await c._async_update_data()
+
+        assert c.registers["hmux0.RunDataReturnTemp"].value["value"] is None
+        assert "hmux0.RunDataReturnTemp.value" not in values["ebusd"]
+
+
+async def test_hmux0_return_temperature_invalid_poll_does_not_restore_cache() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(["hmux0 RunDataReturnTemp = 28.2184"])
+        c.registers["hmux0.RunDataReturnTemp"] = EbusdRegister(
+            circuit="hmux0",
+            name="RunDataReturnTemp",
+            fields=["value"],
+            value={"value": "28.2184"},
+            has_data=True,
+        )
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.find_registers = AsyncMock(return_value=["hmux0 RunDataReturnTemp = 1082.88"])
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c._async_load_cache = AsyncMock(return_value={"hmux0.RunDataReturnTemp.value": "28.2184"})
+        c._last_energy_poll = datetime.now()
+
+        values = await c._async_update_data()
+
+        assert c.registers["hmux0.RunDataReturnTemp"].value["value"] is None
+        assert "hmux0.RunDataReturnTemp.value" not in values["ebusd"]
 
 
 async def test_runtime_definitions_roll_over_and_retry_failures(monkeypatch) -> None:
@@ -1721,7 +1841,7 @@ async def test_orchestration_order() -> None:
             assert "connect" in call_log
             assert "define" in call_log
             assert "find" in call_log
-            assert call_log.index("connect") < call_log.index("define") < call_log.index("find")
+            assert call_log.index("connect") < call_log.index("find") < call_log.index("define")
             assert len(c.entities) > 0
     finally:
         module.EbusService = orig_ebus

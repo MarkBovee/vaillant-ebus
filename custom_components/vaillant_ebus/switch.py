@@ -54,9 +54,7 @@ async def async_setup_entry(
             HwcAwayModeSwitch(coordinator, entry),
         ]
     )
-    coordinator.register_entity_adder(
-        "switch", lambda descriptions: async_add_entities(_build(descriptions))
-    )
+    coordinator.register_entity_adder("switch", lambda descriptions: async_add_entities(_build(descriptions)))
 
 
 class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
@@ -110,7 +108,7 @@ def _parse_date(raw: str | None) -> date | None:
         return None
     try:
         return datetime.strptime(raw.strip(), "%d.%m.%Y").date()
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -230,16 +228,24 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         circuit = self.coordinator.heating_circuit
         if circuit is None:
             return
-        self.coordinator.dhw_boost_desired = True
-        await self.coordinator.async_write_register(circuit, "HwcSFMode", "load", strict_verify=False)
+        if await self.coordinator.async_write_register(
+            circuit, "HwcSFMode", "load", strict_verify=False, refresh=False
+        ):
+            self.coordinator.dhw_boost_desired = True
+            self.coordinator.async_update_listeners()
+            await self.coordinator.async_request_refresh()
 
     # Write "auto" to HwcSFMode to stop DHW boost
     async def async_turn_off(self, **kwargs: Any) -> None:
         circuit = self.coordinator.heating_circuit
         if circuit is None:
             return
-        self.coordinator.dhw_boost_desired = False
-        await self.coordinator.async_write_register(circuit, "HwcSFMode", "auto", strict_verify=False)
+        if await self.coordinator.async_write_register(
+            circuit, "HwcSFMode", "auto", strict_verify=False, refresh=False
+        ):
+            self.coordinator.dhw_boost_desired = False
+            self.coordinator.async_update_listeners()
+            await self.coordinator.async_request_refresh()
 
 
 class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):

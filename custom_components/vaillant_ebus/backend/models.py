@@ -35,6 +35,14 @@ def is_no_data_value(raw: str | None) -> bool:
     return low.startswith("no data stored") or low.startswith("(empty ") or low.startswith("err:") or "(err" in low
 
 
+def is_valid_hmux0_return_temperature(raw: str) -> bool:
+    """Return whether an HMUX0 return-temperature decode is physically plausible."""
+    try:
+        return -50 <= float(raw) <= 100
+    except ValueError:
+        return False
+
+
 COMPRESSOR_ACTIVE_STATUS_CODES = {104, 114, 134}
 COMPRESSOR_STATUS_CODES = {
     34,

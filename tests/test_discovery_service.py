@@ -171,6 +171,65 @@ def test_scan_matching_does_not_cross_hmu_hmux_families() -> None:
     assert "hmu" not in result
 
 
+def test_scan_only_hmux0_creates_heat_pump_node_for_runtime_bootstrap() -> None:
+    graph = DiscoveryService.build_device_graph(["scan.08 = Vaillant;HMUX0;0303;0504", "ctlv3 HwcOpMode = auto"])
+
+    hmux0 = graph.nodes["hmux0"]
+    assert hmux0.device_type == DeviceType.HEAT_PUMP
+    assert hmux0.registers == []
+    assert (hmux0.scan_type, hmux0.scan_sw, hmux0.scan_hw) == ("HMUX0", "0303", "0504")
+
+
+def test_scan_only_hmux0_rejects_conflicting_identity() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.08 = Vaillant;HMUX0;0303;0504",
+            "scan.08 = Vaillant;HMUX0;0406;0504",
+            "ctlv3 HwcOpMode = auto",
+        ]
+    )
+
+    assert "hmux0" not in graph.nodes
+
+
+def test_scan_only_hmux0_overrides_generic_hmu_alias_circuit() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.08 = Vaillant;HMUX0;0303;0504",
+            "hmu YieldTotal =  (ERR: invalid position)",
+            "ctlv3 HwcOpMode = auto",
+        ]
+    )
+
+    assert graph.nodes["hmux0"].device_type == DeviceType.HEAT_PUMP
+
+
+def test_scan_only_hmux0_suppresses_generic_hmu_alias_records() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.08 = Vaillant;HMUX0;0303;0504",
+            "hmu YieldTotal = 1234",
+            "ctlv3 HwcOpMode = auto",
+        ]
+    )
+
+    assert "hmu" not in graph.nodes
+    assert "hmu.YieldTotal" not in graph.raw_registers
+    assert graph.nodes["ctlv3"].parent == "hmux0"
+
+
+def test_scan_only_hmux0_keeps_separately_scanned_hmu() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.08 = Vaillant;HMUX0;0303;0504",
+            "scan.09 = Vaillant;HMU00;0901;5103",
+            "hmu YieldTotal = 1234",
+        ]
+    )
+
+    assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+
+
 def test_scan_matching_sibling_circuits_each_get_own_scan() -> None:
     result = match_scan_to_circuits(
         [("08", "HMU00", "0901", "5103"), ("08", "HMUX0", "0303", "0504")],
@@ -1097,6 +1156,20 @@ def test_parse_register_empty_with_meta() -> None:
 def test_parse_register_partial_value_with_error_is_unavailable() -> None:
     _, _, value = DiscoveryService._parse_register("sc YieldThisYear = 0;32768;13056;0 (ERR: invalid position)")
     assert value is None
+
+
+@pytest.mark.parametrize("raw", ("1082.88", "-423.75"))
+def test_parse_register_rejects_invalid_hmux0_return_temperature(raw: str) -> None:
+    _, _, value = DiscoveryService._parse_register(f"hmux0 RunDataReturnTemp = {raw}")
+
+    assert value is None
+
+
+@pytest.mark.parametrize("raw", ("28.0172", "28.2184"))
+def test_parse_register_keeps_valid_hmux0_return_temperature(raw: str) -> None:
+    _, _, value = DiscoveryService._parse_register(f"hmux0 RunDataReturnTemp = {raw}")
+
+    assert value == raw
 
 
 def test_scan_metadata_present_in_nodes() -> None:

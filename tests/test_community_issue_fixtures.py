@@ -53,6 +53,36 @@ def test_hmux0_latest_issue99_values_keep_entity_metadata() -> None:
 
 
 @pytest.mark.parametrize(
+    ("fixture", "invalid_return_temperature"),
+    (
+        ("community/hmux0_issue99_2026-09-10_170850.yaml", "1082.88"),
+        ("community/hmux0_issue99_2026-09-10_173229.yaml", "-423.75"),
+    ),
+)
+def test_latest_issue99_dumps_keep_ctlv3_dhw_and_reject_invalid_hmux0_temperature(
+    fixture: str, invalid_return_temperature: str
+) -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines(fixture))
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    assert graph.nodes["hmux0"].device_type.name == "HEAT_PUMP"
+    assert graph.nodes["ctlv3"].device_type.name == "HEATING_CONTROLLER"
+    assert graph.raw_registers["ctlv3.HwcOpMode"] == "auto"
+    assert graph.raw_registers["ctlv3.HwcSFMode"] == "auto"
+    assert graph.raw_registers["ctlv3.HwcStorageTemp"] == "45"
+    assert graph.raw_registers["ctlv3.HwcTempDesired"] == "48"
+    assert graph.raw_registers["ctlv3.HwcHolidayStartPeriod"] == "01.01.2015"
+    assert graph.raw_registers["ctlv3.HwcHolidayEndPeriod"] == "01.01.2015"
+    assert "hmux0.RunDataReturnTemp" not in graph.raw_registers
+    assert "hmux0.RunDataReturnTemp" in graph.placeholder_registers
+    assert entities["hmux0.RunDataReturnTemp.value"].raw_value == ""
+    assert invalid_return_temperature in ("1082.88", "-423.75")
+
+    for register in ("YieldHc", "YieldHwc", "CopHc", "CopHwc"):
+        assert graph.raw_registers[f"hmux0.{register}"]
+
+
+@pytest.mark.parametrize(
     "fixture",
     (
         "community/arotherm_pro7_quiet_off_idle_discovery.yaml",
@@ -109,9 +139,7 @@ def test_hmux0_dhw_holiday_capture_keeps_controller_values_and_sentinels_unavail
 def test_hmux0_holiday_capture_keeps_future_zone_holiday_values() -> None:
     """Controller holiday dates must survive discovery as ctlv3 values."""
     dump = load_discovery_dump("community/arotherm_hmux0_dhw_holiday_discovery.yaml")
-    graph = DiscoveryService.build_device_graph(
-        load_find_lines("community/arotherm_hmux0_dhw_holiday_discovery.yaml")
-    )
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_hmux0_dhw_holiday_discovery.yaml"))
 
     assert dump["metadata"]["dump_version"] == 3
     assert graph.raw_registers["ctlv3.Z1HolidayStartPeriod"] == "26.09.2026"

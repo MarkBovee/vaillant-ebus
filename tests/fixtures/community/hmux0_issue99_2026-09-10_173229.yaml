@@ -1,0 +1,27 @@
+# Relevant discovery records from issue #99 dump 2026-09-10T17:32:30.
+# The full user-supplied dump is retained in the issue attachment.
+metadata:
+  timestamp: '2026-09-10T17:32:30.029116'
+  ebusd_version: ebusd 26.1.26.1
+  integration_version: 1.7.6
+  source: https://github.com/user-attachments/files/32067218/discovery_dump_2026-09-10_173229.yaml
+raw_find_lines:
+  - scan.08 = Vaillant;HMUX0;0303;0504
+  - scan.15 = Vaillant;CTLV3;0808;8004
+  - ctlv3 HwcHolidayEndPeriod = 01.01.2015
+  - ctlv3 HwcHolidayStartPeriod = 01.01.2015
+  - ctlv3 HwcOpMode = auto
+  - ctlv3 HwcSFMode = auto
+  - ctlv3 HwcStorageTemp = 45
+  - ctlv3 HwcTempDesired = 48
+  - hmux0 RunDataReturnTemp = -423.75
+  - hmux0 CopHc = 3.5
+  - hmux0 CopHcMonth = 3.3
+  - hmux0 CopHwc = 2.8
+  - hmux0 CopHwcMonth = 3.1
+  - hmux0 YieldHc = 4662
+  - hmux0 YieldHcDay = 0.0
+  - hmux0 YieldHcMonth = 10.3
+  - hmux0 YieldHwc = 625
+  - hmux0 YieldHwcDay = 2.0
+  - hmux0 YieldHwcMonth = 29.3

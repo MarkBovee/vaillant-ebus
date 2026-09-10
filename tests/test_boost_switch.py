@@ -67,9 +67,7 @@ class _WaterHeaterEntityFeature(enum.IntFlag):
 
 
 components_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components", None))
-switch_pkg = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("homeassistant.components.switch", None)
-)
+switch_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components.switch", None))
 switch_pkg.SwitchEntity = _MockBaseEntity
 water_heater_pkg = importlib.util.module_from_spec(
     importlib.machinery.ModuleSpec("homeassistant.components.water_heater", None)
@@ -106,7 +104,7 @@ for _name in ("switch", "water_heater"):
     sys.modules[f"vaillant_ebus.{_name}"] = _mod
     _spec.loader.exec_module(_mod)
 
-from vaillant_ebus.switch import HwcBoostSwitch, _is_holiday_active  # noqa: E402
+from vaillant_ebus.switch import HwcAwayModeSwitch, HwcBoostSwitch, _is_holiday_active  # noqa: E402
 from vaillant_ebus.water_heater import EbusdWaterHeater  # noqa: E402
 
 
@@ -117,6 +115,7 @@ def _coordinator(dhw_boost_desired=None, sfmode="load") -> MagicMock:
     c.data = {"ebusd": {"basv.HwcSFMode.value": sfmode, "basv.HwcOpMode.value": "auto"}}
     c.async_write_register = AsyncMock(return_value=True)
     c.async_write_registers = AsyncMock(return_value=True)
+    c.async_request_refresh = AsyncMock()
     c.get_device_info = MagicMock(return_value={"identifiers": {("vaillant_ebus", "dhw")}})
     c.last_update_success = True
     return c
@@ -153,12 +152,84 @@ async def test_boost_switch_turn_on_and_off() -> None:
     sw = HwcBoostSwitch(c, _entry())
     await sw.async_turn_on()
     assert c.dhw_boost_desired is True
-    c.async_write_register.assert_awaited_once_with("basv", "HwcSFMode", "load", strict_verify=False)
+    c.async_write_register.assert_awaited_once_with("basv", "HwcSFMode", "load", strict_verify=False, refresh=False)
+    c.async_update_listeners.assert_called_once()
 
     c.async_write_register.reset_mock()
     await sw.async_turn_off()
     assert c.dhw_boost_desired is False
-    c.async_write_register.assert_awaited_once_with("basv", "HwcSFMode", "auto", strict_verify=False)
+    c.async_write_register.assert_awaited_once_with("basv", "HwcSFMode", "auto", strict_verify=False, refresh=False)
+    assert c.async_update_listeners.call_count == 2
+
+
+async def test_boost_switch_keeps_confirmed_state_when_write_fails() -> None:
+    c = _coordinator(dhw_boost_desired=False)
+    c.async_write_register = AsyncMock(return_value=False)
+    sw = HwcBoostSwitch(c, _entry())
+
+    await sw.async_turn_on()
+
+    assert c.dhw_boost_desired is False
+
+
+async def test_water_heater_keeps_confirmed_boost_state_when_write_fails() -> None:
+    c = _coordinator(dhw_boost_desired=False)
+    c.async_write_registers = AsyncMock(return_value=False)
+    wh = EbusdWaterHeater(c, _entry())
+
+    await wh.async_set_operation_mode("boost")
+
+    assert c.dhw_boost_desired is False
+
+
+async def test_water_heater_marks_boost_off_before_later_mode_write_fails() -> None:
+    c = _coordinator(dhw_boost_desired=True)
+    c.async_write_register = AsyncMock(side_effect=(True, False))
+    wh = EbusdWaterHeater(c, _entry())
+
+    await wh.async_set_operation_mode("auto")
+
+    assert c.dhw_boost_desired is False
+    assert c.async_write_register.await_args_list == [
+        (("basv", "HwcSFMode", "auto"), {"strict_verify": False, "refresh": False}),
+        (("basv", "HwcOpMode", "auto"), {"strict_verify": False}),
+    ]
+    c.async_update_listeners.assert_called_once()
+
+
+async def test_ctlv3_dhw_controls_use_resolved_controller_circuit() -> None:
+    c = _coordinator(dhw_boost_desired=False, sfmode="auto")
+    c.heating_circuit = "ctlv3"
+    c.data["ebusd"] = {
+        "ctlv3.HwcOpMode.value": "auto",
+        "ctlv3.HwcSFMode.value": "auto",
+        "ctlv3.HwcStorageTemp.value": "45",
+        "ctlv3.HwcTempDesired.value": "48",
+        "ctlv3.HwcHolidayStartPeriod.value": "01.01.2015",
+        "ctlv3.HwcHolidayEndPeriod.value": "01.01.2015",
+    }
+    water_heater = EbusdWaterHeater(c, _entry())
+
+    assert water_heater.current_operation == "auto"
+    assert water_heater.current_temperature == 45.0
+    assert water_heater.target_temperature == 48.0
+    assert water_heater.is_away_mode_on is None
+
+    await water_heater.async_set_operation_mode("boost")
+    c.async_write_registers.assert_awaited_once_with(
+        [("ctlv3", "HwcSFMode", "load")], strict_verify=False, refresh=False
+    )
+
+    c.async_write_registers.reset_mock()
+    away = HwcAwayModeSwitch(c, _entry())
+    assert away.is_on is False
+    await away.async_turn_off()
+    c.async_write_registers.assert_awaited_once_with(
+        [
+            ("ctlv3", "HwcHolidayStartPeriod", "01.01.2015"),
+            ("ctlv3", "HwcHolidayEndPeriod", "01.01.2015"),
+        ]
+    )
 
 
 # The water heater reports boost once desired, even when HwcSFMode reads "load".

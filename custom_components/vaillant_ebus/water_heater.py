@@ -46,7 +46,7 @@ def _value(coordinator: VaillantCoordinator, register: str) -> str | None:
 def _float(value: str | None) -> float | None:
     try:
         return float(value) if value is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -142,20 +142,23 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         if ckt is None:
             return
         if operation_mode == "boost":
-            self.coordinator.dhw_boost_desired = True
-            await self.coordinator.async_write_registers(
-                [(ckt, "HwcSFMode", "load")], strict_verify=False
-            )
+            if await self.coordinator.async_write_registers(
+                [(ckt, "HwcSFMode", "load")], strict_verify=False, refresh=False
+            ):
+                self.coordinator.dhw_boost_desired = True
+                self.coordinator.async_update_listeners()
+                await self.coordinator.async_request_refresh()
         else:
-            self.coordinator.dhw_boost_desired = False
             ebusd_mode = HA_TO_EBUSD_OPMODE.get(operation_mode, operation_mode)
-            await self.coordinator.async_write_registers(
-                [
-                    (ckt, "HwcSFMode", "auto"),
-                    (ckt, "HwcOpMode", ebusd_mode),
-                ],
-                strict_verify=False,
-            )
+            # The device accepts these writes independently. Record that Boost
+            # stopped as soon as its own command succeeds, even if mode write fails.
+            if await self.coordinator.async_write_register(
+                ckt, "HwcSFMode", "auto", strict_verify=False, refresh=False
+            ):
+                self.coordinator.dhw_boost_desired = False
+                self.coordinator.async_update_listeners()
+                await self.coordinator.async_request_refresh()
+                await self.coordinator.async_write_register(ckt, "HwcOpMode", ebusd_mode, strict_verify=False)
 
     # Turn DHW on by setting operation mode to auto
     async def async_turn_on(self) -> None:

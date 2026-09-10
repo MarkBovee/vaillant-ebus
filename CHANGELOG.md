@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.8.0-rc2 - 2026-09-10
+
+### Fixed
+
+- **HMUX0 HW0504 without ebusd alias (#99).** `HMUX0;SW=0303;HW=0504` scan
+  metadata now bootstraps only the 11 community-evidenced, fixture-backed telemetry
+  definitions (`RunDataReturnTemp`, heating/DHW `Yield*`, heating/DHW `Cop*`).
+  The old `08.hmux0.csv -> 08.hmu.csv` workaround is no longer required for
+  this supported set, and generic HMU-only definitions are not applied.
+- **Invalid HMUX0 return temperatures.** Physically impossible
+  `RunDataReturnTemp` values are unavailable instead of being exposed as real
+  measurements.
+- **DHW Boost state.** The requested Boost state changes only after ebusd
+  accepts the local write, so failed writes cannot leave a misleading UI state.
+
+### Migration
+
+- Remove the `08.hmux0.csv -> 08.hmu.csv` symlink for affected HMUX0 HW0504
+  systems, restart ebusd, then reload the integration or restart Home Assistant.
+
 ## 1.8.0-rc1 - 2026-09-10
 
 First release candidate for v1.8.0.
