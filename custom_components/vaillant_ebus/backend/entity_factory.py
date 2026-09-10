@@ -6,7 +6,7 @@ import logging
 from copy import copy
 from typing import Any
 
-from .mapping import ELOBLOCK_GAS_REGISTERS, REGISTER_MAP, get_meta, multi_field_fields, split_multi_field
+from .mapping import ELOBLOCK_GAS_REGISTERS, REGISTER_MAP, get_meta, is_field_key, multi_field_fields, split_multi_field
 from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister, RegisterMeta, is_no_data_value
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ def _is_numeric(value: str) -> bool:
     try:
         float(value)
         return True
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return False
 
 
@@ -141,8 +141,7 @@ def _determine_enabled_by_default(
         return False
     known_in_map = register_key in REGISTER_MAP
     mapped_variant = not known_in_map and any(
-        f"{circuit}.{register_key.split('.', 1)[1]}" in REGISTER_MAP
-        for circuit in ("ctlv2", "hmu")
+        f"{circuit}.{register_key.split('.', 1)[1]}" in REGISTER_MAP for circuit in ("ctlv2", "hmu")
     )
     if raw_value is not None:
         rv = raw_value.strip().lower()
@@ -273,7 +272,7 @@ class EntityFactoryService:
                 raw = graph.raw_registers.get(rk)
                 # Keys containing a second dot are parsed fields of a parent
                 # register, not standalone ebusd registers.
-                if "." in name:
+                if is_field_key(rk):
                     continue
                 base_meta = get_meta(circuit, name)
 
@@ -352,9 +351,7 @@ class EntityFactoryService:
                             writable=field_meta.writable,
                         )
                         if not field_meta.entity_type:
-                            field_meta.entity_type = _classify_register(
-                                field_reg, field_name, field_raw, field_meta
-                            )
+                            field_meta.entity_type = _classify_register(field_reg, field_name, field_raw, field_meta)
                         entities.append(
                             EntityDescription(
                                 circuit=circuit,

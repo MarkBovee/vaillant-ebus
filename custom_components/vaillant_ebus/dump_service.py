@@ -14,7 +14,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .backend.dump_analysis import CURRENT_DUMP_VERSION, normalize_dump
 from .backend.grab_parser import parse_grab_lines, unknown_telegrams
-from .backend.mapping import REGISTER_MAP
+from .backend.mapping import REGISTER_MAP, is_field_key
 from .backend.models import is_no_data_value
 from .const import DOMAIN, INTEGRATION_VERSION, SENSITIVE_FIELDS
 from .coordinator import VaillantCoordinator
@@ -94,7 +94,7 @@ async def _dump_registers(
         if len(parts) != 2:
             continue
         circuit, name = parts
-        if "." in name:
+        if is_field_key(key):
             continue
         target_circuit = aliases.get(circuit, circuit)
         target_key = f"{target_circuit}.{name}"
@@ -185,8 +185,7 @@ async def async_export_discovery_dump(
         raise HomeAssistantError(message)
 
     aliases = {
-        "ctlv2": coordinator.heating_circuit,
-        "hmu": coordinator.heat_pump_circuit,
+        logical_circuit: coordinator.resolve_register_circuit(logical_circuit) for logical_circuit in ("ctlv2", "hmu")
     }
     before_registers, seen, raw_find_lines = await _dump_registers(ebus, circuit_aliases=aliases)
 
@@ -235,16 +234,18 @@ async def async_export_discovery_dump(
             telegrams = parse_grab_lines(grab_lines)
             dump_data["labeled_telegrams"] = [t for t in telegrams if t["label"]]
             dump_data["unknown_telegrams"] = unknown_telegrams(grab_lines)
-            dump_data["traffic"] = normalize_dump(dump_data)["traffic"]
         except Exception as exc:  # pragma: no cover - defensive
             _LOGGER.warning("Failed to parse grab telegrams: %s", exc)
     if after_registers:
         dump_data["after_registers"] = after_registers
         dump_data["raw_find_lines_after"] = after_raw_lines
 
-    dump_data["registers"] = normalize_dump(dump_data)["registers"]
+    normalized = normalize_dump(dump_data)
+    if grab_lines:
+        dump_data["traffic"] = normalized["traffic"]
+    dump_data["registers"] = normalized["registers"]
     if after_registers:
-        dump_data["changes"] = normalize_dump(dump_data)["changes"]
+        dump_data["changes"] = normalized["changes"]
 
     await _persist_dump(hass, filepath, dump_data)
     _LOGGER.info("Discovery dump written to %s", filepath)

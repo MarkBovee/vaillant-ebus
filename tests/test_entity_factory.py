@@ -60,7 +60,13 @@ from vaillant_ebus.backend.entity_factory import (  # noqa: E402
     _determine_enabled_by_default,
     _resolve_device_circuit,
 )
-from vaillant_ebus.backend.mapping import REGISTER_MAP, RegisterMeta, get_meta  # noqa: E402
+from vaillant_ebus.backend.mapping import (  # noqa: E402
+    REGISTER_MAP,
+    RegisterMeta,
+    get_meta,
+    is_field_key,
+    parent_register_name,
+)
 from vaillant_ebus.backend.models import DeviceGraph, DeviceNode, DeviceType  # noqa: E402
 
 
@@ -129,6 +135,14 @@ def _build_graph(overrides: dict | None = None) -> DeviceGraph:
         },
         placeholder_registers=set(),
     )
+
+
+# Intent: keep parent-register parsing semantics explicit for all consumers.
+def test_field_key_helpers_preserve_parent_registers() -> None:
+    assert is_field_key("ctlv3.Status01.temp") is True
+    assert parent_register_name("ctlv3.Status01.temp") == "ctlv3.Status01"
+    assert is_field_key("ctlv3.Status01") is False
+    assert parent_register_name("ctlv3.Status01") == "ctlv3.Status01"
 
 
 class TestEntityGeneration:

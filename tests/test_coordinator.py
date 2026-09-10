@@ -384,11 +384,39 @@ async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0 = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0) == 11
+        assert len(hmux0) == 23
         assert all(",hmu," not in definition for definition in hmux0)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0)
         assert any(",hmux0,CopHwcMonth," in definition for definition in hmux0)
+
+
+# Intent: keep legacy runtime definition templates on their discovered owner.
+async def test_runtime_definitions_resolve_logical_circuits() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = AsyncMock()
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = DeviceGraph(
+            nodes={
+                "hmux0": DeviceNode("hmux0", DeviceType.HEAT_PUMP, has_data=True),
+                "ctlv3": DeviceNode(
+                    "ctlv3",
+                    DeviceType.HEATING_CONTROLLER,
+                    registers=["ctlv3.Z1OpMode"],
+                    has_data=True,
+                ),
+            },
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        assert all(",ctlv2," not in definition for definition in definitions)
+        assert all(",hmu," not in definition for definition in definitions)
 
 
 
@@ -405,6 +433,32 @@ async def test_legacy_register_aliases_resolve_to_discovered_circuits() -> None:
         controller.scan_type = "CTLV3"
         c._graph.nodes["ctlv3"] = controller
         assert c.resolve_register_circuit("ctlv2") == "ctlv3"
+
+
+# Intent: prove logical register aliases resolve from graph identity when multiple device families coexist.
+async def test_graph_resolution_prefers_discovered_roles_in_mixed_installation() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(
+            nodes={
+                "hmux0": DeviceNode("hmux0", DeviceType.HEAT_PUMP, has_data=True),
+                "hmu": DeviceNode("hmu", DeviceType.HEAT_PUMP, has_data=True),
+                "bai": DeviceNode("bai", DeviceType.HEATING_CONTROLLER, has_data=True),
+                "ctlv3": DeviceNode(
+                    "ctlv3",
+                    DeviceType.HEATING_CONTROLLER,
+                    registers=["ctlv3.Z1OpMode", "ctlv3.HwcOpMode"],
+                    has_data=True,
+                ),
+            },
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+
+        assert c.resolve_register_circuit("hmu") == "hmu"
+        assert c.resolve_register_circuit("ctlv2") == "ctlv3"
+        assert c.heating_circuit == "ctlv3"
+        assert c.heat_pump_circuit == "hmu"
 
 
 # Intent: re-run discovery once after ebusd has had time to populate live values.
@@ -672,7 +726,7 @@ async def test_hmux0_runtime_definitions_use_issue99_fixture_metadata() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_defs = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_defs) == 11
+        assert len(hmux0_defs) == 23
         assert all(",hmu," not in definition for definition in hmux0_defs)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0_defs)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0_defs)
@@ -963,6 +1017,44 @@ async def test_async_write_registers_bundles_and_refreshes() -> None:
         assert c.async_request_refresh.call_count == 1
 
 
+# Intent: route logical write aliases through discovered circuit identity.
+async def test_async_write_register_resolves_discovered_circuit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(
+            nodes={"ctlv3": DeviceNode("ctlv3", DeviceType.HEATING_CONTROLLER, has_data=True)},
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.write_register = AsyncMock(return_value=WriteResult(success=True, verified_value=None))
+        c.ebus = mock_ebus
+        c.async_request_refresh = AsyncMock()
+
+        assert await c.async_write_register("ctlv2", "Z1DayTemp", "21") is True
+        mock_ebus.write_register.assert_awaited_once_with("ctlv3", "Z1DayTemp", "21", strict_verify=True)
+
+
+# Intent: route BAI logical writes only when a unique BAI controller is discovered.
+async def test_async_set_mode_override_resolves_unique_bai_circuit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(
+            nodes={"bai0": DeviceNode("bai0", DeviceType.HEATING_CONTROLLER, has_data=True)},
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.write_register = AsyncMock(return_value=WriteResult(success=True, verified_value=None))
+        c.ebus = mock_ebus
+        c.async_request_refresh = AsyncMock()
+
+        assert await c.async_set_mode_override(55, 45, keep_alive=False) is True
+        assert mock_ebus.write_register.await_args.args[0] == "bai0"
+
+
 async def test_async_write_registers_stops_on_failure_no_refresh() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
@@ -1127,6 +1219,83 @@ async def test_fallback_read_map_reads_discovered_circuit() -> None:
         calls = {args[0] for args, _ in mock_ebus.read_register.call_args_list}
         assert ("ctlv2", "PrEnergySumHwc") not in calls
         assert c.registers["ctlv3.PrEnergySumHwc"].has_data is True
+
+
+# Intent: use graph-resolved ownership instead of falling back to a legacy circuit.
+async def test_fallback_read_uses_graph_owner_for_duplicate_register_names() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value="42")
+        c.ebus = mock_ebus
+        c._graph = DeviceGraph(
+            nodes={
+                "ctlv3": DeviceNode("ctlv3", DeviceType.HEATING_CONTROLLER, has_data=True),
+                "basv3": DeviceNode("basv3", DeviceType.HEATING_CONTROLLER, has_data=True),
+            },
+            raw_registers={"ctlv3.PrEnergySumHwc": "-", "basv3.PrEnergySumHwc": "-"},
+            placeholder_registers=set(),
+        )
+        c._last_find_keys = set()
+
+        await c._fallback_read()
+
+        calls = {(args[0], args[1]) for args, _ in mock_ebus.read_register.call_args_list}
+        assert ("ctlv2", "PrEnergySumHwc") not in calls
+        assert ("ctlv3", "PrEnergySumHwc") not in calls
+
+
+# Intent: do not poll a legacy alias when discovered owners are ambiguous.
+async def test_fallback_read_skips_ambiguous_discovered_owners() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value="42")
+        c.ebus = mock_ebus
+        c._graph = DeviceGraph(
+            nodes={
+                "ctlv3": DeviceNode("ctlv3", DeviceType.HEATING_CONTROLLER, has_data=True),
+                "basv3": DeviceNode("basv3", DeviceType.HEATING_CONTROLLER, has_data=True),
+            },
+            raw_registers={"ctlv3.PrEnergySumHwc": "-", "basv3.PrEnergySumHwc": "-"},
+            placeholder_registers=set(),
+        )
+
+        await c._fallback_read()
+
+        calls = {(args[0], args[1]) for args, _ in mock_ebus.read_register.call_args_list}
+        assert ("ctlv2", "PrEnergySumHwc") not in calls
+
+
+# Intent: keep parsed multi-field names out of coordinator register polling.
+async def test_fallback_read_skips_field_mapping_keys() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value="42")
+        c.ebus = mock_ebus
+        c._graph = DeviceGraph(
+            nodes={"hmu": DeviceNode("hmu", DeviceType.HEAT_PUMP, has_data=True)},
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+        c._last_find_keys = set()
+
+        original_map = COORDINATOR.REGISTER_MAP
+        COORDINATOR.REGISTER_MAP = {
+            "hmu.Status01": MAPPING.REGISTER_MAP["hmu.Status01"],
+            "hmu.Status01.temp": MAPPING.RegisterMeta(enabled=True),
+        }
+        try:
+            await c._fallback_read()
+        finally:
+            COORDINATOR.REGISTER_MAP = original_map
+
+        calls = {(args[0], args[1]) for args, _ in mock_ebus.read_register.call_args_list}
+        assert ("hmu", "Status01.temp") not in calls
 
 
 # The Yield day/month variants from #77 must be mapped so they get entities

@@ -28,6 +28,7 @@ spec.loader.exec_module(module)
 
 parse_grab_lines = module.parse_grab_lines
 unknown_telegrams = module.unknown_telegrams
+GrabTelegram = module.GrabTelegram
 
 GRAB_LINES = [
     "[grab] grab started",
@@ -44,6 +45,7 @@ GRAB_LINES = [
 class TestParseGrabLines:
     def test_labeled_telegram_parsed(self) -> None:
         telegrams = parse_grab_lines(GRAB_LINES)
+        assert set(telegrams[0]) == set(GrabTelegram.__annotations__)
         labeled = [t for t in telegrams if t["label"]]
         assert len(labeled) == 1
         t = labeled[0]

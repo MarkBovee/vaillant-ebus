@@ -44,18 +44,43 @@ ELOBLOCK_GAS_REGISTERS: frozenset[str] = frozenset(
 MULTI_FIELD_FIELDS: dict[str, list[str]] = {
     "hmu.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
     "hmu.Status00": [
-        "supplytemp", "waterpressure", "compressormodulation", "compressorstate",
-        "heatingstate", "field6", "defrost", "compressorpower",
+        "supplytemp",
+        "waterpressure",
+        "compressormodulation",
+        "compressorstate",
+        "heatingstate",
+        "field6",
+        "defrost",
+        "compressorpower",
     ],
     "hmu.Status07": [
-        "power", "dailyenvyield", "display_b0_heaterenabled", "display_b1",
-        "display_b2_backupheater", "display_b3", "display_b4", "display_b5_noisereduction",
-        "display_b6_dhwecomode", "display_b7", "heatermain_b0", "heatermain_b1_error",
-        "heatermain_b2", "heatermain_b3_heating", "heatermain_b4_cooling",
-        "heatermain_b5_pressureloss", "heatermain_b6", "heatermain_b7_warmwater",
-        "displaypressure", "heaterbackup_b0", "heaterbackup_b1_error", "heaterbackup_b2",
-        "heaterbackup_b3_heating", "heaterbackup_b4_cooling", "heaterbackup_b5_pressureloss",
-        "heaterbackup_b6", "heaterbackup_b7_warmwater",
+        "power",
+        "dailyenvyield",
+        "display_b0_heaterenabled",
+        "display_b1",
+        "display_b2_backupheater",
+        "display_b3",
+        "display_b4",
+        "display_b5_noisereduction",
+        "display_b6_dhwecomode",
+        "display_b7",
+        "heatermain_b0",
+        "heatermain_b1_error",
+        "heatermain_b2",
+        "heatermain_b3_heating",
+        "heatermain_b4_cooling",
+        "heatermain_b5_pressureloss",
+        "heatermain_b6",
+        "heatermain_b7_warmwater",
+        "displaypressure",
+        "heaterbackup_b0",
+        "heaterbackup_b1_error",
+        "heaterbackup_b2",
+        "heaterbackup_b3_heating",
+        "heaterbackup_b4_cooling",
+        "heaterbackup_b5_pressureloss",
+        "heaterbackup_b6",
+        "heaterbackup_b7_warmwater",
     ],
     "hmux0.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
     "bai.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
@@ -84,6 +109,16 @@ def multi_field_fields(register_key: str) -> list[str] | None:
     return MULTI_FIELD_FIELDS.get(register_key)
 
 
+# Identify parsed field keys so callers never poll them as ebusd registers.
+def is_field_key(register_key: str) -> bool:
+    return register_key.count(".") > 1
+
+
+# Return the parent register key for a parsed field, preserving ordinary keys.
+def parent_register_name(register_key: str) -> str:
+    return register_key.rsplit(".", 1)[0] if is_field_key(register_key) else register_key
+
+
 def split_multi_field(register_key: str, raw: str | None) -> dict[str, str | None]:
     """Split a raw register value into named fields; keep the raw value under "value"."""
     fields = MULTI_FIELD_FIELDS.get(register_key)
@@ -91,9 +126,7 @@ def split_multi_field(register_key: str, raw: str | None) -> dict[str, str | Non
     if not fields or raw is None:
         return values
     parts = raw.split(";")
-    values.update(
-        {field: parts[i] if i < len(parts) else None for i, field in enumerate(fields)}
-    )
+    values.update({field: parts[i] if i < len(parts) else None for i, field in enumerate(fields)})
     return values
 
 
@@ -115,17 +148,11 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "hmu.Status00.waterpressure": RegisterMeta(
         friendly_name="Status Water Pressure", device_class="pressure", unit="bar"
     ),
-    "hmu.Status00.compressormodulation": RegisterMeta(
-        friendly_name="Status Compressor Modulation", unit="%"
-    ),
+    "hmu.Status00.compressormodulation": RegisterMeta(friendly_name="Status Compressor Modulation", unit="%"),
     "hmu.Status00.compressorstate": RegisterMeta(friendly_name="Status Compressor State"),
     "hmu.Status00.heatingstate": RegisterMeta(friendly_name="Status Heating State"),
-    "hmu.Status00.defrost": RegisterMeta(
-        friendly_name="Defrost Active", entity_type="binary_sensor"
-    ),
-    "hmu.Status00.compressorpower": RegisterMeta(
-        friendly_name="Status Compressor Power", unit="%"
-    ),
+    "hmu.Status00.defrost": RegisterMeta(friendly_name="Defrost Active", entity_type="binary_sensor"),
+    "hmu.Status00.compressorpower": RegisterMeta(friendly_name="Status Compressor Power", unit="%"),
     "hmu.RunDataElPowerConsumption": RegisterMeta(
         friendly_name="Electrical Power Consumption", device_class="power", unit="W"
     ),
@@ -1974,9 +2001,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         icon="mdi:information",
         entity_category="diagnostic",
     ),
-    "hmu.Status07.power": RegisterMeta(
-        friendly_name="Display Compressor Power", device_class="power", unit="%"
-    ),
+    "hmu.Status07.power": RegisterMeta(friendly_name="Display Compressor Power", device_class="power", unit="%"),
     "hmu.Status07.dailyenvyield": RegisterMeta(
         friendly_name="Display Environmental Yield Today", device_class="energy", unit="kWh"
     ),
@@ -1989,24 +2014,16 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "hmu.Status07.display_b2_backupheater": RegisterMeta(
         friendly_name="Backup Heater Active", entity_type="binary_sensor"
     ),
-    "hmu.Status07.display_b6_dhwecomode": RegisterMeta(
-        friendly_name="DHW Eco Mode", entity_type="binary_sensor"
-    ),
+    "hmu.Status07.display_b6_dhwecomode": RegisterMeta(friendly_name="DHW Eco Mode", entity_type="binary_sensor"),
     "hmu.Status07.heatermain_b1_error": RegisterMeta(
         friendly_name="Comfort Protection Error", entity_type="binary_sensor", entity_category="diagnostic"
     ),
-    "hmu.Status07.heatermain_b3_heating": RegisterMeta(
-        friendly_name="Heating Active", entity_type="binary_sensor"
-    ),
-    "hmu.Status07.heatermain_b4_cooling": RegisterMeta(
-        friendly_name="Cooling Active", entity_type="binary_sensor"
-    ),
+    "hmu.Status07.heatermain_b3_heating": RegisterMeta(friendly_name="Heating Active", entity_type="binary_sensor"),
+    "hmu.Status07.heatermain_b4_cooling": RegisterMeta(friendly_name="Cooling Active", entity_type="binary_sensor"),
     "hmu.Status07.heatermain_b5_pressureloss": RegisterMeta(
         friendly_name="Pressure Loss", entity_type="binary_sensor", entity_category="diagnostic"
     ),
-    "hmu.Status07.heatermain_b7_warmwater": RegisterMeta(
-        friendly_name="DHW Active", entity_type="binary_sensor"
-    ),
+    "hmu.Status07.heatermain_b7_warmwater": RegisterMeta(friendly_name="DHW Active", entity_type="binary_sensor"),
     "hmu.Status07.displaypressure": RegisterMeta(
         friendly_name="Display System Pressure", device_class="pressure", unit="bar"
     ),

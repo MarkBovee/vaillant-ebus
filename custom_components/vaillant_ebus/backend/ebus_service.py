@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from collections import deque
+from typing import TypedDict
 
 from .models import SendResult, WriteResult
 
@@ -17,6 +18,13 @@ READ_TIMEOUT = 10
 DONE_STR = "done"
 
 EBUSD_STATUS_SUFFIXES = (";ok", ";err", ";inv", ";too_small", ";too_big", ";nan", ";unknown")
+
+
+class CommandLogEntry(TypedDict):
+    cmd: str
+    data: str
+    error: str | None
+    duration_ms: int
 
 
 # Strip ebusd read status suffix from value (e.g. "23.50;ok" -> "23.50")
@@ -90,7 +98,7 @@ class EbusService:
         self._reconnect_count = 0
         self._reconnecting = False
         self._lock = asyncio.Lock()
-        self._command_log: deque[dict] = deque(maxlen=20)
+        self._command_log: deque[CommandLogEntry] = deque(maxlen=20)
 
     @property
     def is_connected(self) -> bool:
@@ -103,7 +111,7 @@ class EbusService:
         return self._version
 
     @property
-    def debug_info(self) -> dict:
+    def debug_info(self) -> dict[str, object]:
         # Return command log and connection state for diagnostics
         return {
             "connected": self._writer is not None,
@@ -253,9 +261,7 @@ class EbusService:
     # is logged but not treated as a failure. This is used for registers whose
     # physical state lags the accepted write (e.g. HwcSFMode keeps reporting
     # "load" while the cylinder finishes charging after boost is turned off).
-    async def write_register(
-        self, circuit: str, name: str, value: str, strict_verify: bool = True
-    ) -> WriteResult:
+    async def write_register(self, circuit: str, name: str, value: str, strict_verify: bool = True) -> WriteResult:
         _validate_identifier("circuit", circuit)
         _validate_identifier("register name", name)
         cmd = f"write -c {circuit} {name} {value}"

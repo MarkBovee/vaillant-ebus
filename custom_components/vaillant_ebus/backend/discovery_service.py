@@ -202,8 +202,7 @@ class DiscoveryService:
                     circuit=sub_name,
                     device_type=existing.device_type,
                     registers=merged,
-                    has_data=existing.has_data
-                    or any(raw_registers.get(rk) is not None for rk in regs),
+                    has_data=existing.has_data or any(raw_registers.get(rk) is not None for rk in regs),
                 )
                 continue
             nodes[sub_name] = DeviceNode(
@@ -442,9 +441,9 @@ def _match_scan_to_circuits(
     for scan_type, scan_sw, scan_hw in scans:
         if scan_type.lower() == "netx2":
             continue
-        candidates = [c for c in circuit_names if _normalize_name(c) == _normalize_name(scan_type)]
-        if len(candidates) == 1 and candidates[0] not in result:
-            result[candidates[0]] = (scan_type, scan_sw, scan_hw)
+        exact_candidates = [c for c in circuit_names if _normalize_name(c) == _normalize_name(scan_type)]
+        if len(exact_candidates) == 1 and exact_candidates[0] not in result:
+            result[exact_candidates[0]] = (scan_type, scan_sw, scan_hw)
 
     claimed = {info[0].lower() for info in result.values()}
 
@@ -462,14 +461,14 @@ def _match_scan_to_circuits(
         fam = _name_family(ckt)
         if not fam or family_counts.get(fam, 0) != 1:
             continue
-        candidates = [
+        family_candidates: list[tuple[str, str, str]] = [
             (t, sw, hw)
             for t, sw, hw in scans
             if t.lower() != "netx2" and t.lower() not in claimed and _name_family(t) == fam
         ]
-        if len(candidates) == 1:
-            result[ckt] = candidates[0]
-            claimed.add(candidates[0][0].lower())
+        if len(family_candidates) == 1:
+            result[ckt] = family_candidates[0]
+            claimed.add(family_candidates[0][0].lower())
 
     # Priority 4: prefix fallback for circuits whose name only shares the scan
     # family as a prefix. Used only when exactly one unclaimed scan and one
@@ -487,11 +486,7 @@ def _match_scan_to_circuits(
         ]
         if len(same_family) != 1:
             continue
-        claimants = [
-            c
-            for c in circuit_names
-            if c not in result and _normalize_name(c).startswith(fam)
-        ]
+        claimants = [c for c in circuit_names if c not in result and _normalize_name(c).startswith(fam)]
         if len(claimants) == 1:
             result[claimants[0]] = (scan_type, scan_sw, scan_hw)
             claimed.add(scan_type.lower())

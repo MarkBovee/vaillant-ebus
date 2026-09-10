@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.8.0 - 2026-09-10
+
+### Changed
+
+- **Architecture refactor.** Centralized discovered-circuit resolution in the
+  `DeviceGraph`, typed raw grab telegram contracts, and preserved runtime
+  register, entity, cache, and discovery behavior.
+- **Discovery safety.** Fallback reads now use graph-owned register circuits and
+  never poll parsed multi-field keys as independent ebusd registers.
+- **CI quality gates.** Release validation now includes scoped Ruff formatting,
+  strict mypy for typed backend contracts, and committed-diff whitespace checks
+  alongside tests, lint, and compilation.
+
+### Compatibility
+
+- Entity IDs, names, device identities, register names, runtime definitions,
+  dump schema, and service behavior remain unchanged.
+
 ## 1.7.6 - 2026-09-10
 
 ### Fixed

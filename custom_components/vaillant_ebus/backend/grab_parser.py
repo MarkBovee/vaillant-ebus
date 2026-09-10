@@ -6,12 +6,26 @@ registers that are absent from the installed ebusd CSV files.
 
 from __future__ import annotations
 
+from typing import TypedDict
+
+
+class GrabTelegram(TypedDict):
+    master: str
+    slave: str
+    msgid: str
+    sub: str
+    request: str
+    resp: str | None
+    count: str
+    label: str | None
+
 
 # Parse ebusd telegrams from grab output into structured records.
 # Known telegrams carry a register label after the count (`= N: hmu SetMode`);
 # unknown ones do not.
-def parse_grab_lines(grab_lines: list[str]) -> list[dict]:
-    telegrams: list[dict] = []
+# Return typed telegram records while preserving the historical dictionary schema.
+def parse_grab_lines(grab_lines: list[str]) -> list[GrabTelegram]:
+    telegrams: list[GrabTelegram] = []
     for line in grab_lines:
         line = line.strip()
         if not line or not line.startswith(("10", "11", "30", "31", "50", "51", "70", "71", "f0", "f1", "f3", "f5")):
@@ -43,6 +57,6 @@ def parse_grab_lines(grab_lines: list[str]) -> list[dict]:
     return telegrams
 
 
-# Only telegrams ebusd could not map to a known register label
-def unknown_telegrams(grab_lines: list[str]) -> list[dict]:
+# Return only telegrams ebusd could not map to a known register label.
+def unknown_telegrams(grab_lines: list[str]) -> list[GrabTelegram]:
     return [t for t in parse_grab_lines(grab_lines) if t["label"] is None]

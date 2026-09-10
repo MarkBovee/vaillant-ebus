@@ -104,6 +104,54 @@ def test_empty_grab_normalizes_to_empty_traffic() -> None:
     assert normalized["traffic"] == {"summary": [], "unknown": []}
 
 
+# Intent: preserve legacy labeled telegrams that predate raw request fields.
+def test_legacy_labeled_telegrams_without_request_are_compatible() -> None:
+    normalized = normalize_dump(
+        {
+            "labeled_telegrams": [
+                {
+                    "master": "31",
+                    "slave": "08",
+                    "msgid": "b509",
+                    "sub": "00",
+                    "resp": "01",
+                    "count": "2",
+                    "label": "hmu State",
+                }
+            ]
+        }
+    )
+
+    assert normalized["traffic"]["summary"][0]["label"] == "hmu State"
+    assert normalized["traffic"]["summary"][0]["unique_requests"] == []
+
+
+# Intent: retain serialized unknown candidates when legacy dumps have no raw grab.
+def test_legacy_unknown_telegrams_without_grab_are_preserved() -> None:
+    normalized = normalize_dump(
+        {
+            "unknown_telegrams": [
+                {"master": "31", "slave": "08", "msgid": "b511", "sub": "00", "resp": "02", "count": "1"}
+            ]
+        }
+    )
+
+    assert normalized["traffic"]["unknown"][0]["msgid"] == "b511"
+
+
+# Intent: normalize numeric YAML scalars into the string traffic contract.
+def test_legacy_numeric_response_is_coerced_to_string() -> None:
+    normalized = normalize_dump(
+        {
+            "labeled_telegrams": [
+                {"master": "31", "slave": "08", "msgid": "b509", "sub": "00", "resp": 1, "label": "state"}
+            ]
+        }
+    )
+
+    assert normalized["traffic"]["summary"][0]["unique_responses"] == ["1"]
+
+
 def test_live_vwzio_status01_candidate_preserves_correlated_telegram() -> None:
     dump = {
         "traffic": {

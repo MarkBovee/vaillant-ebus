@@ -9,9 +9,7 @@ from enum import Enum
 # ebusd values that mean "no usable data" rather than a measured value.
 # Exact-match set; prefix/substring forms are handled by is_no_data_value().
 # "none" is deliberately excluded: RoomZoneMapping legitimately reports it.
-EBUSD_NO_DATA_VALUES: frozenset[str] = frozenset(
-    {"", "-", "empty", "unknown", "unavailable", "-.-.-"}
-)
+EBUSD_NO_DATA_VALUES: frozenset[str] = frozenset({"", "-", "empty", "unknown", "unavailable", "-.-.-"})
 
 # Sensor fault statuses from the Vaillant sensor enum (Values_sensor in the
 # upstream ebusd configuration: ok=0, circuit=85, cutoff=170). Registers whose
@@ -33,12 +31,7 @@ def is_no_data_value(raw: str | None) -> bool:
         return True
     if ";" in low and all(part.strip() in EBUSD_NO_DATA_VALUES for part in low.split(";")):
         return True
-    return (
-        low.startswith("no data stored")
-        or low.startswith("(empty ")
-        or low.startswith("err:")
-        or "(err" in low
-    )
+    return low.startswith("no data stored") or low.startswith("(empty ") or low.startswith("err:") or "(err" in low
 
 
 COMPRESSOR_ACTIVE_STATUS_CODES = {104, 114, 134}
@@ -148,7 +141,7 @@ def compressor_is_idle(registers: Mapping[str, EbusdRegister], hp_circuit: str =
     if raw_status is not None:
         try:
             status_code = int(raw_status)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             if raw_status in _COMPRESSOR_ACTIVE_STATUS_STRINGS:
                 return False
             if raw_status in _COMPRESSOR_IDLE_STATUS_STRINGS:
@@ -277,3 +270,50 @@ class DeviceGraph:
     nodes: dict[str, DeviceNode]
     raw_registers: dict[str, str]
     placeholder_registers: set[str]
+
+    # Select the discovered heating controller that owns control registers.
+    def heating_controller(self) -> DeviceNode | None:
+        controllers = [node for node in self.nodes.values() if node.device_type == DeviceType.HEATING_CONTROLLER]
+        control_registers = {
+            "HwcTempDesired",
+            "HwcStorageTemp",
+            "HwcOpMode",
+            "Z1DayTemp",
+            "Z1OpMode",
+        }
+        for node in controllers:
+            if any(register.rsplit(".", 1)[-1] in control_registers for register in node.registers):
+                control_candidates = [
+                    candidate
+                    for candidate in controllers
+                    if any(register.rsplit(".", 1)[-1] in control_registers for register in candidate.registers)
+                ]
+                return control_candidates[0] if len(control_candidates) == 1 else None
+        prefix_candidates: list[DeviceNode] = []
+        for prefix in ("ctlv", "basv", "bass"):
+            prefix_candidates.extend(node for node in controllers if node.circuit.lower().startswith(prefix))
+        if len(prefix_candidates) == 1:
+            return prefix_candidates[0]
+        return controllers[0] if len(controllers) == 1 else None
+
+    # Select the discovered heat-pump node for logical heat-pump operations.
+    def heat_pump(self) -> DeviceNode | None:
+        heat_pumps = [node for node in self.nodes.values() if node.device_type == DeviceType.HEAT_PUMP]
+        if len(heat_pumps) == 1:
+            return heat_pumps[0]
+        identified = [node for node in heat_pumps if node.scan_type]
+        return identified[0] if len(identified) == 1 else None
+
+    # Resolve logical metadata circuits through discovered graph identity.
+    def resolve_circuit(self, circuit: str) -> str:
+        if circuit == "ctlv2":
+            controller = self.heating_controller()
+            return controller.circuit if controller else circuit
+        if circuit == "bai":
+            controllers = [node for node in self.nodes.values() if node.device_type == DeviceType.HEATING_CONTROLLER]
+            bai_controllers = [node for node in controllers if node.circuit.lower().startswith("bai")]
+            return bai_controllers[0].circuit if len(bai_controllers) == 1 else circuit
+        if circuit == "hmu":
+            heat_pump = self.heat_pump()
+            return heat_pump.circuit if heat_pump else circuit
+        return circuit
