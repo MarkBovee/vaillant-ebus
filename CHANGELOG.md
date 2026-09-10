@@ -14,7 +14,7 @@ First release candidate for v1.8.0.
 
 ### Validation
 
-- 489 pytest tests passing.
+- 491 pytest tests passing.
 - Ruff, scoped format, strict mypy, YAML, compileall, and whitespace checks passing.
 - Live Home Assistant 2026.9.1 deployment tested successfully.
 
