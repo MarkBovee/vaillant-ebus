@@ -68,6 +68,184 @@ def test_scan_matching_normalizes_prefix_underscores() -> None:
     assert result["vr_71"] == ("VR71", "0100", "5904")
 
 
+# =============================================================================
+# A2. Scan metadata ↔ circuit matching (unit tests)
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("circuit", "scan_type"),
+    [
+        ("hmux0", "HMUX0"),
+        ("ctlv3", "CTLV3"),
+        ("hmu", "HMU"),
+        ("basv", "BASV"),
+        ("ctlv2", "CTLV2"),
+        ("basv2", "BASV2"),
+        ("bass3", "BASS3"),
+    ],
+)
+def test_scan_matching_exact_normalized_names(circuit: str, scan_type: str) -> None:
+    result = match_scan_to_circuits(
+        [("08", scan_type, "0102", "0304")],
+        {circuit: [f"{circuit}.SomeRegister"]},
+    )
+    assert result[circuit] == (scan_type, "0102", "0304")
+
+
+def test_scan_matching_underscore_normalization() -> None:
+    result = match_scan_to_circuits(
+        [("15", "CTLV3", "0808", "8004")],
+        {"ctl_v3": ["ctl_v3.Z1OpMode"]},
+    )
+    assert result["ctl_v3"] == ("CTLV3", "0808", "8004")
+
+
+@pytest.mark.parametrize(
+    ("circuit", "scan_type"),
+    [
+        ("hmu", "HMU00"),
+        ("basv", "BASV2"),
+        ("vwz", "VWZ00"),
+        ("bai", "BAI00"),
+        ("sol00", "SOL00"),
+    ],
+)
+def test_scan_matching_family_variant_number_on_scan_only(circuit: str, scan_type: str) -> None:
+    result = match_scan_to_circuits(
+        [("08", scan_type, "0101", "0202")],
+        {circuit: [f"{circuit}.SomeRegister"]},
+    )
+    assert result[circuit] == (scan_type, "0101", "0202")
+
+
+def test_scan_matching_family_variant_number_on_circuit_only() -> None:
+    result = match_scan_to_circuits(
+        [("15", "BASV", "0507", "1704")],
+        {"basv2": ["basv2.HwcTempDesired"]},
+    )
+    assert result["basv2"] == ("BASV", "0507", "1704")
+
+
+def test_scan_matching_rejects_ambiguous_family_circuits() -> None:
+    """Two sibling circuits of one scan family must not receive guessed metadata."""
+    result = match_scan_to_circuits(
+        [("15", "BASV3", "0708", "4304")],
+        {
+            "basv": ["basv.HwcTempDesired"],
+            "basv2": ["basv2.HwcTempDesired"],
+        },
+    )
+    assert "basv" not in result
+    assert "basv2" not in result
+
+
+def test_scan_matching_rejects_ambiguous_family_scans() -> None:
+    """One circuit with two same-family scan variants stays unmatched."""
+    result = match_scan_to_circuits(
+        [("15", "CTLV2", "0514", "1104"), ("16", "CTLV3", "0808", "8004")],
+        {"ctlv": ["ctlv.Z1OpMode"]},
+    )
+    assert "ctlv" not in result
+
+
+def test_scan_matching_does_not_reuse_claimed_scan_for_sibling_circuit() -> None:
+    """A scan exactly/family-bound to one circuit must not leak to a sibling."""
+    result = match_scan_to_circuits(
+        [("08", "HMU00", "0901", "5103")],
+        {
+            "hmu": ["hmu.FlowTemp"],
+            "hmux0": ["hmux0.RunDataReturnTemp"],
+        },
+    )
+    assert result["hmu"] == ("HMU00", "0901", "5103")
+    assert "hmux0" not in result
+
+
+def test_scan_matching_does_not_cross_hmu_hmux_families() -> None:
+    """HMUX0 scan metadata must not bind to the differently-named hmu circuit."""
+    result = match_scan_to_circuits(
+        [("08", "HMUX0", "0303", "0504")],
+        {"hmu": ["hmu.FlowTemp"]},
+    )
+    assert "hmu" not in result
+
+
+def test_scan_matching_sibling_circuits_each_get_own_scan() -> None:
+    result = match_scan_to_circuits(
+        [("08", "HMU00", "0901", "5103"), ("08", "HMUX0", "0303", "0504")],
+        {
+            "hmu": ["hmu.FlowTemp"],
+            "hmux0": ["hmux0.RunDataReturnTemp"],
+        },
+    )
+    assert result["hmu"] == ("HMU00", "0901", "5103")
+    assert result["hmux0"] == ("HMUX0", "0303", "0504")
+
+
+def test_scan_matching_unknown_scan_type_does_not_leak() -> None:
+    result = match_scan_to_circuits(
+        [("01", "XYZ01", "1234", "5678")],
+        {
+            "hmu": ["hmu.FlowTemp"],
+            "ctlv2": ["ctlv2.Z1OpMode"],
+        },
+    )
+    assert result == {}
+
+
+def test_scan_matching_unknown_scan_type_matches_own_circuit() -> None:
+    result = match_scan_to_circuits(
+        [("01", "XYZ01", "1234", "5678")],
+        {"xyz": ["xyz.Status"]},
+    )
+    assert result["xyz"] == ("XYZ01", "1234", "5678")
+
+
+def test_scan_matching_duplicate_identical_entries_are_deterministic() -> None:
+    entries = [
+        ("15", "CTLV3", "0808", "8004"),
+        ("15", "CTLV3", "0808", "8004"),
+        ("08", "HMUX0", "0303", "0504"),
+        ("08", "HMUX0", "0303", "0504"),
+    ]
+    circuits = {"hmux0": ["hmux0.Status01"], "ctlv3": ["ctlv3.Z1OpMode"]}
+    result = match_scan_to_circuits(entries, circuits)
+    assert result == match_scan_to_circuits(entries[:2] + entries[2:], circuits)
+    assert result["ctlv3"] == ("CTLV3", "0808", "8004")
+    assert result["hmux0"] == ("HMUX0", "0303", "0504")
+
+
+def test_scan_matching_multiple_unrelated_scans_stay_isolated() -> None:
+    result = match_scan_to_circuits(
+        [
+            ("08", "HMUX0", "0303", "0504"),
+            ("15", "CTLV3", "0808", "8004"),
+            ("15", "CTLV3", "0808", "8004"),
+            ("76", "VWZIO", "0303", "0504"),
+            ("f6", "NETX2", "4039", "5703"),
+        ],
+        {
+            "hmux0": ["hmux0.Status01"],
+            "ctlv3": ["ctlv3.Z1OpMode"],
+            "vwzio": ["vwzio.TestHwcTemp"],
+            "Broadcast": ["Broadcast.Outsidetemp"],
+        },
+    )
+    assert result["hmux0"] == ("HMUX0", "0303", "0504")
+    assert result["ctlv3"] == ("CTLV3", "0808", "8004")
+    assert result["vwzio"] == ("VWZIO", "0303", "0504")
+    assert result["Broadcast"] == ("NETX2", "4039", "5703")
+
+
+def test_scan_matching_netx2_broadcast_and_netx3_ignored() -> None:
+    result = match_scan_to_circuits(
+        [("f6", "NETX3", "0129", "0404")],
+        {"Broadcast": ["Broadcast.Outsidetemp"]},
+    )
+    assert result == {}
+
+
 def _arotherm_graph() -> DeviceGraph:
     return DiscoveryService.build_device_graph(AROTHERM_LINES)
 

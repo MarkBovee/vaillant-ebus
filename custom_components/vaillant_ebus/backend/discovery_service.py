@@ -387,41 +387,115 @@ def _name_belongs_to_sub(name: str, sub_name: str) -> bool:
     return False
 
 
+# Normalize a circuit name or scan TYPE for comparison: case-insensitive and
+# underscore-insensitive (VR_71 ↔ VR71). Deliberately conservative — no other
+# characters or digits are stripped, so HMU, HMUX0 and HMU00 remain
+# distinguishable from each other.
+def _normalize_name(name: str) -> str:
+    return name.replace("_", "").lower()
+
+
+# Stable family of a circuit name or scan TYPE: trailing variant digits
+# removed (HMU00 → hmu, HMUX0 → hmux, BASV3 → basv). Digits inside the name
+# are kept so related families (hmu vs hmux) never collapse into one.
+def _name_family(name: str) -> str:
+    return _normalize_name(name).rstrip("0123456789")
+
+
 # Associate ebusd scan metadata with the discovered circuits it describes.
+#
+# Matching runs from strongest to weakest evidence and a circuit is bound at
+# most once:
+#   1. NETX2 → Broadcast (fixed relationship in the ebusd configuration).
+#   2. Exact normalized TYPE ↔ circuit match (HMUX0 ↔ hmux0, CTLV3 ↔ ctlv3).
+#   3. Family match after stripping variant digits (HMU00 ↔ hmu, BASV3 ↔ basv).
+#   4. Stable family-prefix fallback (circuit starts with the scan family).
+# A scan entry is consumed by at most one circuit. Ambiguous associations are
+# intentionally left unmatched instead of guessed: scan metadata drives device
+# naming, classification and hardware-gated runtime definitions (HMUX0 SW/HW),
+# so a wrong assignment poisons the graph. Identical repeated scan lines (find
+# output may repeat them) collapse to the first occurrence, keeping the result
+# deterministic regardless of duplication.
 def _match_scan_to_circuits(
     scan_entries: list[tuple[str, str, str, str]],
     regs_by_circuit: dict[str, list[str]],
 ) -> dict[str, tuple[str, str, str]]:
-    result: dict[str, tuple[str, str, str]] = {}
     circuit_names = [c for c in regs_by_circuit if not c.lower().startswith("scan")]
 
-    def _norm(name: str) -> str:
-        return name.replace("_", "").lower()
+    scans: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    for _addr, scan_type, scan_sw, scan_hw in scan_entries:
+        if scan_type.lower() in seen:
+            continue
+        seen.add(scan_type.lower())
+        scans.append((scan_type, scan_sw, scan_hw))
 
-    # Prefer the most specific match. Exact scan-type ↔ circuit first.
-    for scan_addr, scan_type, scan_sw, scan_hw in scan_entries:
-        # Direct mapping for NETX2 → Broadcast
+    result: dict[str, tuple[str, str, str]] = {}
+
+    # Priority 1: NETX2 always describes the Broadcast pseudo-circuit.
+    for scan_type, scan_sw, scan_hw in scans:
         if scan_type.lower() == "netx2":
             result["Broadcast"] = (scan_type, scan_sw, scan_hw)
+
+    # Priority 2: exact normalized match. Skipped when several circuits share
+    # the normalized name — assigning one of them would be a coin flip.
+    for scan_type, scan_sw, scan_hw in scans:
+        if scan_type.lower() == "netx2":
             continue
-        for ckt in circuit_names:
-            if _norm(ckt) == _norm(scan_type):
-                result[ckt] = (scan_type, scan_sw, scan_hw)
-                break
-    # Fall back to prefix matching for circuits with no exact match, giving
-    # each circuit the longest matching scan prefix.
-    for ckt in circuit_names:
-        if ckt in result:
+        candidates = [c for c in circuit_names if _normalize_name(c) == _normalize_name(scan_type)]
+        if len(candidates) == 1 and candidates[0] not in result:
+            result[candidates[0]] = (scan_type, scan_sw, scan_hw)
+
+    claimed = {info[0].lower() for info in result.values()}
+
+    # Priority 3: family match on digit-stripped names (HMU00 ↔ hmu, BASV3 ↔
+    # basv). Only when exactly one circuit carries the family and exactly one
+    # unclaimed scan shares it; a family shared by several circuits (or a
+    # family with several scan variants) stays unmatched.
+    unmatched = [c for c in circuit_names if c not in result]
+    family_counts: dict[str, int] = {}
+    for ckt in unmatched:
+        fam = _name_family(ckt)
+        if fam:
+            family_counts[fam] = family_counts.get(fam, 0) + 1
+    for ckt in unmatched:
+        fam = _name_family(ckt)
+        if not fam or family_counts.get(fam, 0) != 1:
             continue
-        best = None
-        for scan_addr, scan_type, scan_sw, scan_hw in scan_entries:
-            if scan_type.lower() == "netx2":
-                continue
-            prefix = _norm(scan_type).rstrip("0123456789")
-            if _norm(ckt).startswith(prefix) and (best is None or len(prefix) > len(best[0])):
-                best = (prefix, scan_type, scan_sw, scan_hw)
-        if best is not None:
-            result[ckt] = (best[1], best[2], best[3])
+        candidates = [
+            (t, sw, hw)
+            for t, sw, hw in scans
+            if t.lower() != "netx2" and t.lower() not in claimed and _name_family(t) == fam
+        ]
+        if len(candidates) == 1:
+            result[ckt] = candidates[0]
+            claimed.add(candidates[0][0].lower())
+
+    # Priority 4: prefix fallback for circuits whose name only shares the scan
+    # family as a prefix. Used only when exactly one unclaimed scan and one
+    # unmatched circuit claim each other; anything broader stays unmatched.
+    for scan_type, scan_sw, scan_hw in scans:
+        if scan_type.lower() == "netx2" or scan_type.lower() in claimed:
+            continue
+        fam = _name_family(scan_type)
+        if not fam:
+            continue
+        # Multiple unclaimed variants of the same family (e.g. CTLV2 and
+        # CTLV3) cannot be told apart by a bare prefix — skip the family.
+        same_family = [
+            t for t, _sw, _hw in scans if t.lower() != "netx2" and t.lower() not in claimed and _name_family(t) == fam
+        ]
+        if len(same_family) != 1:
+            continue
+        claimants = [
+            c
+            for c in circuit_names
+            if c not in result and _normalize_name(c).startswith(fam)
+        ]
+        if len(claimants) == 1:
+            result[claimants[0]] = (scan_type, scan_sw, scan_hw)
+            claimed.add(scan_type.lower())
+
     return result
 
 

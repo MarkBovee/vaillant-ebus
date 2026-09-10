@@ -642,6 +642,71 @@ async def test_status07_definition_skips_other_hmu_hardware() -> None:
         assert not any(",Status07," in definition for definition in definitions)
 
 
+# End-to-end: issue #99 find output → DeviceGraph scan metadata → runtime
+# hardware detection. The HMUX0 yield/COP definitions must activate from the
+# discovered scan identity (HMUX0;0303;0504) without any circuit-name hack.
+async def test_hmux0_runtime_definitions_use_issue99_fixture_metadata() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/arotherm_hmux0_dhw_holiday_discovery.yaml")
+        )
+        hmux0 = graph.nodes.get("hmux0")
+        assert hmux0 is not None
+        assert hmux0.device_type == DeviceType.HEAT_PUMP
+        assert hmux0.scan_type == "HMUX0"
+        assert hmux0.scan_sw == "0303"
+        assert hmux0.scan_hw == "0504"
+        ctlv3 = graph.nodes["ctlv3"]
+        assert ctlv3.device_type == DeviceType.HEATING_CONTROLLER
+        assert ctlv3.scan_type == "CTLV3"
+        assert ctlv3.scan_sw == "0808"
+        assert ctlv3.scan_hw == "8004"
+
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = graph
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        hmux0_defs = [definition for definition in definitions if ",hmux0," in definition]
+        assert len(hmux0_defs) == 11
+        assert all(",hmu," not in definition for definition in hmux0_defs)
+        assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0_defs)
+        assert any(",hmux0,YieldHc," in definition for definition in hmux0_defs)
+        assert any(",hmux0,CopHwcMonth," in definition for definition in hmux0_defs)
+
+
+# A future HMUX0 firmware (pro7 capture: SW0406/HW0504 on an `hmu` circuit)
+# receives no cross-family scan binding (HMUX0 ≠ hmu), and neither the SW0303-
+# gated yield/COP definitions nor the HMUX0 Status00/power definitions may
+# activate from that combination.
+async def test_hmux0_other_firmware_gets_scan_metadata_without_yield_definitions() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/arotherm_pro7_quiet_off_idle_discovery.yaml")
+        )
+        hmu = graph.nodes.get("hmu")
+        assert hmu is not None
+        assert hmu.device_type == DeviceType.HEAT_PUMP
+        assert hmu.scan_type == ""
+
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = graph
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        assert not any(",hmux0," in definition for definition in definitions)
+        assert not any(",Status00," in definition for definition in definitions)
+        assert not any(",RunDataElPowerConsumption," in definition for definition in definitions)
+
+
 async def test_runtime_definitions_roll_over_and_retry_failures(monkeypatch) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())

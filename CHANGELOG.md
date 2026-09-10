@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.6 - 2026-09-10
+
+### Fixed
+
+- **Deterministic scan-metadata matching.** Scan `TYPE`/`SW`/`HW` entries are
+  now bound to circuits through an explicit evidence priority: exact normalized
+  name, then digit-stripped family match, then a stable family-prefix fallback.
+  A scan entry is consumed by at most one circuit, and ambiguous associations
+  (several sibling circuits of one family, or several scan variants of one
+  family) are intentionally left unmatched instead of guessed. This prevents
+  placeholder circuits (for example a generic `ctlv2` probe circuit on an
+  HMUX0/CTLV3 bus) from silently receiving another circuit's scan metadata,
+  which affected device naming and classification on mixed installs.
+
 ## 1.7.5 - 2026-09-10
 
 ### Fixed
