@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.8.0-rc1 - 2026-09-10
+
+First release candidate for v1.8.0.
+
+### Changed
+
+- Ownership resolution is fail-closed: unresolved topology is never guessed.
+- Legacy circuit resolution remains available only as a deprecated compatibility
+  wrapper; production ownership paths use typed `ResolutionResult` values.
+- Home Assistant device relationships now use `via_device_id` instead of the
+  deprecated `via_device` field.
+
+### Validation
+
+- 489 pytest tests passing.
+- Ruff, scoped format, strict mypy, YAML, compileall, and whitespace checks passing.
+- Live Home Assistant 2026.9.1 deployment tested successfully.
+
+This is a pre-release for testing before final v1.8.0. Known non-blocking debt:
+Home Assistant reports existing `via_device` warnings from other installed custom
+integrations; Vaillant eBUS no longer emits that warning.
+
 ## 1.8.0 - 2026-09-10
 
 ### Changed

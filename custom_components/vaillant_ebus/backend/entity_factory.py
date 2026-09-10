@@ -229,12 +229,9 @@ def _redistribute_device_assignments(
         elif name_lower.startswith(_DHW_PREFIXES) and "dhw" in graph.nodes:
             entity._device_circuit = "dhw"
         elif name_lower == "hydraulicscheme" and entity.circuit.lower() == "sc":
-            controller = next(
-                (node.circuit for node in graph.nodes.values() if node.device_type == DeviceType.HEATING_CONTROLLER),
-                None,
-            )
+            controller = graph.heating_controller()
             if controller:
-                entity._device_circuit = controller
+                entity._device_circuit = controller.circuit
 
         redistributed.append(entity)
 

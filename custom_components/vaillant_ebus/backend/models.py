@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
+from warnings import deprecated
 
 # ebusd values that mean "no usable data" rather than a measured value.
 # Exact-match set; prefix/substring forms are handled by is_no_data_value().
@@ -352,6 +353,18 @@ class DeviceGraph:
 
     # Resolve logical metadata circuits and expose ambiguity to safety-sensitive callers.
     def resolve_circuit_result(self, circuit: str) -> ResolutionResult:
+        exact_node = self.nodes.get(circuit)
+        expected_type = {
+            "ctlv2": DeviceType.HEATING_CONTROLLER,
+            "hmu": DeviceType.HEAT_PUMP,
+            "bai": DeviceType.HEATING_CONTROLLER,
+        }.get(circuit)
+        if exact_node is not None and (expected_type is None or exact_node.device_type == expected_type):
+            return ResolutionResult(ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit")
+        if exact_node is not None and expected_type is not None:
+            return ResolutionResult(
+                ResolutionStatus.AMBIGUOUS, circuit=circuit, reason="exact circuit has wrong device role"
+            )
         if circuit == "ctlv2":
             result = self.heating_controller_result()
             if result.status == ResolutionStatus.UNIQUE:
@@ -363,12 +376,7 @@ class DeviceGraph:
                         ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
                     )
                 return ResolutionResult(result.status, circuit, reason=result.reason)
-            exact_node = self.nodes.get(circuit)
-            if exact_node is not None:
-                return ResolutionResult(
-                    ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
-                )
-            return ResolutionResult(ResolutionStatus.FALLBACK, circuit, reason=result.reason)
+            return ResolutionResult(ResolutionStatus.MISSING, circuit, reason=result.reason)
         if circuit == "bai":
             bai_controllers = sorted(
                 (
@@ -383,7 +391,7 @@ class DeviceGraph:
                 return ResolutionResult(ResolutionStatus.UNIQUE, node.circuit, node, "only BAI controller")
             if bai_controllers:
                 return ResolutionResult(ResolutionStatus.AMBIGUOUS, circuit=circuit, reason="multiple BAI controllers")
-            return ResolutionResult(ResolutionStatus.FALLBACK, circuit, reason="no BAI controller discovered")
+            return ResolutionResult(ResolutionStatus.MISSING, circuit, reason="no BAI controller discovered")
         if circuit == "hmu":
             result = self.heat_pump_result()
             if result.status == ResolutionStatus.UNIQUE:
@@ -395,18 +403,12 @@ class DeviceGraph:
                         ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
                     )
                 return ResolutionResult(result.status, circuit, reason=result.reason)
-            exact_node = self.nodes.get(circuit)
-            if exact_node is not None:
-                return ResolutionResult(
-                    ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
-                )
-            return ResolutionResult(ResolutionStatus.FALLBACK, circuit, reason=result.reason)
-        exact_node = self.nodes.get(circuit)
-        if exact_node is not None:
-            return ResolutionResult(ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit")
+            return ResolutionResult(ResolutionStatus.MISSING, circuit, reason=result.reason)
         return ResolutionResult(ResolutionStatus.FALLBACK, circuit, reason="literal circuit")
 
-    # Resolve logical metadata circuits while retaining the legacy string API.
+    # Deprecated compatibility wrapper. Ownership-sensitive callers must use
+    # resolve_circuit_result() so unresolved topology cannot be mistaken for a circuit.
+    @deprecated("Use resolve_circuit_result() for ownership-sensitive resolution")
     def resolve_circuit(self, circuit: str) -> str:
         result = self.resolve_circuit_result(circuit)
         return result.circuit or circuit

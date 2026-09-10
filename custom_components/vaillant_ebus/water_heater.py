@@ -35,6 +35,8 @@ HOLIDAY_RESET_VALUES = frozenset(("01.01.2015", "01.01.2019"))
 # Look up a string value from coordinator ebusd data by register name
 def _value(coordinator: VaillantCoordinator, register: str) -> str | None:
     circuit = coordinator.heating_circuit
+    if circuit is None:
+        return None
     key = f"{circuit}.{register}.value"
     value = coordinator.data.get("ebusd", {}).get(key)
     return str(value) if value is not None else None
@@ -137,6 +139,8 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         if operation_mode not in OPERATION_MODES:
             raise ValueError(f"Unsupported DHW operation: {operation_mode}")
         ckt = self.coordinator.heating_circuit
+        if ckt is None:
+            return
         if operation_mode == "boost":
             self.coordinator.dhw_boost_desired = True
             await self.coordinator.async_write_registers(
@@ -163,25 +167,33 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
 
     # Enable away mode by setting holiday period from today to end date
     async def async_turn_away_mode_on(self) -> None:
+        circuit = self.coordinator.heating_circuit
+        if circuit is None:
+            return
         today = date.today().strftime(DATE_FMT)
         away_duration = self.coordinator._entry.options.get(CONF_AWAY_DURATION, DEFAULT_AWAY_DURATION)
         end = (date.today() + timedelta(days=away_duration)).strftime(DATE_FMT)
         await self.coordinator.async_write_registers(
             [
-                (self.coordinator.heating_circuit, "HwcHolidayStartPeriod", today),
-                (self.coordinator.heating_circuit, "HwcHolidayEndPeriod", end),
+                (circuit, "HwcHolidayStartPeriod", today),
+                (circuit, "HwcHolidayEndPeriod", end),
             ]
         )
 
     # Disable away mode by resetting holiday dates to unset
     async def async_turn_away_mode_off(self) -> None:
+        circuit = self.coordinator.heating_circuit
+        if circuit is None:
+            return
         await self.coordinator.async_write_registers(
             [
-                (self.coordinator.heating_circuit, "HwcHolidayStartPeriod", HOLIDAY_RESET),
-                (self.coordinator.heating_circuit, "HwcHolidayEndPeriod", HOLIDAY_RESET),
+                (circuit, "HwcHolidayStartPeriod", HOLIDAY_RESET),
+                (circuit, "HwcHolidayEndPeriod", HOLIDAY_RESET),
             ]
         )
 
     # Write value to a DHW register through the central write path
     async def _write(self, name: str, value: str) -> None:
-        await self.coordinator.async_write_register(self.coordinator.heating_circuit, name, value)
+        circuit = self.coordinator.heating_circuit
+        if circuit is not None:
+            await self.coordinator.async_write_register(circuit, name, value)

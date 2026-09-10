@@ -252,6 +252,20 @@ async def test_dump_registers_skip_ambiguous_alias() -> None:
     ebus.read_register.assert_not_called()
 
 
+async def test_dump_registers_skip_missing_alias() -> None:
+    ebus = MagicMock()
+    ebus.find_registers = AsyncMock(return_value=[])
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {"hmu.OutsideTemp": MagicMock(enabled=True, writable=False)}
+    try:
+        registers, _, _ = await DUMP._dump_registers(ebus, circuit_aliases={"hmu": None})
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    assert registers == []
+    ebus.read_register.assert_not_called()
+
+
 def test_dump_redacts_sensitive_register_names() -> None:
     DUMP.SENSITIVE_FIELDS = {"serial"}
     assert DUMP._redact("secret-value", "SerialNumber") == "<redacted>"
@@ -306,11 +320,48 @@ async def test_service_dispatch_fails_without_loaded_entries() -> None:
 async def test_read_parameter_routes_to_selected_coordinator() -> None:
     hass, coord_a, coord_b = _two_entry_hass()
     for coord in (coord_a, coord_b):
-        coord.ebus = MagicMock()
-        coord.ebus.read_register = AsyncMock(return_value="21.5")
+        coord.async_read_register = AsyncMock(return_value="21.5")
     await INIT._svc_read_parameter(hass, _call({"circuit": "hmu", "name": "OutsideTemp", "entry_id": "entry-a"}))
-    coord_a.ebus.read_register.assert_awaited_once_with("hmu", "OutsideTemp", "")
-    coord_b.ebus.read_register.assert_not_awaited()
+    coord_a.async_read_register.assert_awaited_once_with("hmu", "OutsideTemp", "")
+    coord_b.async_read_register.assert_not_awaited()
+
+
+async def test_read_parameter_uses_discovered_circuit_resolution() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = tc._hass(tmpdir)
+        coordinator = VaillantCoordinator(hass, tc._entry())
+        coordinator._graph = tc.DeviceGraph(
+            nodes={"hmux0": tc.DeviceNode("hmux0", tc.DeviceType.HEAT_PUMP, has_data=True)},
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+        coordinator.ebus = MagicMock()
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.read_register = AsyncMock(return_value="21.5")
+        hass.data = {"vaillant_ebus": {"entry-a": coordinator}}
+
+        await INIT._svc_read_parameter(
+            hass, _call({"circuit": "hmu", "name": "OutsideTemp", "entry_id": "entry-a"})
+        )
+
+        coordinator.ebus.read_register.assert_awaited_once_with("hmux0", "OutsideTemp", "")
+
+
+async def test_read_parameter_does_not_read_when_circuit_owner_is_missing() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = tc._hass(tmpdir)
+        coordinator = VaillantCoordinator(hass, tc._entry())
+        coordinator._graph = tc.DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+        coordinator.ebus = MagicMock()
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.read_register = AsyncMock(return_value="21.5")
+        hass.data = {"vaillant_ebus": {"entry-a": coordinator}}
+
+        await INIT._svc_read_parameter(
+            hass, _call({"circuit": "hmu", "name": "OutsideTemp", "entry_id": "entry-a"})
+        )
+
+        coordinator.ebus.read_register.assert_not_awaited()
 
 
 # Intent: integration-scope setup registers every service once with schemas

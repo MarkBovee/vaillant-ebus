@@ -216,6 +216,40 @@ def test_scan_matching_duplicate_identical_entries_are_deterministic() -> None:
     assert result["hmux0"] == ("HMUX0", "0303", "0504")
 
 
+def test_scan_matching_conflicting_duplicate_metadata_is_unmatched_in_any_order() -> None:
+    entries = [("08", "HMUX0", "0303", "0504"), ("08", "HMUX0", "0406", "0504")]
+    circuits = {"hmux0": ["hmux0.Status01"]}
+
+    first = match_scan_to_circuits(entries, circuits)
+    second = match_scan_to_circuits(list(reversed(entries)), circuits)
+
+    assert first == {}
+    assert second == {}
+
+
+def test_scan_matching_compatible_duplicate_metadata_merges_missing_fields() -> None:
+    result = match_scan_to_circuits(
+        [("08", "HMUX0", "", "0504"), ("08", "HMUX0", "0303", "0504")],
+        {"hmux0": ["hmux0.Status01"]},
+    )
+
+    assert result["hmux0"] == ("HMUX0", "0303", "0504")
+
+
+def test_relationships_do_not_select_first_parent_for_ambiguous_devices() -> None:
+    first = DiscoveryService.build_device_graph(
+        ["hmu FlowTemp = 35", "hmux0 FlowTemp = 36", "ctlv3 Z1OpMode = day", "ctlv4 Z1OpMode = day"]
+    )
+    second = DiscoveryService.build_device_graph(
+        ["ctlv4 Z1OpMode = day", "ctlv3 Z1OpMode = day", "hmux0 FlowTemp = 36", "hmu FlowTemp = 35"]
+    )
+
+    assert first.nodes["ctlv3"].parent is None
+    assert first.nodes["ctlv4"].parent is None
+    assert second.nodes["ctlv3"].parent is None
+    assert second.nodes["ctlv4"].parent is None
+
+
 def test_heat_pump_resolution_does_not_depend_on_node_order() -> None:
     first = DeviceGraph(
         nodes={

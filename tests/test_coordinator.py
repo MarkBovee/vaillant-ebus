@@ -385,6 +385,13 @@ def test_graph_resolution_reports_ambiguous_heat_pump_owner() -> None:
     assert resolution.circuit == "hmu"
 
 
+def test_legacy_resolve_circuit_keeps_string_contract_without_ownership_authority() -> None:
+    graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+
+    assert graph.resolve_circuit("hmu") == "hmu"
+    assert graph.resolve_circuit_result("hmu").status == ResolutionStatus.MISSING
+
+
 async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
@@ -466,6 +473,22 @@ async def test_runtime_definitions_skip_ambiguous_logical_circuit() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         assert all(",ctlv2," not in definition for definition in definitions)
+
+
+async def test_runtime_definitions_skip_missing_logical_circuit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = AsyncMock()
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        assert all(",ctlv2," not in definition for definition in definitions)
+        assert all(",hmu," not in definition for definition in definitions)
+        assert all(",bai," not in definition for definition in definitions)
 
 
 async def test_legacy_register_aliases_resolve_to_discovered_circuits() -> None:
@@ -1076,6 +1099,46 @@ async def test_async_write_register_resolves_discovered_circuit() -> None:
         mock_ebus.write_register.assert_awaited_once_with("ctlv3", "Z1DayTemp", "21", strict_verify=True)
 
 
+async def test_async_read_register_resolves_discovered_circuit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(
+            nodes={"hmux0": DeviceNode("hmux0", DeviceType.HEAT_PUMP, has_data=True)},
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value="21")
+        c.ebus = mock_ebus
+
+        assert await c.async_read_register("hmu", "OutsideTemp") == "21"
+        mock_ebus.read_register.assert_awaited_once_with("hmux0", "OutsideTemp", "")
+
+
+async def test_async_read_register_rejects_missing_or_ambiguous_owner() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value="21")
+        c.ebus = mock_ebus
+
+        c._graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+        assert await c.async_read_register("hmu", "OutsideTemp") is None
+
+        c._graph = DeviceGraph(
+            nodes={
+                "hmux0": DeviceNode("hmux0", DeviceType.HEAT_PUMP),
+                "hmu1": DeviceNode("hmu1", DeviceType.HEAT_PUMP),
+            },
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+        assert await c.async_read_register("hmu", "OutsideTemp") is None
+        mock_ebus.read_register.assert_not_awaited()
+
+
 # Intent: refuse writes when graph ownership cannot identify one controller.
 async def test_async_write_register_rejects_ambiguous_discovered_circuit() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -1095,6 +1158,28 @@ async def test_async_write_register_rejects_ambiguous_discovered_circuit() -> No
 
         assert await c.async_write_register("ctlv2", "Z1DayTemp", "21") is False
         mock_ebus.write_register.assert_not_awaited()
+
+
+async def test_async_write_register_rejects_missing_discovered_circuit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.write_register = AsyncMock(return_value=WriteResult(success=True, verified_value=None))
+        c.ebus = mock_ebus
+
+        assert await c.async_write_register("hmu", "SetMode", "auto") is False
+        mock_ebus.write_register.assert_not_awaited()
+
+
+async def test_register_circuit_properties_do_not_fallback_with_unresolved_graph() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+
+        assert c.heating_circuit is None
+        assert c.heat_pump_circuit is None
 
 
 # Intent: route BAI logical writes only when a unique BAI controller is discovered.
@@ -1328,6 +1413,41 @@ async def test_fallback_read_skips_ambiguous_discovered_owners() -> None:
         assert ("ctlv2", "PrEnergySumHwc") not in calls
 
 
+async def test_fallback_read_skips_missing_logical_owner() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value="42")
+        c.ebus = mock_ebus
+        c._graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+
+        await c._fallback_read()
+
+        calls = {(args[0], args[1]) for args, _ in mock_ebus.read_register.call_args_list}
+        assert ("hmu", "OutsideTemp") not in calls
+
+
+async def test_fallback_read_rejects_singleton_wrong_role_candidate() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value="42")
+        c.ebus = mock_ebus
+        c._graph = DeviceGraph(
+            nodes={"ctlv3": DeviceNode("ctlv3", DeviceType.HEATING_CONTROLLER, has_data=True)},
+            raw_registers={"ctlv3.RunDataStatuscode": "-"},
+            placeholder_registers=set(),
+        )
+
+        await c._fallback_read()
+
+        assert ("ctlv3", "RunDataStatuscode") not in {
+            (args[0], args[1]) for args, _ in mock_ebus.read_register.call_args_list
+        }
+
+
 # Intent: keep parsed multi-field names out of coordinator register polling.
 async def test_fallback_read_skips_field_mapping_keys() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -1527,8 +1647,11 @@ async def test_get_device_info_with_parent() -> None:
         c.ebus = MagicMock()
         c.ebus.version = "23.2"
 
+        device_registry = sys.modules["homeassistant.helpers.device_registry"]
+        device_registry.async_get_device_id_by_identifier = MagicMock(return_value="parent-device-id")
         info = c.get_device_info("ctlv2")
-        assert info.get("via_device") == ("vaillant_ebus", "hmu")
+        assert info.get("via_device_id") == "parent-device-id"
+        assert "via_device" not in info
 
 
 async def test_get_device_info_no_graph_fallback() -> None:
@@ -1539,6 +1662,20 @@ async def test_get_device_info_no_graph_fallback() -> None:
 
         info = c.get_device_info("hmu")
         assert "hmu" in str(info["identifiers"])
+
+
+async def test_get_device_info_omits_parent_when_registry_lookup_fails() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = _make_graph()
+        c.ebus = MagicMock()
+        c.ebus.version = "23.2"
+        device_registry = sys.modules["homeassistant.helpers.device_registry"]
+        device_registry.async_get_device_id_by_identifier = MagicMock(side_effect=ValueError)
+
+        info = c.get_device_info("ctlv2")
+
+        assert "via_device_id" not in info
 
 
 async def test_orchestration_order() -> None:

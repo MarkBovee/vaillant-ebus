@@ -149,39 +149,44 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     def is_on(self) -> bool | None:
         # True when holiday start/end dates contain today
         data = self.coordinator.data.get("ebusd", {})
-        start = data.get(f"{self.coordinator.heating_circuit}.Z1HolidayStartPeriod.value")
-        end = data.get(f"{self.coordinator.heating_circuit}.Z1HolidayEndPeriod.value")
+        circuit = self.coordinator.heating_circuit
+        if circuit is None:
+            return None
+        start = data.get(f"{circuit}.Z1HolidayStartPeriod.value")
+        end = data.get(f"{circuit}.Z1HolidayEndPeriod.value")
         if start is None or end is None:
             return None
         return _is_holiday_active(start, end)
 
     # Set holiday dates from today to far future, enable away mode
     async def async_turn_on(self, **kwargs: Any) -> None:
-        if not self.coordinator.ebus:
+        circuit = self.coordinator.heating_circuit
+        if not self.coordinator.ebus or circuit is None:
             return
         today = _today_str()
         data = self.coordinator.data.get("ebusd", {})
-        holiday_temp = data.get(f"{self.coordinator.heating_circuit}.Z1HolidayTemp.value", "15")
+        holiday_temp = data.get(f"{circuit}.Z1HolidayTemp.value", "15")
         writes = [
-            (self.coordinator.heating_circuit, "Z1HolidayStartPeriod", today),
-            (self.coordinator.heating_circuit, "Z1HolidayEndPeriod", FAR_FUTURE),
-            (self.coordinator.heating_circuit, "HwcHolidayStartPeriod", today),
-            (self.coordinator.heating_circuit, "HwcHolidayEndPeriod", FAR_FUTURE),
+            (circuit, "Z1HolidayStartPeriod", today),
+            (circuit, "Z1HolidayEndPeriod", FAR_FUTURE),
+            (circuit, "HwcHolidayStartPeriod", today),
+            (circuit, "HwcHolidayEndPeriod", FAR_FUTURE),
         ]
         if holiday_temp:
-            writes.append((self.coordinator.heating_circuit, "Z1HolidayTemp", holiday_temp))
+            writes.append((circuit, "Z1HolidayTemp", holiday_temp))
         await self.coordinator.async_write_registers(writes)
 
     # Reset holiday dates to unset, disable away mode
     async def async_turn_off(self, **kwargs: Any) -> None:
-        if not self.coordinator.ebus:
+        circuit = self.coordinator.heating_circuit
+        if not self.coordinator.ebus or circuit is None:
             return
         writes = [
-            (self.coordinator.heating_circuit, "Z1HolidayStartPeriod", UNSET_DATE),
-            (self.coordinator.heating_circuit, "Z1HolidayEndPeriod", UNSET_DATE),
-            (self.coordinator.heating_circuit, "HwcHolidayStartPeriod", UNSET_DATE),
-            (self.coordinator.heating_circuit, "HwcHolidayEndPeriod", UNSET_DATE),
-            (self.coordinator.heating_circuit, "Z1HolidayTemp", "15"),
+            (circuit, "Z1HolidayStartPeriod", UNSET_DATE),
+            (circuit, "Z1HolidayEndPeriod", UNSET_DATE),
+            (circuit, "HwcHolidayStartPeriod", UNSET_DATE),
+            (circuit, "HwcHolidayEndPeriod", UNSET_DATE),
+            (circuit, "Z1HolidayTemp", "15"),
         ]
         await self.coordinator.async_write_registers(writes)
 
@@ -212,24 +217,29 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         if desired is not None:
             return desired
         data = self.coordinator.data.get("ebusd", {})
-        raw = data.get(f"{self.coordinator.heating_circuit}.HwcSFMode.value")
+        circuit = self.coordinator.heating_circuit
+        if circuit is None:
+            return None
+        raw = data.get(f"{circuit}.HwcSFMode.value")
         if raw is None:
             return None
         return raw.strip().lower() == "load"
 
     # Write "load" to HwcSFMode to start DHW boost
     async def async_turn_on(self, **kwargs: Any) -> None:
+        circuit = self.coordinator.heating_circuit
+        if circuit is None:
+            return
         self.coordinator.dhw_boost_desired = True
-        await self.coordinator.async_write_register(
-            self.coordinator.heating_circuit, "HwcSFMode", "load", strict_verify=False
-        )
+        await self.coordinator.async_write_register(circuit, "HwcSFMode", "load", strict_verify=False)
 
     # Write "auto" to HwcSFMode to stop DHW boost
     async def async_turn_off(self, **kwargs: Any) -> None:
+        circuit = self.coordinator.heating_circuit
+        if circuit is None:
+            return
         self.coordinator.dhw_boost_desired = False
-        await self.coordinator.async_write_register(
-            self.coordinator.heating_circuit, "HwcSFMode", "auto", strict_verify=False
-        )
+        await self.coordinator.async_write_register(circuit, "HwcSFMode", "auto", strict_verify=False)
 
 
 class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
@@ -252,8 +262,11 @@ class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         data = self.coordinator.data.get("ebusd", {})
-        start = data.get(f"{self.coordinator.heating_circuit}.HwcHolidayStartPeriod.value")
-        end = data.get(f"{self.coordinator.heating_circuit}.HwcHolidayEndPeriod.value")
+        circuit = self.coordinator.heating_circuit
+        if circuit is None:
+            return None
+        start = data.get(f"{circuit}.HwcHolidayStartPeriod.value")
+        end = data.get(f"{circuit}.HwcHolidayEndPeriod.value")
         if start is None or end is None:
             return None
         return _is_holiday_active(start, end)
@@ -261,6 +274,8 @@ class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     # Set DHW holiday from today to far future
     async def async_turn_on(self, **kwargs: Any) -> None:
         ckt = self.coordinator.heating_circuit
+        if ckt is None:
+            return
         await self.coordinator.async_write_registers(
             [
                 (ckt, "HwcHolidayStartPeriod", _today_str()),
@@ -271,6 +286,8 @@ class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     # Reset DHW holiday dates to unset value
     async def async_turn_off(self, **kwargs: Any) -> None:
         ckt = self.coordinator.heating_circuit
+        if ckt is None:
+            return
         await self.coordinator.async_write_registers(
             [
                 (ckt, "HwcHolidayStartPeriod", UNSET_DATE),

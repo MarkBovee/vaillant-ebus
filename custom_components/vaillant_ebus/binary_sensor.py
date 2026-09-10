@@ -39,12 +39,17 @@ async def async_setup_entry(
         return entities
 
     async_add_entities(_build(coordinator.entities))
-    async_add_entities(
-        [
-            EbusdConnectionSensor(coordinator, entry),
-            EbusdFaultSensor(coordinator, entry),
-        ]
-    )
+    added_fixed = False
+
+    def _ensure_fixed_entities() -> None:
+        nonlocal added_fixed
+        if added_fixed or coordinator.heat_pump_circuit is None:
+            return
+        async_add_entities([EbusdConnectionSensor(coordinator, entry), EbusdFaultSensor(coordinator, entry)])
+        added_fixed = True
+
+    _ensure_fixed_entities()
+    coordinator.register_post_discovery_callback(_ensure_fixed_entities)
     coordinator.register_entity_adder(
         "binary_sensor", lambda descriptions: async_add_entities(_build(descriptions))
     )
@@ -134,6 +139,8 @@ class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntit
     def is_on(self) -> bool:
         c = self.coordinator.heating_circuit
         hp = self.coordinator.heat_pump_circuit
+        if c is None or hp is None:
+            return False
         values = (
             self.coordinator.data.get("ebusd", {}).get(f"{hp}.Currenterror.value"),
             self.coordinator.data.get("ebusd", {}).get(f"{c}.Currenterror.value"),

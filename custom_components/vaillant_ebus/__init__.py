@@ -55,9 +55,8 @@ async def _svc_read_parameter(hass: HomeAssistant, call: ServiceCall) -> None:
     circuit = call.data["circuit"]
     name = call.data["name"]
     field = call.data.get("field", "")
-    if coordinator.ebus:
-        value = await coordinator.ebus.read_register(circuit, name, field)
-        _LOGGER.info("read_parameter %s.%s = %s", circuit, name, value)
+    value = await coordinator.async_read_register(circuit, name, field)
+    _LOGGER.info("read_parameter %s.%s = %s", circuit, name, value)
 
 
 # Write a value with read-after-write verification via the central write path.

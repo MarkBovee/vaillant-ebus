@@ -11,7 +11,7 @@ from typing import TypedDict
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry
+from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
@@ -206,29 +206,35 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         return self._entry.data.get(CONF_EBUSD_PORT, 8888)
 
     @property
-    def heating_circuit(self) -> str:
-        if self._graph:
-            controller = self._graph.heating_controller()
-            if controller:
-                return controller.circuit
-        return self._heating_circuit
+    def heating_circuit(self) -> str | None:
+        if self._graph is None:
+            return self._heating_circuit
+        return self.resolve_register_circuit("ctlv2")
 
     @property
-    def heat_pump_circuit(self) -> str:
-        if self._graph:
-            heat_pump = self._graph.heat_pump()
-            if heat_pump:
-                return heat_pump.circuit
-        return "hmu"
+    def heat_pump_circuit(self) -> str | None:
+        if self._graph is None:
+            return "hmu"
+        return self.resolve_register_circuit("hmu")
 
     def resolve_register_circuit(self, circuit: str) -> str | None:
         """Resolve legacy map circuits to circuits discovered on this bus."""
-        if self._graph:
+        if self._graph is not None:
             resolution = self._graph.resolve_circuit_result(circuit)
-            if resolution.status == ResolutionStatus.AMBIGUOUS:
+            if resolution.status != ResolutionStatus.UNIQUE:
                 return None
             return resolution.circuit or circuit
         return circuit
+
+    async def async_read_register(self, circuit: str, name: str, field: str = "") -> str | None:
+        """Read a register only after resolving its discovered circuit owner."""
+        if not self.ebus or not self.ebus.is_connected:
+            return None
+        resolved_circuit = self.resolve_register_circuit(circuit)
+        if resolved_circuit is None:
+            _LOGGER.warning("Read skipped: unresolved discovered circuit for %s.%s", circuit, name)
+            return None
+        return await self.ebus.read_register(resolved_circuit, name, field)
 
     # Active heating zones (zone id -> hosting circuit) derived from the
     # discovery graph. A zone counts as active when it has a room-zone mapping
@@ -239,16 +245,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # climate entity. Deliberately NOT filtered on the zone node's has_data:
     # ebusd reports ghost mapping values like "none" as real register values.
     def zone_circuits(self) -> dict[str, str]:
-        zones: dict[str, str] = {}
-        if not self._graph:
-            return zones
+        owners: dict[str, set[str]] = {}
+        if self._graph is None:
+            return {}
         for node in self._graph.nodes.values():
             for zone in node.zone_circuits:
-                if zone in zones:
-                    continue
                 if self._zone_is_valid(node.circuit, zone):
-                    zones[zone] = node.circuit
-        return zones
+                    owners.setdefault(zone, set()).add(node.circuit)
+        return {zone: next(iter(circuits)) for zone, circuits in owners.items() if len(circuits) == 1}
 
     # Whether a raw zone-register value proves real data: anything the shared
     # no-data helper rejects, except "none" which is a legitimate RoomZoneMapping
@@ -280,7 +284,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # absence (cache-seeded graphs only carry live values), so the register is
     # assumed present to preserve the pre-per-zone behavior.
     def has_zone_register(self, circuit: str, zone: str, name: str) -> bool:
-        if not self._graph or not self._last_find_keys:
+        if self._graph is None or not self._last_find_keys:
             return True
         key = f"{circuit}.{zone.upper()}{name}"
         if key in self._graph.raw_registers or key in self._graph.placeholder_registers:
@@ -722,8 +726,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             parts = definition.split(",", 3)
             if len(parts) < 3 or not self._graph:
                 return definition
-            resolution = self._graph.resolve_circuit_result(parts[1])
-            if resolution.status == ResolutionStatus.AMBIGUOUS:
+            resolution = (
+                self._graph.heating_controller_result()
+                if parts[1] == "ctlv2"
+                else self._graph.heat_pump_result()
+                if parts[1] == "hmu"
+                else self._graph.resolve_circuit_result(parts[1])
+            )
+            if resolution.status != ResolutionStatus.UNIQUE:
                 return None
             resolved = resolution.circuit or parts[1]
             if resolved == parts[1]:
@@ -732,7 +742,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return ",".join(parts)
 
         defines = [definition for definition in (_resolve_definition_circuit(item) for item in defines) if definition]
-        heat_pump = self._graph.heat_pump() if self._graph else None
+        heat_pump = self._graph.heat_pump_result().node if self._graph is not None else None
         if (
             heat_pump
             and heat_pump.scan_type.upper() == "HMUX0"
@@ -887,7 +897,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         parent: str | None = None
         node: DeviceNode | None = None
 
-        if self._graph:
+        if self._graph is not None:
             node = self._graph.nodes.get(circuit)
 
         if node:
@@ -910,20 +920,25 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         else:
             name = f"Vaillant {circuit}"
 
-        via_device: tuple[str, str] | None = None
-        if parent:
-            via_device = (DOMAIN, parent)
-
         ebusd_version = self.ebus.version if self.ebus else None
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, circuit)},
             name=name,
             manufacturer="Vaillant",
             model=name,
             sw_version=scan_sw or ebusd_version,
             hw_version=scan_hw,
-            via_device=via_device,
         )
+        if parent:
+            try:
+                info["via_device_id"] = device_registry.async_get_device_id_by_identifier(
+                    self.hass,
+                    (DOMAIN, parent),
+                    config_entry_id=self._entry.entry_id,
+                )
+            except ValueError:
+                _LOGGER.debug("Parent device %s is not registered yet", parent)
+        return info
 
     # Select a unique discovered owner for a logical register map entry.
     def _fallback_candidate(self, logical_circuit: str, name: str) -> str | None:
@@ -934,14 +949,29 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         Mirrors the ctlv2/hmu aliasing used by get_meta() so registers that
         live under basv3/ctlv3/vwzio are read from the correct circuit.
         """
+        expected_type = {
+            "ctlv2": DeviceType.HEATING_CONTROLLER,
+            "hmu": DeviceType.HEAT_PUMP,
+            "bai": DeviceType.HEATING_CONTROLLER,
+        }.get(logical_circuit)
         candidates: list[str] = []
-        if self._graph:
+        if self._graph is not None:
             keys = list(self._graph.raw_registers) + list(self._graph.placeholder_registers)
-            candidates = list(dict.fromkeys(rk.split(".", 1)[0] for rk in keys if rk.endswith(f".{name}")))
+            candidates = list(
+                dict.fromkeys(
+                    circuit
+                    for circuit in (rk.split(".", 1)[0] for rk in keys if rk.endswith(f".{name}"))
+                    if expected_type is None
+                    or (
+                        self._graph.nodes.get(circuit) is not None
+                        and self._graph.nodes[circuit].device_type == expected_type
+                    )
+                )
+            )
         resolved = self.resolve_register_circuit(logical_circuit)
         if resolved is not None and resolved in candidates:
             return resolved
-        if len(candidates) == 1:
+        if expected_type is None and len(candidates) == 1:
             return candidates[0]
         return None
 
@@ -991,16 +1021,18 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             map_circuit, name = key.split(".", 1)
             if is_field_key(key):
                 continue
-            circuit = self._fallback_candidate(map_circuit, name)
+            candidate_circuit = self._fallback_candidate(map_circuit, name)
             if (
-                circuit is None
+                candidate_circuit is None
                 and self._graph
                 and any(
                     rk.endswith(f".{name}") for rk in (*self._graph.raw_registers, *self._graph.placeholder_registers)
                 )
             ):
                 continue
-            resolved_circuit = circuit if circuit is not None else self.resolve_register_circuit(map_circuit)
+            resolved_circuit = (
+                candidate_circuit if candidate_circuit is not None else self.resolve_register_circuit(map_circuit)
+            )
             if resolved_circuit is not None:
                 _add(resolved_circuit, name)
 
@@ -1052,7 +1084,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     _LOGGER.debug("Fallback read %s = %s", key, value)
             except Exception as exc:
                 _LOGGER.warning("Fallback read failed: %s (%s)", key, exc)
-        if self._graph:
+        if self._graph is not None:
             graph_added = 0
             for key, register in self.registers.items():
                 if not register.has_data or key in self._graph.raw_registers:
@@ -1127,7 +1159,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 self._disable_no_data_registry_entities(self.entities)
                 if poll_energy:
                     self._last_energy_poll = now
-                zero_idle_registers(self.registers, self.heat_pump_circuit)
+                heat_pump_circuit = self.heat_pump_circuit
+                if heat_pump_circuit is not None:
+                    zero_idle_registers(self.registers, heat_pump_circuit)
                 if updated:
                     _LOGGER.info("Poll updated %d registers", updated)
                 return {"ebusd": await self._async_values_from_registers()}

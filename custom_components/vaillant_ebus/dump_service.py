@@ -188,7 +188,8 @@ async def async_export_discovery_dump(
 
     # Skip ambiguous logical aliases rather than polling a legacy circuit.
     aliases = {
-        logical_circuit: coordinator.resolve_register_circuit(logical_circuit) for logical_circuit in ("ctlv2", "hmu")
+        logical_circuit: coordinator.resolve_register_circuit(logical_circuit)
+        for logical_circuit in ("ctlv2", "hmu", "bai")
     }
     before_registers, seen, raw_find_lines = await _dump_registers(ebus, circuit_aliases=aliases)
 

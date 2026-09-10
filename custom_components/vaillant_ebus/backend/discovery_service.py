@@ -441,15 +441,33 @@ def _match_scan_to_circuits(
 ) -> dict[str, ScanMetadata]:
     circuit_names = [c for c in regs_by_circuit if not c.lower().startswith("scan")]
 
-    scans: list[ScanMetadata] = []
-    seen: set[str] = set()
+    scans_by_type: dict[str, ScanMetadata] = {}
+    conflicting_types: set[str] = set()
     for entry in scan_entries:
         normalized_entry = entry if isinstance(entry, ScanEntry) else ScanEntry(*entry)
         scan_type = normalized_entry.scan_type
-        if scan_type.lower() in seen:
+        scan_key = scan_type.casefold()
+        if scan_key in conflicting_types:
             continue
-        seen.add(scan_type.lower())
-        scans.append(ScanMetadata(scan_type, normalized_entry.scan_sw, normalized_entry.scan_hw))
+        existing = scans_by_type.get(scan_key)
+        if existing is None:
+            scans_by_type[scan_key] = ScanMetadata(scan_type, normalized_entry.scan_sw, normalized_entry.scan_hw)
+            continue
+        if existing.scan_sw and normalized_entry.scan_sw and existing.scan_sw != normalized_entry.scan_sw:
+            conflicting_types.add(scan_key)
+            scans_by_type.pop(scan_key, None)
+            continue
+        if existing.scan_hw and normalized_entry.scan_hw and existing.scan_hw != normalized_entry.scan_hw:
+            conflicting_types.add(scan_key)
+            scans_by_type.pop(scan_key, None)
+            continue
+        scans_by_type[scan_key] = ScanMetadata(
+            existing.scan_type,
+            existing.scan_sw or normalized_entry.scan_sw,
+            existing.scan_hw or normalized_entry.scan_hw,
+        )
+
+    scans = list(scans_by_type.values())
 
     result: dict[str, ScanMetadata] = {}
 
@@ -529,8 +547,10 @@ def _apply_relationships(
     nodes: dict[str, DeviceNode],
     sub_devices: dict[str, tuple[str, DeviceType]],
 ) -> None:
-    heat_pump = next((n for n in nodes.values() if n.device_type == DeviceType.HEAT_PUMP), None)
-    controller = next((n for n in nodes.values() if n.device_type == DeviceType.HEATING_CONTROLLER), None)
+    heat_pumps = [n for n in nodes.values() if n.device_type == DeviceType.HEAT_PUMP]
+    controllers = [n for n in nodes.values() if n.device_type == DeviceType.HEATING_CONTROLLER]
+    heat_pump = heat_pumps[0] if len(heat_pumps) == 1 else None
+    controller = controllers[0] if len(controllers) == 1 else None
 
     if not heat_pump and not controller:
         return

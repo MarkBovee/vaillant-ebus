@@ -68,7 +68,9 @@ QUICK_VETO_DURATION_REGISTER = "QuickVetoDuration"
 
 # Look up a string value from coordinator ebusd data by register name
 def _value(coordinator: VaillantCoordinator, register: str, circuit: str | None = None) -> str | None:
-    ckt = circuit or coordinator.heating_circuit
+    ckt = circuit if circuit is not None else coordinator.heating_circuit
+    if ckt is None:
+        return None
     key = f"{ckt}.{register}.value"
     value = coordinator.data.get("ebusd", {}).get(key)
     return str(value) if value is not None else None
@@ -103,7 +105,10 @@ async def async_setup_entry(
     def _ensure_zone_entities() -> None:
         zone_circuits = coordinator.zone_circuits()
         if not zone_circuits:
-            zone_circuits = {"z1": coordinator.heating_circuit}
+            circuit = coordinator.heating_circuit
+            if circuit is None:
+                return
+            zone_circuits = {"z1": circuit}
         missing = [zone for zone in zone_circuits if zone not in created_zones]
         if not missing:
             return
@@ -340,11 +345,14 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # date itself, so only the end date is written.
     async def _start_manual_cooling(self) -> bool:
         try:
+            heating_circuit = self.coordinator.heating_circuit
+            if heating_circuit is None:
+                return False
             days = self.coordinator._entry.options.get(CONF_COOLING_DURATION, DEFAULT_COOLING_DURATION)
             today = datetime.now().date()
             end = today + timedelta(days=days)
             writes = [
-                (self.coordinator.heating_circuit, "ManualCoolingEndDate", end.strftime(DATE_FMT)),
+                (heating_circuit, "ManualCoolingEndDate", end.strftime(DATE_FMT)),
                 (self._circuit, f"{self._zn}OpMode", "auto"),
             ]
             return await self.coordinator.async_write_registers(writes)
@@ -357,8 +365,11 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # The controller manages the start date itself.
     async def _cancel_manual_cooling(self) -> bool:
         try:
+            heating_circuit = self.coordinator.heating_circuit
+            if heating_circuit is None:
+                return False
             return await self.coordinator.async_write_register(
-                self.coordinator.heating_circuit, "ManualCoolingEndDate", HOLIDAY_RESET
+                heating_circuit, "ManualCoolingEndDate", HOLIDAY_RESET
             )
         except Exception as exc:
             _LOGGER.exception("cancel manual cooling failed: %s", exc)
