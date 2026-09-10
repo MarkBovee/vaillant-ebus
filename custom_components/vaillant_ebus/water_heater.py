@@ -85,13 +85,17 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
             | WaterHeaterEntityFeature.ON_OFF
         )
 
-    # True when HwcHolidayStartPeriod/EndPeriod bracket today
+    # True when HwcHolidayStartPeriod/EndPeriod bracket today. A reset sentinel
+    # is an explicit "not away" value, matching the DHW away switch; only
+    # genuinely missing data is unknown.
     @property
     def is_away_mode_on(self) -> bool | None:
         h_start = _value(self.coordinator, "HwcHolidayStartPeriod")
         h_end = _value(self.coordinator, "HwcHolidayEndPeriod")
-        if not h_start or not h_end or h_start in HOLIDAY_RESET_VALUES or h_end in HOLIDAY_RESET_VALUES:
+        if not h_start or not h_end:
             return None
+        if h_start in HOLIDAY_RESET_VALUES or h_end in HOLIDAY_RESET_VALUES:
+            return False
         try:
             now = date.today()
             start = datetime.strptime(h_start, DATE_FMT).date()

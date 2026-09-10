@@ -295,23 +295,37 @@ class DeviceGraph:
     raw_registers: dict[str, str]
     placeholder_registers: set[str]
 
+    # Register names that identify the heating/DHW controller. Their source
+    # circuit is authoritative even when ebusd exposes them under a logical
+    # sub-device: the DHW node owns ``ctlv3.HwcOpMode`` while the controller
+    # node itself lists no Hwc registers.
+    _CONTROL_REGISTERS: frozenset[str] = frozenset(
+        {"HwcTempDesired", "HwcStorageTemp", "HwcOpMode", "Z1DayTemp", "Z1OpMode"}
+    )
+
+    # Source circuits that own a discovered controller/DHW control register.
+    # Runtime-defined registers can create a bare ``ctlv2`` node on a bus whose
+    # real controller is ``ctlv3``; the control register's source circuit, not
+    # the logical device that happens to list it, identifies the controller.
+    def _control_owner_circuits(self) -> set[str]:
+        owners: set[str] = set()
+        for key in self.raw_registers:
+            if key.rsplit(".", 1)[-1] in self._CONTROL_REGISTERS:
+                owners.add(key.split(".", 1)[0].casefold())
+        return owners
+
     # Resolve the discovered heating controller without relying on node order.
     def heating_controller_result(self) -> ResolutionResult:
         controllers = sorted(
             (node for node in self.nodes.values() if node.device_type == DeviceType.HEATING_CONTROLLER),
             key=lambda node: node.circuit.casefold(),
         )
-        control_registers = {
-            "HwcTempDesired",
-            "HwcStorageTemp",
-            "HwcOpMode",
-            "Z1DayTemp",
-            "Z1OpMode",
-        }
+        control_owners = self._control_owner_circuits()
         control_candidates = [
             node
             for node in controllers
-            if any(register.rsplit(".", 1)[-1] in control_registers for register in node.registers)
+            if node.circuit.casefold() in control_owners
+            or any(register.rsplit(".", 1)[-1] in self._CONTROL_REGISTERS for register in node.registers)
         ]
         if len(control_candidates) == 1:
             node = control_candidates[0]
@@ -367,24 +381,27 @@ class DeviceGraph:
             "hmu": DeviceType.HEAT_PUMP,
             "bai": DeviceType.HEATING_CONTROLLER,
         }.get(circuit)
+        if circuit == "ctlv2":
+            # Runtime-defined registers can leave a bare ctlv2 node behind even
+            # when the real controller answering DHW/heating is ctlv3. Prefer
+            # the controller that owns the control registers; fall back to the
+            # exact discovered node only when that ownership is not unique.
+            result = self.heating_controller_result()
+            if result.status == ResolutionStatus.UNIQUE:
+                return result
+            if exact_node is not None and exact_node.device_type == DeviceType.HEATING_CONTROLLER:
+                return ResolutionResult(
+                    ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
+                )
+            if result.status == ResolutionStatus.AMBIGUOUS:
+                return ResolutionResult(result.status, circuit, reason=result.reason)
+            return ResolutionResult(ResolutionStatus.MISSING, circuit, reason=result.reason)
         if exact_node is not None and (expected_type is None or exact_node.device_type == expected_type):
             return ResolutionResult(ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit")
         if exact_node is not None and expected_type is not None:
             return ResolutionResult(
                 ResolutionStatus.AMBIGUOUS, circuit=circuit, reason="exact circuit has wrong device role"
             )
-        if circuit == "ctlv2":
-            result = self.heating_controller_result()
-            if result.status == ResolutionStatus.UNIQUE:
-                return result
-            if result.status == ResolutionStatus.AMBIGUOUS:
-                exact_node = self.nodes.get(circuit)
-                if exact_node is not None:
-                    return ResolutionResult(
-                        ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
-                    )
-                return ResolutionResult(result.status, circuit, reason=result.reason)
-            return ResolutionResult(ResolutionStatus.MISSING, circuit, reason=result.reason)
         if circuit == "bai":
             bai_controllers = sorted(
                 (

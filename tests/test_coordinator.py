@@ -418,11 +418,13 @@ async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0 = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0) == 11
+        assert len(hmux0) == 20
         assert all(",hmu," not in definition for definition in hmux0)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0)
         assert any(",hmux0,CopHwcMonth," in definition for definition in hmux0)
+        assert any(",hmux0,HcElecConsDay," in definition for definition in hmux0)
+        assert any(",hmux0,HwcElecConsTotal," in definition for definition in hmux0)
         assert not any(",Status00," in definition for definition in definitions)
         assert not any(",RunDataElPowerConsumption," in definition for definition in definitions)
 
@@ -774,17 +776,16 @@ async def test_hmux0_runtime_definitions_use_issue99_fixture_metadata() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_defs = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_defs) == 11
+        assert len(hmux0_defs) == 20
         assert all(",hmu," not in definition for definition in hmux0_defs)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0_defs)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0_defs)
         assert any(",hmux0,CopHwcMonth," in definition for definition in hmux0_defs)
 
 
-# A future HMUX0 firmware (pro7 capture: SW0406/HW0504 on an `hmu` circuit)
-# receives no cross-family scan binding (HMUX0 ≠ hmu), and neither the SW0303-
-# gated yield/COP definitions nor the HMUX0 Status00/power definitions may
-# activate from that combination.
+# A future HMUX0 firmware (pro7 capture: SW0406/HW0504) must not receive the
+# SW0303-gated yield/COP definitions or the incompatible HMU-only layouts.
+# The shared b516 energy family remains available.
 async def test_hmux0_other_firmware_gets_scan_metadata_without_yield_definitions() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         graph = DISCOVERY.DiscoveryService.build_device_graph(
@@ -804,7 +805,13 @@ async def test_hmux0_other_firmware_gets_scan_metadata_without_yield_definitions
         await c._define_custom_registers()
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
-        assert not any(",hmux0," in definition for definition in definitions)
+        # SW0303-gated telemetry stays off for this future firmware.
+        assert not any(",RunDataReturnTemp," in definition for definition in definitions)
+        assert not any(",YieldHc," in definition for definition in definitions)
+        assert not any(",CopHc," in definition for definition in definitions)
+        # The shared b516 energy statistics family is firmware-independent and
+        # must survive on the identified heat pump.
+        assert any(",hmux0,HcElecConsTotal," in definition for definition in definitions)
         assert not any(",Status00," in definition for definition in definitions)
         assert not any(",RunDataElPowerConsumption," in definition for definition in definitions)
 
@@ -823,7 +830,7 @@ async def test_hmux0_scan_bootstrap_defines_only_confirmed_registers() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_definitions = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_definitions) == 11
+        assert len(hmux0_definitions) == 20
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 
@@ -860,7 +867,7 @@ async def test_hmux0_scan_bootstrap_rediscovers_defined_registers() -> None:
 
         assert discovery.discover.await_count == 2
         definitions = [call.args[0] for call in mock_ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 11
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 20
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
         assert c.heat_pump_circuit == "hmux0"
         assert c.heating_circuit == "ctlv3"
@@ -885,7 +892,7 @@ async def test_hmux0_scan_bootstrap_ignores_generic_hmu_alias_definitions() -> N
         await c._define_custom_registers()
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 11
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 20
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 

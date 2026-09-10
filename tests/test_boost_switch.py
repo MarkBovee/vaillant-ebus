@@ -16,7 +16,10 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from tests import test_coordinator as tc  # noqa: F401 — installs shared HA mocks
+from tests.fake_ebusd import load_find_lines
 
 PROJECT_ROOT = Path(__file__).parents[1]
 COMPONENT_PATH = PROJECT_ROOT / "custom_components/vaillant_ebus"
@@ -129,6 +132,46 @@ def _entry() -> MagicMock:
     return e
 
 
+# Build the coordinator `ebusd` value dict the same way the real coordinator
+# does, so the water-heater properties read exactly what a live refresh exposes.
+def _ebusd_data_from_graph(graph) -> dict[str, str]:
+    data: dict[str, str] = {}
+    for rk, raw in graph.raw_registers.items():
+        circuit, name = rk.split(".", 1)
+        for field, value in tc._register_values(rk, raw).items():
+            if value is not None:
+                data[f"{circuit}.{name}.{field}"] = value
+    return data
+
+
+# Coordinator stub whose heating circuit is resolved from a real discovery
+# graph. Unlike the MagicMock helper above it cannot be told the circuit: the
+# DHW entity state depends on the graph resolution being correct.
+class _GraphCoordinator:
+    def __init__(self, graph, data: dict[str, str]) -> None:
+        self._graph = graph
+        self.data = {"ebusd": data}
+        self.dhw_boost_desired = None
+        self.last_update_success = True
+        self.async_write_register = AsyncMock(return_value=True)
+        self.async_write_registers = AsyncMock(return_value=True)
+        self.async_request_refresh = AsyncMock()
+        self.async_update_listeners = MagicMock()
+
+    @property
+    def heating_circuit(self):
+        return self._graph.resolve_circuit_result("ctlv2").circuit
+
+    def get_device_info(self, *_args):
+        return {"identifiers": {("vaillant_ebus", "dhw")}}
+
+
+def _graph_coordinator(fixture: str) -> _GraphCoordinator:
+    graph = tc.DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+    return _GraphCoordinator(graph, _ebusd_data_from_graph(graph))
+
+
+
 # Without a prior toggle, the switch falls back to the raw HwcSFMode register.
 def test_boost_switch_falls_back_to_raw_register() -> None:
     sw = HwcBoostSwitch(_coordinator(dhw_boost_desired=None, sfmode="load"), _entry())
@@ -213,7 +256,7 @@ async def test_ctlv3_dhw_controls_use_resolved_controller_circuit() -> None:
     assert water_heater.current_operation == "auto"
     assert water_heater.current_temperature == 45.0
     assert water_heater.target_temperature == 48.0
-    assert water_heater.is_away_mode_on is None
+    assert water_heater.is_away_mode_on is False
 
     await water_heater.async_set_operation_mode("boost")
     c.async_write_registers.assert_awaited_once_with(
@@ -225,6 +268,94 @@ async def test_ctlv3_dhw_controls_use_resolved_controller_circuit() -> None:
     assert away.is_on is False
     await away.async_turn_off()
     c.async_write_registers.assert_awaited_once_with(
+        [
+            ("ctlv3", "HwcHolidayStartPeriod", "01.01.2015"),
+            ("ctlv3", "HwcHolidayEndPeriod", "01.01.2015"),
+        ]
+    )
+
+
+# Regression for issue #99: the latest dumps carry a spurious ctlv2 node from
+# runtime-defined registers while the real DHW controller is ctlv3. A valid
+# ctlv3.HwcOpMode=auto must surface as the water-heater operation mode "auto",
+# never "unknown". Before the graph fix this resolved to ctlv2 and stayed None.
+@pytest.mark.parametrize(
+    "fixture",
+    (
+        "community/hmux0_issue99_2026-09-10_170850.yaml",
+        "community/hmux0_issue99_2026-09-10_173229.yaml",
+    ),
+)
+def test_latest_dump_dhw_entity_state_is_auto_not_unknown(fixture: str) -> None:
+    coordinator = _graph_coordinator(fixture)
+    assert coordinator.heating_circuit == "ctlv3"
+
+    water_heater = EbusdWaterHeater(coordinator, _entry())
+
+    assert water_heater.current_operation == "auto"
+    assert water_heater.current_temperature == 45.0
+    assert water_heater.target_temperature == 48.0
+
+    # The dump shows HwcSFMode = auto, so Boost is off.
+    assert HwcBoostSwitch(coordinator, _entry()).is_on is False
+    # Unset holiday sentinels are an explicit "not away", not unknown.
+    assert water_heater.is_away_mode_on is False
+
+
+# Valid data arriving only after the entity exists must update its state; the
+# coordinator populates registers asynchronously, so the entity must not cache
+# the initial "unknown".
+def test_dhw_entity_operation_updates_when_valid_data_arrives_later() -> None:
+    coordinator = _graph_coordinator("community/hmux0_issue99_2026-09-10_173229.yaml")
+    water_heater = EbusdWaterHeater(coordinator, _entry())
+
+    coordinator.data["ebusd"].pop("ctlv3.HwcOpMode.value")
+    assert water_heater.current_operation is None
+
+    coordinator.data["ebusd"]["ctlv3.HwcOpMode.value"] = "auto"
+    assert water_heater.current_operation == "auto"
+
+
+# A temporary no-data reply must read as unknown, then recover once a real
+# value returns. This proves "not available yet" is not conflated with a
+# permanent failure state.
+def test_dhw_entity_operation_recovers_after_temporary_no_data() -> None:
+    coordinator = _graph_coordinator("community/hmux0_issue99_2026-09-10_173229.yaml")
+    water_heater = EbusdWaterHeater(coordinator, _entry())
+
+    coordinator.data["ebusd"]["ctlv3.HwcOpMode.value"] = "no data stored"
+    assert water_heater.current_operation is None
+
+    coordinator.data["ebusd"]["ctlv3.HwcOpMode.value"] = "auto"
+    assert water_heater.current_operation == "auto"
+
+
+# An enum value the integration does not map must stay unknown instead of
+# being coerced to a default.
+def test_dhw_entity_operation_unknown_for_invalid_enum() -> None:
+    coordinator = _graph_coordinator("community/hmux0_issue99_2026-09-10_173229.yaml")
+    coordinator.data["ebusd"]["ctlv3.HwcOpMode.value"] = "bogus"
+    water_heater = EbusdWaterHeater(coordinator, _entry())
+
+    assert water_heater.current_operation is None
+
+
+# DHW writes must target the resolved ctlv3 controller, not the spurious ctlv2
+# node the latest dump exposes.
+async def test_latest_dump_dhw_writes_target_resolved_controller() -> None:
+    coordinator = _graph_coordinator("community/hmux0_issue99_2026-09-10_173229.yaml")
+    water_heater = EbusdWaterHeater(coordinator, _entry())
+
+    await water_heater.async_set_operation_mode("boost")
+    coordinator.async_write_registers.assert_awaited_once_with(
+        [("ctlv3", "HwcSFMode", "load")], strict_verify=False, refresh=False
+    )
+
+    coordinator.async_write_registers.reset_mock()
+    away = HwcAwayModeSwitch(coordinator, _entry())
+    assert away.is_on is False
+    await away.async_turn_off()
+    coordinator.async_write_registers.assert_awaited_once_with(
         [
             ("ctlv3", "HwcHolidayStartPeriod", "01.01.2015"),
             ("ctlv3", "HwcHolidayEndPeriod", "01.01.2015"),
@@ -259,8 +390,21 @@ def test_water_heater_properties_and_holiday_handling() -> None:
     assert wh.current_temperature == 48.5
     assert wh.target_temperature == 52.0
     assert wh.current_operation == "auto"
-    assert wh.is_away_mode_on is None
+    assert wh.is_away_mode_on is False
     # Test 01.01.2019 reset sentinel as well
     c.data["ebusd"]["basv.HwcHolidayStartPeriod.value"] = "01.01.2019"
     c.data["ebusd"]["basv.HwcHolidayEndPeriod.value"] = "01.01.2019"
+    assert wh.is_away_mode_on is False
+
+
+# Away state is coherent with the away switch: an unset sentinel is False, a
+# bracketing period is True, and only genuinely missing data is unknown.
+def test_water_heater_away_state_coherence() -> None:
+    c = _coordinator(dhw_boost_desired=None, sfmode="auto")
+    c.data["ebusd"]["basv.HwcHolidayStartPeriod.value"] = "01.01.2020"
+    c.data["ebusd"]["basv.HwcHolidayEndPeriod.value"] = "01.01.2099"
+    wh = EbusdWaterHeater(c, _entry())
+    assert wh.is_away_mode_on is True
+
+    c.data["ebusd"].pop("basv.HwcHolidayStartPeriod.value")
     assert wh.is_away_mode_on is None

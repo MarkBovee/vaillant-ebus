@@ -62,7 +62,7 @@ def test_hmux0_latest_issue99_values_keep_entity_metadata() -> None:
 def test_latest_issue99_dumps_keep_ctlv3_dhw_and_reject_invalid_hmux0_temperature(
     fixture: str, invalid_return_temperature: str
 ) -> None:
-    graph = DiscoveryService.build_device_graph(load_find_lines(fixture))
+    graph = DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
     entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
 
     assert graph.nodes["hmux0"].device_type.name == "HEAT_PUMP"

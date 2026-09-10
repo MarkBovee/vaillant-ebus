@@ -728,10 +728,18 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             and heat_pump.scan_sw == "0303"
             and heat_pump.scan_hw == "0504"
         )
-        # Generic HMU layouts are not valid for this HMUX0 variant. Define only
-        # the independently evidenced HMUX0 register set below.
+        # HMU layouts that are proven incompatible with this HMUX0 variant:
+        # the brine source-temperature probe, the generic compressor status
+        # block, and the electrical-power decode. The shared b516 energy
+        # statistics family is kept; the without-symlink capture shows it
+        # returning valid heating/DHW/cooling consumption on this hardware.
         if heat_pump and heat_pump.scan_type.upper() == "HMUX0":
-            defines = [definition for definition in defines if definition.split(",", 3)[1] != "hmu"]
+            hmu_only_layouts = {"SourceTempInput", "Status00", "RunDataElPowerConsumption"}
+            defines = [
+                definition
+                for definition in defines
+                if not (definition.split(",", 3)[1] == "hmu" and definition.split(",", 3)[2] in hmu_only_layouts)
+            ]
 
         # Resolve logical definition circuits only after discovery identifies their owners.
         # Drop definitions whose logical owner is ambiguous instead of guessing.

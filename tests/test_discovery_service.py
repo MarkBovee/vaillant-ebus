@@ -328,6 +328,44 @@ def test_heat_pump_resolution_does_not_depend_on_node_order() -> None:
     assert second.heat_pump() is None
 
 
+# Issue #99: runtime-defined registers can expose a bare ctlv2 circuit while
+# the real DHW/heating controller is ctlv3. The controller that owns the
+# control registers must win so DHW entities read ctlv3 values.
+def test_heating_controller_prefers_control_register_owner_over_bare_ctlv2() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = Vaillant;CTLV3;0808;8004",
+            "ctlv3 HwcOpMode = auto",
+            "ctlv3 HwcTempDesired = 48",
+            "ctlv3 HwcStorageTemp = 45",
+            "ctlv2 z1RoomHumidity = 53",
+            "ctlv2 ManualCoolingStartDate = 01.01.2019",
+        ]
+    )
+
+    assert graph.heating_controller_result().circuit == "ctlv3"
+    assert graph.resolve_circuit_result("ctlv2").circuit == "ctlv3"
+
+
+# A genuine ctlv2 that owns the control registers must still resolve to itself.
+def test_heating_controller_keeps_real_ctl2_when_it_owns_control_registers() -> None:
+    graph = DiscoveryService.build_device_graph(
+        ["scan.15 = Vaillant;CTLV2;0808;8004", "ctlv2 HwcOpMode = auto", "ctlv3 z1RoomHumidity = 53"]
+    )
+
+    assert graph.heating_controller_result().circuit == "ctlv2"
+    assert graph.resolve_circuit_result("ctlv2").circuit == "ctlv2"
+
+
+# Two controllers that each own a control register stay ambiguous instead of
+# picking one by insertion order; the exact ctlv2 node is the safe fallback.
+def test_heating_controller_two_control_owners_stay_ambiguous() -> None:
+    graph = DiscoveryService.build_device_graph(["ctlv2 HwcOpMode = auto", "ctlv3 HwcTempDesired = 48"])
+
+    assert graph.heating_controller_result().status.name == "AMBIGUOUS"
+    assert graph.resolve_circuit_result("ctlv2").circuit == "ctlv2"
+
+
 def test_scan_matching_multiple_unrelated_scans_stay_isolated() -> None:
     result = match_scan_to_circuits(
         [

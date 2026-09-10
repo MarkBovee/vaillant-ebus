@@ -4,11 +4,21 @@
 
 ### Fixed
 
+- **`Domestic Hot Water` stuck at `unknown` (#99).** Runtime-defined registers
+  can leave a bare `ctlv2` probe circuit on an `HMUX0`/`CTLV3` bus. Controller
+  resolution now prefers the circuit that actually owns the control/DHW
+  registers (`ctlv3`), so a valid `ctlv3.HwcOpMode = auto` reaches the
+  water-heater entity instead of being looked up under `ctlv2`. DHW reads and
+  writes now consistently target the resolved controller.
+- **DHW away state coherence.** An unset holiday sentinel (`01.01.2015`,
+  `01.01.2019`) now reports "not away" on the water-heater entity, matching the
+  DHW away switch, instead of "unknown". Only genuinely missing data is unknown.
 - **HMUX0 HW0504 without ebusd alias (#99).** `HMUX0;SW=0303;HW=0504` scan
-  metadata now bootstraps only the 11 community-evidenced, fixture-backed telemetry
-  definitions (`RunDataReturnTemp`, heating/DHW `Yield*`, heating/DHW `Cop*`).
+  metadata now bootstraps the community-evidenced, fixture-backed telemetry
+  definitions (`RunDataReturnTemp`, heating/DHW `Yield*`, heating/DHW `Cop*`)
+  plus the shared b516 heating/DHW/cooling electrical-consumption statistics.
   The old `08.hmux0.csv -> 08.hmu.csv` workaround is no longer required for
-  this supported set, and generic HMU-only definitions are not applied.
+  this supported set, and incompatible generic HMU-only layouts are not applied.
 - **Invalid HMUX0 return temperatures.** Physically impossible
   `RunDataReturnTemp` values are unavailable instead of being exposed as real
   measurements.
@@ -19,6 +29,8 @@
 
 - Remove the `08.hmux0.csv -> 08.hmu.csv` symlink for affected HMUX0 HW0504
   systems, restart ebusd, then reload the integration or restart Home Assistant.
+  DHW entities read from `ctlv3`; any stale `ctlv2`/`hmu` fallback entities can
+  be removed with **Purge stale entities**.
 
 ## 1.8.0-rc1 - 2026-09-10
 
