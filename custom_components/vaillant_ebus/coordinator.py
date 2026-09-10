@@ -7,7 +7,7 @@ import logging
 import os
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TypedDict
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -30,6 +30,7 @@ from .backend.models import (
     DeviceNode,
     DeviceType,
     EbusdRegister,
+    ResolutionStatus,
     is_no_data_value,
     zero_idle_registers,
 )
@@ -80,6 +81,10 @@ ZONE_LIVE_REGISTERS: tuple[str, ...] = ("RoomTemp", "ActualRoomTempDesired")
 # Build the per-field value dict for a register (split multi-field values).
 def _register_values(register_key: str, raw: str | None) -> dict[str, str | None]:
     return split_multi_field(register_key, raw)
+
+
+class CoordinatorState(TypedDict):
+    ebusd: dict[str, str]
 
 
 def _usable_register_value(register_key: str, raw: str | None) -> str | None:
@@ -145,7 +150,7 @@ def _merge_entities(
     return merged
 
 
-class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._entry = entry
         self._started = False
@@ -216,10 +221,13 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return heat_pump.circuit
         return "hmu"
 
-    def resolve_register_circuit(self, circuit: str) -> str:
+    def resolve_register_circuit(self, circuit: str) -> str | None:
         """Resolve legacy map circuits to circuits discovered on this bus."""
         if self._graph:
-            return self._graph.resolve_circuit(circuit)
+            resolution = self._graph.resolve_circuit_result(circuit)
+            if resolution.status == ResolutionStatus.AMBIGUOUS:
+                return None
+            return resolution.circuit or circuit
         return circuit
 
     # Active heating zones (zone id -> hosting circuit) derived from the
@@ -709,17 +717,21 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ]
 
         # Resolve logical definition circuits only after discovery identifies their owners.
-        def _resolve_definition_circuit(definition: str) -> str:
+        # Drop definitions whose logical owner is ambiguous instead of guessing.
+        def _resolve_definition_circuit(definition: str) -> str | None:
             parts = definition.split(",", 3)
             if len(parts) < 3 or not self._graph:
                 return definition
-            resolved = self._graph.resolve_circuit(parts[1])
+            resolution = self._graph.resolve_circuit_result(parts[1])
+            if resolution.status == ResolutionStatus.AMBIGUOUS:
+                return None
+            resolved = resolution.circuit or parts[1]
             if resolved == parts[1]:
                 return definition
             parts[1] = resolved
             return ",".join(parts)
 
-        defines = [_resolve_definition_circuit(definition) for definition in defines]
+        defines = [definition for definition in (_resolve_definition_circuit(item) for item in defines) if definition]
         heat_pump = self._graph.heat_pump() if self._graph else None
         if (
             heat_pump
@@ -927,7 +939,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             keys = list(self._graph.raw_registers) + list(self._graph.placeholder_registers)
             candidates = list(dict.fromkeys(rk.split(".", 1)[0] for rk in keys if rk.endswith(f".{name}")))
         resolved = self.resolve_register_circuit(logical_circuit)
-        if resolved in candidates:
+        if resolved is not None and resolved in candidates:
             return resolved
         if len(candidates) == 1:
             return candidates[0]
@@ -988,7 +1000,9 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             ):
                 continue
-            _add(circuit or self.resolve_register_circuit(map_circuit), name)
+            resolved_circuit = circuit if circuit is not None else self.resolve_register_circuit(map_circuit)
+            if resolved_circuit is not None:
+                _add(resolved_circuit, name)
 
         # Placeholder reads: discovered no-data registers whose metadata
         # resolves via the circuit alias (15-minute interval).
@@ -1046,7 +1060,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 node = self._graph.nodes.get(register.circuit)
                 if node is None:
                     continue
-                self._graph.raw_registers[key] = register.value.get("value", "")
+                self._graph.raw_registers[key] = register.value.get("value") or ""
                 if key not in node.registers:
                     node.registers.append(key)
                 node.has_data = True
@@ -1063,7 +1077,7 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "Fallback read complete: %d/%d registers with data (%d new)", read_with_data, len(candidates), added
         )
 
-    async def _async_update_data(self) -> dict[str, Any]:
+    async def _async_update_data(self) -> CoordinatorState:
         if not self._cache_seeded:
             self._cache_seeded = True
             await self._async_seed_entities_from_cache()
@@ -1146,6 +1160,9 @@ class VaillantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return False
         for circuit, name, value in writes:
             resolved_circuit = self.resolve_register_circuit(circuit)
+            if resolved_circuit is None:
+                _LOGGER.warning("Write skipped: ambiguous discovered circuit for %s.%s", circuit, name)
+                return False
             result = await self.ebus.write_register(resolved_circuit, name, value, strict_verify=strict_verify)
             if not result.success:
                 _LOGGER.warning("Write failed %s.%s=%s: %s", circuit, name, value, result.error_message)

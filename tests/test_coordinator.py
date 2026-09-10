@@ -71,7 +71,13 @@ ANALYSIS_SPEC.loader.exec_module(ANALYSIS)
 
 from vaillant_ebus.backend.ebus_service import EbusService, WriteResult  # noqa: E402
 from vaillant_ebus.backend.entity_factory import EntityFactoryService  # noqa: E402
-from vaillant_ebus.backend.models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister  # noqa: E402
+from vaillant_ebus.backend.models import (  # noqa: E402
+    DeviceGraph,
+    DeviceNode,
+    DeviceType,
+    EbusdRegister,
+    ResolutionStatus,
+)
 
 mock_homeassistant = MagicMock()
 mock_homeassistant.config_entries = MagicMock()
@@ -148,9 +154,11 @@ def _hass(cache_dir: str) -> MagicMock:
     h = MagicMock()
     h.config.path.return_value = str(Path(cache_dir) / "vaillant_ebus" / "register_cache.json")
     h.async_create_task = MagicMock()
+
     async def _executor(func, *args):
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, func, *args)
+
     h.async_add_executor_job = _executor
     return h
 
@@ -358,6 +366,25 @@ async def test_heat_pump_circuit_resolves_hmux0() -> None:
         assert c.resolve_register_circuit("ctlv2") == "ctlv3"
 
 
+# Intent: expose ambiguous graph ownership without selecting a node by insertion order.
+def test_graph_resolution_reports_ambiguous_heat_pump_owner() -> None:
+    graph = DeviceGraph(
+        nodes={
+            "hmux0": DeviceNode("hmux0", DeviceType.HEAT_PUMP, scan_type="HMUX0"),
+            "hmu1": DeviceNode("hmu1", DeviceType.HEAT_PUMP, scan_type="HMU00"),
+            "hmu2": DeviceNode("hmu2", DeviceType.HEAT_PUMP, scan_type="HMU00"),
+        },
+        raw_registers={},
+        placeholder_registers=set(),
+    )
+
+    resolution = graph.resolve_circuit_result("hmu")
+
+    assert resolution.status == ResolutionStatus.AMBIGUOUS
+    assert resolution.node is None
+    assert resolution.circuit == "hmu"
+
+
 async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
@@ -418,6 +445,27 @@ async def test_runtime_definitions_resolve_logical_circuits() -> None:
         assert all(",ctlv2," not in definition for definition in definitions)
         assert all(",hmu," not in definition for definition in definitions)
 
+
+# Intent: never define an alias register when graph ownership is ambiguous.
+async def test_runtime_definitions_skip_ambiguous_logical_circuit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = AsyncMock()
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = DeviceGraph(
+            nodes={
+                "ctlv3": DeviceNode("ctlv3", DeviceType.HEATING_CONTROLLER, has_data=True),
+                "basv3": DeviceNode("basv3", DeviceType.HEATING_CONTROLLER, has_data=True),
+            },
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        assert all(",ctlv2," not in definition for definition in definitions)
 
 
 async def test_legacy_register_aliases_resolve_to_discovered_circuits() -> None:
@@ -583,9 +631,7 @@ async def test_initial_discovery_pushes_new_entities_once(seed_cache, caplog) ->
             await c._apply_discovery_graph(initial, "initial")
         adder = MagicMock()
         c.register_entity_adder("sensor", adder)
-        fresh = DISCOVERY.DiscoveryService.build_device_graph(
-            ["hmu OutsideTemp = 18.5", "hmu FlowTemp = 35"]
-        )
+        fresh = DISCOVERY.DiscoveryService.build_device_graph(["hmu OutsideTemp = 18.5", "hmu FlowTemp = 35"])
         with caplog.at_level("INFO", logger="vaillant_ebus.coordinator"):
             await c._apply_discovery_graph(fresh, "initial")
             await c._apply_discovery_graph(initial, "initial")
@@ -607,9 +653,9 @@ async def test_runtime_energy_refreshes_without_reload(monkeypatch) -> None:
         lines = [f"hmu {name} = 100" for name in names]
         c.ebus.find_registers = AsyncMock(return_value=lines)
         c._graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
-        monkeypatch.setattr(COORDINATOR, "REGISTER_MAP", {
-            f"hmu.{name}": MAPPING.REGISTER_MAP[f"hmu.{name}"] for name in names
-        })
+        monkeypatch.setattr(
+            COORDINATOR, "REGISTER_MAP", {f"hmu.{name}": MAPPING.REGISTER_MAP[f"hmu.{name}"] for name in names}
+        )
         await c._define_custom_registers()
         c.ebus.read_register = AsyncMock(return_value="200")
         values = await c._async_update_data()
@@ -658,9 +704,7 @@ async def test_hmux0_strong_assumption_definitions_are_additive() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         status00 = next(definition for definition in definitions if ",Status00," in definition)
-        power = next(
-            definition for definition in definitions if ",RunDataElPowerConsumption," in definition
-        )
+        power = next(definition for definition in definitions if ",RunDataElPowerConsumption," in definition)
         assert ",B511,00," in status00
         assert "defrost,,UCH,0=inactive;32=active" in status00
         assert ",B509,055402005b0d," in power
@@ -964,9 +1008,7 @@ async def test_define_custom_registers_delegates_to_ebus() -> None:
         assert any("HwcElecConsDay" in d and ",B516,1001ffff0304" in d for d in calls)
         # SourceTempInput runtime define (issue #49), layout verified upstream
         # in john30/ebusd-configuration PR #565 on brine units.
-        assert any(
-            "SourceTempInput" in d and ",B51A,05ff3222,value,,IGN:3,,,,value,,D2C" in d for d in calls
-        )
+        assert any("SourceTempInput" in d and ",B51A,05ff3222,value,,IGN:3,,,,value,,D2C" in d for d in calls)
         # B524 heating-circuit state registers (Helianthus B524 register map,
         # discussion #60): GG=0x02 messages with the documented RR and wire
         # types (EXP for f32, ULG for u32).
@@ -1002,9 +1044,7 @@ async def test_async_write_registers_bundles_and_refreshes() -> None:
 
         mock_ebus = MagicMock(spec=EbusService)
         mock_ebus.is_connected = True
-        mock_ebus.write_register = AsyncMock(
-            return_value=WriteResult(success=True, verified_value=None)
-        )
+        mock_ebus.write_register = AsyncMock(return_value=WriteResult(success=True, verified_value=None))
         c.ebus = mock_ebus
         c.async_request_refresh = AsyncMock()
 
@@ -1034,6 +1074,27 @@ async def test_async_write_register_resolves_discovered_circuit() -> None:
 
         assert await c.async_write_register("ctlv2", "Z1DayTemp", "21") is True
         mock_ebus.write_register.assert_awaited_once_with("ctlv3", "Z1DayTemp", "21", strict_verify=True)
+
+
+# Intent: refuse writes when graph ownership cannot identify one controller.
+async def test_async_write_register_rejects_ambiguous_discovered_circuit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(
+            nodes={
+                "ctlv3": DeviceNode("ctlv3", DeviceType.HEATING_CONTROLLER, has_data=True),
+                "basv3": DeviceNode("basv3", DeviceType.HEATING_CONTROLLER, has_data=True),
+            },
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.write_register = AsyncMock(return_value=WriteResult(success=True, verified_value=None))
+        c.ebus = mock_ebus
+
+        assert await c.async_write_register("ctlv2", "Z1DayTemp", "21") is False
+        mock_ebus.write_register.assert_not_awaited()
 
 
 # Intent: route BAI logical writes only when a unique BAI controller is discovered.
@@ -1070,9 +1131,7 @@ async def test_async_write_registers_stops_on_failure_no_refresh() -> None:
         c.ebus = mock_ebus
         c.async_request_refresh = MagicMock()
 
-        ok = await c.async_write_registers(
-            [("ctlv2", "A", "1"), ("ctlv2", "B", "2")]
-        )
+        ok = await c.async_write_registers([("ctlv2", "A", "1"), ("ctlv2", "B", "2")])
 
         assert ok is False
         assert c.async_request_refresh.call_count == 0
@@ -1613,9 +1672,7 @@ async def test_enable_registry_entities_respects_user_choice() -> None:
             "sensor.enabled": _Entry("ebusd_hmu_currentyieldpower", "entry-1", None),
             "sensor.other_entry": _Entry("ebusd_hmu_powerconsumptionhmu", "entry-2", "integration"),
         }
-        registry.async_update_entity = MagicMock(
-            side_effect=lambda entity_id, **kwargs: updated.append(entity_id)
-        )
+        registry.async_update_entity = MagicMock(side_effect=lambda entity_id, **kwargs: updated.append(entity_id))
         from homeassistant.helpers import entity_registry
 
         entity_registry.async_get = MagicMock(return_value=registry)
@@ -1649,9 +1706,7 @@ async def test_enable_registry_entities_expands_multi_field_uids() -> None:
             "sensor.runtime": _Entry("ebusd_hmu_compressorhc_runtime", "entry-1", "integration"),
             "sensor.cycles": _Entry("ebusd_hmu_compressorhc_cycles", "entry-1", "integration"),
         }
-        registry.async_update_entity = MagicMock(
-            side_effect=lambda entity_id, **kwargs: updated.append(entity_id)
-        )
+        registry.async_update_entity = MagicMock(side_effect=lambda entity_id, **kwargs: updated.append(entity_id))
         from homeassistant.helpers import entity_registry
 
         entity_registry.async_get = MagicMock(return_value=registry)

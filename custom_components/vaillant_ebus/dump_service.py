@@ -67,7 +67,7 @@ def _parse_find_lines(raw_lines: list[str]) -> list[dict]:
 async def _dump_registers(
     ebus,
     seen_keys: set[str] | None = None,
-    circuit_aliases: dict[str, str] | None = None,
+    circuit_aliases: dict[str, str | None] | None = None,
 ) -> tuple[list[dict], set[str], list[str]]:
     raw_lines = await ebus.find_registers()
     discovered = _parse_find_lines(raw_lines)
@@ -97,6 +97,8 @@ async def _dump_registers(
         if is_field_key(key):
             continue
         target_circuit = aliases.get(circuit, circuit)
+        if target_circuit is None:
+            continue
         target_key = f"{target_circuit}.{name}"
         if key in seen_keys or target_key in seen_keys:
             continue
@@ -184,6 +186,7 @@ async def async_export_discovery_dump(
         )
         raise HomeAssistantError(message)
 
+    # Skip ambiguous logical aliases rather than polling a legacy circuit.
     aliases = {
         logical_circuit: coordinator.resolve_register_circuit(logical_circuit) for logical_circuit in ("ctlv2", "hmu")
     }

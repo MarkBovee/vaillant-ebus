@@ -5,7 +5,16 @@ from __future__ import annotations
 from .discovery_service import DiscoveryService
 from .ebus_service import EbusService
 from .entity_factory import EntityDescription, EntityFactoryService
-from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister, RegisterMeta, WriteResult
+from .models import (
+    DeviceGraph,
+    DeviceNode,
+    DeviceType,
+    EbusdRegister,
+    RegisterMeta,
+    ResolutionResult,
+    ResolutionStatus,
+    WriteResult,
+)
 
 __all__ = [
     "DeviceGraph",
@@ -17,5 +26,7 @@ __all__ = [
     "EntityDescription",
     "EntityFactoryService",
     "RegisterMeta",
+    "ResolutionResult",
+    "ResolutionStatus",
     "WriteResult",
 ]

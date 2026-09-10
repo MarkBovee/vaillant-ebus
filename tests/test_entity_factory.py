@@ -861,9 +861,7 @@ class TestStatEnergyRegisters:
     # flexoTHERM (brine-water, no active cooling) reports the cooling energy
     # register as "element not found" — it must not appear as an entity.
     def test_flexotherm_has_no_cooling_energy_entity(self) -> None:
-        graph = DiscoveryService.build_device_graph(
-            load_find_lines("community/flexotherm_discovery.yaml")
-        )
+        graph = DiscoveryService.build_device_graph(load_find_lines("community/flexotherm_discovery.yaml"))
         by_key = {e.key: e for e in EntityFactoryService().generate(graph)}
         assert "hmu.StatElectricEnergySumCool.value" not in by_key
         assert "hmu.StatEnvironmentEnergySumCool.value" not in by_key
@@ -874,9 +872,7 @@ class TestStatEnergyRegisters:
     # counters stay at 0 (YieldCoolDay=0.0, HoursCool=0) and cumulative cooling
     # totals return "element not found" and must stay hidden.
     def test_flexotherm_133_cooling_daily_yield_entities(self) -> None:
-        graph = DiscoveryService.build_device_graph(
-            load_find_lines("community/flexotherm_133_cooling_discovery.yaml")
-        )
+        graph = DiscoveryService.build_device_graph(load_find_lines("community/flexotherm_133_cooling_discovery.yaml"))
         by_key = {e.key: e for e in EntityFactoryService().generate(graph)}
         yield_day = by_key.get("hmu.YieldCoolDay.value")
         assert yield_day is not None, "daily cooling yield must be an entity"
@@ -900,9 +896,7 @@ class TestStatEnergyRegisters:
     # later one used to overwrite the live node, hiding the DHW sensors and
     # leaving water_heater without a current temperature.
     def test_flexotherm_dhw_sub_device_merge_keeps_live_registers(self) -> None:
-        graph = DiscoveryService.build_device_graph(
-            load_find_lines("community/flexotherm_133_cooling_discovery.yaml")
-        )
+        graph = DiscoveryService.build_device_graph(load_find_lines("community/flexotherm_133_cooling_discovery.yaml"))
         dhw = graph.nodes.get("dhw")
         assert dhw is not None
         assert dhw.has_data, "dhw node must keep the live variant's data"
@@ -919,9 +913,7 @@ class TestStatEnergyRegisters:
     # flexoCOMPACT (air/water aroTHERM with active cooling) reports cooling
     # energy live on both hmu and ctlv2; both get hmu energy metadata (issue #50).
     def test_flexocompact_cooling_energy_entities(self) -> None:
-        graph = DiscoveryService.build_device_graph(
-            load_find_lines("community/flexocompact_find.txt")
-        )
+        graph = DiscoveryService.build_device_graph(load_find_lines("community/flexocompact_find.txt"))
         by_key = {e.key: e for e in EntityFactoryService().generate(graph)}
         for reg in (
             "hmu.StatElectricEnergySumCool.value",

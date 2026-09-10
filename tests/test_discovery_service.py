@@ -216,6 +216,25 @@ def test_scan_matching_duplicate_identical_entries_are_deterministic() -> None:
     assert result["hmux0"] == ("HMUX0", "0303", "0504")
 
 
+def test_heat_pump_resolution_does_not_depend_on_node_order() -> None:
+    first = DeviceGraph(
+        nodes={
+            "hmux0": DeviceNode("hmux0", DeviceType.HEAT_PUMP, scan_type="HMUX0"),
+            "hmu": DeviceNode("hmu", DeviceType.HEAT_PUMP, scan_type="HMU00"),
+        },
+        raw_registers={},
+        placeholder_registers=set(),
+    )
+    second = DeviceGraph(
+        nodes=dict(reversed(list(first.nodes.items()))),
+        raw_registers={},
+        placeholder_registers=set(),
+    )
+
+    assert first.heat_pump() is None
+    assert second.heat_pump() is None
+
+
 def test_scan_matching_multiple_unrelated_scans_stay_isolated() -> None:
     result = match_scan_to_circuits(
         [
@@ -544,7 +563,6 @@ def test_internal_b516_helper_register_is_hidden() -> None:
     assert "hmu.TmpB516MonthEven" not in graph.nodes["hmu"].registers
 
 
-
 # =============================================================================
 # D. Community fixture tests
 # =============================================================================
@@ -580,9 +598,7 @@ def test_flexotherm_device_graph() -> None:
 
 
 def test_invalid_source_temperature_stub_is_suppressed() -> None:
-    graph = DiscoveryService.build_device_graph(
-        ["hmu SourceTempInput = -1011.06", "hmu FlowTemp = 35.0"]
-    )
+    graph = DiscoveryService.build_device_graph(["hmu SourceTempInput = -1011.06", "hmu FlowTemp = 35.0"])
 
     assert "hmu.SourceTempInput" not in graph.raw_registers
     assert "hmu.SourceTempInput" not in graph.placeholder_registers
@@ -1045,9 +1061,7 @@ def test_parse_register_empty_with_meta() -> None:
 
 
 def test_parse_register_partial_value_with_error_is_unavailable() -> None:
-    _, _, value = DiscoveryService._parse_register(
-        "sc YieldThisYear = 0;32768;13056;0 (ERR: invalid position)"
-    )
+    _, _, value = DiscoveryService._parse_register("sc YieldThisYear = 0;32768;13056;0 (ERR: invalid position)")
     assert value is None
 
 

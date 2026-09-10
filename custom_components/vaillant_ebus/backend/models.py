@@ -251,6 +251,13 @@ class DeviceType(Enum):
     UNKNOWN = "unknown"
 
 
+class ResolutionStatus(Enum):
+    UNIQUE = "unique"
+    MISSING = "missing"
+    AMBIGUOUS = "ambiguous"
+    FALLBACK = "fallback"
+
+
 @dataclass
 class DeviceNode:
     circuit: str
@@ -265,15 +272,26 @@ class DeviceNode:
     scan_hw: str = ""
 
 
+@dataclass(frozen=True)
+class ResolutionResult:
+    status: ResolutionStatus
+    circuit: str | None = None
+    node: DeviceNode | None = None
+    reason: str = ""
+
+
 @dataclass
 class DeviceGraph:
     nodes: dict[str, DeviceNode]
     raw_registers: dict[str, str]
     placeholder_registers: set[str]
 
-    # Select the discovered heating controller that owns control registers.
-    def heating_controller(self) -> DeviceNode | None:
-        controllers = [node for node in self.nodes.values() if node.device_type == DeviceType.HEATING_CONTROLLER]
+    # Resolve the discovered heating controller without relying on node order.
+    def heating_controller_result(self) -> ResolutionResult:
+        controllers = sorted(
+            (node for node in self.nodes.values() if node.device_type == DeviceType.HEATING_CONTROLLER),
+            key=lambda node: node.circuit.casefold(),
+        )
         control_registers = {
             "HwcTempDesired",
             "HwcStorageTemp",
@@ -281,39 +299,114 @@ class DeviceGraph:
             "Z1DayTemp",
             "Z1OpMode",
         }
-        for node in controllers:
-            if any(register.rsplit(".", 1)[-1] in control_registers for register in node.registers):
-                control_candidates = [
-                    candidate
-                    for candidate in controllers
-                    if any(register.rsplit(".", 1)[-1] in control_registers for register in candidate.registers)
-                ]
-                return control_candidates[0] if len(control_candidates) == 1 else None
+        control_candidates = [
+            node
+            for node in controllers
+            if any(register.rsplit(".", 1)[-1] in control_registers for register in node.registers)
+        ]
+        if len(control_candidates) == 1:
+            node = control_candidates[0]
+            return ResolutionResult(ResolutionStatus.UNIQUE, node.circuit, node, "control registers")
+        if len(control_candidates) > 1:
+            return ResolutionResult(ResolutionStatus.AMBIGUOUS, reason="multiple controllers own control registers")
+
         prefix_candidates: list[DeviceNode] = []
         for prefix in ("ctlv", "basv", "bass"):
             prefix_candidates.extend(node for node in controllers if node.circuit.lower().startswith(prefix))
         if len(prefix_candidates) == 1:
-            return prefix_candidates[0]
-        return controllers[0] if len(controllers) == 1 else None
+            node = prefix_candidates[0]
+            return ResolutionResult(ResolutionStatus.UNIQUE, node.circuit, node, "controller circuit prefix")
+        if len(prefix_candidates) > 1:
+            return ResolutionResult(ResolutionStatus.AMBIGUOUS, reason="multiple controller circuit prefixes")
+        if len(controllers) == 1:
+            node = controllers[0]
+            return ResolutionResult(ResolutionStatus.UNIQUE, node.circuit, node, "only controller")
+        if controllers:
+            return ResolutionResult(ResolutionStatus.AMBIGUOUS, reason="multiple heating controllers")
+        return ResolutionResult(ResolutionStatus.MISSING, reason="no heating controller discovered")
 
-    # Select the discovered heat-pump node for logical heat-pump operations.
-    def heat_pump(self) -> DeviceNode | None:
-        heat_pumps = [node for node in self.nodes.values() if node.device_type == DeviceType.HEAT_PUMP]
+    # Resolve the discovered heat pump without relying on node order.
+    def heat_pump_result(self) -> ResolutionResult:
+        heat_pumps = sorted(
+            (node for node in self.nodes.values() if node.device_type == DeviceType.HEAT_PUMP),
+            key=lambda node: node.circuit.casefold(),
+        )
         if len(heat_pumps) == 1:
-            return heat_pumps[0]
+            node = heat_pumps[0]
+            return ResolutionResult(ResolutionStatus.UNIQUE, node.circuit, node, "only heat pump")
         identified = [node for node in heat_pumps if node.scan_type]
-        return identified[0] if len(identified) == 1 else None
+        if len(identified) == 1:
+            node = identified[0]
+            return ResolutionResult(ResolutionStatus.UNIQUE, node.circuit, node, "identified heat pump")
+        if heat_pumps:
+            return ResolutionResult(ResolutionStatus.AMBIGUOUS, reason="multiple heat pumps")
+        return ResolutionResult(ResolutionStatus.MISSING, reason="no heat pump discovered")
 
-    # Resolve logical metadata circuits through discovered graph identity.
-    def resolve_circuit(self, circuit: str) -> str:
+    # Preserve the compact node API for callers that only need a unique owner.
+    def heating_controller(self) -> DeviceNode | None:
+        return self.heating_controller_result().node
+
+    # Preserve the compact node API for callers that only need a unique owner.
+    def heat_pump(self) -> DeviceNode | None:
+        return self.heat_pump_result().node
+
+    # Resolve logical metadata circuits and expose ambiguity to safety-sensitive callers.
+    def resolve_circuit_result(self, circuit: str) -> ResolutionResult:
         if circuit == "ctlv2":
-            controller = self.heating_controller()
-            return controller.circuit if controller else circuit
+            result = self.heating_controller_result()
+            if result.status == ResolutionStatus.UNIQUE:
+                return result
+            if result.status == ResolutionStatus.AMBIGUOUS:
+                exact_node = self.nodes.get(circuit)
+                if exact_node is not None:
+                    return ResolutionResult(
+                        ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
+                    )
+                return ResolutionResult(result.status, circuit, reason=result.reason)
+            exact_node = self.nodes.get(circuit)
+            if exact_node is not None:
+                return ResolutionResult(
+                    ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
+                )
+            return ResolutionResult(ResolutionStatus.FALLBACK, circuit, reason=result.reason)
         if circuit == "bai":
-            controllers = [node for node in self.nodes.values() if node.device_type == DeviceType.HEATING_CONTROLLER]
-            bai_controllers = [node for node in controllers if node.circuit.lower().startswith("bai")]
-            return bai_controllers[0].circuit if len(bai_controllers) == 1 else circuit
+            bai_controllers = sorted(
+                (
+                    node
+                    for node in self.nodes.values()
+                    if node.device_type == DeviceType.HEATING_CONTROLLER and node.circuit.lower().startswith("bai")
+                ),
+                key=lambda node: node.circuit.casefold(),
+            )
+            if len(bai_controllers) == 1:
+                node = bai_controllers[0]
+                return ResolutionResult(ResolutionStatus.UNIQUE, node.circuit, node, "only BAI controller")
+            if bai_controllers:
+                return ResolutionResult(ResolutionStatus.AMBIGUOUS, circuit=circuit, reason="multiple BAI controllers")
+            return ResolutionResult(ResolutionStatus.FALLBACK, circuit, reason="no BAI controller discovered")
         if circuit == "hmu":
-            heat_pump = self.heat_pump()
-            return heat_pump.circuit if heat_pump else circuit
-        return circuit
+            result = self.heat_pump_result()
+            if result.status == ResolutionStatus.UNIQUE:
+                return result
+            if result.status == ResolutionStatus.AMBIGUOUS:
+                exact_node = self.nodes.get(circuit)
+                if exact_node is not None:
+                    return ResolutionResult(
+                        ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
+                    )
+                return ResolutionResult(result.status, circuit, reason=result.reason)
+            exact_node = self.nodes.get(circuit)
+            if exact_node is not None:
+                return ResolutionResult(
+                    ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
+                )
+            return ResolutionResult(ResolutionStatus.FALLBACK, circuit, reason=result.reason)
+        exact_node = self.nodes.get(circuit)
+        if exact_node is not None:
+            return ResolutionResult(ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit")
+        return ResolutionResult(ResolutionStatus.FALLBACK, circuit, reason="literal circuit")
+
+    # Resolve logical metadata circuits while retaining the legacy string API.
+    def resolve_circuit(self, circuit: str) -> str:
+        result = self.resolve_circuit_result(circuit)
+        return result.circuit or circuit

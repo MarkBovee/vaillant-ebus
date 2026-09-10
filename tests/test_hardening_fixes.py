@@ -237,6 +237,21 @@ async def test_export_dump_reports_disconnected_ebusd(tmp_path: Path) -> None:
         await DUMP.async_export_discovery_dump(hass, coordinator)
 
 
+# Intent: dump map probes skip logical aliases with ambiguous graph ownership.
+async def test_dump_registers_skip_ambiguous_alias() -> None:
+    ebus = MagicMock()
+    ebus.find_registers = AsyncMock(return_value=[])
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {"ctlv2.Z1DayTemp": MagicMock(enabled=True, writable=False)}
+    try:
+        registers, _, _ = await DUMP._dump_registers(ebus, circuit_aliases={"ctlv2": None})
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    assert registers == []
+    ebus.read_register.assert_not_called()
+
+
 def test_dump_redacts_sensitive_register_names() -> None:
     DUMP.SENSITIVE_FIELDS = {"serial"}
     assert DUMP._redact("secret-value", "SerialNumber") == "<redacted>"
@@ -314,11 +329,11 @@ async def test_async_setup_registers_all_services_with_entry_selector() -> None:
         "write_parameter",
         "refresh",
         "rediscover",
-            "analyze_registers",
-            "export_discovery_dump",
-            "set_mode_override",
-            "clear_mode_override",
-        }
+        "analyze_registers",
+        "export_discovery_dump",
+        "set_mode_override",
+        "clear_mode_override",
+    }
     assert set(registered) == expected
 
 

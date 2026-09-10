@@ -18,9 +18,7 @@ for name, path in (
     pkg.__path__ = [str(path)]
     sys.modules[name] = pkg
 
-spec = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.grab_parser", BACKEND_PATH / "grab_parser.py"
-)
+spec = importlib.util.spec_from_file_location("vaillant_ebus.backend.grab_parser", BACKEND_PATH / "grab_parser.py")
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
 sys.modules["vaillant_ebus.backend.grab_parser"] = module
@@ -76,10 +74,7 @@ class TestParseGrabLines:
     def test_roundtrip_real_fixture(self) -> None:
         import yaml
 
-        fixture = (
-            Path(__file__).parents[1]
-            / "tests/fixtures/community/arotherm_plus_ctlv2_cooling_discovery.yaml"
-        )
+        fixture = Path(__file__).parents[1] / "tests/fixtures/community/arotherm_plus_ctlv2_cooling_discovery.yaml"
         data = yaml.safe_load(fixture.read_text())
         grab = data.get("grab", [])
         assert grab, "fixture should contain grab data"

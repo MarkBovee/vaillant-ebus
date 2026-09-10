@@ -24,9 +24,7 @@ parser_module = importlib.util.module_from_spec(parser_spec)
 sys.modules["vaillant_ebus.backend.grab_parser"] = parser_module
 parser_spec.loader.exec_module(parser_module)
 
-spec = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.dump_analysis", BACKEND_PATH / "dump_analysis.py"
-)
+spec = importlib.util.spec_from_file_location("vaillant_ebus.backend.dump_analysis", BACKEND_PATH / "dump_analysis.py")
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
 sys.modules["vaillant_ebus.backend.dump_analysis"] = module
@@ -82,12 +80,24 @@ def test_telegram_grouping_aggregates_counts_and_responses() -> None:
     grouped = group_telegrams(
         [
             {
-                "master": "10", "slave": "08", "msgid": "b510", "sub": "01",
-                "label": None, "request": "10...", "resp": "aa", "count": "2",
+                "master": "10",
+                "slave": "08",
+                "msgid": "b510",
+                "sub": "01",
+                "label": None,
+                "request": "10...",
+                "resp": "aa",
+                "count": "2",
             },
             {
-                "master": "10", "slave": "08", "msgid": "b510", "sub": "01",
-                "label": None, "request": "10...", "resp": "bb", "count": "3",
+                "master": "10",
+                "slave": "08",
+                "msgid": "b510",
+                "sub": "01",
+                "label": None,
+                "request": "10...",
+                "resp": "bb",
+                "count": "3",
             },
         ]
     )

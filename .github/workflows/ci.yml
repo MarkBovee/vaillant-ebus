@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "main"
+      - "release/**"
     tags:
       - "v*"
   pull_request:
@@ -27,6 +28,9 @@ jobs:
 
       - name: Lint
         run: ruff check .
+
+      - name: Validate YAML
+        run: python -c "import pathlib, yaml; [yaml.safe_load(path.read_text()) for pattern in ('*.yml', '*.yaml') for path in pathlib.Path('.').rglob(pattern)]"
 
       - name: Format check
         run: ruff format --check custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py custom_components/vaillant_ebus/backend/entity_factory.py custom_components/vaillant_ebus/backend/mapping.py custom_components/vaillant_ebus/coordinator.py custom_components/vaillant_ebus/dump_service.py
@@ -65,6 +69,9 @@ jobs:
 
       - name: Lint
         run: ruff check .
+
+      - name: Validate YAML
+        run: python -c "import pathlib, yaml; [yaml.safe_load(path.read_text()) for pattern in ('*.yml', '*.yaml') for path in pathlib.Path('.').rglob(pattern)]"
 
       - name: Format check
         run: ruff format --check custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py custom_components/vaillant_ebus/backend/entity_factory.py custom_components/vaillant_ebus/backend/mapping.py custom_components/vaillant_ebus/coordinator.py custom_components/vaillant_ebus/dump_service.py

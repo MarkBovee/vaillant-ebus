@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, NamedTuple
 
 from .models import DeviceGraph, DeviceNode, DeviceType, is_no_data_value
 
@@ -17,6 +18,25 @@ ALWAYS_HIDDEN = {"memory"}
 HIDDEN_DEVICE_KEYWORDS = {"broadcast", "scan", "general"}
 HIDDEN_REGISTER_NAMES = {"tmpb516montheven"}
 SECONDARY_ZONE_CIRCUITS = frozenset({"hc2", "hc3", "z2", "z3"})
+
+
+class ParsedRegister(NamedTuple):
+    circuit: str
+    name: str
+    value: str | None
+
+
+class ScanEntry(NamedTuple):
+    address: str
+    scan_type: str
+    scan_sw: str
+    scan_hw: str
+
+
+class ScanMetadata(NamedTuple):
+    scan_type: str
+    scan_sw: str
+    scan_hw: str
 
 
 class DiscoveryService:
@@ -47,28 +67,28 @@ class DiscoveryService:
         return graph
 
     @staticmethod
-    def _parse_register(line: str) -> tuple[str, str, str | None]:
+    def _parse_register(line: str) -> ParsedRegister:
         """Parse a find line into (circuit, name, value_or_None)."""
         line = line.strip()
         if not line or "=" not in line:
-            return ("", "", None)
+            return ParsedRegister("", "", None)
         lhs, rhs = line.split("=", 1)
         parts = lhs.strip().split(None, 1)
         circuit = parts[0]
         name = parts[1].strip() if len(parts) > 1 else ""
         val = rhs.strip()
         if is_no_data_value(val):
-            return (circuit, name, None)
+            return ParsedRegister(circuit, name, None)
         if circuit.lower() == "hmu" and name.lower() == "sourcetempinput":
             try:
                 if float(val) < -100:
-                    return (circuit, name, None)
+                    return ParsedRegister(circuit, name, None)
             except ValueError:
-                return (circuit, name, None)
-        return (circuit, name, val)
+                return ParsedRegister(circuit, name, None)
+        return ParsedRegister(circuit, name, val)
 
     @staticmethod
-    def _parse_scan(line: str) -> tuple[str, str, str, str] | None:
+    def _parse_scan(line: str) -> ScanEntry | None:
         """Parse a scan metadata line into (scan_addr, TYPE, SW, HW) or None."""
         line = line.strip()
         if not line or "=" not in line:
@@ -85,8 +105,8 @@ class DiscoveryService:
         if all("=" in part for part in parts):
             metadata = dict(part.split("=", 1) for part in parts)
             if {"MF", "ID", "SW", "HW"} <= metadata.keys():
-                return (lhs.strip(), metadata["ID"], metadata["SW"], metadata["HW"])
-        return (lhs.strip(), parts[1].strip(), parts[2].strip(), parts[3].strip())
+                return ScanEntry(lhs.strip(), metadata["ID"], metadata["SW"], metadata["HW"])
+        return ScanEntry(lhs.strip(), parts[1].strip(), parts[2].strip(), parts[3].strip())
 
     @staticmethod
     def _is_hidden(register_key: str, has_data: dict[str, bool] | None = None) -> bool:
@@ -150,7 +170,7 @@ class DiscoveryService:
     def build_device_graph(find_lines: list[str]) -> DeviceGraph:
         raw_registers: dict[str, str] = {}
         placeholder_registers: set[str] = set()
-        scan_entries: list[tuple[str, str, str, str]] = []  # (scan_addr, TYPE, SW, HW)
+        scan_entries: list[ScanEntry] = []
         regs_by_circuit: dict[str, list[str]] = {}
 
         for line in find_lines:
@@ -222,9 +242,9 @@ class DiscoveryService:
                 continue
 
             scan_info = scan_by_circuit.get(circuit)
-            scan_type = scan_info[0] if scan_info else ""
-            scan_sw = scan_info[1] if scan_info else ""
-            scan_hw = scan_info[2] if scan_info else ""
+            scan_type = scan_info.scan_type if scan_info else ""
+            scan_sw = scan_info.scan_sw if scan_info else ""
+            scan_hw = scan_info.scan_hw if scan_info else ""
 
             own_regs: list[str] = []
             for rk in reg_keys:
@@ -416,36 +436,39 @@ def _name_family(name: str) -> str:
 # output may repeat them) collapse to the first occurrence, keeping the result
 # deterministic regardless of duplication.
 def _match_scan_to_circuits(
-    scan_entries: list[tuple[str, str, str, str]],
+    scan_entries: Sequence[ScanEntry | tuple[str, str, str, str]],
     regs_by_circuit: dict[str, list[str]],
-) -> dict[str, tuple[str, str, str]]:
+) -> dict[str, ScanMetadata]:
     circuit_names = [c for c in regs_by_circuit if not c.lower().startswith("scan")]
 
-    scans: list[tuple[str, str, str]] = []
+    scans: list[ScanMetadata] = []
     seen: set[str] = set()
-    for _addr, scan_type, scan_sw, scan_hw in scan_entries:
+    for entry in scan_entries:
+        normalized_entry = entry if isinstance(entry, ScanEntry) else ScanEntry(*entry)
+        scan_type = normalized_entry.scan_type
         if scan_type.lower() in seen:
             continue
         seen.add(scan_type.lower())
-        scans.append((scan_type, scan_sw, scan_hw))
+        scans.append(ScanMetadata(scan_type, normalized_entry.scan_sw, normalized_entry.scan_hw))
 
-    result: dict[str, tuple[str, str, str]] = {}
+    result: dict[str, ScanMetadata] = {}
 
     # Priority 1: NETX2 always describes the Broadcast pseudo-circuit.
-    for scan_type, scan_sw, scan_hw in scans:
-        if scan_type.lower() == "netx2":
-            result["Broadcast"] = (scan_type, scan_sw, scan_hw)
+    for scan in scans:
+        if scan.scan_type.lower() == "netx2":
+            result["Broadcast"] = scan
 
     # Priority 2: exact normalized match. Skipped when several circuits share
     # the normalized name — assigning one of them would be a coin flip.
-    for scan_type, scan_sw, scan_hw in scans:
+    for scan in scans:
+        scan_type = scan.scan_type
         if scan_type.lower() == "netx2":
             continue
         exact_candidates = [c for c in circuit_names if _normalize_name(c) == _normalize_name(scan_type)]
         if len(exact_candidates) == 1 and exact_candidates[0] not in result:
-            result[exact_candidates[0]] = (scan_type, scan_sw, scan_hw)
+            result[exact_candidates[0]] = scan
 
-    claimed = {info[0].lower() for info in result.values()}
+    claimed = {info.scan_type.lower() for info in result.values()}
 
     # Priority 3: family match on digit-stripped names (HMU00 ↔ hmu, BASV3 ↔
     # basv). Only when exactly one circuit carries the family and exactly one
@@ -461,19 +484,22 @@ def _match_scan_to_circuits(
         fam = _name_family(ckt)
         if not fam or family_counts.get(fam, 0) != 1:
             continue
-        family_candidates: list[tuple[str, str, str]] = [
-            (t, sw, hw)
-            for t, sw, hw in scans
-            if t.lower() != "netx2" and t.lower() not in claimed and _name_family(t) == fam
+        family_candidates = [
+            scan
+            for scan in scans
+            if scan.scan_type.lower() != "netx2"
+            and scan.scan_type.lower() not in claimed
+            and _name_family(scan.scan_type) == fam
         ]
         if len(family_candidates) == 1:
             result[ckt] = family_candidates[0]
-            claimed.add(family_candidates[0][0].lower())
+            claimed.add(family_candidates[0].scan_type.lower())
 
     # Priority 4: prefix fallback for circuits whose name only shares the scan
     # family as a prefix. Used only when exactly one unclaimed scan and one
     # unmatched circuit claim each other; anything broader stays unmatched.
-    for scan_type, scan_sw, scan_hw in scans:
+    for scan in scans:
+        scan_type = scan.scan_type
         if scan_type.lower() == "netx2" or scan_type.lower() in claimed:
             continue
         fam = _name_family(scan_type)
@@ -482,13 +508,17 @@ def _match_scan_to_circuits(
         # Multiple unclaimed variants of the same family (e.g. CTLV2 and
         # CTLV3) cannot be told apart by a bare prefix — skip the family.
         same_family = [
-            t for t, _sw, _hw in scans if t.lower() != "netx2" and t.lower() not in claimed and _name_family(t) == fam
+            scan.scan_type
+            for scan in scans
+            if scan.scan_type.lower() != "netx2"
+            and scan.scan_type.lower() not in claimed
+            and _name_family(scan.scan_type) == fam
         ]
         if len(same_family) != 1:
             continue
         claimants = [c for c in circuit_names if c not in result and _normalize_name(c).startswith(fam)]
         if len(claimants) == 1:
-            result[claimants[0]] = (scan_type, scan_sw, scan_hw)
+            result[claimants[0]] = scan
             claimed.add(scan_type.lower())
 
     return result
