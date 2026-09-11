@@ -116,7 +116,7 @@ def load_discovery_dump(name: str) -> dict:
     return yaml.safe_load(path.read_text())
 
 
-def load_find_lines(name: str) -> list[str]:
+def load_find_lines(name: str, after: bool = False) -> list[str]:
     """Load find lines from a fixture file.
 
     Fixtures are searched in ``tests/fixtures/``. The ``name`` can be:
@@ -124,13 +124,21 @@ def load_find_lines(name: str) -> list[str]:
     - a discovery dump YAML like ``community/flexotherm_discovery.yaml``
       (its ``raw_find_lines`` are used)
     - an absolute path
+
+    Discovery dumps can carry a post-definition ``raw_find_lines_after``; set
+    ``after=True`` to prefer it. That reflects the effective state after the
+    integration's runtime ``define`` pass, which is what the coordinator sees
+    on its second discovery.
     """
     path = Path(name) if name.startswith("/") else FIXTURES_DIR / name
     if not path.exists():
         raise FileNotFoundError(f"Fixture not found: {path}")
     if path.suffix.lower() in (".yaml", ".yml"):
         dump = load_discovery_dump(name)
-        raw = dump.get("raw_find_lines") or dump.get("raw_find_lines_after")
+        if after:
+            raw = dump.get("raw_find_lines_after") or dump.get("raw_find_lines")
+        else:
+            raw = dump.get("raw_find_lines") or dump.get("raw_find_lines_after")
         if not raw:
             raise ValueError(f"No raw_find_lines in fixture: {path}")
         return [ln.rstrip("\n\r") for ln in raw if ln.strip()]

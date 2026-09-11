@@ -59,6 +59,8 @@ EntityFactoryService = ENTITY.EntityFactoryService
 # posted in the thread: Feb 23 2025 -> "5732", Aug 24 2026 -> "1835". An
 # earlier live check accepted "0835" for Aug 24 2026, which the device decodes
 # as Aug 8 -- plausible-looking but the wrong day.
+# Intent: b516_date_bytes encodes five known calendar dates to their exact verified 4-hex-character strings.
+# Why: pins the QQ/W/V date table (upstream issue #490) so a refactor cannot shift the day or month encoding.
 def test_b516_date_bytes_known_dates() -> None:
     assert b516_date_bytes(datetime(2026, 8, 24)) == "1835"
     assert b516_date_bytes(datetime(2025, 2, 23)) == "5732"
@@ -67,17 +69,24 @@ def test_b516_date_bytes_known_dates() -> None:
     assert b516_date_bytes(datetime(2025, 1, 1)) == "2132"
 
 
+# Intent: b516_date_bytes rolls the month grouping from July 31 ("ff34") to August 1 ("0135").
+# Why: protects the half-year boundary where QQ increments and W resets, a common off-by-one source.
 def test_b516_date_bytes_month_boundaries() -> None:
     assert b516_date_bytes(datetime(2026, 7, 31)) == "ff34"
     assert b516_date_bytes(datetime(2026, 8, 1)) == "0135"
 
 
+# Intent: day 15 stays on the even W value ("0f35") and day 16 flips to the odd W value at V=0 ("1035").
+# Why: pins the mid-month day-split boundary of the upstream b516 table.
 def test_b516_date_bytes_day_split_boundary() -> None:
     # Day 15 stays on the even W value; day 16 flips to the odd one at V=0.
     assert b516_date_bytes(datetime(2026, 8, 15)) == "0f35"
     assert b516_date_bytes(datetime(2026, 8, 16)) == "1035"
 
 
+# Intent: three real b516 reply payloads decode as IGN:7 then a little-endian float32 Wh counter.
+# Why: freezes the wire contract so a future define-string edit cannot silently
+# shift or rescale the energy value (issue #490).
 def test_b516_exp_reply_decode_contract() -> None:
     # The runtime defines read every b516 reply as IGN:7 followed by a 4-byte
     # little-endian float32 Wh counter (the upstream "energye" type). Pin that
@@ -94,6 +103,9 @@ def test_b516_exp_reply_decode_contract() -> None:
     assert struct.unpack("<f", bytes.fromhex("00000000"))[0] == 0.0
 
 
+# Intent: the cooling/electric/solar energy registers generate sensors with the
+# expected friendly names, units, device classes, and total_increasing state classes.
+# Why: guards the b516 cooling-energy entity contract and the lifetime-vs-daily monotonic classification (issue #50).
 def test_b516_cooling_register_entities() -> None:
     lines = [
         "hmu CoolEnvYieldTotal = 1206000",

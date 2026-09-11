@@ -75,6 +75,8 @@ class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEn
     def native_value(self) -> datetime | None:
         data = self.coordinator.data.get("ebusd", {})
         c = self.coordinator.heating_circuit
+        if c is None:
+            return None
         end_date = data.get(f"{c}.Z1QuickVetoEndDate.value")
         end_time = data.get(f"{c}.Z1QuickVetoEndTime.value")
         if not end_date or not end_time or _is_holiday_reset(end_date):
@@ -109,7 +111,10 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity)
     # Return holiday start/end date as datetime (time set to midnight)
     @property
     def native_value(self) -> datetime | None:
-        raw = self.coordinator.data.get("ebusd", {}).get(f"{self.coordinator.heating_circuit}.{self._register}.value")
+        circuit = self.coordinator.heating_circuit
+        if circuit is None:
+            return None
+        raw = self.coordinator.data.get("ebusd", {}).get(f"{circuit}.{self._register}.value")
         if not raw or _is_holiday_reset(raw):
             return None
         try:
@@ -120,9 +125,10 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity)
 
     # Write holiday date to ebusd register through the central write path
     async def async_set_value(self, value: datetime) -> None:
-        if self.coordinator.ebus:
+        circuit = self.coordinator.heating_circuit
+        if self.coordinator.ebus and circuit is not None:
             await self.coordinator.async_write_register(
-                self.coordinator.heating_circuit, self._register, value.strftime(DATE_FMT)
+                circuit, self._register, value.strftime(DATE_FMT)
             )
 
 
@@ -149,7 +155,10 @@ class EbusdManualCoolingEntity(CoordinatorEntity[VaillantCoordinator], DateTimeE
 
     @property
     def native_value(self) -> datetime | None:
-        raw = self.coordinator.data.get("ebusd", {}).get(f"ctlv2.{self._register}.value")
+        circuit = self.coordinator.heating_circuit
+        if circuit is None:
+            return None
+        raw = self.coordinator.data.get("ebusd", {}).get(f"{circuit}.{self._register}.value")
         if not raw or str(raw) in ("-", "") or str(raw).startswith(("ERR:", "no data stored")):
             return None
         try:
@@ -159,5 +168,6 @@ class EbusdManualCoolingEntity(CoordinatorEntity[VaillantCoordinator], DateTimeE
             return None
 
     async def async_set_value(self, value: datetime) -> None:
-        if self.coordinator.ebus:
-            await self.coordinator.async_write_register("ctlv2", self._register, value.strftime(DATE_FMT))
+        circuit = self.coordinator.heating_circuit
+        if self.coordinator.ebus and circuit is not None:
+            await self.coordinator.async_write_register(circuit, self._register, value.strftime(DATE_FMT))

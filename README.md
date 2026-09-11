@@ -67,7 +67,7 @@ graph TD
 | `EntityFactoryService` | Converts the discovered graph plus `REGISTER_MAP` metadata into Home Assistant entity descriptions. |
 | HA platform modules | Turn entity descriptions into native `sensor`, `number`, `select`, `switch`, `climate`, `water_heater`, `calendar`, and `datetime` entities. |
 
-The normal data flow is: connect to ebusd, define any runtime-only registers, discover the device graph, generate entity descriptions, and then poll/read registers through the coordinator. Entity existence comes from discovery; `REGISTER_MAP` supplies metadata and defaults rather than a hardcoded device inventory.
+The normal data flow is: connect to ebusd, discover the device graph, define any runtime-only registers, rediscover their values, generate entity descriptions, and then poll/read registers through the coordinator. Entity existence comes from discovery; `REGISTER_MAP` supplies metadata and defaults rather than a hardcoded device inventory.
 
 ## Features
 

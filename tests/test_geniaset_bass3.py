@@ -61,6 +61,9 @@ DeviceType = DISCOVERY.DeviceType
 GENIASET_LINES = load_find_lines("community/geniaset_bass3_discovery.yaml")
 
 
+# Intent: the GeniaSet fixture builds a graph where bass is a data-bearing
+# HEATING_CONTROLLER with scan_type BASS3 and hmu is a HEAT_PUMP.
+# Why: validates discovery classification for the BASS3 community fixture.
 def test_geniaset_bass3_graph() -> None:
     graph = DiscoveryService.build_device_graph(GENIASET_LINES)
     assert graph.nodes["bass"].device_type == DeviceType.HEATING_CONTROLLER
@@ -69,6 +72,8 @@ def test_geniaset_bass3_graph() -> None:
     assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
 
 
+# Intent: the bass Hwc operation, storage, and desired registers all appear in the graph's raw_registers.
+# Why: ensures the DHW control registers captured on the BASS3 bus are discovered.
 def test_geniaset_bass3_dhw_registers_discovered() -> None:
     graph = DiscoveryService.build_device_graph(GENIASET_LINES)
     for key in ("bass.HwcOpMode", "bass.HwcStorageTemp", "bass.HwcTempDesired"):
@@ -78,6 +83,9 @@ def test_geniaset_bass3_dhw_registers_discovered() -> None:
 # bass/dhw (live Hwc registers) and hmu/dhw (no data) both map to the logical
 # "dhw" device name; the merge must keep the live bass registers as entities
 # so water_heater gets a current temperature (GitHub issue #79).
+# Intent: after bass/dhw and hmu/dhw merge into one logical dhw device, the live
+# bass HwcStorageTemp/HwcTempDesired/HwcOpMode registers still generate entities.
+# Why: protects the water_heater current temperature for the GeniaSet system (GitHub issue #79).
 def test_geniaset_bass3_dhw_entities_survive_sub_device_merge() -> None:
     graph = DiscoveryService.build_device_graph(GENIASET_LINES)
     dhw = graph.nodes["dhw"]

@@ -46,6 +46,23 @@
   resolution, with fixture coverage for the discovered circuit and absent-path
   coverage. Do not add another literal `ctlvN`, `hmu`, or `bai` fallback for one
   user's hardware.
+- **A discovered node is not proof of device role.** Runtime-defined fallback
+  registers can leave a stale alias node (for example a bare `ctlv2`) on a bus
+  whose real controller is a different variant (`ctlv3`). Resolve the controller
+  from the circuit that owns the control/DHW registers, and treat an exact node
+  as authoritative only when it is that owner. An exact node must never
+  short-circuit a unique, control-owning controller.
+- **A register's owner is its source circuit, not the node that lists it.**
+  Logical sub-devices aggregate registers under a parent (the `dhw` node owns
+  `ctlv3.HwcOpMode` while the `ctlv3` node lists no `Hwc*` registers). Identify
+  the owning circuit from each register's source circuit in
+  `DeviceGraph.raw_registers`.
+- **Never collapse "unavailable" into a default.** Sentinel/`no data stored`
+  means unavailable; a valid value looked up under the wrong circuit is a
+  resolution bug, not a data problem. Coercing `None` to a default hides it.
+  Likewise an explicit "unset" sentinel (for example holiday reset dates) is a
+  legitimate absent/false state, not `unknown`; only genuinely missing data is
+  unknown.
 
 ## Runtime-Defined Registers
 
@@ -64,6 +81,13 @@ r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800,value,,IGN:4,,,,v
 Use `EbusService.define_register()` for runtime definitions. Do not replace them with CSV uploads or an addon `--configpath` override.
 
 When changing `_fallback_read()`, preserve entity regeneration after newly readable registers are added.
+
+When a hardware variant's upstream CSV is absent or only partially compatible,
+define a minimal, evidence-backed runtime set instead of aliasing a generic CSV
+(the `08.hmux0.csv -> 08.hmu.csv` symlink for HMUX0 is the documented example).
+Keep the shared register families that the capture proves work, and drop only the
+layouts the capture proves incompatible. Never blanket-drop a whole family, and
+never copy a generic CSV wholesale.
 
 ## Climate Compatibility
 
@@ -231,20 +255,42 @@ When adding registers, devices, or metadata derived from community data:
 ## Test Fixtures
 
 - ebusd `find` output and discovery dumps are captured as fixtures in `tests/fixtures/`. There is no `data-dump/` directory anymore; all community and local captures live in `tests/fixtures/`.
-- `tests/fixtures/community/` holds third-party captures: discovery-dump YAML files (`flexotherm_discovery.yaml`, `arotherm_plus_2zone_discovery.yaml`, `arotherm_plus_basv3_discovery.yaml`, `arotherm_pro7_discovery.yaml`, `geniaset_bass3_discovery.yaml`) and plain `find` output (`basv_find.txt`, `v32_find.txt`, `flexocompact_find.txt`, `szflo_ebusctl_info.txt`, `second_ebusctl_info.txt`, `dumpvalues.yaml`).
+- `tests/fixtures/community/` holds third-party captures: discovery-dump YAML files (`flexotherm_discovery.yaml`, `arotherm_plus_2zone_discovery.yaml`, `arotherm_plus_basv3_discovery.yaml`, `arotherm_pro7_discovery.yaml`, `geniaset_bass3_discovery.yaml`) and plain `find` output (`basv_find.txt`, `v32_find.txt`, `flexocompact_find.txt`, `dumpvalues.yaml`).
+- The fixture trust model and full inventory live in `docs/test-audit-rc3.md`. Classify every fixture as GOLDEN, REDUCED-FAITHFUL, SYNTHETIC, or LEGACY/UNKNOWN; never use a reduced or unknown-provenance fixture as the sole evidence for discovery, circuit ownership, or graph resolution.
+- `tests/test_fixture_integrity.py` guards the golden captures: it fails if the issue #99 dumps lose the spurious `ctlv2` records or a discovery dump loses provenance metadata. Do not weaken it to accommodate a stripped fixture.
 - `dumpvalues.yaml` records multi-field register field names and is the reference for `MULTI_FIELD_MAP` in `tests/fake_ebusd.py`. Keep the two in sync.
 - Load fixtures in tests with `load_find_lines("community/<name>")` for `find` output and `load_discovery_dump("community/<name>")` for discovery-dump YAML; both live in `tests/fake_ebusd.py`. Discovery-dump YAML fixtures need `pyyaml` (installed in CI).
 - Open GitHub issues may reference specific community dumps. When investigating an issue, load the matching fixture and confirm the register behavior on the discovered device graph before changing production code.
 - New community captures should be added under `tests/fixtures/community/` as discovery-dump YAML (preferred, keeps metadata and `raw_find_lines`) with a fixture-load test, never as a separate `data-dump/` folder.
 - **Fixtures are the correctness gate for community data.** A fixture-driven regression test replaces live ebusd verification for anything derived from user/upstream captures. Prefer this over asking for live access; only the owner's own hardware can ever be live-verified.
+- **Do not hand-trim a capture to "relevant" records.** Stripping apparently
+  unrelated entries can mask the bug: an issue #99 resolution regression only
+  reproduces because the real dump still carries the stale alias records. Keep
+  every raw `find` line the capture provides.
+- A discovery dump can carry both pre- and post-definition `find` output. Use the
+  post-definition lines (`load_find_lines(name, after=True)`) when a test asserts
+  the effective runtime state after the integration's `define` pass, and the raw
+  lines when it asserts the initial discovery state.
+- A regression test for reported invalid values should assert both rejection
+  (out-of-range/absurd decode becomes unavailable) and preservation (a plausible
+  value stays available); reject only the specific field, never clamp or
+  transform.
 
 ## Validation
 
 ```bash
 .venv/bin/ruff check .
 .venv/bin/pytest -q
+python3 tools/version.py check
 python3 -m compileall -f custom_components/vaillant_ebus/
 ```
+
+## Release Versioning
+
+- The release version must stay identical across `pyproject.toml`, `custom_components/vaillant_ebus/manifest.json`, and the top `## <version>` heading in `CHANGELOG.md`.
+- `tools/version.py` is the single source of truth. Bump with `python tools/version.py bump X.Y.Z`, then add the matching `## X.Y.Z - YYYY-MM-DD` CHANGELOG section (release notes are human-written).
+- `tests/test_version_consistency.py` runs `python tools/version.py check`, so CI fails on drift. Never hand-edit one version file without updating the other two.
+- Publishing a release means pushing the release branch and an annotated `v*` tag; the CI `release` job builds the zip and creates or updates the GitHub release from the top CHANGELOG section. Do not merge the release branch until it has been tested on Home Assistant.
 
 ## GitHub Communication
 

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "main"
+      - "release/**"
     tags:
       - "v*"
   pull_request:
@@ -18,21 +19,43 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
 
       - name: Install dependencies
-        run: pip install ruff pytest pytest-asyncio pyyaml
+        run: pip install ruff==0.16.4 mypy==1.15.0 pytest pytest-asyncio pyyaml types-cryptography
+
+      - name: Version check
+        run: python tools/version.py check
 
       - name: Lint
         run: ruff check .
+
+      - name: Validate YAML
+        run: python -c "import pathlib, yaml; [yaml.safe_load(path.read_text()) for pattern in ('*.yml', '*.yaml') for path in pathlib.Path('.').rglob(pattern)]"
+
+      - name: Format check
+        run: ruff format --check custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py custom_components/vaillant_ebus/backend/entity_factory.py custom_components/vaillant_ebus/backend/mapping.py custom_components/vaillant_ebus/coordinator.py custom_components/vaillant_ebus/dump_service.py
+
+      - name: Type check
+        run: mypy --strict --follow-imports=skip custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py
 
       - name: Test
         run: pytest -q tests/
 
       - name: Compile
         run: python3 -m compileall -f custom_components/vaillant_ebus/
+
+      - name: Diff check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}"
+          else
+            git diff --check HEAD^ HEAD
+          fi
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -42,21 +65,43 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
 
       - name: Install dependencies
-        run: pip install ruff pytest pytest-asyncio pyyaml
+        run: pip install ruff==0.16.4 mypy==1.15.0 pytest pytest-asyncio pyyaml types-cryptography
+
+      - name: Version check
+        run: python tools/version.py check
 
       - name: Lint
         run: ruff check .
+
+      - name: Validate YAML
+        run: python -c "import pathlib, yaml; [yaml.safe_load(path.read_text()) for pattern in ('*.yml', '*.yaml') for path in pathlib.Path('.').rglob(pattern)]"
+
+      - name: Format check
+        run: ruff format --check custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py custom_components/vaillant_ebus/backend/entity_factory.py custom_components/vaillant_ebus/backend/mapping.py custom_components/vaillant_ebus/coordinator.py custom_components/vaillant_ebus/dump_service.py
+
+      - name: Type check
+        run: mypy --strict --follow-imports=skip custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py
 
       - name: Test
         run: pytest -q tests/
 
       - name: Compile
         run: python3 -m compileall -f custom_components/vaillant_ebus/
+
+      - name: Diff check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}"
+          else
+            git diff --check HEAD^ HEAD
+          fi
 
       - name: Build release zip
         run: |

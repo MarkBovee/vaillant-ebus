@@ -1,6 +1,6 @@
 [project]
 name = "vaillant-ebus"
-version = "1.2.1"
+version = "1.8.0"
 description = "Home Assistant integration for Vaillant heat pumps via ebusd TCP"
 requires-python = ">=3.14"
 license = { text = "Apache-2.0" }
@@ -20,6 +20,10 @@ select = ["E", "F", "I", "N", "W", "UP"]
 strict = true
 python_version = "3.14"
 exclude = [".git", ".venv", "venv", ".research-scratch"]
+
+[[tool.mypy.overrides]]
+module = ["homeassistant.*", "aiohttp", "yaml"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

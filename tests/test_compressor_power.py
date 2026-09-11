@@ -32,6 +32,9 @@ def _register(key: str, value: str) -> tuple[str, EbusdRegister]:
 
 
 # Idle detection from status code + speed values
+# Intent: compressor_is_idle is true for status 100 or when both speed and
+# utilization are zero, and false for status 104.
+# Why: idle detection must fire on a stopped status code or zero-speed signals so power is not zeroed while running.
 def test_compressor_is_idle_from_status_and_values() -> None:
     stopped = dict(
         [
@@ -58,6 +61,9 @@ def test_compressor_is_idle_from_status_and_values() -> None:
 
 
 # All compressor-dependent registers are zeroed when compressor is idle
+# Intent: zero_idle_registers sets every COMPRESSOR_ZERO_REGISTER_NAMES entry to
+# "0" and keeps has_data when the status is idle.
+# Why: prevents stale compressor power and flow readings from lingering as live values while the compressor is stopped.
 def test_zero_idle_registers_clears_all() -> None:
     regs = dict(
         [
@@ -79,6 +85,8 @@ def test_zero_idle_registers_clears_all() -> None:
 
 
 # Registers are NOT zeroed when compressor status is active
+# Intent: zero_idle_registers preserves CurrentConsumedPower when status code 104 indicates the compressor is active.
+# Why: protects genuine running power readings from being wiped during active operation.
 def test_zero_idle_registers_skips_when_compressor_active() -> None:
     regs = dict(
         [
@@ -91,6 +99,8 @@ def test_zero_idle_registers_skips_when_compressor_active() -> None:
 
 
 # String status "standby" is correctly detected as idle
+# Intent: the string status "standby" is treated as idle even when compressor speed is non-zero.
+# Why: covers controllers that report a textual standby state instead of numeric status codes.
 def test_compressor_is_idle_string_status_standby() -> None:
     regs = dict(
         [
@@ -102,6 +112,8 @@ def test_compressor_is_idle_string_status_standby() -> None:
 
 
 # String status "hwc_compressor_active" is correctly detected as NOT idle
+# Intent: the string status "hwc_compressor_active" is not idle even when compressor speed is zero.
+# Why: prevents DHW compressor activity from being misread as idle and having its values zeroed.
 def test_compressor_is_idle_string_status_hwc_active() -> None:
     regs = dict(
         [
@@ -113,6 +125,8 @@ def test_compressor_is_idle_string_status_hwc_active() -> None:
 
 
 # Registers preserved when string status indicates active compressor
+# Intent: zero_idle_registers preserves CurrentConsumedPower when the string status is "hwc_compressor_active".
+# Why: guards active DHW power readings against zeroing when the controller reports a textual status.
 def test_zero_idle_registers_skips_on_hwc_active_string() -> None:
     regs = dict(
         [
@@ -126,6 +140,8 @@ def test_zero_idle_registers_skips_on_hwc_active_string() -> None:
 
 
 # A resolved non-"hmu" heat-pump circuit zeroes its own registers
+# Intent: zero_idle_registers(regs, "um") zeroes the registers of the explicitly resolved non-"hmu" circuit.
+# Why: supports heat-pump variants whose circuit is not literally "hmu" without hardcoding it.
 def test_zero_idle_registers_non_hmu_circuit() -> None:
     regs = dict(
         [
@@ -138,6 +154,8 @@ def test_zero_idle_registers_non_hmu_circuit() -> None:
 
 
 # Default call ignores circuits other than "hmu" (no silent cross-circuit zeroing)
+# Intent: calling zero_idle_registers without a circuit argument leaves the non-"hmu" circuit register unchanged.
+# Why: prevents silent cross-circuit zeroing when the caller has not resolved the actual heat-pump circuit.
 def test_default_call_ignores_other_circuits() -> None:
     regs = dict(
         [

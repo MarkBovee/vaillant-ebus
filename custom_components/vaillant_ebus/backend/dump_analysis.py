@@ -2,12 +2,41 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, TypedDict
 
-from .grab_parser import parse_grab_lines
+from .grab_parser import GrabTelegram, parse_grab_lines
 
 CURRENT_DUMP_VERSION = 4
 _SENTINELS = ("", "-", "empty", "unknown", "unavailable", "no data stored")
+
+
+class TelegramGroup(TypedDict):
+    master: str | None
+    slave: str | None
+    msgid: str | None
+    sub: str | None
+    label: str | None
+    known: bool
+    occurrence_count: int
+    unique_requests: list[str]
+    unique_responses: list[str]
+
+
+# Normalize legacy serialized telegrams before applying the typed grouping path.
+def _coerce_telegram(raw: Mapping[str, Any]) -> GrabTelegram:
+    response = raw.get("resp")
+    label = raw.get("label")
+    return {
+        "master": str(raw.get("master") or ""),
+        "slave": str(raw.get("slave") or ""),
+        "msgid": str(raw.get("msgid") or ""),
+        "sub": str(raw.get("sub") or ""),
+        "request": str(raw.get("request") or raw.get("req") or ""),
+        "resp": str(response) if response is not None else None,
+        "count": str(raw.get("count") or "1"),
+        "label": str(label) if label is not None else None,
+    }
 
 
 def _meaningful(value: Any) -> bool:
@@ -71,28 +100,34 @@ def _register_changes(before: list[dict[str, Any]], after: list[dict[str, Any]])
     return changes
 
 
-def group_telegrams(telegrams: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def group_telegrams(telegrams: list[GrabTelegram]) -> list[TelegramGroup]:
     """Aggregate telegrams by bus identity, preserving changing responses."""
-    groups: dict[tuple[Any, ...], dict[str, Any]] = {}
+    groups: dict[tuple[str | None, ...], TelegramGroup] = {}
     for telegram in telegrams:
-        key = tuple(telegram.get(field) for field in ("master", "slave", "msgid", "sub", "label"))
+        key = (
+            telegram["master"],
+            telegram["slave"],
+            telegram["msgid"],
+            telegram["sub"],
+            telegram["label"],
+        )
         group = groups.setdefault(
             key,
             {
-                "master": telegram.get("master"),
-                "slave": telegram.get("slave"),
-                "msgid": telegram.get("msgid"),
-                "sub": telegram.get("sub"),
-                "label": telegram.get("label"),
-                "known": bool(telegram.get("label")),
+                "master": telegram["master"],
+                "slave": telegram["slave"],
+                "msgid": telegram["msgid"],
+                "sub": telegram["sub"],
+                "label": telegram["label"],
+                "known": bool(telegram["label"]),
                 "occurrence_count": 0,
                 "unique_requests": [],
                 "unique_responses": [],
             },
         )
-        group["occurrence_count"] += int(telegram.get("count") or 1)
-        request = telegram.get("request") or telegram.get("req")
-        response = telegram.get("resp")
+        group["occurrence_count"] += int(telegram["count"] or 1)
+        request = telegram.get("request")
+        response = telegram["resp"]
         if request and request not in group["unique_requests"]:
             group["unique_requests"].append(request)
         if response and response not in group["unique_responses"]:
@@ -117,7 +152,14 @@ def normalize_dump(dump: dict[str, Any]) -> dict[str, Any]:
     after = list(dump.get("after_registers") or [])
     current = after or before
     raw_grab = list(dump.get("grab") or [])
-    parsed = parse_grab_lines(raw_grab) if raw_grab else list(dump.get("labeled_telegrams") or [])
+    parsed = (
+        parse_grab_lines(raw_grab)
+        if raw_grab
+        else [
+            _coerce_telegram(item)
+            for item in (dump.get("labeled_telegrams") or []) + (dump.get("unknown_telegrams") or [])
+        ]
+    )
     unknown = [telegram for telegram in parsed if not telegram.get("label")]
     return {
         "dump_version": version,

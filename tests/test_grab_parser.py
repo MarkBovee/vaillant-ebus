@@ -18,9 +18,7 @@ for name, path in (
     pkg.__path__ = [str(path)]
     sys.modules[name] = pkg
 
-spec = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.grab_parser", BACKEND_PATH / "grab_parser.py"
-)
+spec = importlib.util.spec_from_file_location("vaillant_ebus.backend.grab_parser", BACKEND_PATH / "grab_parser.py")
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
 sys.modules["vaillant_ebus.backend.grab_parser"] = module
@@ -28,6 +26,7 @@ spec.loader.exec_module(module)
 
 parse_grab_lines = module.parse_grab_lines
 unknown_telegrams = module.unknown_telegrams
+GrabTelegram = module.GrabTelegram
 
 GRAB_LINES = [
     "[grab] grab started",
@@ -42,8 +41,12 @@ GRAB_LINES = [
 
 
 class TestParseGrabLines:
+    # Intent: parses the labeled grab line into all GrabTelegram fields with label
+    # "hmu SetMode", msgid b510, master 10, slave 08, sub, resp, and count 19.
+    # Why: pins the field extraction contract for known/polled telegrams.
     def test_labeled_telegram_parsed(self) -> None:
         telegrams = parse_grab_lines(GRAB_LINES)
+        assert set(telegrams[0]) == set(GrabTelegram.__annotations__)
         labeled = [t for t in telegrams if t["label"]]
         assert len(labeled) == 1
         t = labeled[0]
@@ -55,6 +58,9 @@ class TestParseGrabLines:
         assert t["resp"] == "0101"
         assert t["count"] == "19"
 
+    # Intent: parses the five unlabeled grab lines with label None, including a
+    # response-less broadcast telegram (b505) retaining master 10 and slave fe.
+    # Why: protects extraction of unknown telegrams, which are the input to register discovery.
     def test_unknown_telegrams_parsed(self) -> None:
         telegrams = parse_grab_lines(GRAB_LINES)
         unknown = [t for t in telegrams if t["label"] is None]
@@ -66,18 +72,20 @@ class TestParseGrabLines:
         assert bc["master"] == "10"
         assert bc["slave"] == "fe"
 
+    # Intent: unknown_telegrams returns exactly the five unlabeled telegrams from the grab sample.
+    # Why: guards the filter that separates unknown candidates from known labeled telegrams.
     def test_unknown_telegrams_helper(self) -> None:
         unknown = unknown_telegrams(GRAB_LINES)
         assert all(t["label"] is None for t in unknown)
         assert len(unknown) == 5
 
+    # Intent: a real ctlv2 cooling discovery fixture yields both non-empty unknown
+    # and labeled telegram lists through the parser.
+    # Why: ensures the parser handles real captured grab output, not only the hand-written sample.
     def test_roundtrip_real_fixture(self) -> None:
         import yaml
 
-        fixture = (
-            Path(__file__).parents[1]
-            / "tests/fixtures/community/arotherm_plus_ctlv2_cooling_discovery.yaml"
-        )
+        fixture = Path(__file__).parents[1] / "tests/fixtures/community/arotherm_plus_ctlv2_cooling_discovery.yaml"
         data = yaml.safe_load(fixture.read_text())
         grab = data.get("grab", [])
         assert grab, "fixture should contain grab data"

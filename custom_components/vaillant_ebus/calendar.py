@@ -34,7 +34,17 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(EbusdCalendar(coordinator, entry, name, prefix) for name, prefix in SCHEDULES.items())
+    added = False
+
+    def _ensure_calendars() -> None:
+        nonlocal added
+        if added or coordinator.heating_circuit is None:
+            return
+        async_add_entities(EbusdCalendar(coordinator, entry, name, prefix) for name, prefix in SCHEDULES.items())
+        added = True
+
+    _ensure_calendars()
+    coordinator.register_post_discovery_callback(_ensure_calendars)
 
 
 class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
@@ -94,6 +104,8 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
     # Get timer register value from coordinator data or register cache
     def _value(self, name: str) -> str | None:
         c = self.coordinator.heating_circuit
+        if c is None:
+            return None
         key = f"{c}.{name}.value"
         value = self.coordinator.data.get("ebusd", {}).get(key)
         if value is not None:

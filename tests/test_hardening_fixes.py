@@ -81,6 +81,7 @@ def _coordinator(tmpdir: str) -> VaillantCoordinator:
 
 # Intent: identifiers are validated before interpolation; empty values and
 # CR/LF injection never reach the protocol layer.
+# Why: prevents CR/LF command injection through register identifiers.
 async def test_read_register_rejects_invalid_identifiers() -> None:
     svc = EbusService(host="127.0.0.1", port=8888)
     svc.send_command = AsyncMock()  # must never be reached by invalid input
@@ -101,6 +102,8 @@ async def test_read_register_rejects_invalid_identifiers() -> None:
     assert svc.send_command.await_count == 1
 
 
+# Intent: write rejects an empty name and an embedded newline before sending.
+# Why: prevents injection through write identifiers.
 async def test_write_register_rejects_invalid_identifiers() -> None:
     svc = EbusService(host="127.0.0.1", port=8888)
     svc.send_command = AsyncMock()
@@ -111,6 +114,8 @@ async def test_write_register_rejects_invalid_identifiers() -> None:
     assert svc.send_command.await_count == 0
 
 
+# Intent: define_register rejects empty definitions and newline-bearing quoted fields.
+# Why: prevents malformed or injected define commands reaching ebusd.
 async def test_define_register_rejects_invalid_definitions() -> None:
     svc = EbusService(host="127.0.0.1", port=8888)
     with pytest.raises(ValueError):
@@ -120,6 +125,7 @@ async def test_define_register_rejects_invalid_definitions() -> None:
 
 
 # Intent: values keep their ebusd syntax — spaces and semicolons pass through.
+# Why: protects legitimate multi-part ebusd values from overzealous sanitization.
 async def test_write_register_preserves_values_with_spaces_and_semicolons() -> None:
     svc = EbusService(host="127.0.0.1", port=8888)
     svc.send_command = AsyncMock(
@@ -137,6 +143,8 @@ async def test_write_register_preserves_values_with_spaces_and_semicolons() -> N
 # --- central write path: stop at the first failure, refresh only on success ---
 
 
+# Intent: a batch write stops at the first failed register and never refreshes.
+# Why: protects partial-write handling so a refresh only follows full success.
 async def test_write_registers_stop_on_first_failure_without_refresh() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = _coordinator(tmpdir)
@@ -156,6 +164,8 @@ async def test_write_registers_stop_on_first_failure_without_refresh() -> None:
         c.async_request_refresh.assert_not_awaited()
 
 
+# Intent: a fully successful batch write triggers exactly one refresh.
+# Why: protects the single refresh-after-write contract.
 async def test_write_registers_refresh_once_after_full_success() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = _coordinator(tmpdir)
@@ -174,6 +184,7 @@ async def test_write_registers_refresh_once_after_full_success() -> None:
 
 # Intent: a corrupt cache falls back to an empty dict but logs why; a missing
 # file stays silent because first run without a cache is normal.
+# Why: keeps failures diagnosable without first-run warning noise.
 async def test_load_cache_logs_corrupt_but_not_missing(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = _coordinator(tmpdir)
@@ -193,6 +204,7 @@ async def test_load_cache_logs_corrupt_but_not_missing(tmp_path: Path, caplog: p
 
 
 # Intent: save failures log path and reason — never the cached values.
+# Why: prevents cached register values from leaking into logs.
 async def test_save_cache_failure_logs_without_values(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = _coordinator(tmpdir)
@@ -212,6 +224,7 @@ async def test_save_cache_failure_logs_without_values(tmp_path: Path, caplog: py
 
 
 # Intent: the dump directory is created before the YAML write lands.
+# Why: protects ordered dump persistence for nested target paths.
 async def test_persist_dump_creates_directory_before_write(tmp_path: Path) -> None:
     order: list[str] = []
 
@@ -227,6 +240,8 @@ async def test_persist_dump_creates_directory_before_write(tmp_path: Path) -> No
     assert target.exists()
 
 
+# Intent: exporting a dump with ebus None raises a HomeAssistantError naming the disconnected state.
+# Why: gives a clear failure instead of a later attribute error.
 async def test_export_dump_reports_disconnected_ebusd(tmp_path: Path) -> None:
     hass = MagicMock()
     hass.config.path.return_value = str(tmp_path)
@@ -237,6 +252,40 @@ async def test_export_dump_reports_disconnected_ebusd(tmp_path: Path) -> None:
         await DUMP.async_export_discovery_dump(hass, coordinator)
 
 
+# Intent: dump map probes skip logical aliases with ambiguous graph ownership.
+# Why: prevents dump probing of aliases with unresolved ownership.
+async def test_dump_registers_skip_ambiguous_alias() -> None:
+    ebus = MagicMock()
+    ebus.find_registers = AsyncMock(return_value=[])
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {"ctlv2.Z1DayTemp": MagicMock(enabled=True, writable=False)}
+    try:
+        registers, _, _ = await DUMP._dump_registers(ebus, circuit_aliases={"ctlv2": None})
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    assert registers == []
+    ebus.read_register.assert_not_called()
+
+
+# Intent: dump map probes skip a logical alias with no discovered owner.
+# Why: prevents dump probing of aliases that have no hardware.
+async def test_dump_registers_skip_missing_alias() -> None:
+    ebus = MagicMock()
+    ebus.find_registers = AsyncMock(return_value=[])
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {"hmu.OutsideTemp": MagicMock(enabled=True, writable=False)}
+    try:
+        registers, _, _ = await DUMP._dump_registers(ebus, circuit_aliases={"hmu": None})
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    assert registers == []
+    ebus.read_register.assert_not_called()
+
+
+# Intent: _redact replaces sensitive register names with a placeholder and leaves others untouched.
+# Why: protects serial-like secrets from appearing in exported dumps.
 def test_dump_redacts_sensitive_register_names() -> None:
     DUMP.SENSITIVE_FIELDS = {"serial"}
     assert DUMP._redact("secret-value", "SerialNumber") == "<redacted>"
@@ -257,6 +306,7 @@ def _two_entry_hass() -> tuple[MagicMock, MagicMock, MagicMock]:
 
 # Intent: services stay deterministic with multiple entries — explicit entry_id
 # wins, single entries auto-select, ambiguity and unknown ids fail loudly.
+# Why: protects the common single-entry service call path.
 async def test_service_dispatch_single_entry_auto_selected() -> None:
     hass = MagicMock()
     coord = MagicMock()
@@ -266,6 +316,8 @@ async def test_service_dispatch_single_entry_auto_selected() -> None:
     coord.async_request_refresh.assert_awaited_once()
 
 
+# Intent: an explicit entry_id routes the service to that coordinator only.
+# Why: protects deterministic routing when multiple entries are loaded.
 async def test_service_dispatch_explicit_entry_id_wins() -> None:
     hass, coord_a, coord_b = _two_entry_hass()
     await INIT._svc_refresh(hass, _call({"entry_id": "entry-b"}))
@@ -273,6 +325,8 @@ async def test_service_dispatch_explicit_entry_id_wins() -> None:
     coord_a.async_request_refresh.assert_not_awaited()
 
 
+# Intent: an ambiguous call and an unknown entry_id both raise HomeAssistantError.
+# Why: prevents silently picking the wrong coordinator.
 async def test_service_dispatch_requires_selector_when_ambiguous() -> None:
     hass, coord_a, _coord_b = _two_entry_hass()
     with pytest.raises(HomeAssistantError):
@@ -281,6 +335,8 @@ async def test_service_dispatch_requires_selector_when_ambiguous() -> None:
         await INIT._svc_refresh(hass, _call({"entry_id": "missing"}))
 
 
+# Intent: service dispatch raises when no entries are loaded.
+# Why: surfaces a misconfigured integration instead of silently doing nothing.
 async def test_service_dispatch_fails_without_loaded_entries() -> None:
     hass = MagicMock()
     hass.data = {"vaillant_ebus": {}}
@@ -288,18 +344,62 @@ async def test_service_dispatch_fails_without_loaded_entries() -> None:
         await INIT._svc_refresh(hass, _call({}))
 
 
+# Intent: read_parameter calls the selected coordinator with the raw circuit and empty field.
+# Why: protects multi-entry read routing.
 async def test_read_parameter_routes_to_selected_coordinator() -> None:
     hass, coord_a, coord_b = _two_entry_hass()
     for coord in (coord_a, coord_b):
-        coord.ebus = MagicMock()
-        coord.ebus.read_register = AsyncMock(return_value="21.5")
+        coord.async_read_register = AsyncMock(return_value="21.5")
     await INIT._svc_read_parameter(hass, _call({"circuit": "hmu", "name": "OutsideTemp", "entry_id": "entry-a"}))
-    coord_a.ebus.read_register.assert_awaited_once_with("hmu", "OutsideTemp", "")
-    coord_b.ebus.read_register.assert_not_awaited()
+    coord_a.async_read_register.assert_awaited_once_with("hmu", "OutsideTemp", "")
+    coord_b.async_read_register.assert_not_awaited()
+
+
+# Intent: read_parameter resolves the logical circuit to the discovered owner before reading.
+# Why: protects service reads on HMUX0 hardware via graph identity.
+async def test_read_parameter_uses_discovered_circuit_resolution() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = tc._hass(tmpdir)
+        coordinator = VaillantCoordinator(hass, tc._entry())
+        coordinator._graph = tc.DeviceGraph(
+            nodes={"hmux0": tc.DeviceNode("hmux0", tc.DeviceType.HEAT_PUMP, has_data=True)},
+            raw_registers={},
+            placeholder_registers=set(),
+        )
+        coordinator.ebus = MagicMock()
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.read_register = AsyncMock(return_value="21.5")
+        hass.data = {"vaillant_ebus": {"entry-a": coordinator}}
+
+        await INIT._svc_read_parameter(
+            hass, _call({"circuit": "hmu", "name": "OutsideTemp", "entry_id": "entry-a"})
+        )
+
+        coordinator.ebus.read_register.assert_awaited_once_with("hmux0", "OutsideTemp", "")
+
+
+# Intent: read_parameter performs no transport read when the circuit owner is absent.
+# Why: prevents service reads of aliases that have no discovered hardware.
+async def test_read_parameter_does_not_read_when_circuit_owner_is_missing() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = tc._hass(tmpdir)
+        coordinator = VaillantCoordinator(hass, tc._entry())
+        coordinator._graph = tc.DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+        coordinator.ebus = MagicMock()
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.read_register = AsyncMock(return_value="21.5")
+        hass.data = {"vaillant_ebus": {"entry-a": coordinator}}
+
+        await INIT._svc_read_parameter(
+            hass, _call({"circuit": "hmu", "name": "OutsideTemp", "entry_id": "entry-a"})
+        )
+
+        coordinator.ebus.read_register.assert_not_awaited()
 
 
 # Intent: integration-scope setup registers every service once with schemas
 # that accept the optional entry selector.
+# Why: protects the service surface from missing or renamed registrations.
 async def test_async_setup_registers_all_services_with_entry_selector() -> None:
     hass = MagicMock()
     registered: dict[str, object] = {}
@@ -314,14 +414,16 @@ async def test_async_setup_registers_all_services_with_entry_selector() -> None:
         "write_parameter",
         "refresh",
         "rediscover",
-            "analyze_registers",
-            "export_discovery_dump",
-            "set_mode_override",
-            "clear_mode_override",
-        }
+        "analyze_registers",
+        "export_discovery_dump",
+        "set_mode_override",
+        "clear_mode_override",
+    }
     assert set(registered) == expected
 
 
+# Intent: every registered service handler is an async coroutine function.
+# Why: Home Assistant requires async handlers, so this guards against a sync regression.
 async def test_registered_service_handlers_are_async_callbacks() -> None:
     hass = MagicMock()
     registered: dict[str, object] = {}
