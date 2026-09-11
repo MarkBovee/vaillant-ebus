@@ -264,6 +264,10 @@ def _setup_data() -> dict:
     }
 
 
+# Intent: A two-zone discovery graph yields one thermostat and one flow-range
+# entity per zone, each bound to its own device.
+# Why: Pins per-zone entity creation and unique_id/device identity so a graph
+# with z1 and z2 never collapses to one shared climate.
 async def test_async_setup_entry_creates_per_zone_entities() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, _graph_two_zone(), _setup_data())
@@ -289,6 +293,7 @@ async def test_async_setup_entry_creates_per_zone_entities() -> None:
 
 
 # Intent: a zone-2 thermostat reads its own Z2 registers, not Z1's.
+# Why: prevents a per-zone entity from surfacing zone 1's room temperature when both zones share one controller circuit.
 async def test_zone2_reads_own_registers() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, _graph_two_zone(), _setup_data())
@@ -300,6 +305,8 @@ async def test_zone2_reads_own_registers() -> None:
 
 # Intent: target-temperature writes follow mode semantics — time-controlled
 # (auto) zones start a quick veto; manual/day zones write day temp directly.
+# Why: guards the mypyllant-aligned quick-veto path so an auto-mode target
+# change never overwrites the permanent day setpoint.
 async def test_zone2_set_temperature_auto_starts_quick_veto() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(
@@ -316,6 +323,8 @@ async def test_zone2_set_temperature_auto_starts_quick_veto() -> None:
         assert ("ctlv2", "Z2DayTemp", "22.0") not in calls
 
 
+# Intent: In manual/day mode a target-temperature change writes the zone's DayTemp directly and starts no quick veto.
+# Why: pins the mode-dependent write path so day mode keeps a permanent setpoint while auto mode uses quick veto.
 async def test_zone1_set_temperature_day_writes_day_temp() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(
@@ -333,6 +342,8 @@ async def test_zone1_set_temperature_day_writes_day_temp() -> None:
 
 # Intent: an active device-side veto (survives restarts) reports BOOST and
 # routes temperature changes to a temp-only quick-veto update.
+# Why: ensures a veto already active on the device is recognised after a restart
+# and a temp update reuses it without a new duration.
 async def test_device_side_veto_reports_boost_and_updates_temp_only() -> None:
     from datetime import datetime, timedelta
 
@@ -361,6 +372,8 @@ async def test_device_side_veto_reports_boost_and_updates_temp_only() -> None:
 
 # Intent: the idle sentinel end date (01.01.2019) must never read as BOOST;
 # a temperature change then starts a fresh veto like any auto-mode zone.
+# Why: prevents the idle veto sentinel date from being misread as an active
+# boost, which would hide the target and block a fresh veto.
 async def test_past_sentinel_end_date_reports_no_boost() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(
@@ -383,6 +396,8 @@ async def test_past_sentinel_end_date_reports_no_boost() -> None:
         assert ("ctlv2", "Z2QuickVetoDuration", "3") in calls
 
 
+# Intent: A holiday period starting tomorrow reads preset "none", while a period bracketing today reads "away".
+# Why: guards the date-window logic so scheduling a future absence does not immediately flip the zone into away mode.
 def test_future_holiday_period_is_not_away_and_active_period_is_away() -> None:
     from datetime import date, timedelta
 
@@ -410,6 +425,7 @@ def test_future_holiday_period_is_not_away_and_active_period_is_away() -> None:
 
 
 # Intent: boost on a zone with quick-veto support writes the zone's veto registers.
+# Why: pins that the configured quick_veto_temp and duration reach the zone's own QuickVeto registers.
 async def test_zone2_boost_writes_quick_veto() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(
@@ -427,6 +443,7 @@ async def test_zone2_boost_writes_quick_veto() -> None:
 
 
 # Intent: COOL and BOOST are hidden for zones without the supporting registers.
+# Why: prevents exposing cooling or boost controls the hardware cannot back with registers.
 async def test_cool_and_boost_omitted_without_registers() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, _graph_two_zone(full_parity=False))
@@ -439,6 +456,7 @@ async def test_cool_and_boost_omitted_without_registers() -> None:
 
 
 # Intent: a zone with full parity offers COOL, HEAT, AUTO and all presets.
+# Why: pins the exact mode and preset lists for a zone whose cooling and veto registers are discovered.
 async def test_cool_and_boost_offered_with_registers() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, _graph_two_zone(full_parity=True))
@@ -448,6 +466,7 @@ async def test_cool_and_boost_offered_with_registers() -> None:
 
 
 # Intent: single-zone systems keep exactly the legacy z1 entities and ids.
+# Why: protects backwards-compatible entity ids and the "Home" name for existing single-zone installs.
 async def test_single_zone_setup_keeps_z1_identity() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, _graph_single_zone(), _setup_data())
@@ -463,6 +482,7 @@ async def test_single_zone_setup_keeps_z1_identity() -> None:
 
 
 # Intent: ghost zones (mapping "none", no live core data) get no climate entity.
+# Why: stops an unused zone's static defaults from creating a phantom thermostat entity.
 async def test_ghost_zone_gets_no_climate_entity() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, _graph_ghost_zone(), _setup_data())
@@ -480,6 +500,7 @@ async def test_ghost_zone_gets_no_climate_entity() -> None:
 
 # Intent: with no discovery graph yet, setup falls back to z1 with full
 # features (COOL/BOOST assumed present), preserving pre-per-zone behavior.
+# Why: prevents a cold start before discovery from stripping COOL/BOOST off the legacy z1 entity.
 async def test_setup_with_empty_graph_keeps_z1_full_features() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, None, _setup_data())
@@ -497,6 +518,7 @@ async def test_setup_with_empty_graph_keeps_z1_full_features() -> None:
 
 # Intent: zones discovered after setup still get their climate entities via the
 # post-discovery callback, so a fresh install does not require an entry reload.
+# Why: ensures late-discovered zones are added live, without an integration reload.
 async def test_post_discovery_adds_missing_zone_entities() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, None, _setup_data())
@@ -522,6 +544,7 @@ async def test_post_discovery_adds_missing_zone_entities() -> None:
 
 
 # Intent: a real but idle zone still gets a climate entity; reads are unavailable.
+# Why: distinguishes a wired-but-idle zone (entity exists, values unknown) from a ghost zone (no entity).
 async def test_real_idle_zone_gets_climate_entity() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, _graph_idle_zone(), {"ebusd": {"ctlv2.Z1RoomTemp.value": "21.5"}})
@@ -537,6 +560,7 @@ async def test_real_idle_zone_gets_climate_entity() -> None:
 
 
 # Intent: the per-zone flow range reads and writes the zone's HcN registers.
+# Why: prevents the zone-2 flow range from reading or writing zone-1 HC registers.
 async def test_flow_temp_range_zone2_reads_and_writes_hc2() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, _graph_two_zone(), _setup_data())
@@ -551,6 +575,8 @@ async def test_flow_temp_range_zone2_reads_and_writes_hc2() -> None:
 
 
 # Intent: hvac_action stays heat-pump-global while zone status gates it.
+# Why: keeps hvac_action driven by the shared compressor status while the zone's
+# Hc status decides whether it reports heating.
 async def test_hvac_action_uses_shared_compressor_state() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(
@@ -569,6 +595,7 @@ async def test_hvac_action_uses_shared_compressor_state() -> None:
 
 
 # Intent: manual cooling keeps the shared date register and writes the zone op mode.
+# Why: pins manual cooling to the shared ManualCoolingEndDate plus the zone's own OpMode write.
 async def test_zone2_manual_cooling_uses_shared_date() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, _graph_two_zone())
@@ -581,6 +608,8 @@ async def test_zone2_manual_cooling_uses_shared_date() -> None:
         assert ("ctlv2", "Z2OpMode", "auto") in writes
 
 
+# Intent: The climate entity is available whenever the coordinator's last refresh succeeded.
+# Why: decouples entity availability from per-register data so a zone with no live values still reports a state.
 async def test_available_tracks_coordinator() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, _graph_two_zone())

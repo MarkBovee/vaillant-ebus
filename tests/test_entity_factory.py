@@ -138,6 +138,8 @@ def _build_graph(overrides: dict | None = None) -> DeviceGraph:
 
 
 # Intent: keep parent-register parsing semantics explicit for all consumers.
+# Why: field keys must resolve to their parent register before any read or
+# probe, otherwise parsed fields are polled as if they were registers.
 def test_field_key_helpers_preserve_parent_registers() -> None:
     assert is_field_key("ctlv3.Status01.temp") is True
     assert parent_register_name("ctlv3.Status01.temp") == "ctlv3.Status01"
@@ -148,12 +150,16 @@ def test_field_key_helpers_preserve_parent_registers() -> None:
 class TestEntityGeneration:
     """Entity generation from DeviceGraph."""
 
+    # Intent: generating from a graph with known registers yields a non-empty entity list.
+    # Why: an empty result would silently remove all Home Assistant entities.
     def test_generate_returns_entities(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
         result = svc.generate(graph)
         assert result, "Expected non-empty entity list"
 
+    # Intent: the reference graph yields at least seven entities across hmu, z1 and dhw.
+    # Why: catches silent under-generation when device routing or dedup drops registers.
     def test_generate_count(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
@@ -162,6 +168,8 @@ class TestEntityGeneration:
         # hmu.RunDataLowPressure has enabled=False, excluded
         assert len(result) >= 7, f"Expected at least 7 entities, got {len(result)}"
 
+    # Intent: all generated entity keys are unique.
+    # Why: duplicate keys collide in the entity registry and unique-id dedup.
     def test_entities_have_unique_keys(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
@@ -169,6 +177,8 @@ class TestEntityGeneration:
         keys = [e.key for e in result]
         assert len(keys) == len(set(keys)), f"Duplicate keys: {keys}"
 
+    # Intent: every entity key has the form circuit.name.field with exactly two dots.
+    # Why: platform code parses keys into circuit, name and field, so a malformed key breaks lookups.
     def test_entities_have_keys(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
@@ -181,6 +191,10 @@ class TestEntityGeneration:
     # #60): the runtime-defined heating-circuit state registers must generate
     # entities with the documented metadata (units, device classes, counters
     # as diagnostic total-increasing sensors).
+    # Intent: B524 runtime-defined heating-circuit registers generate entities
+    # with the documented units, device classes and counter metadata.
+    # Why: locks the community-captured metadata from discussion #60 so a
+    # mapping change cannot silently drop units or state classes.
     def test_helianthus_b524_circuit_register_entities(self) -> None:
         lines = load_find_lines("community/helianthus_b524_circuit_registers.yaml")
         graph = DiscoveryService.build_device_graph(lines)
@@ -206,6 +220,8 @@ class TestEntityGeneration:
 class TestDeviceCircuitResolution:
     """Device circuit assignment from device graph."""
 
+    # Intent: a zone node with live data assigns its registers to the zone circuit.
+    # Why: zone registers must group under z1 instead of the controller to keep device entities correct.
     def test_device_circuit_zone_with_data(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
@@ -214,6 +230,8 @@ class TestDeviceCircuitResolution:
         assert z1_entities, "Expected Z1DayTemp entity"
         assert z1_entities[0].device_circuit == "z1", f"Expected z1, got {z1_entities[0].device_circuit}"
 
+    # Intent: a zone node without live data routes its registers to the parent ctlv2 circuit.
+    # Why: avoids exposing an empty ghost zone while keeping the register visible.
     def test_device_circuit_zone_without_data(self) -> None:
         graph = _build_graph({"z1_has_data": False})
         svc = EntityFactoryService()
@@ -223,6 +241,7 @@ class TestDeviceCircuitResolution:
         assert z1_entities[0].device_circuit == "ctlv2", f"Expected ctlv2, got {z1_entities[0].device_circuit}"
 
     # Intent: exclude an inactive secondary zone instead of folding it into ctlv2.
+    # Why: an inactive secondary zone would otherwise create phantom entities for hardware that is not installed.
     def test_inactive_z2_is_suppressed(self) -> None:
         graph = _build_graph({"include_z2": True, "z2_has_data": False})
         svc = EntityFactoryService()
@@ -230,6 +249,8 @@ class TestDeviceCircuitResolution:
         z2_entities = [e for e in result if e.name == "Z2DayTemp"]
         assert not z2_entities, "Inactive secondary zones must not create entities"
 
+    # Intent: the DHW logical node's registers are assigned to the dhw circuit.
+    # Why: water-heater entities must be grouped under dhw rather than the controller.
     def test_device_circuit_dhw(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
@@ -238,6 +259,8 @@ class TestDeviceCircuitResolution:
         assert dhw_entities, "Expected HwcTempDesired entity"
         assert dhw_entities[0].device_circuit == "dhw", f"Expected dhw, got {dhw_entities[0].device_circuit}"
 
+    # Intent: heat-pump registers are assigned to the hmu circuit.
+    # Why: keeps heat-pump sensors attached to the outdoor unit device.
     def test_device_circuit_hmu(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
@@ -247,6 +270,8 @@ class TestDeviceCircuitResolution:
         assert hmu_entities[0].device_circuit == "hmu", f"Expected hmu, got {hmu_entities[0].device_circuit}"
 
     # Intent: route controller-owned HC and DHW registers to logical devices.
+    # Why: HC flow temps belong to the zone and DHW flow temp to the cylinder,
+    # so misrouting splits entities across the wrong device.
     def test_controller_owned_registers_route_to_logical_devices(self) -> None:
         graph = _build_graph()
         result = EntityFactoryService().generate(graph)
@@ -256,12 +281,14 @@ class TestDeviceCircuitResolution:
         assert circuits["Date"] == "ctlv2"
 
     # Intent: ensure an inactive HC2 does not leak onto the controller device.
+    # Why: an inactive HC2 flow register must not leak onto the controller as a misleading entity.
     def test_inactive_secondary_zone_register_is_suppressed(self) -> None:
         graph = _build_graph({"include_z2": True, "z2_has_data": False})
         result = EntityFactoryService().generate(graph)
         assert all(entity.name != "Hc2FlowTemp" for entity in result)
 
     # Intent: route an active secondary heating circuit to its matching zone.
+    # Why: an installed second heating circuit must expose its flow temp on z2, not ctlv2.
     def test_active_secondary_zone_register_routes_to_zone(self) -> None:
         graph = _build_graph({"include_z2": True, "z2_has_data": True})
         result = EntityFactoryService().generate(graph)
@@ -269,6 +296,7 @@ class TestDeviceCircuitResolution:
         assert circuits["Hc2FlowTemp"] == "z2"
 
     # Intent: preserve explicit user-selected device routing.
+    # Why: user YAML routing must not be overridden by automatic circuit resolution.
     def test_device_circuit_override_wins_over_redistribution(self) -> None:
         graph = _build_graph()
         result = EntityFactoryService().generate(
@@ -282,26 +310,38 @@ class TestDeviceCircuitResolution:
 class TestEnabledByDefault:
     """Entity enabled_by_default determination."""
 
+    # Intent: a REGISTER_MAP register with enabled=True is enabled by default.
+    # Why: anchors the happy-path default for mapped registers.
     def test_enabled_by_default_known_register(self) -> None:
         result = _determine_enabled_by_default("hmu.Status01", "Standby", True, RegisterMeta(enabled=True))
         assert result is True
 
+    # Intent: an unknown register with a real value is enabled by default.
+    # Why: newly discovered registers with data should be usable without manual enabling.
     def test_enabled_by_default_has_data(self) -> None:
         result = _determine_enabled_by_default("unknown.RegName", "42", True, RegisterMeta(enabled=True))
         assert result is True
 
+    # Intent: an unknown register whose value is None is disabled by default.
+    # Why: prevents empty placeholder registers from cluttering the entity list.
     def test_enabled_by_default_unknown_placeholder_is_disabled(self) -> None:
         result = _determine_enabled_by_default("unknown.RegName", None, True, RegisterMeta(enabled=True))
         assert result is False
 
+    # Intent: an unmapped register returning '-' with has_data False is disabled.
+    # Why: ebusd placeholder sentinels must not become enabled entities.
     def test_enabled_by_default_placeholder_not_known(self) -> None:
         result = _determine_enabled_by_default("unknown.RegName", "-", False, RegisterMeta(enabled=True))
         assert result is False
 
+    # Intent: a mapped register returning '-' with has_data False is disabled.
+    # Why: no-data known registers stay disabled even when mapped.
     def test_enabled_by_default_placeholder_known(self) -> None:
         result = _determine_enabled_by_default("hmu.Status01", "-", False, REGISTER_MAP["hmu.Status01"])
         assert result is False
 
+    # Intent: a REGISTER_MAP entry with enabled=False stays disabled regardless of value.
+    # Why: honors explicit opt-out metadata for noisy registers.
     def test_enabled_by_default_meta_disabled(self) -> None:
         result = _determine_enabled_by_default(
             "hmu.RunDataLowPressure", "-", False, REGISTER_MAP["hmu.RunDataLowPressure"]
@@ -312,6 +352,8 @@ class TestEnabledByDefault:
 class TestMetadataIsolation:
     """Generated entities must not mutate shared register mapping metadata."""
 
+    # Intent: re-generating after a register value changes reclassifies the entity without mutating shared metadata.
+    # Why: shared REGISTER_MAP mutation would leak classification between entities and coordinator cycles.
     def test_register_classification_does_not_leak_between_generations(self) -> None:
         graph = DeviceGraph(
             nodes={
@@ -336,6 +378,8 @@ class TestMetadataIsolation:
 class TestYamlOverrides:
     """YAML override handling."""
 
+    # Intent: a YAML entity_type override changes the generated entity type.
+    # Why: lets users fix misclassified registers without code changes.
     def test_yaml_override_changes_entity_type(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
@@ -344,6 +388,8 @@ class TestYamlOverrides:
         entity = [e for e in result if e.key == "hmu.Status01.value"][0]
         assert entity.entity_type == "number", f"Expected number, got {entity.entity_type}"
 
+    # Intent: a YAML enabled override enables a register that discovery marked disabled or no-data.
+    # Why: a user override must beat the automatic enabled-by-default heuristic.
     def test_yaml_override_force_enabled(self) -> None:
         graph = _build_graph()
         graph.nodes["z1"].has_data = False
@@ -354,6 +400,8 @@ class TestYamlOverrides:
         entity = [e for e in result if e.key == "ctlv2.Z1OpMode.value"][0]
         assert entity.enabled_by_default is True
 
+    # Intent: a YAML device_class override replaces the mapped device class.
+    # Why: users need to correct device-class classification for statistics and the UI.
     def test_yaml_override_device_class(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
@@ -366,6 +414,8 @@ class TestYamlOverrides:
 class TestRegisterMapFallback:
     """No REGISTER_MAP fallback — entity existence from graph only."""
 
+    # Intent: entities come only from the discovery graph and REGISTER_MAP does not inject a missing register.
+    # Why: enforces the graph-is-source-of-truth rule that prevents virtual entities for absent hardware.
     def test_graph_only_no_fallback(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
@@ -373,12 +423,16 @@ class TestRegisterMapFallback:
         keys = {e.key for e in result}
         assert "hmu.RunDataCompressorSpeed.value" not in keys, "No fallback — only graph registers exist"
 
+    # Intent: an empty graph produces zero entities.
+    # Why: nothing discovered must mean no entities, not a REGISTER_MAP dump.
     def test_empty_graph_no_fallback(self) -> None:
         graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
         svc = EntityFactoryService()
         result = svc.generate(graph)
         assert len(result) == 0, "Empty graph → no entities"
 
+    # Intent: a parsed field key such as ctlv3.Status01.temp is ignored rather than exposed.
+    # Why: field suffixes are not ebusd registers, so treating them as registers creates bogus entities.
     def test_field_entry_is_not_treated_as_register(self) -> None:
         graph = DeviceGraph(
             nodes={
@@ -395,6 +449,8 @@ class TestRegisterMapFallback:
 
         assert EntityFactoryService().generate(graph) == []
 
+    # Intent: an unmapped composite register such as bai.SetModeOverride is not exposed as a raw sensor.
+    # Why: raw semicolon payloads must never surface as sensor values.
     def test_unmapped_composite_register_is_not_exposed_as_raw_sensor(self) -> None:
         graph = DeviceGraph(
             nodes={
@@ -411,6 +467,8 @@ class TestRegisterMapFallback:
 
         assert EntityFactoryService().generate(graph) == []
 
+    # Intent: an empty date sentinel does not produce a sensor entity.
+    # Why: empty ebusd date placeholders must not appear as sensor values.
     def test_empty_date_value_is_not_exposed_as_sensor(self) -> None:
         graph = DeviceGraph(
             nodes={
@@ -431,6 +489,8 @@ class TestRegisterMapFallback:
 class TestBackwardCompatibility:
     """EntityDescription structure compatibility."""
 
+    # Intent: generated entities expose the expected EntityDescription attributes with the correct types.
+    # Why: platform modules and unique-id logic depend on this field contract.
     def test_entity_description_structure(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
@@ -450,21 +510,29 @@ class TestBackwardCompatibility:
 class TestResolveDeviceCircuit:
     """Unit tests for _resolve_device_circuit helper."""
 
+    # Intent: _resolve_device_circuit returns the sub-device circuit when the sub-device has data.
+    # Why: pins the helper contract used by entity routing.
     def test_sub_device_with_data_returns_own(self) -> None:
         graph = _build_graph()
         node = graph.nodes["z1"]
         assert _resolve_device_circuit("ctlv2.Z1DayTemp", node, graph) == "z1"
 
+    # Intent: _resolve_device_circuit falls back to the parent circuit when the sub-device has no data.
+    # Why: avoids routing no-data registers to a non-existent zone device.
     def test_sub_device_without_data_returns_parent(self) -> None:
         graph = _build_graph({"z1_has_data": False})
         node = graph.nodes["z1"]
         assert _resolve_device_circuit("ctlv2.Z1DayTemp", node, graph) == "ctlv2"
 
+    # Intent: _resolve_device_circuit returns a top-level node's own circuit.
+    # Why: top-level devices such as hmu must not be reassigned to a parent.
     def test_top_level_returns_own(self) -> None:
         graph = _build_graph()
         node = graph.nodes["hmu"]
         assert _resolve_device_circuit("hmu.Status01", node, graph) == "hmu"
 
+    # Intent: the solar/hydraulic-scheme register routes to the controller device, not the sc circuit.
+    # Why: the hydraulic scheme is controller configuration and must appear on ctlv2.
     def test_sc_hydraulic_scheme_belongs_to_controller(self) -> None:
         graph = _build_graph()
         graph.nodes["sc"] = DeviceNode(
@@ -480,6 +548,8 @@ class TestResolveDeviceCircuit:
         entity = next(e for e in entities if e.key == "sc.HydraulicScheme.value")
         assert entity.device_circuit == "ctlv2"
 
+    # Intent: _resolve_device_circuit returns the node's own circuit when it has no parent.
+    # Why: guards against a None parent resolving to an empty circuit.
     def test_no_parent_returns_own(self) -> None:
         graph = _build_graph()
         node = graph.nodes["z1"]
@@ -495,6 +565,8 @@ class TestResolveDeviceCircuit:
 class TestGenerateFromFixtureGraphs:
     """Entity generation from real fixture DeviceGraphs."""
 
+    # Intent: a real aroTHERM find output generates a large, well-formed entity set across hmu and ctlv2.
+    # Why: end-to-end fixture check that discovery plus the factory produce usable entities offline.
     def test_generate_from_arotherm_graph(self) -> None:
         lines = load_find_lines("arotherm_find.txt")
         graph = DiscoveryService.build_device_graph(lines)
@@ -508,6 +580,8 @@ class TestGenerateFromFixtureGraphs:
             assert isinstance(e.key, str)
         assert any(e.enabled_by_default for e in entities)
 
+    # Intent: a basv find output generates entities including from the basv circuit.
+    # Why: verifies non-ctlv2 controller hardware is handled by the factory.
     def test_generate_from_basv_graph(self) -> None:
         lines = load_find_lines("community/basv_find.txt")
         graph = DiscoveryService.build_device_graph(lines)
@@ -517,6 +591,7 @@ class TestGenerateFromFixtureGraphs:
         assert any(e.circuit == "basv" for e in entities), "Expected entities from basv circuit"
 
     # Intent: preserve active Z2 entities that share the ctlv2 source circuit with Z1.
+    # Why: single-source-circuit multi-zone setups must split Z2 registers off the controller without losing them.
     def test_generate_active_z2_entities_from_single_circuit_fixture(self) -> None:
         lines = load_find_lines("community/multizone_single_circuit_find.txt")
         graph = DiscoveryService.build_device_graph(lines)
@@ -530,6 +605,8 @@ class TestGenerateFromFixtureGraphs:
         }
         assert {entity.device_circuit for entity in z2_entities} == {"z2"}
 
+    # Intent: a YAML icon override is applied to the generated entity metadata.
+    # Why: users can customize entity icons without code changes.
     def test_yaml_override_icon(self) -> None:
         lines = load_find_lines("arotherm_find.txt")
         graph = DiscoveryService.build_device_graph(lines)
@@ -540,6 +617,8 @@ class TestGenerateFromFixtureGraphs:
         assert matches, "Expected hmu.CurrentConsumedPower entity"
         assert matches[0].meta.icon == "mdi:flash"
 
+    # Intent: a YAML entity_type override on a fixture graph changes the entity type.
+    # Why: confirms overrides work against real discovered registers, not only synthetic graphs.
     def test_yaml_override_entity_type(self) -> None:
         lines = load_find_lines("arotherm_find.txt")
         graph = DiscoveryService.build_device_graph(lines)
@@ -550,6 +629,8 @@ class TestGenerateFromFixtureGraphs:
         assert matches, "Expected ctlv2.Z1DayTemp entity"
         assert matches[0].entity_type == "number"
 
+    # Intent: an empty graph yields no entities.
+    # Why: documents that the factory has no REGISTER_MAP fallback path.
     def test_empty_graph_generates_no_entities(self) -> None:
         graph = DeviceGraph(
             nodes={},
@@ -579,6 +660,8 @@ class TestMultiFieldParsing:
             placeholder_registers=set(),
         )
 
+    # Intent: hmu.Status01 multi-field values split into the named fields temp, temp_1 and pumpstate.
+    # Why: issue #51: a compound status register must expose each parsed field instead of one raw string.
     def test_status01_splits_into_named_fields(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._status01_graph())
@@ -587,6 +670,8 @@ class TestMultiFieldParsing:
         assert "temp_1" in fields
         assert "pumpstate" in fields
 
+    # Intent: the Status01 temp and temp_1 fields carry flow/return friendly names and temperature metadata.
+    # Why: issue #51: field metadata must match the parsed position.
     def test_status01_flow_return_temperature_meta(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._status01_graph())
@@ -598,6 +683,8 @@ class TestMultiFieldParsing:
         assert ret.meta.friendly_name == "Return Temperature"
         assert ret.meta.unit == "°C"
 
+    # Intent: the Status01 field entities have a distinct key per field.
+    # Why: duplicate keys would collide in the entity registry.
     def test_status01_field_keys_are_unique(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._status01_graph())
@@ -607,6 +694,8 @@ class TestMultiFieldParsing:
         assert "hmu.Status01.pumpstate" in status_keys
         assert len(status_keys) == len(set(status_keys))
 
+    # Intent: placeholder Status01 fields are either omitted or retained with raw_value '-'.
+    # Why: guards that empty compound fields are not given fabricated values.
     def test_status01_placeholder_fields_skipped(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._status01_graph())
@@ -615,6 +704,8 @@ class TestMultiFieldParsing:
             e.field == "temp_2" and e.raw_value == "-" for e in entities if e.name == "Status01"
         )
 
+    # Intent: the original hmu.Status01.value entity is retained alongside the split fields.
+    # Why: issue #51: splitting must not remove the raw register entity.
     def test_status01_original_string_entity_kept(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._status01_graph())
@@ -626,6 +717,8 @@ class TestMultiFieldParsing:
 class TestPowerConsumptionUnit:
     """Power unit consistency (issue #52)."""
 
+    # Intent: PowerConsumptionHmu metadata is power in kW.
+    # Why: issue #52: a wrong unit breaks Home Assistant statistics and the energy dashboard.
     def test_power_consumption_hmu_unit_is_kw(self) -> None:
         meta = get_meta("hmu", "PowerConsumptionHmu")
         assert meta.unit == "kW"
@@ -635,21 +728,30 @@ class TestPowerConsumptionUnit:
 class TestSourceTempMetadata:
     """Source temp metadata (issue #49)."""
 
+    # Intent: SourceTempInput metadata is temperature in degrees Celsius.
+    # Why: issue #49: the brine source temperature must render correctly.
     def test_source_temp_input_metadata(self) -> None:
         meta = get_meta("hmu", "SourceTempInput")
         assert meta.device_class == "temperature"
         assert meta.unit == "°C"
 
+    # Intent: SourceTempOutput metadata is temperature in degrees Celsius.
+    # Why: issue #49: companion to the source input temperature.
     def test_source_temp_output_metadata(self) -> None:
         meta = get_meta("hmu", "SourceTempOutput")
         assert meta.device_class == "temperature"
         assert meta.unit == "°C"
 
+    # Intent: hmux0 RunDataReturnTemp metadata is temperature in degrees Celsius.
+    # Why: issue #49: return temperature must be a measurement on HMUX hardware.
     def test_run_data_return_temperature_metadata(self) -> None:
         meta = get_meta("hmux0", "RunDataReturnTemp")
         assert meta.device_class == "temperature"
         assert meta.unit == "°C"
 
+    # Intent: the issue #99 hmux0 fixture generates enabled entities with
+    # correct metadata for return temp, yield and COP registers.
+    # Why: issue #99: aliasing hmux0 to a generic CSV dropped these registers, so this pins them.
     def test_hmux0_yield_and_cop_entities_from_issue_99_fixture(self) -> None:
         graph = DiscoveryService.build_device_graph(load_find_lines("community/hmux0_yield_cop_find.txt"))
         entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
@@ -698,6 +800,8 @@ class TestStateClassSemantics:
             placeholder_registers=set(),
         )
 
+    # Intent: COP entities get state_class measurement.
+    # Why: issue #54: without it Home Assistant renders COP as a step or bar instead of a line graph.
     def test_cop_entities_measurement_state_class(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._cop_graph())
@@ -706,6 +810,8 @@ class TestStateClassSemantics:
         for entity in cop:
             assert entity.meta.state_class == "measurement"
 
+    # Intent: Z1RoomTemp metadata is a temperature measurement.
+    # Why: issue #54: room temperature must plot as a measurement line.
     def test_room_temp_measurement_state_class(self) -> None:
         meta = get_meta("ctlv2", "Z1RoomTemp")
         assert meta.state_class == "measurement"
@@ -715,18 +821,24 @@ class TestStateClassSemantics:
 class TestPrEnergySum:
     """Electrical energy consumption registers (issue #53)."""
 
+    # Intent: ctlv2 PrEnergySumHc metadata is energy in kWh with total_increasing.
+    # Why: issue #53: energy totals must feed the energy dashboard as cumulative sensors.
     def test_pr_energy_sum_meta_is_energy(self) -> None:
         meta = get_meta("ctlv2", "PrEnergySumHc")
         assert meta.device_class == "energy"
         assert meta.unit == "kWh"
         assert meta.state_class == "total_increasing"
 
+    # Intent: ctlv3 PrEnergySumHwc gets the same energy metadata through fallback resolution.
+    # Why: issue #53: controllers exposing the register under ctlv3 must not lose energy classification.
     def test_ctlv3_fallback_gets_energy_meta(self) -> None:
         meta = get_meta("ctlv3", "PrEnergySumHwc")
         assert meta.device_class == "energy"
         assert meta.unit == "kWh"
         assert meta.state_class == "total_increasing"
 
+    # Intent: the aroTHERM Plus prenergy discovery dump generates enabled PrEnergySum entities with energy metadata.
+    # Why: issue #53: guards real fixture coverage for the energy registers.
     def test_prenergy_fixture_entities_have_energy_meta(self) -> None:
         lines = load_find_lines("community/arotherm_plus_prenergy_discovery.yaml")
         graph = DiscoveryService.build_device_graph(lines)
@@ -741,6 +853,8 @@ class TestPrEnergySum:
 
     # aroTHERM Plus run dumps (#53 follow-up): PrEnergySum* stay no-data even
     # during active runs, but entities must still be generated (and enabled).
+    # Intent: cooling and HWC run dumps still generate enabled PrEnergySum entities even when values are no-data.
+    # Why: issue #53 follow-up: entities must persist during active runs for energy accounting.
     def test_run_fixtures_keep_prenergy_entities(self) -> None:
         for fixture in (
             "community/arotherm_plus_cooling_run_discovery.yaml",
@@ -758,6 +872,8 @@ class TestPrEnergySum:
                 assert entity.enabled_by_default is True
 
     # Live yield/energy registers from the run dumps map to energy entities.
+    # Intent: live Yield and TotalEnergyUsage registers in the run dumps map to energy/kWh entities.
+    # Why: issue #53 follow-up: live consumption must register as energy, not as raw strings.
     def test_run_fixtures_live_energy_registers_are_energy(self) -> None:
         for fixture in (
             "community/arotherm_plus_cooling_run_discovery.yaml",
@@ -776,6 +892,8 @@ class TestPrEnergySum:
     # ctlv2 cooling fixture (Mark's own system while cooling): the live cooling
     # data registers exposed by ebusd map to proper entities; the cooling-program
     # registers that this hardware does not have must not appear as entities.
+    # Intent: the ctlv2 cooling dump exposes live cooling registers and omits unsupported cooling-program registers.
+    # Why: prevents entities for hardware features the unit does not implement.
     def test_ctlv2_cooling_fixture_entities(self) -> None:
         lines = load_find_lines("community/arotherm_plus_ctlv2_cooling_discovery.yaml")
         graph = DiscoveryService.build_device_graph(lines)
@@ -800,6 +918,9 @@ class TestPrEnergySum:
     # The runtime-defined manual cooling dates (GitHub issue #644) must appear as
     # sensor entities when present in the find output, carrying the mapped
     # friendly name.
+    # Intent: the runtime-defined ManualCoolingStartDate and ManualCoolingEndDate
+    # registers generate sensor entities with the mapped names.
+    # Why: issue #644: the manual cooling dates must be usable from Home Assistant.
     def test_manual_cooling_dates_entities(self) -> None:
         lines = [
             "ctlv2 ManualCoolingStartDate = 14.08.2026",
@@ -821,12 +942,16 @@ class TestPrEnergySum:
 class TestStatEnergyRegisters:
     """Heat-pump statistics energy registers on non-hmu circuits (issue #53)."""
 
+    # Intent: basv3 StatElectricEnergySumCool resolves to energy/kWh/total_increasing metadata.
+    # Why: issue #53: non-hmu controllers need the same energy classification.
     def test_basv3_gets_hmu_energy_meta(self) -> None:
         meta = get_meta("basv3", "StatElectricEnergySumCool")
         assert meta.device_class == "energy"
         assert meta.unit == "kWh"
         assert meta.state_class == "total_increasing"
 
+    # Intent: the basv3 fixture generates enabled energy entities for every Stat*EnergySum register.
+    # Why: issue #53: locks the controller energy register family.
     def test_basv3_fixture_stat_energy_entities(self) -> None:
         lines = load_find_lines("community/arotherm_plus_basv3_discovery.yaml")
         graph = DiscoveryService.build_device_graph(lines)
@@ -849,6 +974,8 @@ class TestStatEnergyRegisters:
             assert entity.meta.state_class == "total_increasing", reg
             assert entity.enabled_by_default is True, reg
 
+    # Intent: registers on a no-data orphan circuit such as vwzio are not exposed as standalone entities.
+    # Why: prevents an empty disconnected node from creating phantom energy sensors.
     def test_no_data_orphan_circuit_suppressed(self) -> None:
         lines = load_find_lines("community/arotherm_plus_basv3_discovery.yaml")
         graph = DiscoveryService.build_device_graph(lines)
@@ -860,6 +987,8 @@ class TestStatEnergyRegisters:
 
     # flexoTHERM (brine-water, no active cooling) reports the cooling energy
     # register as "element not found" — it must not appear as an entity.
+    # Intent: flexoTHERM, which has no active cooling, does not expose cooling Stat*EnergySum entities.
+    # Why: issue #50: element-not-found registers must stay hidden.
     def test_flexotherm_has_no_cooling_energy_entity(self) -> None:
         graph = DiscoveryService.build_device_graph(load_find_lines("community/flexotherm_discovery.yaml"))
         by_key = {e.key: e for e in EntityFactoryService().generate(graph)}
@@ -871,6 +1000,9 @@ class TestStatEnergyRegisters:
     # but RunDataStatuscode=0 — the compressor never runs, so the compressor-based
     # counters stay at 0 (YieldCoolDay=0.0, HoursCool=0) and cumulative cooling
     # totals return "element not found" and must stay hidden.
+    # Intent: the flexoTHERM v1.3.3 passive-cooling dump exposes daily cooling
+    # yield and runtime but hides element-not-found cumulative cooling registers.
+    # Why: issue #50: distinguishes real passive-cooling data from unavailable cumulative totals.
     def test_flexotherm_133_cooling_daily_yield_entities(self) -> None:
         graph = DiscoveryService.build_device_graph(load_find_lines("community/flexotherm_133_cooling_discovery.yaml"))
         by_key = {e.key: e for e in EntityFactoryService().generate(graph)}
@@ -895,6 +1027,8 @@ class TestStatEnergyRegisters:
     # hmu/dhw (all no-data) both map to the logical "dhw" device name. The
     # later one used to overwrite the live node, hiding the DHW sensors and
     # leaving water_heater without a current temperature.
+    # Intent: merging the ctlv3/dhw and hmu/dhw logical nodes keeps the live variant's registers and data.
+    # Why: issue #50: the no-data node used to overwrite the live one, hiding DHW sensors.
     def test_flexotherm_dhw_sub_device_merge_keeps_live_registers(self) -> None:
         graph = DiscoveryService.build_device_graph(load_find_lines("community/flexotherm_133_cooling_discovery.yaml"))
         dhw = graph.nodes.get("dhw")
@@ -912,6 +1046,8 @@ class TestStatEnergyRegisters:
 
     # flexoCOMPACT (air/water aroTHERM with active cooling) reports cooling
     # energy live on both hmu and ctlv2; both get hmu energy metadata (issue #50).
+    # Intent: flexoCOMPACT exposes live cooling energy on both hmu and ctlv2 plus SourceTempInput as a temperature.
+    # Why: issues #49 and #50: covers air/water active-cooling hardware.
     def test_flexocompact_cooling_energy_entities(self) -> None:
         graph = DiscoveryService.build_device_graph(load_find_lines("community/flexocompact_find.txt"))
         by_key = {e.key: e for e in EntityFactoryService().generate(graph)}
@@ -937,6 +1073,8 @@ class TestStatEnergyRegisters:
 class TestBuildingCircuitFlowUnit:
     """Building circuit flow unit (issue #55)."""
 
+    # Intent: BuildingCircuitFlow metadata uses litres per hour.
+    # Why: issue #55: a wrong flow unit misleads users and breaks unit conversion.
     def test_building_circuit_flow_unit_is_l_per_hour(self) -> None:
         meta = get_meta("hmu", "BuildingCircuitFlow")
         assert meta.unit == "l/h"
@@ -960,6 +1098,8 @@ class TestCaseInsensitiveRegisterDedup:
             placeholder_registers=set(),
         )
 
+    # Intent: registers differing only by case collapse into a single entity with one unique id.
+    # Why: ebusd-dependent casing would otherwise create duplicate unique ids.
     def test_case_variants_produce_single_entity(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._case_graph())
@@ -989,6 +1129,8 @@ class TestCompressorRunStatsSplit:
             placeholder_registers=set(),
         )
 
+    # Intent: CompressorHc splits into runtime and cycles entities with min/duration/total_increasing metadata.
+    # Why: issue #62: compressor stats must be two typed sensors, not one raw pair.
     def test_compressor_hc_splits_into_runtime_and_cycles(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._compressor_graph())
@@ -1003,6 +1145,8 @@ class TestCompressorRunStatsSplit:
         assert runtime.meta.device_class == "duration"
         assert runtime.meta.state_class == "total_increasing"
 
+    # Intent: CompressorHwc splits into runtime and cycles with the pair values split correctly.
+    # Why: issue #62: DHW compressor stats need the same split as heating.
     def test_compressor_hwc_splits_into_runtime_and_cycles(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._compressor_graph())
@@ -1011,6 +1155,8 @@ class TestCompressorRunStatsSplit:
         assert runtime.raw_value == "51989"
         assert cycles.raw_value == "733"
 
+    # Intent: the split compressor entities each have a unique id.
+    # Why: issue #62: duplicate unique ids would make Home Assistant drop entities.
     def test_compressor_split_unique_ids(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._compressor_graph())
@@ -1024,18 +1170,24 @@ class TestCompressorRunStatsSplit:
 class TestOutsideTempDeviceClass:
     """OutsideTemp must be a graphable measurement (issue #61)."""
 
+    # Intent: ctlv2 OutsideTemp metadata is temperature with measurement state class.
+    # Why: issue #61: outside temperature must graph as a measurement.
     def test_ctlv2_outsidetemp_is_temperature(self) -> None:
         meta = get_meta("ctlv2", "OutsideTemp")
         assert meta.device_class == "temperature"
         assert meta.unit == "°C"
         assert meta.state_class == "measurement"
 
+    # Intent: basv3 OutsideTemp falls back to the temperature metadata.
+    # Why: issue #61: non-ctlv2 controllers must not lose outside-temperature classification.
     def test_basv3_outsidetemp_falls_back_to_temperature(self) -> None:
         meta = get_meta("basv3", "OutsideTemp")
         assert meta.device_class == "temperature"
         assert meta.unit == "°C"
         assert meta.state_class == "measurement"
 
+    # Intent: a generated basv3 OutsideTemp entity carries temperature measurement metadata.
+    # Why: issue #61: verifies the fallback survives into the generated entity.
     def test_basv3_outsidetemp_entity_has_device_class(self) -> None:
         graph = DeviceGraph(
             nodes={
@@ -1054,6 +1206,8 @@ class TestOutsideTempDeviceClass:
         assert entity.meta.device_class == "temperature"
         assert entity.meta.state_class == "measurement"
 
+    # Intent: the basv3 discovery fixture generates an OutsideTemp entity with measurement metadata.
+    # Why: issue #61: fixture-level regression for outside temperature.
     def test_basv3_fixture_outsidetemp_is_measurement(self) -> None:
         lines = load_find_lines("community/arotherm_plus_basv3_discovery.yaml")
         graph = DiscoveryService.build_device_graph(lines)
@@ -1065,6 +1219,8 @@ class TestOutsideTempDeviceClass:
         assert entity.meta.unit == "°C"
         assert entity.meta.state_class == "measurement"
 
+    # Intent: the 2-zone fixture generates all four split compressor entities with unique ids.
+    # Why: end-to-end coverage of compressor splitting on a multi-zone system.
     def test_2zone_fixture_compressor_split(self) -> None:
         lines = load_find_lines("community/arotherm_plus_2zone_discovery.yaml")
         graph = DiscoveryService.build_device_graph(lines)

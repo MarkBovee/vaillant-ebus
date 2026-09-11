@@ -255,7 +255,9 @@ When adding registers, devices, or metadata derived from community data:
 ## Test Fixtures
 
 - ebusd `find` output and discovery dumps are captured as fixtures in `tests/fixtures/`. There is no `data-dump/` directory anymore; all community and local captures live in `tests/fixtures/`.
-- `tests/fixtures/community/` holds third-party captures: discovery-dump YAML files (`flexotherm_discovery.yaml`, `arotherm_plus_2zone_discovery.yaml`, `arotherm_plus_basv3_discovery.yaml`, `arotherm_pro7_discovery.yaml`, `geniaset_bass3_discovery.yaml`) and plain `find` output (`basv_find.txt`, `v32_find.txt`, `flexocompact_find.txt`, `szflo_ebusctl_info.txt`, `second_ebusctl_info.txt`, `dumpvalues.yaml`).
+- `tests/fixtures/community/` holds third-party captures: discovery-dump YAML files (`flexotherm_discovery.yaml`, `arotherm_plus_2zone_discovery.yaml`, `arotherm_plus_basv3_discovery.yaml`, `arotherm_pro7_discovery.yaml`, `geniaset_bass3_discovery.yaml`) and plain `find` output (`basv_find.txt`, `v32_find.txt`, `flexocompact_find.txt`, `dumpvalues.yaml`).
+- The fixture trust model and full inventory live in `docs/test-audit-rc3.md`. Classify every fixture as GOLDEN, REDUCED-FAITHFUL, SYNTHETIC, or LEGACY/UNKNOWN; never use a reduced or unknown-provenance fixture as the sole evidence for discovery, circuit ownership, or graph resolution.
+- `tests/test_fixture_integrity.py` guards the golden captures: it fails if the issue #99 dumps lose the spurious `ctlv2` records or a discovery dump loses provenance metadata. Do not weaken it to accommodate a stripped fixture.
 - `dumpvalues.yaml` records multi-field register field names and is the reference for `MULTI_FIELD_MAP` in `tests/fake_ebusd.py`. Keep the two in sync.
 - Load fixtures in tests with `load_find_lines("community/<name>")` for `find` output and `load_discovery_dump("community/<name>")` for discovery-dump YAML; both live in `tests/fake_ebusd.py`. Discovery-dump YAML fixtures need `pyyaml` (installed in CI).
 - Open GitHub issues may reference specific community dumps. When investigating an issue, load the matching fixture and confirm the register behavior on the discovered device graph before changing production code.
@@ -279,8 +281,16 @@ When adding registers, devices, or metadata derived from community data:
 ```bash
 .venv/bin/ruff check .
 .venv/bin/pytest -q
+python3 tools/version.py check
 python3 -m compileall -f custom_components/vaillant_ebus/
 ```
+
+## Release Versioning
+
+- The release version must stay identical across `pyproject.toml`, `custom_components/vaillant_ebus/manifest.json`, and the top `## <version>` heading in `CHANGELOG.md`.
+- `tools/version.py` is the single source of truth. Bump with `python tools/version.py bump X.Y.Z`, then add the matching `## X.Y.Z - YYYY-MM-DD` CHANGELOG section (release notes are human-written).
+- `tests/test_version_consistency.py` runs `python tools/version.py check`, so CI fails on drift. Never hand-edit one version file without updating the other two.
+- Publishing a release means pushing the release branch and an annotated `v*` tag; the CI `release` job builds the zip and creates or updates the GitHub release from the top CHANGELOG section. Do not merge the release branch until it has been tested on Home Assistant.
 
 ## GitHub Communication
 

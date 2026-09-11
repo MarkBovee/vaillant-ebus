@@ -123,6 +123,8 @@ def _coordinator(heating_circuit: str = "basv", registers: dict | None = None) -
 
 
 # A cooling-timer schedule entry is registered in SCHEDULES.
+# Intent: SCHEDULES maps "Cooling Program" to Z1CoolingTimer and "Cooling Program 2" to Z2CoolingTimer.
+# Why: guards the additive per-zone cooling-timer registration that hardware without those registers must tolerate.
 def test_cooling_program_in_schedules() -> None:
     assert "Cooling Program" in SCHEDULES
     assert SCHEDULES["Cooling Program"] == "Z1CoolingTimer"
@@ -131,6 +133,10 @@ def test_cooling_program_in_schedules() -> None:
 
 
 # _parse_slot parses a "HH:MM;HH:MM;temp" slot, ignoring empty/zero slots.
+# Intent: _parse_slot builds events with summary and temperature description,
+# rolls past-midnight intervals to the next day, and rejects zero/empty/no-data
+# slots.
+# Why: pins the timer-slot parser against malformed and overnight schedules.
 def test_parse_slot() -> None:
     day = date(2026, 8, 27)
     ev = _parse_slot(day, "06:00;12:00;21", "Cooling Program")
@@ -151,6 +157,9 @@ def test_parse_slot() -> None:
 
 
 # A calendar entity with no timer data yields no events (additive/empty).
+# Intent: A calendar built from an empty coordinator exposes its expected
+# unique_id/name and returns no events for the queried day.
+# Why: proves an absent timer register does not fabricate events or break the entity.
 def test_calendar_empty_without_data() -> None:
     cal = EbusdCalendar(_coordinator(), _entry(), "Cooling Program", "Z1CoolingTimer")
     assert cal._attr_unique_id == "entry-1_calendar_z1coolingtimer"
@@ -162,6 +171,8 @@ def test_calendar_empty_without_data() -> None:
 
 # A calendar entity populates events from discovered timer register data.
 # 2026-08-27 is a Thursday, so the Thursday0..2 slots apply.
+# Intent: Thursday's three discovered timer slots produce exactly the two non-zero events with correct start/end times.
+# Why: verifies discovered register data is parsed into calendar events and the zero slot is dropped.
 def test_calendar_populates_from_register_data() -> None:
     registers = {
         "basv.Z1CoolingTimer_Thursday0": MagicMock(value={"value": "06:00;12:00;21"}),

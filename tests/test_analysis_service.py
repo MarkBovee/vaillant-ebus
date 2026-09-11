@@ -49,6 +49,9 @@ def _entities(graph: DeviceGraph) -> list[EntityDescription]:
 
 
 class TestAnalysisService:
+    # Intent: analyzing an empty live-register snapshot against an empty graph
+    # yields no devices, entities, enable candidates, or suggestions.
+    # Why: pins the no-op baseline so background analysis never fabricates output on a fresh or disconnected bus.
     def test_empty_live_registers_returns_empty(self) -> None:
         service = AnalysisService()
         result = service.analyze({}, _graph({}), [])
@@ -57,6 +60,8 @@ class TestAnalysisService:
         assert result.registers_to_enable == []
         assert result.suggestions == []
 
+    # Intent: re-analyzing the same live registers against an already-generated entity set reports no new entities.
+    # Why: prevents duplicate-entity churn on every poll when nothing changed on the bus.
     def test_no_change_produces_no_new_entities(self) -> None:
         graph = _graph({"hmu.Status01": "50.0;40.0;-;-;-;off"})
         entities = _entities(graph)
@@ -64,6 +69,8 @@ class TestAnalysisService:
         result = service.analyze({"hmu.Status01": "50.0;40.0;-;-;-;off"}, graph, entities)
         assert result.new_entities == []
 
+    # Intent: a live register absent from the discovery graph (hmu.CopHwc) is reported under new_entities.
+    # Why: lets the integration surface newly present registers (e.g. runtime-defined ones) without a restart.
     def test_new_register_detected_as_entity(self) -> None:
         graph = _graph({"hmu.CopHc": "4.2"})
         entities = _entities(graph)
@@ -72,6 +79,8 @@ class TestAnalysisService:
         keys = {entity.key for entity in result.new_entities}
         assert "hmu.CopHwc.value" in keys
 
+    # Intent: a live circuit not present in the graph (vr_71) is reported under new_devices.
+    # Why: ensures added hardware such as an EcoTEC boiler is detected and offered for setup.
     def test_new_device_detected(self) -> None:
         graph = _graph({"hmu.CopHc": "4.2"})
         entities = _entities(graph)
@@ -82,6 +91,8 @@ class TestAnalysisService:
         )
         assert "vr_71" in result.new_devices
 
+    # Intent: a live register mapping to a REGISTER_MAP entry with enabled=False lands in registers_to_enable.
+    # Why: lets analysis suggest enabling known-but-disabled registers instead of leaving them permanently invisible.
     def test_disabled_by_default_register_is_enable_candidate(self) -> None:
         # PowerConsumptionHmu is enabled=False in the mapping.
         disabled = next(k for k in REGISTER_MAP if not REGISTER_MAP[k].enabled)
@@ -91,6 +102,8 @@ class TestAnalysisService:
         result = service.analyze({"hmu.CopHc": "4.2", disabled: "0.4"}, graph, entities)
         assert disabled in result.registers_to_enable
 
+    # Intent: a live circuit unknown to the graph (foo) produces a suggestion naming that circuit.
+    # Why: surfaces unrecognized hardware to the user for investigation rather than dropping it silently.
     def test_unknown_circuit_suggested(self) -> None:
         graph = _graph({"hmu.CopHc": "4.2"})
         entities = _entities(graph)

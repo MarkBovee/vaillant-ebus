@@ -86,6 +86,9 @@ def _v32_entities():
     return [e for e in ENTITY.EntityFactoryService().generate(_graph()) if e.circuit == "v32"]
 
 
+# Intent: the v32 fixture builds a data-bearing v32 node exposing FlowTemp,
+# ReturnTemp, WaterPressure, and an HwcHours DHW sub-device.
+# Why: validates discovery classification of the hybrid heat-pump plus gas-boiler fixture (issue #83).
 def test_v32_boiler_graph() -> None:
     graph = _graph()
     node = graph.nodes["v32"]
@@ -98,6 +101,8 @@ def test_v32_boiler_graph() -> None:
 
 
 # Category 1 from issue #83: sensors missing device_class/unit.
+# Intent: six v32 temperature registers expose device_class temperature and unit °C.
+# Why: fixes missing temperature metadata on the v32 boiler (issue #83 category 1).
 def test_v32_boiler_temperature_metadata() -> None:
     by_key = {e.key: e for e in _v32_entities()}
     for key in (
@@ -113,6 +118,9 @@ def test_v32_boiler_temperature_metadata() -> None:
         assert meta.unit == "°C", key
 
 
+# Intent: v32 fan/heating/DHW/pump hour counters expose duration/h with
+# total_increasing, while HoursTillService has duration/h and an empty state class.
+# Why: ensures runtime counters are classified as monotonic totals and the service countdown is not.
 def test_v32_boiler_duration_metadata() -> None:
     by_key = {e.key: e for e in _v32_entities()}
     for key, state_class in (
@@ -129,6 +137,8 @@ def test_v32_boiler_duration_metadata() -> None:
         assert meta.state_class == state_class, key
 
 
+# Intent: v32 PumpPower is a power sensor in W and WaterPressure a pressure sensor in bar.
+# Why: corrects the mis-typed v32 pump entity (PumpPower must not be a binary_sensor) and pressure metadata.
 def test_v32_boiler_pump_power_and_pressure() -> None:
     by_key = {e.key: e for e in _v32_entities()}
     pump = by_key["v32.PumpPower.value"]
@@ -142,6 +152,9 @@ def test_v32_boiler_pump_power_and_pressure() -> None:
 
 
 # Category 2 from issue #83: semicolon-separated values must be split.
+# Intent: split_multi_field extracts the primary value plus named fields from
+# semicolon-separated v32 ReturnTemp, Status01, and Status02 payloads.
+# Why: verifies semicolon-separated boiler values are split into fields rather than exposed raw (issue #83 category 2).
 def test_v32_boiler_multi_field_split() -> None:
     split = MAPPING.split_multi_field
     assert split("v32.ReturnTemp", "55.31;64650;ok")["value"] == "55.31"
@@ -169,6 +182,10 @@ def test_v32_boiler_multi_field_split() -> None:
     }
 
 
+# Intent: v32 Status01 field entities carry temperature metadata, pumpstate is a
+# binary_sensor, single-field registers create no duplicate base entity, and raw
+# values are retained.
+# Why: guards field-level entity generation and prevents duplicate entities for split registers.
 def test_v32_boiler_status_entities() -> None:
     entities = _v32_entities()
     by_key = {e.key: e for e in entities}
@@ -185,6 +202,8 @@ def test_v32_boiler_status_entities() -> None:
 
 
 # Category 3 from issue #83: ventilation-only registers must not appear.
+# Intent: no ventilation-only bai register becomes a v32 entity.
+# Why: prevents unsupported ventilation entities from appearing on the boiler setup (issue #83 category 3).
 def test_v32_boiler_ventilation_registers_absent() -> None:
     names = {e.name for e in _v32_entities()}
     for name in VENTILATION_ONLY_REGISTERS:
@@ -192,6 +211,9 @@ def test_v32_boiler_ventilation_registers_absent() -> None:
 
 
 # Category 4 from issue #83: faulty-sensor values must carry no data.
+# Intent: faulty-sensor values (circuit/cutoff) parse as no-data, their entities
+# stay disabled by default, and the maintenance max is diagnostic and disabled.
+# Why: ensures sensor-fault sentinels are not exposed as live values (issue #83 category 4).
 def test_v32_boiler_faulty_sensor_values_no_data() -> None:
     graph = _graph()
     # Sensor-fault statuses ("circuit"/"cutoff") are parsed as no-data.
@@ -211,6 +233,8 @@ def test_v32_boiler_faulty_sensor_values_no_data() -> None:
 
 
 # The healthy sibling values keep working after the fault filtering.
+# Intent: the healthy v32 ReturnTemp, FlowTemp, and WaterPressure raw values remain intact after fault filtering.
+# Why: proves fault filtering does not discard valid sibling readings.
 def test_v32_boiler_valid_values_stay_live() -> None:
     graph = _graph()
     assert graph.raw_registers["v32.ReturnTemp"] == "55.31;64650;ok"

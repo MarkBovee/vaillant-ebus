@@ -26,6 +26,8 @@ EbusService = EBUS.EbusService
 
 
 # Fixture loads aroTHERM data
+# Intent: the default aroTHERM fixture loads a non-empty register set that includes Broadcast.Outsidetemp.
+# Why: ensures the core fake-ebusd fixture backing most integration tests stays valid.
 async def test_arotherm_fixture_loads() -> None:
     async with FakeEbusdServer() as server:
         assert server.register_count > 0
@@ -33,6 +35,8 @@ async def test_arotherm_fixture_loads() -> None:
 
 
 # All fixtures load without error
+# Intent: every listed community fixture loads at least its minimum register count through FakeEbusdServer.
+# Why: guards all community fixtures against parse or format regressions in one parametrized sweep.
 @pytest.mark.parametrize(
     "fixture,min_registers",
     [
@@ -65,6 +69,8 @@ async def test_all_fixtures_load(fixture: str, min_registers: int) -> None:
 
 
 # Discovery-dump YAML fixtures expose their metadata and raw find lines
+# Intent: load_find_lines on a discovery-dump YAML yields raw find lines containing ctlv3 and scan.15.
+# Why: confirms discovery-dump fixtures expose their raw find lines to tests.
 def test_load_discovery_dump_metadata() -> None:
     dump = load_find_lines("community/flexotherm_discovery.yaml")
     assert dump
@@ -73,6 +79,8 @@ def test_load_discovery_dump_metadata() -> None:
 
 
 # dumpvalues.yaml records field names for multi-field registers
+# Intent: every field listed in MULTI_FIELD_MAP for each circuit/register exists in dumpvalues.yaml.
+# Why: keeps the documented multi-field reference in sync with the fake-ebusd multi-field map.
 def test_dumpvalues_field_names_match_multi_field_map() -> None:
     from tests.fake_ebusd import MULTI_FIELD_MAP
 
@@ -88,6 +96,8 @@ def test_dumpvalues_field_names_match_multi_field_map() -> None:
 
 
 # state returns acquired message
+# Intent: sending "state" to the fake server returns a response containing "signal acquired".
+# Why: matches the ebusd handshake that EbusService relies on to treat the bus as connected.
 async def test_state_command() -> None:
     async with FakeEbusdServer() as server:
         r, w = await asyncio.open_connection("127.0.0.1", server.port)
@@ -99,6 +109,8 @@ async def test_state_command() -> None:
 
 
 # info returns version string
+# Intent: sending "info" returns a response containing "ebusd".
+# Why: verifies the version handshake used to detect a live ebusd connection.
 async def test_info_command() -> None:
     async with FakeEbusdServer() as server:
         r, w = await asyncio.open_connection("127.0.0.1", server.port)
@@ -110,6 +122,8 @@ async def test_info_command() -> None:
 
 
 # read returns value for known register
+# Intent: reading Broadcast.Outsidetemp returns a non-empty value that is not "no data stored".
+# Why: ensures known registers resolve to data rather than the no-data sentinel.
 async def test_read_known_register() -> None:
     async with FakeEbusdServer() as server:
         r, w = await asyncio.open_connection("127.0.0.1", server.port)
@@ -121,6 +135,8 @@ async def test_read_known_register() -> None:
 
 
 # read returns empty for unknown register
+# Intent: reading a non-existent register returns an empty response.
+# Why: pins the not-found behavior EbusService must treat as unavailable rather than a value.
 async def test_read_unknown_register() -> None:
     async with FakeEbusdServer() as server:
         r, w = await asyncio.open_connection("127.0.0.1", server.port)
@@ -132,6 +148,8 @@ async def test_read_unknown_register() -> None:
 
 
 # write stores value, read-back returns it
+# Intent: a write returns "done" and a subsequent read returns the value that was written.
+# Why: guarantees the write/read-back semantics the integration's verified writes depend on.
 async def test_write_then_read() -> None:
     async with FakeEbusdServer() as server:
         r, w = await asyncio.open_connection("127.0.0.1", server.port)
@@ -145,6 +163,8 @@ async def test_write_then_read() -> None:
 
 
 # find dumps all fixture lines, subsequent commands work
+# Intent: "f" streams more than 50 find lines and the server still answers a following state command.
+# Why: ensures the fake server handles multi-line find output and remains usable afterward.
 async def test_find_multi_line() -> None:
     async with FakeEbusdServer() as server:
         r, w = await asyncio.open_connection("127.0.0.1", server.port)
@@ -168,6 +188,8 @@ async def test_find_multi_line() -> None:
 
 
 # define returns done
+# Intent: a define command returns "done".
+# Why: supports tests that exercise runtime register definitions.
 async def test_define_command() -> None:
     async with FakeEbusdServer() as server:
         r, w = await asyncio.open_connection("127.0.0.1", server.port)
@@ -178,6 +200,9 @@ async def test_define_command() -> None:
 
 
 # The fake server works with the real EbusService
+# Intent: the real EbusService can connect, find registers, read
+# Broadcast.Outsidetemp, and write hmu.SetMode against the fake server.
+# Why: end-to-end contract test proving the fake server is compatible with production transport code.
 async def test_with_real_ebus_service() -> None:
     async with FakeEbusdServer() as fake:
         ebus = EbusService(host="127.0.0.1", port=fake.port)
@@ -196,6 +221,9 @@ async def test_with_real_ebus_service() -> None:
 
 
 # Field-level read for known multi-field register
+# Intent: field-level reads of hmu.SetMode return releaseCooling "0" and hcmode,
+# while an unknown field falls back to the full value string.
+# Why: pins field extraction and the full-value fallback for an unrecognized field name.
 async def test_field_level_read_releasecooling() -> None:
     async with FakeEbusdServer() as fake:
         ebus = EbusService(host="127.0.0.1", port=fake.port)
@@ -210,6 +238,8 @@ async def test_field_level_read_releasecooling() -> None:
 
 
 # Field-level read for non-existent register returns None
+# Intent: a field read on the non-existent hmu.Status00.defrost returns None.
+# Why: guards against fabricating a value for an absent register or field.
 async def test_field_level_read_nonexistent() -> None:
     async with FakeEbusdServer() as fake:
         ebus = EbusService(host="127.0.0.1", port=fake.port)
@@ -220,6 +250,8 @@ async def test_field_level_read_nonexistent() -> None:
 
 
 # Field-level read of hmu.Status01 flow/return temp (issue #51)
+# Intent: reading hmu.Status01 temp, temp_1, and pumpstate from the basv3 fixture returns 39.5, 40.5, and "off".
+# Why: verifies field-split reads for the Status01 multi-field register (issue #51).
 async def test_field_level_read_status01() -> None:
     async with FakeEbusdServer("community/arotherm_plus_basv3_discovery.yaml") as fake:
         ebus = EbusService(host="127.0.0.1", port=fake.port)
@@ -234,6 +266,8 @@ async def test_field_level_read_status01() -> None:
 
 
 # Community basv system works with ebus service
+# Intent: the real EbusService finds a basv circuit in the community basv fixture.
+# Why: ensures the basv community capture works through the production transport.
 async def test_basv_with_ebus_service() -> None:
     async with FakeEbusdServer("community/basv_find.txt") as fake:
         ebus = EbusService(host="127.0.0.1", port=fake.port)

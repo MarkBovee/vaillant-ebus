@@ -78,6 +78,8 @@ def _find_value(lines: list[str], circuit: str, name: str) -> str | None:
     return None
 
 
+# Intent: both boost discovery dumps load with raw lines, before registers, and >500 registers.
+# Why: fixture integrity is required before boost behavior can be asserted.
 def test_boost_fixtures_load() -> None:
     for dump in (BOOST_ON_DUMP, BOOST_OFF_DUMP):
         data = load_discovery_dump(dump)
@@ -86,6 +88,8 @@ def test_boost_fixtures_load() -> None:
         assert data.get("metadata", {}).get("register_count") > 500
 
 
+# Intent: both boost dumps report basv HwcSFMode=load with a 46->68 C cylinder charge.
+# Why: discussion #31 - HwcSFMode lags the boost toggle during charging.
 def test_boost_on_dump_shows_sfmode_load() -> None:
     # The whole point of the capture: even with boost "off" (second dump), the
     # register still reads load while the compressor runs the cylinder up.
@@ -96,6 +100,8 @@ def test_boost_on_dump_shows_sfmode_load() -> None:
         assert _find_value(lines, "basv", "HwcTempDesired") == "68", dump
 
 
+# Intent: the boost-on dump generates basv DHW entities with correct metadata.
+# Why: discussion #31 - boost registers must be discoverable and typed.
 def test_boost_fixture_entities() -> None:
     lines = load_find_lines(BOOST_ON_DUMP)
     graph = DiscoveryService.build_device_graph(lines)

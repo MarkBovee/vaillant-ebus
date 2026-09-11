@@ -34,6 +34,8 @@ normalize_dump = module.normalize_dump
 group_telegrams = module.group_telegrams
 
 
+# Intent: normalizes a legacy ctlv2 cooling discovery-dump fixture to version 3 while keeping the raw grab lines.
+# Why: verifies old dumps are upgraded in-memory without mutating or losing their raw capture.
 def test_legacy_fixture_normalizes_without_migration() -> None:
     path = Path(__file__).parent / "fixtures/community/arotherm_plus_ctlv2_cooling_discovery.yaml"
     dump = yaml.safe_load(path.read_text())
@@ -45,6 +47,8 @@ def test_legacy_fixture_normalizes_without_migration() -> None:
     assert normalized["raw"]["grab"] == dump["grab"]
 
 
+# Intent: a dump with no metadata version normalizes to dump_version 1 and extracts the before register as discovered.
+# Why: keeps first-generation dumps loadable rather than failing version detection.
 def test_unversioned_dump_is_treated_as_legacy() -> None:
     normalized = normalize_dump(
         {"before_registers": [{"circuit": "hmu", "name": "State", "values": ["on"], "has_data": True}]}
@@ -55,6 +59,8 @@ def test_unversioned_dump_is_treated_as_legacy() -> None:
     assert normalized["registers"]["discovered"] == ["hmu.State"]
 
 
+# Intent: a dump tagged version 99 keeps that version but reports version_supported False.
+# Why: prevents a newer dump format from being parsed with assumptions that could misread fields.
 def test_future_version_is_preserved_but_not_assumed_supported() -> None:
     normalized = normalize_dump({"metadata": {"dump_version": 99}, "before_registers": []})
 
@@ -62,6 +68,9 @@ def test_future_version_is_preserved_but_not_assumed_supported() -> None:
     assert normalized["version_supported"] is False
 
 
+# Intent: normalizes before/after registers, splits mapped from unavailable, and
+# reports the sentinel-to-live transition on hmu.State as a change while hmu.New is new.
+# Why: guards detection of a register coming alive from "no data stored" during a dump comparison.
 def test_register_categories_and_sentinel_diff() -> None:
     before = [{"circuit": "hmu", "name": "State", "values": ["no data stored"], "has_data": False}]
     after = [
@@ -76,6 +85,9 @@ def test_register_categories_and_sentinel_diff() -> None:
     assert normalized["changes"]["changed_registers"][0]["key"] == "hmu.State"
 
 
+# Intent: group_telegrams merges two identical b510/01 telegrams into one group
+# with occurrence_count 5 and both responses.
+# Why: ensures duplicate unknown telegrams are aggregated by message identity instead of listed separately.
 def test_telegram_grouping_aggregates_counts_and_responses() -> None:
     grouped = group_telegrams(
         [
@@ -108,6 +120,8 @@ def test_telegram_grouping_aggregates_counts_and_responses() -> None:
     assert grouped[0]["unique_responses"] == ["aa", "bb"]
 
 
+# Intent: a version-4 dump with no grab data normalizes to empty traffic summary and unknown lists.
+# Why: keeps grab-less dumps producing a stable empty traffic structure instead of None.
 def test_empty_grab_normalizes_to_empty_traffic() -> None:
     normalized = normalize_dump({"metadata": {"dump_version": 4}, "before_registers": []})
 
@@ -115,6 +129,7 @@ def test_empty_grab_normalizes_to_empty_traffic() -> None:
 
 
 # Intent: preserve legacy labeled telegrams that predate raw request fields.
+# Why: keeps pre-raw-grab dumps loadable and still exports their label with an empty request list.
 def test_legacy_labeled_telegrams_without_request_are_compatible() -> None:
     normalized = normalize_dump(
         {
@@ -137,6 +152,7 @@ def test_legacy_labeled_telegrams_without_request_are_compatible() -> None:
 
 
 # Intent: retain serialized unknown candidates when legacy dumps have no raw grab.
+# Why: prevents unknown-telegram evidence from being dropped when only a serialized dump exists.
 def test_legacy_unknown_telegrams_without_grab_are_preserved() -> None:
     normalized = normalize_dump(
         {
@@ -150,6 +166,7 @@ def test_legacy_unknown_telegrams_without_grab_are_preserved() -> None:
 
 
 # Intent: normalize numeric YAML scalars into the string traffic contract.
+# Why: guards against YAML parsing an all-digit response as an int and breaking string-based downstream comparisons.
 def test_legacy_numeric_response_is_coerced_to_string() -> None:
     normalized = normalize_dump(
         {
@@ -162,6 +179,8 @@ def test_legacy_numeric_response_is_coerced_to_string() -> None:
     assert normalized["traffic"]["summary"][0]["unique_responses"] == ["1"]
 
 
+# Intent: a live vwzio b511/76/0101 candidate retains its exact sub, request, and response bytes.
+# Why: pins a real correlated telegram so unknown-register mining keeps request/response pairing intact.
 def test_live_vwzio_status01_candidate_preserves_correlated_telegram() -> None:
     dump = {
         "traffic": {

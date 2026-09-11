@@ -8,6 +8,8 @@ from tests.fake_ebusd import load_discovery_dump, load_find_lines
 from tests.test_entity_factory import DiscoveryService, EntityFactoryService
 
 
+# Intent: the eloblock VE28 fixture exposes observed bai registers with metadata.
+# Why: community boiler captures must produce typed, correctly-labeled entities.
 def test_eloblock_ve28_exposes_observed_bai_registers() -> None:
     graph = DiscoveryService.build_device_graph(load_find_lines("community/eloblock_ve28_discovery.yaml"))
     entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
@@ -27,6 +29,8 @@ def test_eloblock_ve28_exposes_observed_bai_registers() -> None:
     assert entities["bai.Flame.value"].enabled_by_default is False
 
 
+# Intent: the latest issue #99 HMUX0 values keep entity metadata and raw values.
+# Why: issue #99 - HMUX0 telemetry entities must stay available and typed.
 def test_hmux0_latest_issue99_values_keep_entity_metadata() -> None:
     graph = DiscoveryService.build_device_graph(load_find_lines("community/hmux0_issue99_latest_find.txt"))
     entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
@@ -52,6 +56,8 @@ def test_hmux0_latest_issue99_values_keep_entity_metadata() -> None:
     assert entities["hmux0.Status01.temp"].meta.device_class == "temperature"
 
 
+# Intent: issue #99 dumps keep ctlv3 DHW values and reject invalid HMUX0 return temperature.
+# Why: issue #99 - spurious hmux0 readings must not overwrite valid controller data.
 @pytest.mark.parametrize(
     ("fixture", "invalid_return_temperature"),
     (
@@ -76,12 +82,14 @@ def test_latest_issue99_dumps_keep_ctlv3_dhw_and_reject_invalid_hmux0_temperatur
     assert "hmux0.RunDataReturnTemp" not in graph.raw_registers
     assert "hmux0.RunDataReturnTemp" in graph.placeholder_registers
     assert entities["hmux0.RunDataReturnTemp.value"].raw_value == ""
-    assert invalid_return_temperature in ("1082.88", "-423.75")
+    assert entities["hmux0.RunDataReturnTemp.value"].raw_value != invalid_return_temperature
 
     for register in ("YieldHc", "YieldHwc", "CopHc", "CopHwc"):
         assert graph.raw_registers[f"hmux0.{register}"]
 
 
+# Intent: Pro7 quiet-mode captures load but expose no NoiseReduction/DeicingActive entities.
+# Why: absent quiet registers must not be fabricated from captures.
 @pytest.mark.parametrize(
     "fixture",
     (
@@ -101,6 +109,8 @@ def test_arotherm_pro7_quiet_captures_load_without_quiet_registers(fixture: str)
     assert not any("NoiseReduction" in name or "DeicingActive" in name for name in names)
 
 
+# Intent: the HMUX0 DHW holiday capture keeps ctlv3 values and treats invalid HMUX0 telemetry as placeholder.
+# Why: issues #99/#103 - controller values and sentinel handling must survive the capture.
 def test_hmux0_dhw_holiday_capture_keeps_controller_values_and_sentinels_unavailable() -> None:
     dump = load_discovery_dump("community/arotherm_hmux0_dhw_holiday_discovery.yaml")
     graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_hmux0_dhw_holiday_discovery.yaml"))
@@ -136,6 +146,8 @@ def test_hmux0_dhw_holiday_capture_keeps_controller_values_and_sentinels_unavail
     assert "hmux0.ConsumptionTotal" not in graph.raw_registers
 
 
+# Intent: future Z1 holiday dates survive discovery as ctlv3 values.
+# Why: holiday scheduling must not be lost or defaulted to a sentinel.
 def test_hmux0_holiday_capture_keeps_future_zone_holiday_values() -> None:
     """Controller holiday dates must survive discovery as ctlv3 values."""
     dump = load_discovery_dump("community/arotherm_hmux0_dhw_holiday_discovery.yaml")
@@ -146,6 +158,8 @@ def test_hmux0_holiday_capture_keeps_future_zone_holiday_values() -> None:
     assert graph.raw_registers["ctlv3.Z1HolidayEndPeriod"] == "09.10.2027"
 
 
+# Intent: ecoTEC VRT380 captures expose bai entities and a controller graph.
+# Why: boiler hardware must be discoverable with its observed register set.
 @pytest.mark.parametrize(
     "fixture",
     (

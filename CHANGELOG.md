@@ -1,5 +1,65 @@
 # Changelog
 
+## 1.8.0 - 2026-09-11
+
+### Changed
+
+- **Architecture refactor.** Centralized discovered-circuit resolution in the
+  `DeviceGraph`, typed raw grab telegram contracts, and preserved runtime
+  register, entity, cache, and discovery behavior.
+- **Discovery safety.** Fallback reads now use graph-owned register circuits and
+  never poll parsed multi-field keys as independent ebusd registers.
+- **Ownership resolution is fail-closed.** Unresolved topology is never guessed;
+  production ownership paths use typed `ResolutionResult` values, and the legacy
+  string resolver remains only as a deprecated compatibility wrapper.
+- **CI quality gates.** Release validation now includes scoped Ruff formatting,
+  strict mypy for typed backend contracts, release-version consistency, and
+  committed-diff whitespace checks alongside tests, lint, and compilation.
+
+### Fixed
+
+- **`Domestic Hot Water` stuck at `unknown` (#99).** Runtime-defined registers
+  can leave a bare `ctlv2` probe circuit on an `HMUX0`/`CTLV3` bus. Controller
+  resolution now prefers the circuit that actually owns the control/DHW
+  registers (`ctlv3`), so a valid `ctlv3.HwcOpMode = auto` reaches the
+  water-heater entity instead of being looked up under `ctlv2`. DHW reads and
+  writes now consistently target the resolved controller.
+- **DHW away state coherence.** An unset holiday sentinel (`01.01.2015`,
+  `01.01.2019`) now reports "not away" on the water-heater entity, matching the
+  DHW away switch, instead of "unknown". Only genuinely missing data is unknown.
+- **HMUX0 HW0504 without ebusd alias (#99).** `HMUX0;SW=0303;HW=0504` scan
+  metadata now bootstraps the community-evidenced, fixture-backed telemetry
+  definitions (`RunDataReturnTemp`, heating/DHW `Yield*`, heating/DHW `Cop*`)
+  plus the shared b516 heating/DHW/cooling electrical-consumption statistics.
+  The old `08.hmux0.csv -> 08.hmu.csv` workaround is no longer required for
+  this supported set, and incompatible generic HMU-only layouts are not applied.
+- **Invalid HMUX0 return temperatures.** Physically impossible
+  `RunDataReturnTemp` values are unavailable instead of being exposed as real
+  measurements.
+- **DHW Boost state.** The requested Boost state changes only after ebusd
+  accepts the local write, so failed writes cannot leave a misleading UI state.
+
+### Validation
+
+- 531 pytest tests passing, including real-capture regression coverage for the
+  issue #99 `ctlv2` pollution and a fixture-integrity guard that fails when a
+  golden capture is stripped.
+- Ruff, scoped format, strict mypy, YAML, compileall, and whitespace checks
+  passing.
+- Live Home Assistant deployment tested successfully.
+
+### Migration
+
+- Remove the `08.hmux0.csv -> 08.hmu.csv` symlink for affected HMUX0 HW0504
+  systems, restart ebusd, then reload the integration or restart Home Assistant.
+  DHW entities read from `ctlv3`; any stale `ctlv2`/`hmu` fallback entities can
+  be removed with **Purge stale entities**.
+
+### Compatibility
+
+- Entity IDs, names, device identities, register names, runtime definitions,
+  dump schema, and service behavior remain unchanged.
+
 ## 1.8.0-rc2 - 2026-09-10
 
 ### Fixed
@@ -53,24 +113,6 @@ First release candidate for v1.8.0.
 This is a pre-release for testing before final v1.8.0. Known non-blocking debt:
 Home Assistant reports existing `via_device` warnings from other installed custom
 integrations; Vaillant eBUS no longer emits that warning.
-
-## 1.8.0 - 2026-09-10
-
-### Changed
-
-- **Architecture refactor.** Centralized discovered-circuit resolution in the
-  `DeviceGraph`, typed raw grab telegram contracts, and preserved runtime
-  register, entity, cache, and discovery behavior.
-- **Discovery safety.** Fallback reads now use graph-owned register circuits and
-  never poll parsed multi-field keys as independent ebusd registers.
-- **CI quality gates.** Release validation now includes scoped Ruff formatting,
-  strict mypy for typed backend contracts, and committed-diff whitespace checks
-  alongside tests, lint, and compilation.
-
-### Compatibility
-
-- Entity IDs, names, device identities, register names, runtime definitions,
-  dump schema, and service behavior remain unchanged.
 
 ## 1.7.6 - 2026-09-10
 

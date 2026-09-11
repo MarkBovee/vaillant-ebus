@@ -45,6 +45,8 @@ def _service() -> EbusService:
 
 
 # send_command: single-line response returned as SendResult
+# Intent: send_command drains stale socket data, sends the command once, and returns the response line with no error.
+# Why: the drain-write-read sequence is the transport contract every register operation depends on.
 async def test_send_command_success() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"Standby\n"])
@@ -56,6 +58,8 @@ async def test_send_command_success() -> None:
 
 
 # send_command: not connected returns not_connected error
+# Intent: send_command on a service with no writer or reader returns error not_connected and empty data.
+# Why: callers must get a typed failure instead of an exception when ebusd is down.
 async def test_send_command_not_connected() -> None:
     s = EbusService(host="127.0.0.1", port=8888)
     result = await s.send_command("state")
@@ -64,6 +68,8 @@ async def test_send_command_not_connected() -> None:
 
 
 # send_command: read timeout returns timeout error
+# Intent: a read that times out returns a SendResult with error timeout.
+# Why: distinguishes a slow ebusd from a closed connection so callers can decide to reconnect.
 async def test_send_command_timeout() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), TimeoutError()])
@@ -73,6 +79,8 @@ async def test_send_command_timeout() -> None:
 
 
 # send_command: empty response (connection closed) returns error
+# Intent: an empty read line returns error connection_closed.
+# Why: signals the peer dropped the socket so the integration can reconnect instead of hanging.
 async def test_send_command_connection_closed() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b""])
@@ -82,6 +90,8 @@ async def test_send_command_connection_closed() -> None:
 
 
 # read_register: returns stripped value on success
+# Intent: read_register returns the value with the ebusd status suffix stripped.
+# Why: raw status suffixes would corrupt sensor values.
 async def test_read_register_success() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"25.5;ok\n"])
@@ -90,6 +100,8 @@ async def test_read_register_success() -> None:
 
 
 # read_register: error response returns None
+# Intent: read_register returns None when the transport reports an error.
+# Why: unavailable reads must yield None so the coordinator marks the entity unavailable.
 async def test_read_register_error_returns_none() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b""])
@@ -98,6 +110,8 @@ async def test_read_register_error_returns_none() -> None:
 
 
 # read_register: timeout returns None
+# Intent: read_register returns None on read timeout.
+# Why: timeouts must not surface as values or raise into polling.
 async def test_read_register_timeout_returns_none() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), TimeoutError()])
@@ -106,6 +120,8 @@ async def test_read_register_timeout_returns_none() -> None:
 
 
 # read_register: with field parameter
+# Intent: read_register with a field issues the field read and returns the parsed value.
+# Why: multi-field registers are read per field, so the field must be included in the command.
 async def test_read_register_with_field() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"field_value\n"])
@@ -114,6 +130,8 @@ async def test_read_register_with_field() -> None:
 
 
 # read_register: strip suffix ";ok" from value
+# Intent: read_register strips the err status suffix from the value.
+# Why: suffix text is transport metadata, not part of the register value.
 async def test_read_register_strips_suffix() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"23.50;err\n"])
@@ -122,6 +140,8 @@ async def test_read_register_strips_suffix() -> None:
 
 
 # read_register: empty value returns None
+# Intent: a blank response line yields None.
+# Why: an empty payload means no data, not an empty-string sensor state.
 async def test_read_register_empty_value_returns_none() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"\n"])
@@ -130,6 +150,8 @@ async def test_read_register_empty_value_returns_none() -> None:
 
 
 # write_register: success with read-back verification
+# Intent: a done write with a matching semicolon-form read-back succeeds and returns the verified value.
+# Why: write verification is the safety net that prevents silently-unapplied writes.
 async def test_write_register_success() -> None:
     s = _service()
     s._reader.readline = AsyncMock(
@@ -148,6 +170,8 @@ async def test_write_register_success() -> None:
 # write_register: read-back that does not match the written value fails.
 # Covers the DHW boost case where ebusd answers "done" but the controller
 # keeps HwcSFMode on "load" while a boost cycle is still running.
+# Intent: a done write whose read-back still reports the old value fails with a verification-mismatch error.
+# Why: ebusd accepts writes it does not apply (DHW HwcSFMode stays load), so trusting done would falsely report success.
 async def test_write_register_readback_mismatch_fails() -> None:
     s = _service()
     s._reader.readline = AsyncMock(
@@ -167,6 +191,8 @@ async def test_write_register_readback_mismatch_fails() -> None:
 # write_register: with strict_verify=False a read-back mismatch is logged but
 # not treated as a failure. Used for HwcSFMode, whose physical state lags the
 # accepted write while the cylinder is still charging.
+# Intent: with strict_verify=False a read-back mismatch is reported as success with the observed value.
+# Why: HwcSFMode physical state lags the accepted write, so strict polling would fail valid boost toggles.
 async def test_write_register_readback_mismatch_non_strict() -> None:
     s = _service()
     s._reader.readline = AsyncMock(
@@ -183,6 +209,8 @@ async def test_write_register_readback_mismatch_non_strict() -> None:
 
 
 # write_register: numeric formatting differences are tolerated
+# Intent: write verification accepts numeric-format differences such as 23.5 versus 23.50.
+# Why: ebusd canonical formatting must not be flagged as a write failure.
 async def test_write_register_readback_numeric_tolerance() -> None:
     s = _service()
     s._reader.readline = AsyncMock(
@@ -199,6 +227,8 @@ async def test_write_register_readback_numeric_tolerance() -> None:
 
 
 # write_register: connection error propagates as failure
+# Intent: a write on a closed connection fails with error_message connection_closed.
+# Why: propagates the transport failure so the caller can reconnect.
 async def test_write_register_connection_error() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b""])
@@ -208,6 +238,8 @@ async def test_write_register_connection_error() -> None:
 
 
 # write_register: ERR response from ebusd returns failure
+# Intent: an ERR response fails the write and preserves the error text.
+# Why: surfaces invalid-value rejections instead of reporting success.
 async def test_write_register_unexpected_response() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"ERR: invalid value\n"])
@@ -217,6 +249,8 @@ async def test_write_register_unexpected_response() -> None:
 
 
 # write_register: empty write response followed by successful read-back
+# Intent: an empty write response followed by a matching read-back still succeeds.
+# Why: some ebusd versions return a blank line instead of done, and read-back is authoritative.
 async def test_write_register_empty_response_verified() -> None:
     s = _service()
     s._reader.readline = AsyncMock(
@@ -233,6 +267,8 @@ async def test_write_register_empty_response_verified() -> None:
 
 
 # write_register: empty write + empty read-back = failure
+# Intent: an empty write response and empty read-back fails with Write verification returned empty.
+# Why: prevents a no-op write from being reported as success.
 async def test_write_register_empty_both() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"\n", TimeoutError(), b"\n"])
@@ -242,6 +278,8 @@ async def test_write_register_empty_both() -> None:
 
 
 # write_register: done response but read-back returns SYN error
+# Intent: a read-back containing ERR: SYN received fails the write with that message.
+# Why: bus synchronization errors must not be treated as a verified write.
 async def test_write_register_readback_syn_error() -> None:
     s = _service()
     s._reader.readline = AsyncMock(
@@ -258,6 +296,8 @@ async def test_write_register_readback_syn_error() -> None:
 
 
 # find_registers: returns raw lines from _send_find
+# Intent: find_registers sends f -a and collects the multi-line response until the read times out.
+# Why: discovery depends on every find line, and a truncated list silently loses registers.
 async def test_find_registers_returns_lines() -> None:
     s = _service()
     s._reader.readline = AsyncMock(
@@ -274,6 +314,8 @@ async def test_find_registers_returns_lines() -> None:
 
 
 # find_registers: not connected returns empty list
+# Intent: find_registers on a not-connected service returns an empty list.
+# Why: discovery must degrade to no registers rather than raise.
 async def test_find_registers_not_connected_returns_empty() -> None:
     s = EbusService(host="127.0.0.1", port=8888)
     lines = await s.find_registers()
@@ -281,6 +323,8 @@ async def test_find_registers_not_connected_returns_empty() -> None:
 
 
 # get_info: parse info command response into dict
+# Intent: get_info parses the info banner into key/value pairs.
+# Why: version and signal metadata feed diagnostics and discovery dumps.
 async def test_get_info_returns_dict() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"version: ebusd 1.0, signal: acquired\n"])
@@ -289,6 +333,8 @@ async def test_get_info_returns_dict() -> None:
 
 
 # get_info: error returns empty dict
+# Intent: get_info returns an empty dict when the transport errors.
+# Why: missing info must not break setup.
 async def test_get_info_error_returns_empty() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b""])
@@ -297,6 +343,8 @@ async def test_get_info_error_returns_empty() -> None:
 
 
 # get_info: empty response returns empty dict
+# Intent: get_info returns an empty dict for a blank response.
+# Why: guards the parser against an empty banner.
 async def test_get_info_empty_response() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"\n"])
@@ -305,6 +353,8 @@ async def test_get_info_empty_response() -> None:
 
 
 # define_register: sends define command and returns response
+# Intent: define_register sends a define -r command and returns done.
+# Why: runtime register definitions require a confirmed define response.
 async def test_define_register_returns_done() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"done\n"])
@@ -313,6 +363,8 @@ async def test_define_register_returns_done() -> None:
 
 
 # define_register: error propagates
+# Intent: define_register returns an ERR string when the transport fails.
+# Why: callers can detect a failed definition instead of assuming success.
 async def test_define_register_error() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b""])
@@ -321,24 +373,32 @@ async def test_define_register_error() -> None:
 
 
 # is_connected: True when writer is set
+# Intent: is_connected is True when a writer is present.
+# Why: connection state drives polling and reconnect decisions.
 def test_is_connected_true() -> None:
     s = _service()
     assert s.is_connected is True
 
 
 # is_connected: False when no writer
+# Intent: is_connected is False on a fresh service.
+# Why: prevents use of an unopened socket.
 def test_is_connected_false() -> None:
     s = EbusService()
     assert s.is_connected is False
 
 
 # version: returns cached version string
+# Intent: version is None before connecting.
+# Why: discovery-dump metadata must be null until the version is known.
 def test_version_default_none() -> None:
     s = EbusService()
     assert s.version is None
 
 
 # version: returns set value
+# Intent: version returns the cached version string.
+# Why: cached ebusd version is exposed without an extra command.
 def test_version_returns_value() -> None:
     s = EbusService()
     s._version = "ebusd 1.0"
@@ -346,6 +406,8 @@ def test_version_returns_value() -> None:
 
 
 # stale socket data is drained before each command
+# Intent: send_command discards buffered stale lines before reading the real response.
+# Why: leftover data would otherwise be mistaken for the command response.
 async def test_stale_data_drained_before_command() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[b"stale\n", TimeoutError(), b"Standby\n"])
@@ -355,6 +417,8 @@ async def test_stale_data_drained_before_command() -> None:
 
 
 # command log records one entry per send_command call
+# Intent: each send_command appends a command-log entry with cmd, data, error and duration.
+# Why: diagnostics rely on the command log to debug bus issues.
 async def test_command_log_records_entry() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"Standby\n"])
@@ -368,6 +432,8 @@ async def test_command_log_records_entry() -> None:
 
 
 # command log ring buffer evicts oldest entries beyond maxlen 20
+# Intent: the command log keeps only the most recent twenty entries.
+# Why: bounds memory for long-running polling.
 async def test_command_log_ring_buffer_eviction() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"ok\n"])
@@ -380,6 +446,8 @@ async def test_command_log_ring_buffer_eviction() -> None:
 
 
 # debug_info returns command log, connection state, and reconnect count
+# Intent: debug_info reports the command log, connection state and reconnect count.
+# Why: Home Assistant diagnostics consume this structure.
 async def test_debug_info() -> None:
     s = _service()
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"Standby\n"])
@@ -398,6 +466,9 @@ async def test_debug_info() -> None:
 
 
 # Integration: connect to fake ebusd and verify state response
+# Intent: connecting to the fake ebusd server and sending state returns a
+# signal-acquired banner, and disconnect clears the connection.
+# Why: end-to-end exercise of connect, command and disconnect over a real socket.
 async def test_integration_connect_and_state() -> None:
     async with FakeEbusdServer() as fake:
         s = EbusService(host=fake.host, port=fake.port)
@@ -410,6 +481,8 @@ async def test_integration_connect_and_state() -> None:
 
 
 # Integration: connect and read a known register
+# Intent: reading ctlv2.AdaptHeatCurve through the fake server returns yes.
+# Why: validates the full read path including framing over a real socket.
 async def test_integration_read_register() -> None:
     async with FakeEbusdServer() as fake:
         s = EbusService(host=fake.host, port=fake.port)
@@ -420,6 +493,8 @@ async def test_integration_read_register() -> None:
 
 
 # Integration: connect and read register with timestamp data
+# Intent: reading Broadcast.Vdatetime returns a semicolon-joined multi-field value.
+# Why: confirms compound values pass through the wire unmangled.
 async def test_integration_read_register_with_semicolons() -> None:
     async with FakeEbusdServer() as fake:
         s = EbusService(host=fake.host, port=fake.port)
@@ -431,6 +506,8 @@ async def test_integration_read_register_with_semicolons() -> None:
 
 
 # Integration: connect and run find_registers
+# Intent: find_registers through the fake server returns non-empty lines containing an equals sign.
+# Why: validates multi-line find framing end to end.
 async def test_integration_find_registers() -> None:
     async with FakeEbusdServer() as fake:
         s = EbusService(host=fake.host, port=fake.port)
@@ -442,6 +519,8 @@ async def test_integration_find_registers() -> None:
 
 
 # Integration: connect and get info
+# Intent: get_info through the fake server returns a version containing ebusd.
+# Why: validates info parsing over a real socket.
 async def test_integration_get_info() -> None:
     async with FakeEbusdServer() as fake:
         s = EbusService(host=fake.host, port=fake.port)
@@ -454,6 +533,8 @@ async def test_integration_get_info() -> None:
 
 # Integration: connect populates the cached version from the info banner, so
 # discovery-dump metadata carries the ebusd version instead of null.
+# Intent: connect caches the ebusd version parsed from the info banner.
+# Why: discovery-dump metadata should carry the version rather than null.
 async def test_connect_populates_version() -> None:
     async with FakeEbusdServer() as fake:
         s = EbusService(host=fake.host, port=fake.port)
@@ -464,6 +545,8 @@ async def test_connect_populates_version() -> None:
 
 
 # Integration: connect and define register
+# Intent: define_register through the fake server returns done.
+# Why: validates runtime definition over a real socket.
 async def test_integration_define_register() -> None:
     async with FakeEbusdServer() as fake:
         s = EbusService(host=fake.host, port=fake.port)
@@ -476,6 +559,7 @@ async def test_integration_define_register() -> None:
 # Intent: after a transport failure the stale writer must be discarded and a
 # real redial attempted — a silent no-op reconnect is a regression (the stale
 # writer stays set because transport errors never clear it themselves).
+# Why: a failed redial that leaves a stale writer makes is_connected lie, so the coordinator never recovers.
 async def test_reconnect_clears_stale_writer_and_raises_when_dial_fails(monkeypatch) -> None:
     s = EbusService(host="127.0.0.1", port=59999)
     s._writer = MagicMock(spec=asyncio.StreamWriter)
@@ -494,6 +578,7 @@ async def test_reconnect_clears_stale_writer_and_raises_when_dial_fails(monkeypa
 
 
 # Intent: concurrent reconnect callers must single-flight — only one dials.
+# Why: concurrent redials would stack connections and corrupt the shared socket.
 async def test_reconnect_guard_single_flight(monkeypatch) -> None:
     s = EbusService(host="127.0.0.1", port=59999)
     s._reconnect_delay = 0

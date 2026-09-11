@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: pip install ruff==0.16.4 mypy==1.15.0 pytest pytest-asyncio pyyaml types-cryptography
 
+      - name: Version check
+        run: python tools/version.py check
+
       - name: Lint
         run: ruff check .
 
@@ -70,6 +73,9 @@ jobs:
 
       - name: Install dependencies
         run: pip install ruff==0.16.4 mypy==1.15.0 pytest pytest-asyncio pyyaml types-cryptography
+
+      - name: Version check
+        run: python tools/version.py check
 
       - name: Lint
         run: ruff check .
