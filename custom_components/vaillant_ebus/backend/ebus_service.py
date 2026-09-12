@@ -16,6 +16,11 @@ MAX_RECONNECT_DELAY = 60
 INITIAL_RECONNECT_DELAY = 1
 READ_TIMEOUT = 10
 DONE_STR = "done"
+# ebusd serves `read` from its cache unless forced; a freshly written value is
+# cached by the write itself. Re-read once from the bus before treating a
+# mismatch as an unapplied write, so a controller that applies the value just
+# after the bus ack is not reported as a failure.
+WRITE_VERIFY_RETRY_DELAY = 0.25
 
 EBUSD_STATUS_SUFFIXES = (";ok", ";err", ";inv", ";too_small", ";too_big", ";nan", ";unknown")
 
@@ -240,13 +245,15 @@ class EbusService:
     async def find_registers(self) -> list[str]:
         return await self._send_find()
 
-    # Read a single register value from ebusd, strip status suffix
-    async def read_register(self, circuit: str, name: str, field: str = "") -> str | None:
+    # Read a single register value from ebusd, strip status suffix. By default
+    # ebusd may answer from its cache; force=True adds "-f" so an active-read
+    # register is queried from the device instead (used to verify writes).
+    async def read_register(self, circuit: str, name: str, field: str = "", force: bool = False) -> str | None:
         _validate_identifier("circuit", circuit)
         _validate_identifier("register name", name)
         if field:
             _validate_identifier("field", field)
-        cmd = f"read -c {circuit} {name}"
+        cmd = f"read -f -c {circuit} {name}" if force else f"read -c {circuit} {name}"
         if field:
             cmd += f" {field}"
         result = await self.send_command(cmd)
@@ -256,11 +263,19 @@ class EbusService:
         raw = result.data.strip()
         return _strip_suffix(raw) if raw else None
 
-    # Write a value to an ebusd register, verify by read-back. When
-    # strict_verify is False a read-back that does not match the written value
-    # is logged but not treated as a failure. This is used for registers whose
-    # physical state lags the accepted write (e.g. HwcSFMode keeps reporting
-    # "load" while the cylinder finishes charging after boost is turned off).
+    # Write a value to an ebusd register, verify by a forced bus read-back.
+    # The read-back bypasses ebusd's cache because ebusd stores the written
+    # value in that cache during the write, which would make a cached read
+    # always "verify" a write the controller never applied. Each failed or
+    # empty read is retried once after a short delay, so a controller that
+    # applies the write just after the bus ack still succeeds.
+    #
+    # strict_verify=True requires the controller to confirm the written value;
+    # an unreadable or mismatching read-back fails the write. strict_verify=False
+    # accepts the write when ebusd acknowledged it, and only warns when the
+    # controller does not confirm it (e.g. HwcSFMode keeps reporting "load"
+    # while the cylinder finishes charging after boost is turned off, or a
+    # write-only register has no read message to verify against).
     async def write_register(self, circuit: str, name: str, value: str, strict_verify: bool = True) -> WriteResult:
         _validate_identifier("circuit", circuit)
         _validate_identifier("register name", name)
@@ -271,14 +286,21 @@ class EbusService:
         data = result.data.strip()
         if data and data != DONE_STR:
             return WriteResult(success=False, error_message=f"Unexpected response: {data}")
-        verified = await self.read_register(circuit, name)
-        if not data and not verified:
-            return WriteResult(success=False, error_message="Write verification returned empty")
-        if verified and verified.startswith("ERR:"):
-            return WriteResult(success=False, error_message=f"Write verification failed: {verified}")
-        if verified and not _values_match(value, verified):
+        verified = await self.read_register(circuit, name, force=True)
+        if strict_verify and (not verified or verified.startswith("ERR:")):
+            # No usable answer on the first post-write read. Retry once; idle
+            # heat-pump registers can return no data on the first attempt. A
+            # non-strict write needs no confirmation, so it skips the retry.
+            await asyncio.sleep(WRITE_VERIFY_RETRY_DELAY)
+            retry = await self.read_register(circuit, name, force=True)
+            if retry and not retry.startswith("ERR:"):
+                verified = retry
+        if not verified or verified.startswith("ERR:"):
+            # A write-only register has no read message, so an unreadable
+            # read-back is not proof the write failed. Only strict callers
+            # require the controller to confirm the value.
             _LOGGER.warning(
-                "Write verification mismatch %s.%s: wrote %r, read back %r",
+                "Write verification unreadable %s.%s: wrote %r, read back %r",
                 circuit,
                 name,
                 value,
@@ -287,8 +309,28 @@ class EbusService:
             if strict_verify:
                 return WriteResult(
                     success=False,
-                    error_message=f"Write verification mismatch: wrote {value!r}, read back {verified!r}",
+                    error_message=f"Write verification failed: wrote {value!r}, read back {verified!r}",
                 )
+            return WriteResult(success=True, verified_value=None)
+        if not _values_match(value, verified):
+            await asyncio.sleep(WRITE_VERIFY_RETRY_DELAY)
+            retry = await self.read_register(circuit, name, force=True)
+            if retry and not retry.startswith("ERR:") and _values_match(value, retry):
+                verified = retry
+            else:
+                _LOGGER.warning(
+                    "Write verification mismatch %s.%s: wrote %r, read back %r",
+                    circuit,
+                    name,
+                    value,
+                    verified,
+                )
+                if strict_verify:
+                    return WriteResult(
+                        success=False,
+                        error_message=f"Write verification mismatch: wrote {value!r}, read back {verified!r}",
+                    )
+        _LOGGER.debug("Write %s.%s=%r acked, verification read-back %r", circuit, name, value, verified)
         return WriteResult(success=True, verified_value=verified)
 
     # Send 'info' command and parse key=value response
