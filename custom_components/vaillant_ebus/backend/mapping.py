@@ -468,6 +468,37 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         unit="kWh",
         state_class="total_increasing",
     ),
+    # ecoTEC Plus VMW 30 CS/1-5 / additional BAI endpoints.
+    "bai.HwcWaterflow": RegisterMeta(
+        friendly_name="Hot Water Flow",
+        unit="L/min",
+        device_class="volume_flow_rate",
+        state_class="measurement",
+    ),
+    "bai.PrimaryCircuitFlowrate": RegisterMeta(
+        friendly_name="Primary Circuit Flow Rate",
+        unit="L/min",
+        device_class="volume_flow_rate",
+        state_class="measurement",
+    ),
+    "bai.StatFuelSum": RegisterMeta(
+        friendly_name="Fuel Energy",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+    ),
+    "bai.StatFuelSumHc": RegisterMeta(
+        friendly_name="Fuel Energy (Heating)",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+    ),
+    "bai.StatFuelSumHwc": RegisterMeta(
+        friendly_name="Fuel Energy (DHW)",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+    ),
     # Runtime-defined b516 cooling-energy registers (issue #50). The bus
     # reports Wh; the unit stays Wh because ebusd returns the raw EXP value.
     "hmu.CoolEnvYieldTotal": RegisterMeta(

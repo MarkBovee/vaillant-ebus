@@ -174,3 +174,34 @@ def test_ecotec_vrt380_captures_expose_bai_and_controller_graph(fixture: str) ->
     assert graph.nodes["bai"].device_type.name == "HEATING_CONTROLLER"
     assert "bai.FlowTemp.value" in entities
     assert "bai.StorageTemp.value" in entities
+
+
+# Intent: ecoTEC BAI flow and fuel registers expose Home Assistant metadata.
+# Why: these registers are present in the discovery graph even when the boiler
+# reports no data, so their metadata must remain covered independently of value availability.
+def test_ecotec_vrt380_bai_flow_and_fuel_metadata() -> None:
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/ecotec_vrt380_15700_discovery.yaml")
+    )
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    for register in (
+        "HwcWaterflow",
+        "PrimaryCircuitFlowrate",
+        "StatFuelSum",
+        "StatFuelSumHc",
+        "StatFuelSumHwc",
+    ):
+        assert f"bai.{register}.value" in entities
+
+    for register in ("HwcWaterflow", "PrimaryCircuitFlowrate"):
+        meta = entities[f"bai.{register}.value"].meta
+        assert meta.device_class == "volume_flow_rate"
+        assert meta.unit == "L/min"
+        assert meta.state_class == "measurement"
+
+    for register in ("StatFuelSum", "StatFuelSumHc", "StatFuelSumHwc"):
+        meta = entities[f"bai.{register}.value"].meta
+        assert meta.device_class == "energy"
+        assert meta.unit == "kWh"
+        assert meta.state_class == "total_increasing"
