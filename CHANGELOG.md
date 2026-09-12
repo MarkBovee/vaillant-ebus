@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.8.3-rc2 - 2026-09-12
+
+### Fixed
+
+- **Energy Manager State now reports `Cooling` (issue #102).** On units without
+  `Status00`/`Status07` (HMU00/CTLV3-style), `RunDataStatuscode` stays at 0
+  while a cooling period is active, so the derived sensor stuck on `Standby`.
+  The `releaseCooling` request flag in `hmu SetMode` is now used as a fallback
+  cooling signal, and only when no explicit defrost, shutdown/standby,
+  compressor-off, DHW, or heating signal is present. A new GOLDEN fixture from
+  the issue #102 capture pins the behavior. This is classified as a strong
+  assumption pending the reporter's short grab around a cooling transition.
+
+### Changed
+
+- **Version tool keeps pyproject PEP 440.** `tools/version.py bump 1.8.3-rcN`
+  now writes `1.8.3rcN` to `pyproject.toml` while `manifest.json` keeps the
+  display form, so the RC release line no longer drifts from valid PEP 440.
+- **Docs: ebusd read-back semantics.** `docs/developer.md` documents the
+  read-cache vs forced-read (`read -f`) behavior behind write verification, and
+  `docs/troubleshooting.md` points at the `-f` check.
+
+### Validation
+
+- Full test suite passing, including the issue #102 cooling regression and the
+  rc1 write-verification tests.
+- Ruff, scoped format, strict mypy, YAML, compileall, version consistency, and
+  whitespace checks passing; independent adversarial audit of the cooling
+  mapping closed out.
+
+### Note
+
+- Pre-release for verification. Contains everything in **1.8.3-rc1** (write
+  verification now bypasses ebusd's cache) plus the cooling change. The
+  holiday/away write verification (issue #99) is still awaiting user
+  confirmation.
+
 ## 1.8.3-rc1 - 2026-09-12
 
 ### Fixed
