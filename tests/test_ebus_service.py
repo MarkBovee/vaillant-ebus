@@ -165,6 +165,20 @@ async def test_write_register_success() -> None:
     result = await s.write_register("hmu", "SetMode", "auto 17 - - 1 1 1 0 0 1")
     assert result.success
     assert result.verified_value == "auto;17;-;-;1;1;1;0;0;1"
+    # The verification read must bypass ebusd's cache: ebusd caches the written
+    # value during the write, so a cached read would always "verify" it.
+    assert b"read -f -c hmu SetMode" in s._writer.write.call_args_list[1].args[0]
+
+
+# read_register: force=True issues a bus read via the -f flag
+# Intent: a forced read adds -f so ebusd queries the device instead of its cache.
+# Why: the difference between a cached and an applied value is what makes write verification meaningful.
+async def test_read_register_force_adds_f_flag() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"auto\n"])
+    val = await s.read_register("ctlv3", "HwcHolidayStartPeriod", force=True)
+    assert val == "auto"
+    assert b"read -f -c ctlv3 HwcHolidayStartPeriod" in s._writer.write.call_args.args[0]
 
 
 # write_register: read-back that does not match the written value fails.
@@ -172,14 +186,17 @@ async def test_write_register_success() -> None:
 # keeps HwcSFMode on "load" while a boost cycle is still running.
 # Intent: a done write whose read-back still reports the old value fails with a verification-mismatch error.
 # Why: ebusd accepts writes it does not apply (DHW HwcSFMode stays load), so trusting done would falsely report success.
-async def test_write_register_readback_mismatch_fails() -> None:
+async def test_write_register_readback_mismatch_fails(monkeypatch) -> None:
+    monkeypatch.setattr(EBUS, "WRITE_VERIFY_RETRY_DELAY", 0)
     s = _service()
     s._reader.readline = AsyncMock(
         side_effect=[
             TimeoutError(),  # drain for write
             b"done\n",  # write response
             TimeoutError(),  # drain for read-back
-            b"load\n",  # read-back: value did not change
+            b"load\n",  # read-back 1: value did not change
+            TimeoutError(),  # drain for retry
+            b"load\n",  # read-back 2: still not applied
         ]
     )
     result = await s.write_register("basv", "HwcSFMode", "auto")
@@ -188,12 +205,35 @@ async def test_write_register_readback_mismatch_fails() -> None:
     assert "load" in result.error_message
 
 
+# write_register: a controller that applies the write just after the bus ack
+# is not reported as a failure because the mismatch is retried once.
+# Intent: first forced read returns the old value, the retry returns the new value, write succeeds.
+# Why: prevents false write failures for controllers with a short apply latency.
+async def test_write_register_retry_recovers_after_controller_lag(monkeypatch) -> None:
+    monkeypatch.setattr(EBUS, "WRITE_VERIFY_RETRY_DELAY", 0)
+    s = _service()
+    s._reader.readline = AsyncMock(
+        side_effect=[
+            TimeoutError(),  # drain for write
+            b"done\n",  # write response
+            TimeoutError(),  # drain for read-back
+            b"load\n",  # read-back 1: not applied yet
+            TimeoutError(),  # drain for retry
+            b"auto\n",  # read-back 2: applied
+        ]
+    )
+    result = await s.write_register("basv", "HwcSFMode", "auto")
+    assert result.success
+    assert result.verified_value == "auto"
+
+
 # write_register: with strict_verify=False a read-back mismatch is logged but
 # not treated as a failure. Used for HwcSFMode, whose physical state lags the
 # accepted write while the cylinder is still charging.
 # Intent: with strict_verify=False a read-back mismatch is reported as success with the observed value.
 # Why: HwcSFMode physical state lags the accepted write, so strict polling would fail valid boost toggles.
-async def test_write_register_readback_mismatch_non_strict() -> None:
+async def test_write_register_readback_mismatch_non_strict(monkeypatch) -> None:
+    monkeypatch.setattr(EBUS, "WRITE_VERIFY_RETRY_DELAY", 0)
     s = _service()
     s._reader.readline = AsyncMock(
         side_effect=[
@@ -201,6 +241,8 @@ async def test_write_register_readback_mismatch_non_strict() -> None:
             b"done\n",  # write response
             TimeoutError(),  # drain for read-back
             b"load\n",  # read-back: value did not change yet
+            TimeoutError(),  # drain for retry
+            b"load\n",  # retry: still not changed
         ]
     )
     result = await s.write_register("basv", "HwcSFMode", "auto", strict_verify=False)
@@ -266,21 +308,32 @@ async def test_write_register_empty_response_verified() -> None:
     assert result.verified_value == "auto;22.0;-;-;1;1;1;0;0;1"
 
 
-# write_register: empty write + empty read-back = failure
-# Intent: an empty write response and empty read-back fails with Write verification returned empty.
+# write_register: empty write + empty read-back = strict failure
+# Intent: an empty write response and an empty verification read fails.
 # Why: prevents a no-op write from being reported as success.
-async def test_write_register_empty_both() -> None:
+async def test_write_register_empty_both(monkeypatch) -> None:
+    monkeypatch.setattr(EBUS, "WRITE_VERIFY_RETRY_DELAY", 0)
     s = _service()
-    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"\n", TimeoutError(), b"\n"])
+    s._reader.readline = AsyncMock(
+        side_effect=[
+            TimeoutError(),
+            b"\n",
+            TimeoutError(),
+            b"\n",
+            TimeoutError(),
+            b"\n",  # retry is empty too
+        ]
+    )
     result = await s.write_register("hmu", "SetMode", "auto")
     assert not result.success
-    assert "Write verification returned empty" in result.error_message
+    assert "Write verification failed" in result.error_message
 
 
 # write_register: done response but read-back returns SYN error
-# Intent: a read-back containing ERR: SYN received fails the write with that message.
+# Intent: a read-back containing ERR: SYN received fails the strict write with that message.
 # Why: bus synchronization errors must not be treated as a verified write.
-async def test_write_register_readback_syn_error() -> None:
+async def test_write_register_readback_syn_error(monkeypatch) -> None:
+    monkeypatch.setattr(EBUS, "WRITE_VERIFY_RETRY_DELAY", 0)
     s = _service()
     s._reader.readline = AsyncMock(
         side_effect=[
@@ -288,11 +341,57 @@ async def test_write_register_readback_syn_error() -> None:
             b"done\n",
             TimeoutError(),
             b"ERR: SYN received\n",
+            TimeoutError(),
+            b"ERR: SYN received\n",  # retry errors too
         ]
     )
     result = await s.write_register("ctlv2", "Z1OpMode", "night")
     assert not result.success
-    assert "Write verification failed: ERR: SYN received" in result.error_message
+    assert "Write verification failed" in result.error_message
+    assert "ERR: SYN received" in result.error_message
+
+
+# write_register: an unreadable verification read fails a strict write
+# Intent: write acked, both forced reads return no value -> strict failure, never a false success.
+# Why: the previous shape returned success with verified_value=None when the verification read failed.
+async def test_write_register_unreadable_read_strict_fails(monkeypatch) -> None:
+    monkeypatch.setattr(EBUS, "WRITE_VERIFY_RETRY_DELAY", 0)
+    s = _service()
+    s._reader.readline = AsyncMock(
+        side_effect=[
+            TimeoutError(),
+            b"done\n",
+            TimeoutError(),
+            b"\n",
+            TimeoutError(),
+            b"\n",
+        ]
+    )
+    result = await s.write_register("hmu", "SetMode", "auto")
+    assert not result.success
+    assert "Write verification failed" in result.error_message
+
+
+# write_register: a write-only register (no read message) still succeeds when
+# non-strict, because an unreadable read-back is not proof the write failed.
+# Intent: non-strict write tolerates an ERR: read-back, e.g. bai.SetModeOverride.
+# Why: ebusd exposes no read message for write-only registers, so their forced read always errors.
+async def test_write_register_unreadable_read_non_strict_succeeds(monkeypatch) -> None:
+    monkeypatch.setattr(EBUS, "WRITE_VERIFY_RETRY_DELAY", 0)
+    s = _service()
+    s._reader.readline = AsyncMock(
+        side_effect=[
+            TimeoutError(),
+            b"done\n",
+            TimeoutError(),
+            b"ERR: not found\n",
+            TimeoutError(),
+            b"ERR: not found\n",
+        ]
+    )
+    result = await s.write_register("bai", "SetModeOverride", "load", strict_verify=False)
+    assert result.success
+    assert result.verified_value is None
 
 
 # find_registers: returns raw lines from _send_find
@@ -553,6 +652,45 @@ async def test_integration_define_register() -> None:
         await s.connect()
         resp = await s.define_register("r5,ctlv2,z1RoomHumidity,test")
         assert resp == "done"
+        await s.disconnect()
+
+
+# Integration: a write applied by the controller verifies against the device
+# value via the forced bus read, not ebusd's cache.
+# Intent: write through a real socket succeeds and reports the bus read-back.
+# Why: pins the end-to-end forced read against the cache/device separation.
+async def test_integration_write_verifies_applied_value(monkeypatch) -> None:
+    monkeypatch.setattr(EBUS, "WRITE_VERIFY_RETRY_DELAY", 0)
+    async with FakeEbusdServer("arotherm_find.txt") as fake:
+        s = EbusService(host=fake.host, port=fake.port)
+        await s.connect()
+        result = await s.write_register("ctlv2", "HwcHolidayStartPeriod", "24.09.2026")
+        assert result.success
+        assert result.verified_value == "24.09.2026"
+        await s.disconnect()
+
+
+# Integration: ebusd caches the written value even when the controller does
+# not apply it (storeLastData), so a cached read can falsely verify the write.
+# A forced bus read must return the device value, and a strict write must fail.
+# Intent: with apply_writes=False the write is cached but the device keeps the old value, so a strict write fails.
+# Why: this is the issue #99 write-verification gap: a cached read cannot tell "accepted" from "applied".
+async def test_integration_write_detects_unapplied_write(monkeypatch) -> None:
+    monkeypatch.setattr(EBUS, "WRITE_VERIFY_RETRY_DELAY", 0)
+    async with FakeEbusdServer("arotherm_find.txt", apply_writes=False) as fake:
+        s = EbusService(host=fake.host, port=fake.port)
+        await s.connect()
+        # ebusd accepts and caches the write without the controller applying it.
+        await s.send_command("write -c ctlv2 HwcHolidayStartPeriod 24.09.2026")
+        cached = await s.read_register("ctlv2", "HwcHolidayStartPeriod")
+        assert cached == "24.09.2026"
+        # The forced bus read bypasses the cache and returns the device value.
+        bus_value = await s.read_register("ctlv2", "HwcHolidayStartPeriod", force=True)
+        assert bus_value == "01.01.2015"
+        # A strict write must therefore fail verification.
+        result = await s.write_register("ctlv2", "HwcHolidayStartPeriod", "25.09.2026")
+        assert not result.success
+        assert "Write verification mismatch" in result.error_message
         await s.disconnect()
 
 

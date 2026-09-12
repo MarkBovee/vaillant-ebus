@@ -171,12 +171,21 @@ class FakeEbusdServer:
         fixture: str | list[str] = "arotherm_find.txt",
         host: str = "127.0.0.1",
         port: int = 0,
+        apply_writes: bool = True,
     ) -> None:
         self._host = host
         self._port = port
         self._find_lines = fixture if isinstance(fixture, list) else load_find_lines(fixture)
         self._server: asyncio.AbstractServer | None = None
+        # ebusd keeps a cache separate from the device. A write always updates
+        # the cache (as real ebusd does via storeLastData); the device value
+        # only changes when the controller applies the write. ``read -f``
+        # bypasses the cache and returns the device value, ``read`` returns the
+        # cache. Set apply_writes=False to simulate a controller that accepts
+        # but does not apply a write.
+        self.apply_writes = apply_writes
         self._registers: dict[tuple[str, str], str] = {}
+        self._device_values: dict[tuple[str, str], str] = {}
         self._build_register_db()
 
     def _build_register_db(self) -> None:
@@ -191,6 +200,7 @@ class FakeEbusdServer:
             last_real = _last_real_value(vals)
             if last_real is not None:
                 self._registers[key] = last_real
+        self._device_values = dict(self._registers)
 
     @property
     def host(self) -> str:
@@ -298,15 +308,19 @@ class FakeEbusdServer:
         return "version: ebusd 26.1.p20260503 (fake)"
 
     def _handle_read(self, parts: list[str]) -> str:
-        """Handle ``read [-c circuit] name [field]``."""
+        """Handle ``read [-f] [-c circuit] name [field]``."""
         rest = parts[1:] if len(parts) > 1 else []
         circuit = ""
         name = ""
         field: str | None = None
+        force = False
 
         idx = 0
         while idx < len(rest):
-            if rest[idx] == "-c" and idx + 1 < len(rest):
+            if rest[idx] == "-f":
+                force = True
+                idx += 1
+            elif rest[idx] == "-c" and idx + 1 < len(rest):
                 circuit = rest[idx + 1]
                 idx += 2
             elif field is None and name and not circuit:
@@ -329,13 +343,14 @@ class FakeEbusdServer:
             return "ERR: missing circuit or name"
 
         key = (circuit, name)
-        val = self._registers.get(key)
+        val = (self._device_values if force else self._registers).get(key)
         if val is None:
             return ""
-
-        if field:
-            return self._extract_field(val, circuit, name, field)
-        return val
+        if force:
+            # A bus read updates ebusd's cache (storeLastData), so the next
+            # non-forced read returns the device value instead of a stale write.
+            self._registers[key] = val
+        return self._extract_field(val, circuit, name, field) if field else val
 
     @staticmethod
     def _extract_field(raw_val: str, circuit: str, name: str, field: str) -> str:
@@ -381,7 +396,10 @@ class FakeEbusdServer:
         if not value:
             return "ERR: missing value"
 
-        self._registers[(circuit, name)] = value
+        key = (circuit, name)
+        self._registers[key] = value
+        if self.apply_writes:
+            self._device_values[key] = value
         return "done"
 
     def _handle_find(self, parts: list[str]) -> str:

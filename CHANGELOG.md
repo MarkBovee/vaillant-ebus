@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.8.3-rc1 - 2026-09-12
+
+### Fixed
+
+- **Write verification bypasses the ebusd cache.** ebusd answers `read` from its
+  cache and stores the written value in that cache during the write itself
+  (`storeLastData`), so a cached read-back always "verified" a write the
+  controller may never have applied. Write verification now re-reads the
+  register from the bus (`read -f`) and retries once after a short delay, so a
+  strict write is only reported as successful when the controller actually
+  reports the new value. A write-only register that has no read-back, or a
+  register whose read-back is still lagging, no longer fails when the caller
+  opted out of strict verification. This is the write path behind the
+  holiday/away dates in issue #99; a controller that accepts but does not apply
+  a write is now surfaced instead of leaving Home Assistant on an optimistic
+  value that later reverts.
+
+### Added
+
+- **Datetime write-contract tests.** The hand-built holiday datetime entities now
+  have regression tests pinning the resolved controller circuit, the register,
+  and the zero-padded `DD.MM.YYYY` serialization.
+- **Cache-vs-device verification tests.** The fake ebusd now models the
+  cache/device boundary, including a controller that accepts but does not apply
+  a write, so the verification contract is covered instead of only the Python
+  call chain.
+
+### Validation
+
+- Full test suite passing, including the new datetime and write-verification
+  regressions.
+- Ruff, scoped format, strict mypy, YAML, compileall, version consistency, and
+  whitespace checks passing.
+
 ## 1.8.2 - 2026-09-12
 
 ### Fixed
