@@ -70,6 +70,11 @@ To clean manually:
 - Verify `--accesslevel=*` is set in ebusd commandline_options
 - Some registers are read-only by hardware design (eBUS spec limitation)
 - The integration returns a clear error message with the ebusd response
+- The integration verifies writes against the bus, not ebusd's cache. To check
+  whether the controller actually applied a value, use `ebusctl read -f -c
+  <circuit> <name>` — the `-f` forces a real bus read. A plain `read` can
+  return the just-written value from ebusd's cache and hide that the controller
+  reverted it (see `docs/developer.md` "ebusd read-back semantics").
 
 ## HMUX0 heat pump variants (aroTHERM VWL 55/8.2 etc.)
 
