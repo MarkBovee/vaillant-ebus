@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.8.2 - 2026-09-12
+
+### Fixed
+
+- **Phantom boiler device on heat-pump buses.** A stale runtime-only controller
+  alias — for example a `bai SetModeOverride` write-only define left on ebusd by
+  an earlier session — is no longer discovered as a physical controller. A
+  scan-less circuit that carries only the integration's own runtime control
+  probes is dropped, so it cannot surface as a phantom `bai` (or similar)
+  device. Real controllers are scan-bound or own native registers and are
+  unaffected.
+
+### Changed
+
+- **Hardware-aware DHW device name.** The logical DHW device is named
+  `Domestic Hot Water` when a heat pump is discovered, and keeps the historical
+  `Boiler (DHW)` name on boiler-only or unresolved buses. Entity names,
+  entity unique IDs, and entity IDs of existing installs are unchanged; only
+  the device display name becomes hardware-aware.
+
+### Validation
+
+- Full test suite passing, including regressions for the runtime-only
+  controller alias and the hardware-aware DHW device name.
+- Ruff, scoped format, strict mypy, YAML, compileall, version consistency, and
+  whitespace checks passing.
+
 ## 1.8.1 - 2026-09-12
 
 ### Fixed

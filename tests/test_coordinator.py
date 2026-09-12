@@ -2544,3 +2544,24 @@ async def test_zone_circuits_keeps_real_idle_zone() -> None:
             placeholder_registers={"ctlv2.Z2RoomTemp", "ctlv2.Z2DayTemp", "ctlv2.Z2OpMode"},
         )
         assert c.zone_circuits() == {"z1": "ctlv2", "z2": "ctlv2"}
+
+
+# Intent: the logical DHW device is named after the hardware that owns it.
+# Why: a heat pump has a hot-water cylinder, not a boiler; a boiler-only bus
+# keeps the historical name so existing installs stay stable.
+async def test_dhw_device_name_is_hardware_aware() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            ["scan.08 = Vaillant;HMU00;0522;5103", "hmu FlowTemp = 30", "ctlv2 HwcOpMode = auto"]
+        )
+        assert c._dhw_device_name() == "Domestic Hot Water"
+
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            ["scan.08 = Vaillant;BAI00;0107;7503", "bai FlowTemp = 30", "ctlv2 HwcOpMode = auto"]
+        )
+        assert c._dhw_device_name() == "Boiler (DHW)"
+
+        c._graph = None
+        assert c._dhw_device_name() == "Boiler (DHW)"
