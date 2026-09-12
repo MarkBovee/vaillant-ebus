@@ -439,15 +439,42 @@ async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0 = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0) == 20
+        assert len(hmux0) == 22
         assert all(",hmu," not in definition for definition in hmux0)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0)
         assert any(",hmux0,CopHwcMonth," in definition for definition in hmux0)
         assert any(",hmux0,HcElecConsDay," in definition for definition in hmux0)
         assert any(",hmux0,HwcElecConsTotal," in definition for definition in hmux0)
-        assert not any(",Status00," in definition for definition in definitions)
-        assert not any(",RunDataElPowerConsumption," in definition for definition in definitions)
+        # Confirmed 0303/0504 telemetry (upstream #249 / #522).
+        assert any(",hmux0,Status00," in definition for definition in definitions)
+        assert any(",hmux0,RunDataElPowerConsumption," in definition for definition in definitions)
+
+
+# Intent: the bespoke HMUX0 Status00 definition uses complete 6-column fields.
+# Why: a mangled Status00 field list is silently accepted by ebusd but decodes
+# the wrong bytes, which is worse than the register being absent. The previous
+# definition had short field rows that shifted every later field.
+async def test_hmux0_status00_definition_has_complete_fields() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            ["scan.08 = Vaillant;HMUX0;0303;0504", "ctlv3 HwcOpMode = auto"]
+        )
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        definition = next(item for item in definitions if ",B511,00," in item)
+        tokens = definition.split(",B511,00,", 1)[1].split(",")
+        assert len(tokens) == 8 * 6
+        assert tokens[0] == "supplytemp"
+        assert tokens[6] == "waterpressure"
+        assert tokens[42] == "compressorpower"
+        assert tokens[47] == "HMUX0 Status00"
 
 
 # Intent: keep legacy runtime definition templates on their discovered owner.
@@ -755,6 +782,55 @@ async def test_status07_definition_is_gated_to_hm5103() -> None:
         assert "display_b5_noisereduction" in status07
 
 
+# Intent: the BAI boiler switch definitions are emitted on the B509 write message.
+# Why: issue #111 - HeatingSwitch/HwcSwitch are read-only in the generic BAI
+# config, so the integration must redefine them writable for control to work.
+async def test_bai_switch_definitions_use_b509_write_message() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(["bai FlowTemp = 28.69"])
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        heating = next(item for item in definitions if ",bai,HeatingSwitch," in item)
+        hwc = next(item for item in definitions if ",bai,HwcSwitch," in item)
+        assert ",08,B509,f203," in heating
+        assert ",08,B509,f303," in hwc
+        assert heating.endswith("value,,onoff,,,")
+        assert hwc.endswith("value,,onoff,,,")
+        # The switch definitions must not leak onto a heat-pump alias.
+        assert all(",hmu," not in item for item in definitions)
+
+
+# Intent: the VWZIO/VWZ Status01 definition is emitted passively on address 0x76.
+# Why: upstream PR #598 - the Hydraulikstation flow/storage telemetry must be
+# observed without adding active bus traffic.
+async def test_vwz_status01_definition_is_passive_on_0x76() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            ["scan.76 = Vaillant;VWZ00;0522;5103", "vwz EnableTestHwcTemp = no data stored"]
+        )
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        status01 = next(item for item in definitions if ",vwz,Status01," in item)
+        assert status01.startswith("u,vwz,Status01,")
+        assert ",31,76,B511,01," in status01
+        tokens = status01.split(",B511,01,", 1)[1].split(",")
+        assert len(tokens) == 36
+        assert tokens[0] == "temp"
+        assert tokens[30] == "pumpstate"
+
+
 # Intent: unproven HMUX0-specific definitions stay disabled for a plain HMU graph.
 # Why: avoids enabling unverified registers (Status00, RunDataElPowerConsumption) on uncaptured hardware.
 async def test_hmux0_unproven_definitions_are_not_enabled() -> None:
@@ -820,11 +896,15 @@ async def test_hmux0_runtime_definitions_use_issue99_fixture_metadata() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_defs = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_defs) == 20
+        assert len(hmux0_defs) == 22
         assert all(",hmu," not in definition for definition in hmux0_defs)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0_defs)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0_defs)
         assert any(",hmux0,CopHwcMonth," in definition for definition in hmux0_defs)
+        # Upstream #249 / #522: the 0303/0504 variant keeps the compressor
+        # status block and the electrical-power decode.
+        assert any(",hmux0,Status00," in definition for definition in hmux0_defs)
+        assert any(",hmux0,RunDataElPowerConsumption," in definition for definition in hmux0_defs)
 
 
 # A future HMUX0 firmware (pro7 capture: SW0406/HW0504) must not receive the
@@ -878,7 +958,7 @@ async def test_hmux0_scan_bootstrap_defines_only_confirmed_registers() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_definitions = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_definitions) == 20
+        assert len(hmux0_definitions) == 22
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 
@@ -917,7 +997,7 @@ async def test_hmux0_scan_bootstrap_rediscovers_defined_registers() -> None:
 
         assert discovery.discover.await_count == 2
         definitions = [call.args[0] for call in mock_ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 20
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 22
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
         assert c.heat_pump_circuit == "hmux0"
         assert c.heating_circuit == "ctlv3"
@@ -944,7 +1024,7 @@ async def test_hmux0_scan_bootstrap_ignores_generic_hmu_alias_definitions() -> N
         await c._define_custom_registers()
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 20
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 22
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 
@@ -1125,7 +1205,7 @@ async def test_transport_reconnect_invalidates_runtime_definitions() -> None:
         assert c._last_energy_poll == datetime.min
         c.ebus.define_register.reset_mock()
         await c._define_custom_registers()
-        assert c.ebus.define_register.await_count == 28
+        assert c.ebus.define_register.await_count == 32
 
 
 # Intent: applying a discovery graph logs the generated entity/platform breakdown.
@@ -1212,7 +1292,7 @@ async def test_define_custom_registers_delegates_to_ebus() -> None:
         c.ebus = mock_ebus
         await c._define_custom_registers()
 
-        assert mock_ebus.define_register.call_count == 28
+        assert mock_ebus.define_register.call_count == 32
         calls = [c.args[0] for c in mock_ebus.define_register.call_args_list]
         assert any("z1RoomHumidity" in d for d in calls)
         assert any("ManualCoolingStartDate" in d and d.startswith("r5") for d in calls)
@@ -1387,6 +1467,28 @@ async def test_async_write_register_rejects_missing_discovered_circuit() -> None
 
         assert await c.async_write_register("hmu", "SetMode", "auto") is False
         mock_ebus.write_register.assert_not_awaited()
+
+
+# Issue #109: on a BAI + CTLV0 boiler bus the BAI burner interface also owns a
+# DHW setpoint, which previously made controller resolution AMBIGUOUS and let
+# the bare runtime ctlv2 probe alias become the write target.
+# Intent: a logical ctlv2 write on the real ecoTEC graph dispatches to ctlv0.
+# Why: issue #109 - HA writes must land on the discovered controller, not ctlv2.
+async def test_ecotec_boiler_write_targets_discovered_ctl0_not_bare_probe() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/ecotec_vrt380_15700_discovery.yaml")
+        )
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.write_register = AsyncMock(return_value=WriteResult(success=True, verified_value=None))
+        c.ebus = mock_ebus
+        c.async_request_refresh = AsyncMock()
+
+        assert c.heating_circuit == "ctlv0"
+        assert await c.async_write_register("ctlv2", "Z1DayTemp", "21") is True
+        assert mock_ebus.write_register.await_args.args[0] == "ctlv0"
 
 
 # Intent: an unresolved empty graph makes heating_circuit and heat_pump_circuit return None.

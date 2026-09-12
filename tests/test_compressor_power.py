@@ -17,6 +17,7 @@ EbusdRegister = MODELS.EbusdRegister
 compressor_is_idle = MODELS.compressor_is_idle
 zero_idle_registers = MODELS.zero_idle_registers
 COMPRESSOR_ZERO_REGISTER_NAMES = MODELS.COMPRESSOR_ZERO_REGISTER_NAMES
+derive_operating_state = MODELS.derive_operating_state
 
 
 # Build a register dict entry with given key and string value
@@ -165,3 +166,51 @@ def test_default_call_ignores_other_circuits() -> None:
     )
     zero_idle_registers(regs)
     assert regs["um.CurrentConsumedPower"].value["value"] == "3.2"
+
+
+# Intent: derive_operating_state maps RunDataStatuscode strings to the five
+# Energy Manager states, with defrost and shutdown handled before heat/cool.
+# Why: issue #102 - the derived state must be correct for every documented
+# compressor status without inventing a state machine.
+def test_derive_operating_state_from_run_data_statuscode() -> None:
+    cases = {
+        "hwc_compressor_active": "DHW",
+        "heat_compressor_active": "Heating",
+        "heat_prerun": "Heating",
+        "heat_overrun": "Heating",
+        "cool_compressor_active": "Cooling",
+        "cool_compressor_active;ok": "Cooling",
+        "cool_prerun": "Cooling",
+        "defrost": "Defrost",
+        "standby": "Standby",
+        "heat_compressor_shutdown": "Standby",
+        "cool_compressor_shutdown": "Standby",
+    }
+    for raw, expected in cases.items():
+        values = {"hmu.RunDataStatuscode.value": raw}
+        assert derive_operating_state(values, "hmu") == expected, raw
+
+
+# Intent: derive_operating_state falls back to HMU Status07 heater bits.
+# Why: issue #102 - HW5103 can rely on Status07 when RunDataStatuscode is absent.
+def test_derive_operating_state_from_status07_bits() -> None:
+    assert derive_operating_state({"hmu.Status07.heatermain_b3_heating": "on"}, "hmu") == "Heating"
+    assert derive_operating_state({"hmu.Status07.heatermain_b4_cooling": "on"}, "hmu") == "Cooling"
+    assert derive_operating_state({"hmu.Status07.heatermain_b7_warmwater": "on"}, "hmu") == "DHW"
+
+
+# Intent: derive_operating_state maps HMUX0 Status00 compressor states.
+# Why: issue #102 - HMUX0 reports operating state through Status00, not Statuscode.
+def test_derive_operating_state_from_status00() -> None:
+    assert derive_operating_state({"hmu.Status00.compressorstate": "hot_water"}, "hmu") == "DHW"
+    assert derive_operating_state({"hmu.Status00.compressorstate": "heating_prerun"}, "hmu") == "Heating"
+    assert derive_operating_state({"hmu.Status00.compressorstate": "defrosting"}, "hmu") == "Defrost"
+    assert derive_operating_state({"hmu.Status00.compressorstate": "off"}, "hmu") == "Standby"
+
+
+# Intent: derive_operating_state is unknown when nothing reports a state.
+# Why: a missing status must not be coerced into Standby or another default.
+def test_derive_operating_state_unknown_without_data() -> None:
+    assert derive_operating_state({}, "hmu") is None
+    assert derive_operating_state({"hmu.RunDataStatuscode.value": "no data stored"}, "hmu") is None
+    assert derive_operating_state({"hmu.RunDataStatuscode.value": "standby"}, None) is None

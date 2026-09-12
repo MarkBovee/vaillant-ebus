@@ -11,6 +11,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .backend.entity_factory import EntityDescription
+from .backend.models import derive_operating_state
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
@@ -36,9 +37,48 @@ async def async_setup_entry(
         return entities
 
     async_add_entities(_build(coordinator.entities))
-    coordinator.register_entity_adder(
-        "sensor", lambda descriptions: async_add_entities(_build(descriptions))
-    )
+    coordinator.register_entity_adder("sensor", lambda descriptions: async_add_entities(_build(descriptions)))
+
+    # The Energy Manager State is derived, not a register read. Create it for a
+    # discovered heat pump only, so boiler-only buses never grow a phantom
+    # entity. It reports `unavailable` until a status field carries data.
+    heat_pump_circuit = coordinator.heat_pump_circuit
+    if heat_pump_circuit is not None:
+        async_add_entities([EbusdEnergyManagerState(coordinator, entry, heat_pump_circuit)])
+
+
+class EbusdEnergyManagerState(CoordinatorEntity[VaillantCoordinator], SensorEntity):
+    """Derived operating state: Heating / DHW / Cooling / Standby / Defrost."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Energy Manager State"
+    _attr_icon = "mdi:heat-pump-outline"
+
+    def __init__(
+        self,
+        coordinator: VaillantCoordinator,
+        entry: ConfigEntry,
+        heat_pump_circuit: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_energy_manager_state"
+        self._attr_device_info = coordinator.get_device_info(heat_pump_circuit)
+        self._fallback_circuit = heat_pump_circuit
+
+    def _state(self) -> str | None:
+        # Re-resolve the heat-pump circuit so late discovery or a circuit rename
+        # keeps the state sensor on the device that actually reports the status.
+        circuit = self.coordinator.heat_pump_circuit or self._fallback_circuit
+        data = (self.coordinator.data or {}).get("ebusd", {})
+        return derive_operating_state(data, circuit)
+
+    @property
+    def native_value(self) -> str | None:
+        return self._state()
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success and self._state() is not None
 
 
 class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreEntity):
@@ -87,7 +127,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
         val: float | str | None
         try:
             val = float(raw)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             if getattr(self, "_attr_native_unit_of_measurement", None):
                 val = None
             else:

@@ -174,7 +174,7 @@ class DiscoveryService:
         raw_registers: dict[str, str] = {}
         placeholder_registers: set[str] = set()
         scan_entries = [scan for line in find_lines if (scan := DiscoveryService._parse_scan(line)) is not None]
-        suppress_hmu_alias = _is_hmux0_0303_0504_without_hmu(scan_entries)
+        suppress_hmu_alias = _is_hmux0_0303_0504_without_hmu(scan_entries) or _is_boiler_without_heat_pump(scan_entries)
         regs_by_circuit: dict[str, list[str]] = {}
 
         for line in find_lines:
@@ -603,6 +603,18 @@ def _is_hmux0_0303_0504_without_hmu(scan_entries: Sequence[ScanEntry]) -> bool:
     if not hmux0 or any(entry.scan_sw != "0303" or entry.scan_hw != "0504" for entry in hmux0):
         return False
     return not any(_name_family(entry.scan_type) == "hmu" for entry in scan_entries)
+
+
+# A boiler bus (BAI burner interface) with no heat-pump scan can still report a
+# bare `hmu` circuit made only of runtime-defined b516 energy probes. That alias
+# must not be exposed as a real aroTHERM heat pump. Suppress it only when a BAI
+# scan is present and no heat-pump scan exists, so genuine HMU/HMUX buses and
+# scan-less legacy captures keep their heat-pump node.
+def _is_boiler_without_heat_pump(scan_entries: Sequence[ScanEntry]) -> bool:
+    """Identify a BAI boiler bus with no scanned heat pump."""
+    has_bai = any(_name_family(entry.scan_type) == "bai" for entry in scan_entries)
+    has_heat_pump = any(_name_family(entry.scan_type) in ("hmu", "hmux") for entry in scan_entries)
+    return has_bai and not has_heat_pump
 
 
 # Link discovered logical devices to their source circuit and heat-pump parents.

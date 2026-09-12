@@ -8,6 +8,31 @@ from tests.fake_ebusd import load_discovery_dump, load_find_lines
 from tests.test_entity_factory import DiscoveryService, EntityFactoryService
 
 
+# Intent: the derived Energy Manager State honours a real cooling capture.
+# Why: issue #102 - the state must be derived from the actual compressor status,
+# not assumed from the register presence.
+def test_cooling_capture_derives_cooling_operating_state() -> None:
+    from tests.test_compressor_power import derive_operating_state
+
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_plus_cooling_run_discovery.yaml"))
+    values = {f"{key}.value": value for key, value in graph.raw_registers.items()}
+
+    assert graph.raw_registers["hmu.RunDataStatuscode"] == "cool_compressor_active"
+    assert derive_operating_state(values, "hmu") == "Cooling"
+
+
+# Intent: the derived Energy Manager State honours a real DHW-active capture.
+# Why: issue #102 - DHW demand must map to the DHW state from live compressor data.
+def test_dhw_capture_derives_dhw_operating_state() -> None:
+    from tests.test_compressor_power import derive_operating_state
+
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_basv_boost_on_discovery.yaml"))
+    values = {f"{key}.value": value for key, value in graph.raw_registers.items()}
+
+    assert graph.raw_registers["hmu.RunDataStatuscode"] == "hwc_compressor_active"
+    assert derive_operating_state(values, "hmu") == "DHW"
+
+
 # Intent: the eloblock VE28 fixture exposes observed bai registers with metadata.
 # Why: community boiler captures must produce typed, correctly-labeled entities.
 def test_eloblock_ve28_exposes_observed_bai_registers() -> None:
@@ -27,6 +52,41 @@ def test_eloblock_ve28_exposes_observed_bai_registers() -> None:
     assert entities["bai.Gasvalve.value"].enabled_by_default is False
     assert entities["bai.FanSpeed.value"].enabled_by_default is False
     assert entities["bai.Flame.value"].enabled_by_default is False
+
+
+# Intent: VWZIO/VWZ Status01 is parsed into the six shared status fields.
+# Why: upstream PR #598 - the Hydraulikstation reuses the HMU Status01 layout,
+# so its flow/storage/outside/pump values must reach HA as typed sensors.
+def test_vwz_status01_fields_are_parsed() -> None:
+    graph = DiscoveryService.build_device_graph(["vwz Status01 = 23.0;22.5;15.98;-;38.0;off"])
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    for field, expected in (
+        ("temp", "23.0"),
+        ("temp_1", "22.5"),
+        ("temp_2", "15.98"),
+        ("temp_3", "-"),
+        ("temp_4", "38.0"),
+        ("pumpstate", "off"),
+    ):
+        key = f"vwz.Status01.{field}"
+        assert key in entities
+        assert entities[key].raw_value == expected
+
+    assert entities["vwz.Status01.temp"].meta.device_class == "temperature"
+
+
+# Intent: BAI HeatingSwitch/HwcSwitch become writable switch entities.
+# Why: issue #111 - the eloBLOCK VE 28 exposes these registers and they are the
+# reliable on/off control, unlike the absent SetModeOverride.
+def test_bai_heating_and_hwc_switches_are_switch_entities() -> None:
+    graph = DiscoveryService.build_device_graph(["bai HeatingSwitch = on", "bai HwcSwitch = off"])
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    assert entities["bai.HeatingSwitch.value"].meta.entity_type == "switch"
+    assert entities["bai.HwcSwitch.value"].meta.entity_type == "switch"
+    assert entities["bai.HeatingSwitch.value"].meta.friendly_name == "Heating Switch"
+    assert entities["bai.HeatingSwitch.value"].enabled_by_default is True
 
 
 # Intent: the latest issue #99 HMUX0 values keep entity metadata and raw values.
@@ -176,13 +236,57 @@ def test_ecotec_vrt380_captures_expose_bai_and_controller_graph(fixture: str) ->
     assert "bai.StorageTemp.value" in entities
 
 
+# Issue #109: the boiler bus exposes both a BAI burner interface and a CTLV0
+# controller. Both list a DHW setpoint register, which previously left the
+# controller AMBIGUOUS and let the bare runtime `ctlv2` probe alias become the
+# resolved heating circuit, so HA writes targeted a circuit that does not exist.
+# Intent: the real ctlv0 controller wins over bai and the bare ctlv2 alias.
+# Why: issue #109 - HA writes must target the discovered controller circuit.
+@pytest.mark.parametrize(
+    "fixture",
+    (
+        "community/ecotec_vrt380_15700_discovery.yaml",
+        "community/ecotec_vrt380_ctlv2_discovery.yaml",
+    ),
+)
+def test_ecotec_vrt380_resolves_real_controller_not_bare_probe(fixture: str) -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines(fixture))
+
+    result = graph.heating_controller_result()
+    assert result.status.name == "UNIQUE"
+    assert result.circuit == "ctlv0"
+    # The logical ctlv2 metadata alias must route to the discovered ctlv0.
+    assert graph.resolve_circuit_result("ctlv2").circuit == "ctlv0"
+
+
+# Issue #109: a boiler-only bus reports only runtime-defined b516 `hmu` energy
+# probes (created by the integration's generic define pass), which used to
+# surface as a phantom aroTHERM heat-pump device.
+# Intent: a BAI bus with no heat-pump scan exposes no hmu heat-pump node.
+# Why: issue #109 - no phantom heat-pump device on boiler-only hardware.
+def test_ecotec_vrt380_boiler_bus_has_no_phantom_heat_pump() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/ecotec_vrt380_15700_discovery.yaml"))
+
+    assert "hmu" not in graph.nodes
+    assert graph.heat_pump_result().status.name == "MISSING"
+    entities = EntityFactoryService().generate(graph)
+    assert not any(entity.device_circuit == "hmu" for entity in entities)
+
+
+# Intent: a real HMU00 heat pump scan keeps its hmu node and is not suppressed.
+# Why: the boiler-only suppression must not affect genuine heat-pump buses.
+def test_ecotec_heat_pump_bus_keeps_hmu_node() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_ecotec_discovery.yaml"))
+
+    assert graph.nodes["hmu"].device_type.name == "HEAT_PUMP"
+    assert graph.heat_pump_result().circuit == "hmu"
+
+
 # Intent: ecoTEC BAI flow and fuel registers expose Home Assistant metadata.
 # Why: these registers are present in the discovery graph even when the boiler
 # reports no data, so their metadata must remain covered independently of value availability.
 def test_ecotec_vrt380_bai_flow_and_fuel_metadata() -> None:
-    graph = DiscoveryService.build_device_graph(
-        load_find_lines("community/ecotec_vrt380_15700_discovery.yaml")
-    )
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/ecotec_vrt380_15700_discovery.yaml"))
     entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
 
     for register in (
