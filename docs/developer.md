@@ -156,6 +156,33 @@ await coordinator.async_write_registers([
 
 For a single write use `coordinator.async_write_register(circuit, name, value)`.
 
+### ebusd read-back semantics
+
+ebusd serves `read` from its cache when the cached value is newer than the
+default max age (300 s). During a `write`, ebusd stores the response into that
+same cache (`storeLastData`), so a plain `read -c <circuit> <name>` right after
+a write returns the just-written value even if the controller never applied it.
+Write verification therefore bypasses the cache:
+
+- `EbusService.read_register(..., force=True)` issues `read -f ...`, a real bus
+  read.
+- `write_register` re-reads from the bus after the write and, on a mismatch,
+  retries once after `WRITE_VERIFY_RETRY_DELAY` so a controller that applies
+  the value just after the bus ack is not reported as failing.
+- With `strict_verify=True` an unreadable or mismatching read-back fails the
+  write. With `strict_verify=False` (e.g. `HwcSFMode`, whose physical state
+  lags the accepted write) the write succeeds on the ebusd ack and a persistent
+  mismatch is only logged. A write-only register has no read message; the
+  verification read then reports `ERR: not found`, which is not a write failure.
+
+On a live bus the equivalent check that cannot be fooled by the cache is:
+
+```bash
+ebusctl read -f -c <circuit> <name>   # NOT read -c ...
+ebusctl write -c <circuit> <name> <value>
+ebusctl read -f -c <circuit> <name>   # immediately after
+```
+
 ## Testing against live ebusd
 
 ```bash

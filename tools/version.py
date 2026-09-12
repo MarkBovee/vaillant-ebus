@@ -7,11 +7,12 @@ The version lives in three places:
 - ``custom_components/vaillant_ebus/manifest.json`` (display: ``1.8.0-rc2``)
 - the top ``## <version>`` heading in ``CHANGELOG.md``
 
-Usage::
+``bump`` converts the input ``X.Y.Z-rcN`` form to the PEP 440 ``X.Y.ZrcN``
+for ``pyproject.toml`` and keeps the display form (hyphen) elsewhere::
 
     python tools/version.py check
     python tools/version.py bump 1.8.0
-    python tools/version.py bump 1.8.0-rc3
+    python tools/version.py bump 1.8.0-rc3  # pyproject gets 1.8.0rc3
 
 ``check`` exits non-zero when the three do not agree. It is enforced by
 ``tests/test_version_consistency.py`` so CI fails on drift. ``bump`` updates
@@ -31,10 +32,18 @@ PYPROJECT = ROOT / "pyproject.toml"
 MANIFEST = ROOT / "custom_components" / "vaillant_ebus" / "manifest.json"
 CHANGELOG = ROOT / "CHANGELOG.md"
 
+# Pre-release suffixes that must lose their hyphen to be valid PEP 440.
+_PRE_RELEASE = r"(rc|alpha|beta|a|b|post|dev)"
+
 
 def canonical(version: str) -> str:
     """Normalize ``1.8.0-rc2`` / ``1.8.0rc2`` / ``1.8.0`` for comparison."""
     return re.sub(r"[^0-9a-z]", "", version.strip().lower())
+
+
+def pyproject_version(version: str) -> str:
+    """PEP 440 form for pyproject: ``1.8.0-rc2`` → ``1.8.0rc2``."""
+    return re.sub(rf"-{_PRE_RELEASE}", r"\1", version, count=1, flags=re.IGNORECASE)
 
 
 def read_pyproject() -> str:
@@ -71,7 +80,7 @@ def bump(new: str) -> int:
     pyproject_text = PYPROJECT.read_text()
     pyproject_new = re.sub(
         r'(^version\s*=\s*")([^"]+)(")',
-        lambda m: f"{m.group(1)}{new}{m.group(3)}",
+        lambda m: f"{m.group(1)}{pyproject_version(new)}{m.group(3)}",
         pyproject_text,
         count=1,
         flags=re.MULTILINE,
@@ -89,10 +98,14 @@ def bump(new: str) -> int:
         count=1,
     )
     if manifest_new == manifest_text:
-        print('version not found in manifest.json', file=sys.stderr)
+        print("version not found in manifest.json", file=sys.stderr)
         return 1
     MANIFEST.write_text(manifest_new)
-    print(f"bumped to {new}; add the matching '## {new}' heading to CHANGELOG.md")
+    message = (
+        f"bumped to {new} (pyproject uses {pyproject_version(new)}); "
+        f"add the matching '## {new}' heading to CHANGELOG.md"
+    )
+    print(message)
     return check()
 
 
