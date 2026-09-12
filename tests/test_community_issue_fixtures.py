@@ -74,6 +74,10 @@ def test_vwz_status01_fields_are_parsed() -> None:
         assert entities[key].raw_value == expected
 
     assert entities["vwz.Status01.temp"].meta.device_class == "temperature"
+    # Outside and storage are enabled for the Hydraulikstation, unlike the
+    # shared HMU mapping where they are disabled (exposed elsewhere).
+    assert entities["vwz.Status01.temp_2"].enabled_by_default is True
+    assert entities["vwz.Status01.temp_4"].enabled_by_default is True
 
 
 # Intent: BAI HeatingSwitch/HwcSwitch become writable switch entities.

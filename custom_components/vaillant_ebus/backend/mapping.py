@@ -2078,6 +2078,37 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     ),
 }
 
+# VWZIO/VWZ Hydraulikstation Status01 (upstream PR #598) reuses the HMU layout.
+# Give it explicit metadata so the outside/storage fields are enabled here: the
+# shared HMU entries disable those because a heat pump exposes them elsewhere.
+for _vwz_circuit in ("vwz", "vwzio"):
+    REGISTER_MAP.update(
+        {
+            f"{_vwz_circuit}.Status01": RegisterMeta(
+                friendly_name="Status", icon="mdi:information", entity_category="diagnostic"
+            ),
+            f"{_vwz_circuit}.Status01.temp": RegisterMeta(
+                friendly_name="Flow Temperature", device_class="temperature", unit="°C"
+            ),
+            f"{_vwz_circuit}.Status01.temp_1": RegisterMeta(
+                friendly_name="Return Temperature", device_class="temperature", unit="°C"
+            ),
+            f"{_vwz_circuit}.Status01.temp_2": RegisterMeta(
+                friendly_name="Outside Temperature", device_class="temperature", unit="°C"
+            ),
+            f"{_vwz_circuit}.Status01.temp_3": RegisterMeta(
+                friendly_name="Hot Water Temperature", device_class="temperature", unit="°C"
+            ),
+            f"{_vwz_circuit}.Status01.temp_4": RegisterMeta(
+                friendly_name="Storage Temperature", device_class="temperature", unit="°C"
+            ),
+            f"{_vwz_circuit}.Status01.pumpstate": RegisterMeta(
+                friendly_name="Pump State", entity_type="binary_sensor", entity_category="diagnostic"
+            ),
+        }
+    )
+del _vwz_circuit
+
 
 # Encode the W/V/QQ date bytes of the b516 energy-statistics API (upstream
 # john30/ebusd-configuration issue #490). W is a month nibble that restarts at
