@@ -214,3 +214,33 @@ def test_derive_operating_state_unknown_without_data() -> None:
     assert derive_operating_state({}, "hmu") is None
     assert derive_operating_state({"hmu.RunDataStatuscode.value": "no data stored"}, "hmu") is None
     assert derive_operating_state({"hmu.RunDataStatuscode.value": "standby"}, None) is None
+
+
+# Intent: derive_operating_state reports Cooling from SetMode.releaseCooling,
+# the only cooling signal on units without Status00/Status07 (RunDataStatuscode
+# stays 0 while a cooling period is active).
+# Why: issue #102 - Energy Manager State must not stick to Standby during cooling.
+def test_derive_operating_state_uses_setmode_releasecooling() -> None:
+    cooling_setmode = "auto;19.0;-;-;1;1;1;0;0;1"
+    idle_setmode = "auto;19.0;-;-;1;1;1;0;0;0"
+    base = {"hmu.RunDataStatuscode.value": "0"}
+    assert derive_operating_state({**base, "hmu.SetMode.value": cooling_setmode}, "hmu") == "Cooling"
+    assert derive_operating_state({**base, "hmu.SetMode.value": idle_setmode}, "hmu") == "Standby"
+    assert derive_operating_state({"hmu.SetMode.value": cooling_setmode}, "hmu") == "Cooling"
+    assert derive_operating_state({"hmu.SetMode.value": idle_setmode}, "hmu") is None
+    # Explicit controller states always outrank the cooling request flag.
+    heat = {"hmu.RunDataStatuscode.value": "heat_compressor_active"}
+    assert derive_operating_state({**heat, "hmu.SetMode.value": cooling_setmode}, "hmu") == "Heating"
+    standby = {"hmu.RunDataStatuscode.value": "standby"}
+    assert derive_operating_state({**standby, "hmu.SetMode.value": cooling_setmode}, "hmu") == "Standby"
+    off = {"hmu.Status00.compressorstate": "off"}
+    assert derive_operating_state({**off, "hmu.SetMode.value": cooling_setmode}, "hmu") == "Standby"
+    # A cooling descriptor never overrides an explicit compressor-off.
+    assert (
+        derive_operating_state({"hmu.Status00.compressorstate": "off", "hmu.Status00.heatingstate": "cooling"}, "hmu")
+        == "Standby"
+    )
+    assert (
+        derive_operating_state({"hmu.RunDataStatuscode.value": "off", "hmu.SetMode.value": cooling_setmode}, "hmu")
+        == "Standby"
+    )
