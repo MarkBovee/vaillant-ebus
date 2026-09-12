@@ -6,6 +6,15 @@
 - The integration connects directly to the local ebusd TCP interface on port `8888`; it does not use MQTT or cloud services.
 - Registers and devices are discovered from ebusd at runtime. The project is intended as a drop-in replacement for `mypyllant-component`.
 
+## Agent Workflow & Skills
+
+- Load the matching skill with the `skill` tool before working; do not rely on AGENTS.md alone.
+  - `ebusd-expert` for register reverse-engineering, `define` strings, and ebusd TCP-level debugging.
+  - `home-assistant` for deploy, entity/device registry, HA API, and live HA verification.
+  - `intake`, `develop`, `agent-workflows`, `verification`, `code-review`, `debugging`, `improve`, `session-review` for the risk-based lifecycle.
+- This repository is release-sensitive. Follow the lifecycle in the global AGENTS.md "Skills & Workflow": `intake → plan → plan-check → execute → validate → review → audit → release-gate`, delegate independent research to subagents, and never self-declare release readiness.
+- For protocol research, prefer the upstream search and dump mining sections below over guessing from register names.
+
 ## Home Assistant Inspection
 
 - Use the connected HA-MCP server as the primary method for inspecting the live Home Assistant instance. Start with `ha_get_overview`, `ha_search`, `ha_get_integration`, `ha_get_device`, `ha_get_logs`, and `ha_get_system_health` as appropriate.
