@@ -202,6 +202,66 @@ def zero_idle_registers(registers: Mapping[str, EbusdRegister], hp_circuit: str 
             reg.has_data = True
 
 
+# Operating states exposed by the derived Energy Manager State sensor.
+OPERATING_STATE_HEATING = "Heating"
+OPERATING_STATE_DHW = "DHW"
+OPERATING_STATE_COOLING = "Cooling"
+OPERATING_STATE_STANDBY = "Standby"
+OPERATING_STATE_DEFROST = "Defrost"
+
+_ON_BITS = frozenset({"on", "1", "true", "yes"})
+
+
+def _value_is_on(value: str | None) -> bool:
+    return not is_no_data_value(value) and (value or "").strip().lower() in _ON_BITS
+
+
+def _clean(value: str | None) -> str:
+    """Normalize a status string, treating ebusd no-data sentinels as empty."""
+    return "" if is_no_data_value(value) else (value or "").strip().lower()
+
+
+# Derive one Energy Manager State from the protocol data the integration
+# already polls. This is a direct mapping of the compressor status and heater
+# bits the controller reports, not an invented state machine:
+#   - RunDataStatuscode (translated label or raw string): standby, defrost,
+#     hwc_compressor_active, heat_compressor_active/*_prerun/*_overrun,
+#     cool_compressor_active/*_prerun.
+#   - HMUX0/HMU Status00 compressorstate/defrost: off, heating*, hot_water,
+#     defrosting.
+#   - HMU00 HW5103 Status07 heatermain bits: heating/cooling/warmwater.
+# Returns None when no status field carries data, so the entity stays unknown
+# rather than guessing a state.
+def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | None) -> str | None:
+    if not hp_circuit:
+        return None
+    status = _clean(values.get(f"{hp_circuit}.RunDataStatuscode.value"))
+    compressor = _clean(values.get(f"{hp_circuit}.Status00.compressorstate"))
+    heating_state = _clean(values.get(f"{hp_circuit}.Status00.heatingstate"))
+    defrost_bit = values.get(f"{hp_circuit}.Status00.defrost")
+    heating_bit = values.get(f"{hp_circuit}.Status07.heatermain_b3_heating")
+    cooling_bit = values.get(f"{hp_circuit}.Status07.heatermain_b4_cooling")
+    warmwater_bit = values.get(f"{hp_circuit}.Status07.heatermain_b7_warmwater")
+
+    blob = " ".join(part for part in (status, compressor, heating_state) if part)
+    if not blob and not any(_value_is_on(bit) for bit in (heating_bit, cooling_bit, warmwater_bit, defrost_bit)):
+        return None
+
+    if "defrost" in blob or _value_is_on(defrost_bit):
+        return OPERATING_STATE_DEFROST
+    # A shutdown/standby status means no active demand; it never counts as
+    # heating/cooling activity even though the string contains those words.
+    if "shutdown" in blob or "standby" in blob or status in ("off", "0") or compressor in ("off", "0"):
+        return OPERATING_STATE_STANDBY
+    if "hwc" in blob or "hot_water" in blob or "dhw" in blob or _value_is_on(warmwater_bit):
+        return OPERATING_STATE_DHW
+    if "cool" in blob or _value_is_on(cooling_bit):
+        return OPERATING_STATE_COOLING
+    if "heat" in blob or _value_is_on(heating_bit):
+        return OPERATING_STATE_HEATING
+    return OPERATING_STATE_STANDBY
+
+
 CIRCUIT_NAMES: dict[str, str] = {
     "hmu": "Vaillant aroTHERM heat pump",
     "basv": "Vaillant BASV2 Heating Control",
@@ -327,6 +387,22 @@ class DeviceGraph:
             if node.circuit.casefold() in control_owners
             or any(register.rsplit(".", 1)[-1] in self._CONTROL_REGISTERS for register in node.registers)
         ]
+        # A BAI boiler interface also exposes DHW control registers
+        # (HwcTempDesired), but it is a burner, not the heating controller.
+        # When a real controller circuit (ctlv*/basv*/bass*) also owns control
+        # registers, it is authoritative; a bare runtime-probed ctlv2 alias must
+        # never outrank it. This is what makes ecoTEC/VRT380 (bai + ctlv0)
+        # resolve deterministically instead of staying AMBIGUOUS.
+        prefix_control = [
+            node for node in control_candidates if node.circuit.casefold().startswith(("ctlv", "basv", "bass"))
+        ]
+        if len(prefix_control) == 1:
+            node = prefix_control[0]
+            return ResolutionResult(
+                ResolutionStatus.UNIQUE, node.circuit, node, "control registers (controller prefix)"
+            )
+        if len(prefix_control) > 1:
+            return ResolutionResult(ResolutionStatus.AMBIGUOUS, reason="multiple controllers own control registers")
         if len(control_candidates) == 1:
             node = control_candidates[0]
             return ResolutionResult(ResolutionStatus.UNIQUE, node.circuit, node, "control registers")

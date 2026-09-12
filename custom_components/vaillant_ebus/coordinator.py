@@ -56,6 +56,14 @@ ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 ENERGY_POLL_INTERVAL = timedelta(minutes=5)
 
+# VWZIO/VWZ Status01 field layout (upstream PR #598); reuses the HMU layout.
+# Explicit types are required: the hcmode_inc template aliases (temp1/temp2/
+# pumpstate) are not resolvable in a runtime `define`.
+VWZ_STATUS01_FIELDS = (
+    "temp,,D1C,,,,temp_1,,D1C,,,,temp_2,,D2B,,,,temp_3,,D1C,,,,temp_4,,D1C,,,,"
+    "pumpstate,,UCH,0=off;1=on;2=overrun;4=hwc,,"
+)
+
 HMUX0_RUNTIME_REGISTERS = frozenset(
     {
         "RunDataReturnTemp",
@@ -628,6 +636,20 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             ",,,,hwcflowtempdesired,,UCH,,,,setmode1,,UCH,,,,disablehc,,BI0"
             ",,,,disablehwctapping,,BI1,,,,disablehwcload,,BI2,,,,setmode2,,UCH"
             ",,,,remoteControlHcPump,,BI0,,,,releaseBackup,,BI1,,,,releaseCooling,,BI2",
+            # eloBLOCK/BAI boiler control: the generic BAI configuration exposes
+            # HeatingSwitch/HwcSwitch read-only. Redefine them writable on B509
+            # (ID F203/F303) as the upstream product-specific includes do and as
+            # the community eloBLOCK guide uses. Only emitted when a BAI
+            # controller is discovered; absent hardware is filtered by resolution.
+            "wi,bai,HeatingSwitch,Heating Switch,,08,B509,f203,value,,onoff,,,",
+            "wi,bai,HwcSwitch,DHW Switch,,08,B509,f303,value,,onoff,,,",
+            # VWZIO/VWZ Hydraulikstation process telemetry (upstream PR #598).
+            # Status01 (b511 01, 9 bytes) reuses the HMU layout: flow, return,
+            # outside, DHW, storage, pump. Read actively like hmu.Status01 so it
+            # populates immediately; emitted for whichever of vwz/vwzio the bus
+            # exposes, and resolution drops the variant that is not discovered.
+            "r,vwz,Status01,Status01,31,76,B511,01," + VWZ_STATUS01_FIELDS,
+            "r,vwzio,Status01,Status01,31,76,B511,01," + VWZ_STATUS01_FIELDS,
             # B524 heating-circuit state registers (OP=0x02 GG=0x02, RR=0x20..0x25)
             # absent from the shipped CSVs (verified against the installed find
             # output and upstream 15.ctlv2.tsp). Layout documented in the
@@ -666,11 +688,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             # Unsupported variants return an empty response and remain filtered.
             "r,hmu,Status00,Status00,31,8,B511,00"
             ",supplytemp,,D2C,,°C,,waterpressure,,UCH,10,bar,,"
-            "compressormodulation,,UCH,,%,,compressorstate,,UCH,"
-            "0=off;1=heating_prerun;4=heating;5=heating_overrun;24=hot_water;"
-            "110=defrosting,,heatingstate,,UCH,8=off;9=heating,,"
-            "field6,,UCH,,,defrost,,UCH,0=inactive;32=active,,"
-            "compressorpower,,percent1,,%,,HMUX0 Status00",
+            "compressormodulation,,UCH,,%,,compressorstate,,UCH,0=off;1=heating_prerun;"
+            "4=heating;5=heating_overrun;24=hot_water;110=defrosting,,,"
+            "heatingstate,,UCH,8=off;9=heating,,,field6,,UCH,,,,"
+            "defrost,,UCH,0=inactive;32=active,,,compressorpower,,percent1,,%,HMUX0 Status00",
             # HMUX0 HW0504 community capture: upstream issue #522 identifies
             # B509/540200/5b0d as diagnostic electrical power in watts.
             # This is additive; absent hardware returns no data.
@@ -728,13 +749,16 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             and heat_pump.scan_sw == "0303"
             and heat_pump.scan_hw == "0504"
         )
-        # HMU layouts that are proven incompatible with this HMUX0 variant:
-        # the brine source-temperature probe, the generic compressor status
-        # block, and the electrical-power decode. The shared b516 energy
-        # statistics family is kept; the without-symlink capture shows it
-        # returning valid heating/DHW/cooling consumption on this hardware.
+        # HMU-only layouts on HMUX0: the brine source-temperature probe is
+        # always incompatible with the air/water HMUX0. The compressor status
+        # block and electrical-power decode are kept only on the confirmed
+        # 0303/0504 variant (upstream issue #249 / #522, community fixtures);
+        # other HMUX0 variants drop them. The shared b516 energy statistics
+        # family is kept for every HMUX0.
         if heat_pump and heat_pump.scan_type.upper() == "HMUX0":
-            hmu_only_layouts = {"SourceTempInput", "Status00", "RunDataElPowerConsumption"}
+            hmu_only_layouts = {"SourceTempInput"}
+            if not is_hmux0_0303_0504:
+                hmu_only_layouts |= {"Status00", "RunDataElPowerConsumption"}
             defines = [
                 definition
                 for definition in defines

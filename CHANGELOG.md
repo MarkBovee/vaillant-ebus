@@ -1,5 +1,66 @@
 # Changelog
 
+## 1.8.1 - 2026-09-12
+
+### Fixed
+
+- **Malformed HMUX0 `Status00` definition.** The field list contained short
+  rows that shifted every later field, so ebusd would have decoded the wrong
+  bytes. It is now a complete six-column definition and the field layout is
+  regression-tested.
+- **ecoTEC/VRT380 write path (#109).** On a bus that exposes both a BAI burner
+  interface and a CTLV0 controller, `bai.HwcTempDesired` made controller
+  resolution ambiguous. The bare runtime `ctlv2` probe alias was then treated
+  as the discovered heating controller, so logical `ctlv2` writes targeted a
+  circuit that does not exist and HA changes had no effect. Controller
+  resolution now prefers a unique `ctlv*`/`basv*`/`bass*` control-register
+  owner over the BAI burner interface, so writes resolve to the discovered
+  `ctlv0` controller instead of the probe alias.
+- **Phantom heat pump on boiler-only buses (#109).** A boiler bus with no
+  heat-pump scan can still report a bare `hmu` circuit made only of runtime
+  b516 energy probes. That alias is no longer classified as an aroTHERM heat
+  pump when a BAI scan is present and no heat-pump scan exists, so no phantom
+  heat-pump device is created. Genuine HMU/HMUX buses and scan-less legacy
+  captures are unaffected.
+
+### Added
+
+- **Energy Manager State sensor (#102).** A derived sensor exposes `Heating`,
+  `DHW`, `Cooling`, `Standby`, or `Defrost`. It is created for a discovered
+  heat pump and maps the compressor status the controller already reports
+  (`RunDataStatuscode`, `Status00`, `Status07` heater bits). It reports
+  unavailable until a status field carries data, so no state is invented.
+- **HMUX0 HW0504 compressor telemetry.** `Status00` and
+  `RunDataElPowerConsumption` are defined for the confirmed `0303/0504`
+  variant (upstream issues #249 / #522). A double filter had disabled these
+  definitions on every bus; the shared b516 energy family and the
+  0303/0504-gated yield/COP registers are unchanged, and `SourceTempInput`
+  stays off for every HMUX0.
+- **eloBLOCK/BAI boiler switches (#111).** `HeatingSwitch` and `HwcSwitch` are
+  exposed as switch entities and redefined writable on `B509` (ID `F203` /
+  `F303`) for a discovered BAI controller, matching the upstream
+  product-specific includes and the community eloBLOCK guide.
+- **VWZIO/VWZ Status01 (upstream PR #598).** The Hydraulikstation
+  flow/return/outside/storage/pump telemetry is read on address `0x76` and
+  exposed when a `vwz`/`vwzio` circuit is discovered, reusing the HMU Status01
+  field layout with concrete ebusd types.
+
+### Validation
+
+- 549 pytest tests passing, including fixture-backed regressions for the
+  ecoTEC/VRT380 controller resolution, phantom heat-pump suppression, the
+  derived operating state, the BAI switch/Status00 wire definitions, and the
+  VWZ Status01 field parsing.
+- Ruff, scoped format, strict mypy, YAML, compileall, version consistency, and
+  whitespace checks passing.
+- Live Home Assistant deployment tested.
+
+### Compatibility
+
+- Entity IDs, names, device identities, register names, runtime definitions,
+  dump schema, and service behavior remain unchanged except for the additive
+  entities above (Energy Manager State, BAI switches, VWZ Status01).
+
 ## 1.8.0 - 2026-09-11
 
 ### Changed

@@ -43,6 +43,10 @@ ELOBLOCK_GAS_REGISTERS: frozenset[str] = frozenset(
 # Source: ebusd vaillant CSV (08.hmu.csv) + community dumps.
 MULTI_FIELD_FIELDS: dict[str, list[str]] = {
     "hmu.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
+    # VWZIO/VWZ Hydraulikstation Status01 (upstream PR #598) reuses the HMU
+    # layout on address 0x76; the fields are parsed the same way.
+    "vwz.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
+    "vwzio.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
     "hmu.Status00": [
         "supplytemp",
         "waterpressure",
@@ -498,6 +502,20 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         device_class="energy",
         unit="kWh",
         state_class="total_increasing",
+    ),
+    # eloBLOCK/BAI boiler on/off control (issue #111). Exposed as switches; the
+    # integration redefines them writable on B509 for BAI hardware.
+    "bai.HeatingSwitch": RegisterMeta(
+        friendly_name="Heating Switch",
+        entity_type="switch",
+        writable=True,
+        icon="mdi:radiator",
+    ),
+    "bai.HwcSwitch": RegisterMeta(
+        friendly_name="DHW Switch",
+        entity_type="switch",
+        writable=True,
+        icon="mdi:water-boiler",
     ),
     # Runtime-defined b516 cooling-energy registers (issue #50). The bus
     # reports Wh; the unit stays Wh because ebusd returns the raw EXP value.
@@ -2059,6 +2077,37 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Display System Pressure", device_class="pressure", unit="bar"
     ),
 }
+
+# VWZIO/VWZ Hydraulikstation Status01 (upstream PR #598) reuses the HMU layout.
+# Give it explicit metadata so the outside/storage fields are enabled here: the
+# shared HMU entries disable those because a heat pump exposes them elsewhere.
+for _vwz_circuit in ("vwz", "vwzio"):
+    REGISTER_MAP.update(
+        {
+            f"{_vwz_circuit}.Status01": RegisterMeta(
+                friendly_name="Status", icon="mdi:information", entity_category="diagnostic"
+            ),
+            f"{_vwz_circuit}.Status01.temp": RegisterMeta(
+                friendly_name="Flow Temperature", device_class="temperature", unit="°C"
+            ),
+            f"{_vwz_circuit}.Status01.temp_1": RegisterMeta(
+                friendly_name="Return Temperature", device_class="temperature", unit="°C"
+            ),
+            f"{_vwz_circuit}.Status01.temp_2": RegisterMeta(
+                friendly_name="Outside Temperature", device_class="temperature", unit="°C"
+            ),
+            f"{_vwz_circuit}.Status01.temp_3": RegisterMeta(
+                friendly_name="Hot Water Temperature", device_class="temperature", unit="°C"
+            ),
+            f"{_vwz_circuit}.Status01.temp_4": RegisterMeta(
+                friendly_name="Storage Temperature", device_class="temperature", unit="°C"
+            ),
+            f"{_vwz_circuit}.Status01.pumpstate": RegisterMeta(
+                friendly_name="Pump State", entity_type="binary_sensor", entity_category="diagnostic"
+            ),
+        }
+    )
+del _vwz_circuit
 
 
 # Encode the W/V/QQ date bytes of the b516 energy-statistics API (upstream
