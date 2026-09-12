@@ -57,8 +57,11 @@ PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 ENERGY_POLL_INTERVAL = timedelta(minutes=5)
 
 # VWZIO/VWZ Status01 field layout (upstream PR #598); reuses the HMU layout.
+# Explicit types are required: the hcmode_inc template aliases (temp1/temp2/
+# pumpstate) are not resolvable in a runtime `define`.
 VWZ_STATUS01_FIELDS = (
-    "temp,,temp1,,,,temp_1,,temp1,,,,temp_2,,temp2,,,,temp_3,,temp1,,,,temp_4,,temp1,,,,pumpstate,,pumpstate,,,"
+    "temp,,D1C,,,,temp_1,,D1C,,,,temp_2,,D2B,,,,temp_3,,D1C,,,,temp_4,,D1C,,,,"
+    "pumpstate,,UCH,0=off;1=on;2=overrun;4=hwc,,"
 )
 
 HMUX0_RUNTIME_REGISTERS = frozenset(
@@ -641,12 +644,12 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             "wi,bai,HeatingSwitch,Heating Switch,,08,B509,f203,value,,onoff,,,",
             "wi,bai,HwcSwitch,DHW Switch,,08,B509,f303,value,,onoff,,,",
             # VWZIO/VWZ Hydraulikstation process telemetry (upstream PR #598).
-            # Status01 (b511 01, 9 bytes) is passively observed (*u) on address
-            # 0x76 and reuses the HMU layout: flow, return, outside, DHW,
-            # storage, pump. Emitted for whichever of vwz/vwzio the bus exposes;
-            # circuit resolution drops the variant that is not discovered.
-            "u,vwz,Status01,Status01,31,76,B511,01," + VWZ_STATUS01_FIELDS,
-            "u,vwzio,Status01,Status01,31,76,B511,01," + VWZ_STATUS01_FIELDS,
+            # Status01 (b511 01, 9 bytes) reuses the HMU layout: flow, return,
+            # outside, DHW, storage, pump. Read actively like hmu.Status01 so it
+            # populates immediately; emitted for whichever of vwz/vwzio the bus
+            # exposes, and resolution drops the variant that is not discovered.
+            "r,vwz,Status01,Status01,31,76,B511,01," + VWZ_STATUS01_FIELDS,
+            "r,vwzio,Status01,Status01,31,76,B511,01," + VWZ_STATUS01_FIELDS,
             # B524 heating-circuit state registers (OP=0x02 GG=0x02, RR=0x20..0x25)
             # absent from the shipped CSVs (verified against the installed find
             # output and upstream 15.ctlv2.tsp). Layout documented in the

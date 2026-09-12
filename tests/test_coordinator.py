@@ -806,10 +806,10 @@ async def test_bai_switch_definitions_use_b509_write_message() -> None:
         assert all(",hmu," not in item for item in definitions)
 
 
-# Intent: the VWZIO/VWZ Status01 definition is emitted passively on address 0x76.
-# Why: upstream PR #598 - the Hydraulikstation flow/storage telemetry must be
-# observed without adding active bus traffic.
-async def test_vwz_status01_definition_is_passive_on_0x76() -> None:
+# Intent: the VWZIO/VWZ Status01 definition targets address 0x76 with explicit types.
+# Why: upstream PR #598 - the hcmode_inc template aliases do not resolve in a
+# runtime define, so the Hydraulikstation telemetry needs concrete types.
+async def test_vwz_status01_definition_uses_explicit_types_on_0x76() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
         c.ebus = MagicMock(spec=EbusService)
@@ -823,12 +823,15 @@ async def test_vwz_status01_definition_is_passive_on_0x76() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         status01 = next(item for item in definitions if ",vwz,Status01," in item)
-        assert status01.startswith("u,vwz,Status01,")
+        assert status01.startswith("r,vwz,Status01,")
         assert ",31,76,B511,01," in status01
         tokens = status01.split(",B511,01,", 1)[1].split(",")
         assert len(tokens) == 36
         assert tokens[0] == "temp"
+        assert tokens[2] == "D1C"
+        assert tokens[14] == "D2B"
         assert tokens[30] == "pumpstate"
+        assert tokens[32] == "UCH"
 
 
 # Intent: unproven HMUX0-specific definitions stay disabled for a plain HMU graph.

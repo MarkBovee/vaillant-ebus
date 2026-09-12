@@ -41,9 +41,9 @@
   `F303`) for a discovered BAI controller, matching the upstream
   product-specific includes and the community eloBLOCK guide.
 - **VWZIO/VWZ Status01 (upstream PR #598).** The Hydraulikstation
-  flow/return/outside/storage/pump telemetry is observed passively on address
-  `0x76` and exposed when a `vwz`/`vwzio` circuit is discovered; no active bus
-  traffic is added.
+  flow/return/outside/storage/pump telemetry is read on address `0x76` and
+  exposed when a `vwz`/`vwzio` circuit is discovered, reusing the HMU Status01
+  field layout with concrete ebusd types.
 
 ### Validation
 
