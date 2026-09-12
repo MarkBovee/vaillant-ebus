@@ -472,13 +472,15 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "bai.HwcWaterflow": RegisterMeta(
         friendly_name="Hot Water Flow",
         unit="L/min",
-        device_class="volume_flow_rate" ,
+        device_class="volume_flow_rate",
+        state_class="measurement",
     ),
     "bai.PrimaryCircuitFlowrate": RegisterMeta(
         friendly_name="Primary Circuit Flow Rate",
         unit="L/min",
         device_class="volume_flow_rate",
-    ),    
+        state_class="measurement",
+    ),
     "bai.StatFuelSum": RegisterMeta(
         friendly_name="Fuel Energy",
         device_class="energy",
