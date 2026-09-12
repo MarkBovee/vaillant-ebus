@@ -72,6 +72,7 @@ rather than invented.
 | `arotherm_plus_cooling_run_discovery.yaml` | discovery dump | community (issue unknown) | yes (553 lines) | cooling run | `test_discovery_service` | GOLDEN |
 | `arotherm_plus_ctlv2_cooling_discovery.yaml` | discovery dump | community (issue unknown) | yes (614 lines) | ctlv2 cooling | `test_discovery_service` | GOLDEN |
 | `arotherm_plus_hwc_run_discovery.yaml` | discovery dump | community (issue unknown) | yes (553 lines) | DHW run | `test_discovery_service` | GOLDEN |
+| `arotherm_plus_issue102_cooling_discovery.yaml` | discovery dump | issue #102 | yes (713 lines, v4) | Energy Manager State cooling (releaseCooling=1, RunDataStatuscode=0, Status00/07 absent) | `test_community_issue_fixtures` | GOLDEN |
 | `arotherm_plus_prenergy_discovery.yaml` | discovery dump | community (issue unknown) | yes (553 lines) | PrEnergy registers | `test_discovery_service` | GOLDEN |
 | `arotherm_basv_boost_on_discovery.yaml` | discovery dump | community (issue unknown) | yes (582 lines) | boost behavior | `test_boost_fixture` | GOLDEN |
 | `arotherm_basv_boost_off_discovery.yaml` | discovery dump | community (issue unknown) | yes (582 lines) | boost behavior | `test_boost_fixture` | GOLDEN |

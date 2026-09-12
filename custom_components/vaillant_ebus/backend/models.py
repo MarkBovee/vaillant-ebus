@@ -221,6 +221,22 @@ def _clean(value: str | None) -> str:
     return "" if is_no_data_value(value) else (value or "").strip().lower()
 
 
+# Semicolon-separated field index of the releaseCooling bit in the hmu SetMode
+# value. Field order: hcmode, flowtempdesired, hwctempdesired,
+# hwcflowtempdesired, disablehc, disablehwctapping, disablehwcload,
+# remoteControlHcPump, releaseBackup, releaseCooling.
+SETMODE_RELEASE_COOLING_INDEX = 9
+
+
+def _setmode_release_cooling(values: Mapping[str, str | None], hp_circuit: str) -> bool:
+    """Return whether the heat pump requests cooling via SetMode.releaseCooling."""
+    raw = values.get(f"{hp_circuit}.SetMode.value")
+    if not raw:
+        return False
+    parts = str(raw).split(";")
+    return len(parts) > SETMODE_RELEASE_COOLING_INDEX and parts[SETMODE_RELEASE_COOLING_INDEX].strip() == "1"
+
+
 # Derive one Energy Manager State from the protocol data the integration
 # already polls. This is a direct mapping of the compressor status and heater
 # bits the controller reports, not an invented state machine:
@@ -230,6 +246,9 @@ def _clean(value: str | None) -> str:
 #   - HMUX0/HMU Status00 compressorstate/defrost: off, heating*, hot_water,
 #     defrosting.
 #   - HMU00 HW5103 Status07 heatermain bits: heating/cooling/warmwater.
+#   - SetMode.releaseCooling: units without Status00/Status07 (e.g. HMU00/CTLV3)
+#     keep RunDataStatuscode at 0 while a cooling period is active and expose
+#     only this request flag.
 # Returns None when no status field carries data, so the entity stays unknown
 # rather than guessing a state.
 def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | None) -> str | None:
@@ -242,16 +261,25 @@ def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | N
     heating_bit = values.get(f"{hp_circuit}.Status07.heatermain_b3_heating")
     cooling_bit = values.get(f"{hp_circuit}.Status07.heatermain_b4_cooling")
     warmwater_bit = values.get(f"{hp_circuit}.Status07.heatermain_b7_warmwater")
+    release_cooling = _setmode_release_cooling(values, hp_circuit)
 
     blob = " ".join(part for part in (status, compressor, heating_state) if part)
-    if not blob and not any(_value_is_on(bit) for bit in (heating_bit, cooling_bit, warmwater_bit, defrost_bit)):
+    if (
+        not blob
+        and not release_cooling
+        and not any(_value_is_on(bit) for bit in (heating_bit, cooling_bit, warmwater_bit, defrost_bit))
+    ):
         return None
 
     if "defrost" in blob or _value_is_on(defrost_bit):
         return OPERATING_STATE_DEFROST
-    # A shutdown/standby status means no active demand; it never counts as
-    # heating/cooling activity even though the string contains those words.
-    if "shutdown" in blob or "standby" in blob or status in ("off", "0") or compressor in ("off", "0"):
+    # A shutdown/standby status string means the controller reports no active
+    # demand; it always wins over any request flag.
+    if "shutdown" in blob or "standby" in blob:
+        return OPERATING_STATE_STANDBY
+    # An explicit Status00 compressor-off also reports idle regardless of any
+    # cooling descriptor or request flag.
+    if compressor in ("off", "0"):
         return OPERATING_STATE_STANDBY
     if "hwc" in blob or "hot_water" in blob or "dhw" in blob or _value_is_on(warmwater_bit):
         return OPERATING_STATE_DHW
@@ -259,6 +287,14 @@ def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | N
         return OPERATING_STATE_COOLING
     if "heat" in blob or _value_is_on(heating_bit):
         return OPERATING_STATE_HEATING
+    # Fallback for units without Status00/Status07 (e.g. HMU00/CTLV3): they keep
+    # RunDataStatuscode at 0 while a cooling period is active and only expose
+    # the SetMode releaseCooling request flag. Never use it to contradict an
+    # explicit Status00 compressor-off or a literal "off" status.
+    if release_cooling and compressor not in ("off", "0") and status != "off":
+        return OPERATING_STATE_COOLING
+    if status in ("off", "0") or compressor in ("off", "0"):
+        return OPERATING_STATE_STANDBY
     return OPERATING_STATE_STANDBY
 
 

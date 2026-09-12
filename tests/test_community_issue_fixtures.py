@@ -21,6 +21,24 @@ def test_cooling_capture_derives_cooling_operating_state() -> None:
     assert derive_operating_state(values, "hmu") == "Cooling"
 
 
+# Intent: issue #102 capture (HMU00/CTLV3) keeps RunDataStatuscode at 0 while a
+# cooling period is active; the Energy Manager State must derive Cooling from
+# the only available signal, SetMode.releaseCooling.
+# Why: on these units Status00/Status07 are absent, so without the request flag
+# the sensor would report Standby during active cooling.
+def test_issue102_cooling_capture_derives_cooling_state() -> None:
+    from tests.test_compressor_power import derive_operating_state
+
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/arotherm_plus_issue102_cooling_discovery.yaml")
+    )
+    values = {f"{key}.value": value for key, value in graph.raw_registers.items()}
+
+    assert graph.raw_registers["hmu.RunDataStatuscode"] == "0"
+    assert graph.raw_registers["hmu.SetMode"].split(";")[9] == "1"
+    assert derive_operating_state(values, "hmu") == "Cooling"
+
+
 # Intent: the derived Energy Manager State honours a real DHW-active capture.
 # Why: issue #102 - DHW demand must map to the DHW state from live compressor data.
 def test_dhw_capture_derives_dhw_operating_state() -> None:
