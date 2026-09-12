@@ -930,6 +930,20 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             _LOGGER.warning("Could not read register cache from %s; using empty cache", self._cache_path, exc_info=True)
             return {}
 
+    # Whether a circuit is present in the current discovery graph. Used to
+    # decide whether a Home Assistant device is still provided by the
+    # integration (and may not be deleted) or is a stale ghost.
+    def has_discovered_circuit(self, circuit: str) -> bool:
+        return self._graph is not None and circuit in self._graph.nodes
+
+    # Name the logical DHW device after the hardware that owns it: a heat pump
+    # has a hot-water cylinder, not a boiler. Boiler-only and unresolved buses
+    # keep the historical "Boiler (DHW)" name for stability.
+    def _dhw_device_name(self) -> str:
+        if self._graph is not None and self._graph.heat_pump_result().status == ResolutionStatus.UNIQUE:
+            return "Domestic Hot Water"
+        return CIRCUIT_NAMES.get("dhw", "Boiler (DHW)")
+
     def get_device_info(self, circuit: str) -> DeviceInfo:
         scan_type = ""
         scan_sw = ""
@@ -947,7 +961,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             parent = node.parent
 
         circuit_lower = circuit.lower()
-        if circuit_lower in CIRCUIT_NAMES:
+        if circuit_lower == "dhw":
+            name = self._dhw_device_name()
+        elif circuit_lower in CIRCUIT_NAMES:
             name = CIRCUIT_NAMES[circuit_lower]
         elif len(circuit_lower) == 5 and circuit_lower.startswith("ctlv") and circuit_lower[-1].isdigit():
             name = "Vaillant sensoCOMFORT Control"

@@ -303,6 +303,13 @@ class DiscoveryService:
                 scan_hw=metadata.scan_hw,
             )
 
+        # A scan-less controller carrying only the integration's own runtime
+        # control probes (e.g. a stale `bai SetModeOverride` write-only define
+        # left behind by an earlier ebusd session) is not a physical device.
+        # Real controllers are scan-bound or own native control/data registers,
+        # so this targeted rule cannot hide a genuine boiler or controller.
+        nodes = {circuit: node for circuit, node in nodes.items() if not _is_runtime_only_controller_alias(node)}
+
         _apply_relationships(nodes, sub_devices)
 
         return DeviceGraph(
@@ -615,6 +622,20 @@ def _is_boiler_without_heat_pump(scan_entries: Sequence[ScanEntry]) -> bool:
     has_bai = any(_name_family(entry.scan_type) == "bai" for entry in scan_entries)
     has_heat_pump = any(_name_family(entry.scan_type) in ("hmu", "hmux") for entry in scan_entries)
     return has_bai and not has_heat_pump
+
+
+# Runtime control-only registers the integration defines itself; a circuit that
+# only carries these and has no scan/data is an alias left by an old ebusd
+# session, not a device.
+_RUNTIME_ONLY_CONTROLLER_REGISTERS = frozenset({"SetModeOverride", "HeatingSwitch", "HwcSwitch"})
+
+
+def _is_runtime_only_controller_alias(node: DeviceNode) -> bool:
+    """Return whether a node is a scan-less runtime-only controller alias."""
+    if node.device_type != DeviceType.HEATING_CONTROLLER or node.scan_type or node.has_data:
+        return False
+    names = {register.rsplit(".", 1)[-1] for register in node.registers}
+    return bool(names) and names <= _RUNTIME_ONLY_CONTROLLER_REGISTERS
 
 
 # Link discovered logical devices to their source circuit and heat-pump parents.

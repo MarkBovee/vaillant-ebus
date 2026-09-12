@@ -1570,3 +1570,20 @@ async def test_discover_logs_per_device_and_type_summary(caplog) -> None:
     assert "Discovered device ctlv2" in messages
     assert "Device graph:" in messages
     assert graph.nodes["hmu"].device_type == DeviceType.HEAT_PUMP
+
+
+# Intent: a scan-less, data-less runtime-only controller alias is not a device.
+# Why: a stale `bai SetModeOverride` define left on ebusd by an old session must
+# not create a phantom boiler device.
+def test_runtime_only_controller_alias_is_not_a_device() -> None:
+    graph = DiscoveryService.build_device_graph(["bai SetModeOverride = no data stored"])
+
+    assert "bai" not in graph.nodes
+
+
+# Intent: a BAI with native registers is still discovered as a controller.
+# Why: the phantom-alias rule must never hide real boiler hardware.
+def test_bai_with_native_registers_is_kept() -> None:
+    graph = DiscoveryService.build_device_graph(["bai FlowTemp = 28.69", "bai StorageTemp = 56.12"])
+
+    assert graph.nodes["bai"].device_type.name == "HEATING_CONTROLLER"

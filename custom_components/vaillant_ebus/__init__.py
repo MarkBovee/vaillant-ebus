@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.device_registry import DeviceEntry
 
 from . import repairs  # noqa: F401 — registers issue translation keys
 from .const import DOMAIN, PLATFORMS
@@ -218,3 +219,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = hass.data[DOMAIN].pop(entry.entry_id)
         await coordinator.async_stop()
     return True
+
+
+# Allow Home Assistant to delete a device only when it is no longer provided by
+# the current discovery graph. This lets users clear stale/ghost devices (an old
+# runtime alias or a removed circuit) from the UI without touching storage,
+# while still refusing to delete a device that is currently discovered.
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    device_entry: DeviceEntry,
+) -> bool:
+    coordinator: VaillantCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coordinator is None:
+        return False
+    circuits = {identifier[1] for identifier in device_entry.identifiers if identifier[0] == DOMAIN}
+    return bool(circuits) and not any(coordinator.has_discovered_circuit(circuit) for circuit in circuits)
