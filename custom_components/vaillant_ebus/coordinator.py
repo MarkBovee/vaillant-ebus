@@ -930,6 +930,12 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             _LOGGER.warning("Could not read register cache from %s; using empty cache", self._cache_path, exc_info=True)
             return {}
 
+    # Whether a circuit is present in the current discovery graph. Used to
+    # decide whether a Home Assistant device is still provided by the
+    # integration (and may not be deleted) or is a stale ghost.
+    def has_discovered_circuit(self, circuit: str) -> bool:
+        return self._graph is not None and circuit in self._graph.nodes
+
     # Name the logical DHW device after the hardware that owns it: a heat pump
     # has a hot-water cylinder, not a boiler. Boiler-only and unresolved buses
     # keep the historical "Boiler (DHW)" name for stability.

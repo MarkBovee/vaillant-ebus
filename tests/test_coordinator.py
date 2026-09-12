@@ -2565,3 +2565,17 @@ async def test_dhw_device_name_is_hardware_aware() -> None:
 
         c._graph = None
         assert c._dhw_device_name() == "Boiler (DHW)"
+
+
+# Intent: has_discovered_circuit reflects the current graph and a cleared graph.
+# Why: HA device removal must only be allowed for circuits no longer discovered.
+async def test_has_discovered_circuit_matches_graph() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(["ctlv2 HwcOpMode = auto"])
+
+        assert c.has_discovered_circuit("ctlv2")
+        assert not c.has_discovered_circuit("bai")
+
+        c._graph = None
+        assert not c.has_discovered_circuit("ctlv2")

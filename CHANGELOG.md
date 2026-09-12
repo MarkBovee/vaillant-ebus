@@ -20,6 +20,13 @@
   entity unique IDs, and entity IDs of existing installs are unchanged; only
   the device display name becomes hardware-aware.
 
+### Added
+
+- **Stale device removal.** The integration now supports Home Assistant's
+  device-removal flow for devices that are no longer part of the current
+  discovery graph, so ghost devices (an old runtime alias or a removed
+  circuit) can be deleted from the UI without editing storage by hand.
+
 ### Validation
 
 - Full test suite passing, including regressions for the runtime-only
