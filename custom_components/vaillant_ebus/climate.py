@@ -324,8 +324,13 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         elif hvac_mode == HVACMode.HEAT:
             # The optimistic COOL flag can clear while manual cooling is still
             # armed (the device re-reports OpMode auto), so also clear the
-            # cooling window when the controller still reports cooling.
-            cooling_active = previous_hvac_mode == HVACMode.COOL or self._global_cooling_active()
+            # cooling window when the controller still reports cooling or the
+            # window is still set.
+            cooling_active = (
+                previous_hvac_mode == HVACMode.COOL
+                or self._global_cooling_active()
+                or self._manual_cooling_armed()
+            )
             if cooling_active:
                 ok = await self._cancel_manual_cooling()
                 if ok:
@@ -425,6 +430,18 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     def _global_cooling_active(self) -> bool:
         comp = (_value(self.coordinator, "RunDataStatuscode", self.coordinator.heat_pump_circuit) or "").lower()
         return comp in COOLING_STATES
+
+    # Whether the shared manual-cooling window is currently armed: the end date
+    # is set to a non-reset sentinel regardless of the live compressor state.
+    # After a restart the optimistic COOL flag is lost while OpMode reads "auto",
+    # so this closes the gap where an armed window would otherwise survive a
+    # switch to heating on cooling-capable hardware.
+    def _manual_cooling_armed(self) -> bool:
+        heating_circuit = self.coordinator.heating_circuit
+        if heating_circuit is None:
+            return False
+        end = _value(self.coordinator, "ManualCoolingEndDate", heating_circuit)
+        return bool(end) and end.strip() not in HOLIDAY_RESET_VALUES
 
     # Turn on by setting operation mode to auto
     async def async_turn_on(self) -> None:

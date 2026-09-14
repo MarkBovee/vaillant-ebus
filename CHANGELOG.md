@@ -8,10 +8,12 @@
   `Heat` HVAC mode always ran the manual-cooling cancel first, and on
   heating-only hardware the strict read-back verification of
   `ManualCoolingEndDate` failed, so the zone `OpMode` was never written to
-  `day`. The cancel now only runs when the previous mode was `COOL` or the
-  controller still reports an active cooling state. `Heat` therefore always
-  writes the day mode, while leaving an active manual-cooling window still
-  resets `ManualCoolingEndDate`.
+  `day`. The cancel now only runs when the previous mode was `COOL`, the
+  controller still reports an active cooling state, or the manual-cooling
+  window is still armed — so a restart, which loses the optimistic `COOL`
+  flag while `OpMode` reads `auto`, still disarms cooling on `Heat`.
+  Heating-only `Heat` therefore always writes the day mode, while leaving an
+  active manual-cooling window still resets `ManualCoolingEndDate`.
 - **Energy Manager State now reports `Cooling` (issue #102).** On units without
   `Status00`/`Status07` (HMU00/CTLV3-style), `RunDataStatuscode` stays at 0
   while a cooling period is active, so the derived sensor stuck on `Standby`.
@@ -28,8 +30,23 @@
   stops being read (for example a DHW storage-temp register after an ebusd
   circuit/resolution change) previously kept emitting its last value, so the
   entity stayed "available" at a frozen reading. A register that returns no
-  data on a poll is now cleared, and sensors report `unknown` instead of a
+  data on a poll is now cleared — including every named field of a multi-field
+  register such as `Status01` — and sensors report `unknown` instead of a
   cached value, so a dead read can never freeze an entity at a stale value.
+- **Duplicate "no data stored" find lines no longer wipe a readable value
+  (issue #99).** ebusd's `find -a` lists some writable registers twice (a
+  readable definition and a stale one), and the stale line used to clear the
+  good value every poll, flipping entities to `unknown`.
+- **Ghost devices from stale cache registers are pruned.** A cache-seeded
+  rebuild could resurrect registers the real bus no longer exposes (for
+  example a leftover `hmux0.ZZTest` test register), each with its own ghost
+  device that kept reporting the leftover value. The first real discovery now
+  prunes registers explained by neither the discovered graph nor an enabled
+  register-map entry, and a fallback read never revives a register absent from
+  the discovered graph from the cache.
+- **Discovery dumps carry the full ebusd banner.** `get_info` read only the
+  first line of ebusd's multi-line `info` response, so a dump's
+  `ebusd_info` showed a bare version and no per-address loaded CSV files.
 - **eloBLOCK VE 28 switch control (issue #111).** The BAI `HeatingSwitch` /
   `HwcSwitch` writable redefinitions used an `onoff` field type that is not in
   the runtime define's template scope, so element lookup failed with
@@ -47,6 +64,9 @@
 - **Version tool keeps pyproject PEP 440.** `tools/version.py bump 1.8.3-rcN`
   writes `1.8.3rcN` to `pyproject.toml` while `manifest.json` keeps the display
   form, so the RC release line no longer drifts from valid PEP 440.
+- **VWZ device named "Vaillant Hydraulic Station".** The VWZ/VWZIO hydraulic
+  station previously fell back to the raw scan code and showed as "Vaillant
+  VWZ00"; the default name now reads well on an English Home Assistant.
 - **Docs: ebusd read-back semantics.** `docs/developer.md` documents the
   read-cache vs forced-read (`read -f`) behavior behind write verification, and
   `docs/troubleshooting.md` points at the `-f` check.
@@ -72,7 +92,7 @@
 
 ### Validation
 
-- Full test suite passing (589 tests), including the write-verification,
+- Full test suite passing (596 tests), including the write-verification,
   issue #102 cooling + DHW, climate HEAT-mode, sensor frozen-value, and the
   new community-fixture regressions.
 - Ruff, scoped format, strict mypy, YAML, compileall, version consistency, and

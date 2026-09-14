@@ -1162,11 +1162,18 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 if value and (value.startswith("or:") or "read [-" in value):
                     value = None
                 if value is None:
-                    cache = await self._async_load_cache()
-                    cached = cache.get(f"{circuit}.{name}.value")
-                    cached = _usable_register_value(key, cached)
-                    if cached is not None and key not in (skip_cache or set()):
-                        value = cached
+                    # Never resurrect a stale value for a register the bus no
+                    # longer exposes: the issue #99 clearing reports "no data
+                    # stored" as unknown, so the cache may only back a value for
+                    # a register the discovery graph still configures (currently
+                    # idle) or before a graph exists (startup/cache seeding).
+                    graph = self._graph
+                    if graph is None or key in graph.raw_registers or key in graph.placeholder_registers:
+                        cache = await self._async_load_cache()
+                        cached = cache.get(f"{circuit}.{name}.value")
+                        cached = _usable_register_value(key, cached)
+                        if cached is not None and key not in (skip_cache or set()):
+                            value = cached
                 if value is not None:
                     read_with_data += 1
                     if was_new:
@@ -1249,7 +1256,12 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         # already carried a readable value for the key, the stale
                         # line must not wipe it.
                         if key not in batch_with_data and key in self.registers:
-                            self.registers[key].value["value"] = None
+                            # Clear every field, not just the synthetic `value`:
+                            # a multi-field register (e.g. hmu Status01) stores
+                            # its named fields separately, and leaving them set
+                            # would keep the per-field sensors frozen at their
+                            # last decode (issue #99/#102).
+                            self.registers[key].value = _register_values(key, None)
                         continue
                     val = _usable_register_value(key, val)
                     if val is None:

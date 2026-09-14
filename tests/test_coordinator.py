@@ -760,6 +760,29 @@ async def test_initial_discovery_prunes_stale_cache_registers() -> None:
         assert "hmu.SourceTempInput" in c.registers
 
 
+# Intent: a register the discovery graph does not configure is never revived
+# from the cache during a fallback read, even when the cache still holds a
+# stale value from an earlier session.
+# Why: issue #99 - the cache backfill used to resurrect any register whose read
+# returned None, freezing the sensor on a stale value although the register is
+# absent from the discovered graph.
+async def test_fallback_read_does_not_refill_absent_register_from_cache() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value=None)
+        c.ebus = mock_ebus
+        c._graph = _make_graph()
+        c._last_find_keys = set(c._graph.raw_registers)
+        c.registers["ctlv2.HwcStorageTemp"] = EbusdRegister(
+            circuit="ctlv2", name="HwcStorageTemp", fields=["value"], value={"value": None}, has_data=False
+        )
+        await c._async_save_cache({"ctlv2.HwcStorageTemp.value": "45.2"})
+        await c._fallback_read()
+        assert c.registers["ctlv2.HwcStorageTemp"].value["value"] is None
+
+
 # Intent: energy registers read from ebusd cache between polls and force a read only after the interval.
 # Why: protects runtime energy refresh (issue #50 family) without requiring an integration reload.
 async def test_runtime_energy_refreshes_without_reload(monkeypatch) -> None:
@@ -1273,6 +1296,28 @@ async def test_duplicate_no_data_line_does_not_clear_readable_value() -> None:
         )
         values = await c._async_update_data()
         assert values["ebusd"]["ctlv2.HwcOpMode.value"] == "day"
+
+
+# Intent: a no-data find line clears every field of a multi-field register, not
+# just the synthetic `value`, so the per-field sensors cannot freeze.
+# Why: issue #99/#102 - a whole-register "Status01 = no data stored" line left
+# the named fields (temp, pumpstate, ...) emitting their last decoded values.
+async def test_multi_field_no_data_clears_all_fields() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c.ebus.find_registers = AsyncMock(return_value=["hmu Status01 = 40;35;12;48;50;1"])
+        values = await c._async_update_data()
+        assert "hmu.Status01.temp" in values["ebusd"]
+        assert "hmu.Status01.pumpstate" in values["ebusd"]
+        c.ebus.find_registers = AsyncMock(return_value=["hmu Status01 = no data stored"])
+        values = await c._async_update_data()
+        assert "hmu.Status01.temp" not in values["ebusd"]
+        assert "hmu.Status01.pumpstate" not in values["ebusd"]
 
 
 # Intent: a transport reconnect clears runtime definitions and re-defines them on the next pass.
