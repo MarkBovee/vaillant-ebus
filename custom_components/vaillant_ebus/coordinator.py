@@ -1195,6 +1195,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 lines = await self.ebus.find_registers()
                 updated = 0
                 invalid_values: set[str] = set()
+                batch_with_data: set[str] = set()
                 for line in lines:
                     # Shared parser: sentinel/no-data values come back as None.
                     circuit, name, val = DiscoveryService._parse_register(line)
@@ -1202,22 +1203,25 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         continue
                     key = f"{circuit}.{name}"
                     if val is None:
-                        # A register that no longer carries data must not keep
-                        # emitting its last value, otherwise the entity freezes
-                        # at a stale reading (issue #99). Clearing the value
-                        # lets _async_values_from_registers drop it so the
-                        # sensor reports unknown instead of a stale value.
-                        if key in self.registers:
-                            self.registers[key].value["value"] = None
                         if key.lower() == "hmux0.rundatareturntemp":
                             raw = line.split("=", 1)[1].strip()
                             if not is_no_data_value(raw):
                                 invalid_values.add(key)
+                        # A register that no longer carries data must not keep
+                        # emitting its last value, otherwise the entity freezes
+                        # at a stale reading (issue #99). But ebusd's `find -a`
+                        # lists some registers twice — a readable definition and
+                        # a stale one reporting "no data stored". When this batch
+                        # already carried a readable value for the key, the stale
+                        # line must not wipe it.
+                        if key not in batch_with_data and key in self.registers:
+                            self.registers[key].value["value"] = None
                         continue
                     val = _usable_register_value(key, val)
                     if val is None:
                         continue
                     self._live_since_analysis.add(key)
+                    batch_with_data.add(key)
                     if key not in self.registers:
                         self.registers[key] = EbusdRegister(
                             circuit=circuit,

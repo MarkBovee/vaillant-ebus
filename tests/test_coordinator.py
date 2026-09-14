@@ -1219,6 +1219,31 @@ async def test_register_cleared_when_find_returns_no_data() -> None:
         assert "hmu.OutsideTemp.value" not in values["ebusd"]
 
 
+# Intent: a duplicate stale "no data stored" line in the same find batch must
+# not wipe a readable value for the same register, in either line order.
+# Why: ebusd's `find -a` lists some writable registers twice (a readable
+# definition and a stale one), which made the issue #99 clearing flip the DHW
+# entities to unknown on every poll.
+async def test_duplicate_no_data_line_does_not_clear_readable_value() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c.ebus.find_registers = AsyncMock(
+            return_value=["ctlv2 HwcOpMode = day", "ctlv2 HwcOpMode = no data stored"]
+        )
+        values = await c._async_update_data()
+        assert values["ebusd"]["ctlv2.HwcOpMode.value"] == "day"
+        c.ebus.find_registers = AsyncMock(
+            return_value=["ctlv2 HwcOpMode = no data stored", "ctlv2 HwcOpMode = day"]
+        )
+        values = await c._async_update_data()
+        assert values["ebusd"]["ctlv2.HwcOpMode.value"] == "day"
+
+
 # Intent: a transport reconnect clears runtime definitions and re-defines them on the next pass.
 # Why: prevents using definitions tied to a dropped ebusd session and resets the energy poll.
 async def test_transport_reconnect_invalidates_runtime_definitions() -> None:
