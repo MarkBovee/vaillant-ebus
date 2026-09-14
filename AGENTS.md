@@ -289,6 +289,7 @@ When adding registers, devices, or metadata derived from community data:
 
 ```bash
 .venv/bin/ruff check .
+.venv/bin/ruff format --check custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py custom_components/vaillant_ebus/backend/entity_factory.py custom_components/vaillant_ebus/backend/mapping.py custom_components/vaillant_ebus/coordinator.py custom_components/vaillant_ebus/dump_service.py
 .venv/bin/pytest -q
 python3 tools/version.py check
 python3 -m compileall -f custom_components/vaillant_ebus/
