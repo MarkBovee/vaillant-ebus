@@ -740,6 +740,26 @@ async def test_initial_discovery_pushes_new_entities_once(seed_cache, caplog) ->
         assert "0 new entities" in caplog.text
 
 
+# Intent: a register that only exists in the cache (stale from an earlier
+# session or CSV) is pruned from self.registers on the first real discovery,
+# while an enabled REGISTER_MAP register that find does not list is preserved.
+# Why: ghost devices such as a hmux0-owned ZZTest survived on cached leftovers
+# even though the real bus never exposes them.
+async def test_initial_discovery_prunes_stale_cache_registers() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.registers["hmux0.ZZTest"] = EbusdRegister(
+            circuit="hmux0", name="ZZTest", fields=["value"], value={"value": "-0.06"}, has_data=True
+        )
+        c.registers["hmu.SourceTempInput"] = EbusdRegister(
+            circuit="hmu", name="SourceTempInput", fields=["value"], value={"value": "3.2"}, has_data=True
+        )
+        graph = DISCOVERY.DiscoveryService.build_device_graph(["hmu OutsideTemp = 18.5"])
+        await c._apply_discovery_graph(graph, "initial")
+        assert "hmux0.ZZTest" not in c.registers
+        assert "hmu.SourceTempInput" in c.registers
+
+
 # Intent: energy registers read from ebusd cache between polls and force a read only after the interval.
 # Why: protects runtime energy refresh (issue #50 family) without requiring an integration reload.
 async def test_runtime_energy_refreshes_without_reload(monkeypatch) -> None:

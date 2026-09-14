@@ -112,6 +112,21 @@ def _usable_register_value(register_key: str, raw: str | None) -> str | None:
     return raw
 
 
+# Whether an enabled REGISTER_MAP entry accounts for a register, applying the
+# same ctlv2/hmu circuit aliasing as get_meta(). Registers covered by the map
+# may legitimately be present via runtime definitions or the fallback read even
+# when the current find output does not list them.
+def _register_has_enabled_map_entry(register_key: str) -> bool:
+    if "." not in register_key:
+        return False
+    circuit, name = register_key.split(".", 1)
+    for alt in (circuit, "ctlv2", "hmu"):
+        meta = REGISTER_MAP.get(f"{alt}.{name}")
+        if meta is not None and meta.enabled:
+            return True
+    return False
+
+
 # Merge a delayed graph without removing devices that initial discovery found.
 def _merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> DeviceGraph:
     nodes = dict(existing.nodes)
@@ -414,6 +429,25 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 self.registers[rk].has_data = True
 
         self._last_find_keys.update(graph.raw_registers)
+
+        # A cache-seeded rebuild at startup can carry registers the real bus no
+        # longer exposes (e.g. a stale test register from an old CSV or session).
+        # Registers explained by neither the discovered graph nor an enabled
+        # REGISTER_MAP entry are pruned so ghost devices cannot survive on
+        # cached leftovers. Only on initial discovery: delayed rediscovery blends
+        # into a growing graph and must not drop registers that were merely slow
+        # to appear.
+        if source == "initial":
+            live_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
+            stale = [rk for rk in self.registers if rk not in live_keys and not _register_has_enabled_map_entry(rk)]
+            for rk in stale:
+                del self.registers[rk]
+            if stale:
+                _LOGGER.info(
+                    "Pruned %d stale cache register(s) absent from the bus: %s",
+                    len(stale),
+                    ", ".join(sorted(stale)),
+                )
 
         try:
             await self._fallback_read()
