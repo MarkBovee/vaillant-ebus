@@ -204,7 +204,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self._last_placeholder_poll = datetime.min
         self._last_energy_poll = datetime.min
         self._runtime_definitions: dict[str, str] = {}
-        self._write_log: list[dict] = []            # recent write attempts (verification/telegram diag)
+        self._write_log: list[dict] = []  # recent write attempts (verification/telegram diag)
         self._cancel_set_mode_override: Callable[[], None] | None = None
         self._set_mode_override_payload: str | None = None
         self._analysis = AnalysisService()
