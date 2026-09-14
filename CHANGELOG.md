@@ -1,5 +1,77 @@
 # Changelog
 
+## 1.8.3 - 2026-09-14
+
+### Fixed
+
+- **Heating mode now applies on systems without cooling (#130).** Setting the
+  `Heat` HVAC mode always ran the manual-cooling cancel first, and on
+  heating-only hardware the strict read-back verification of
+  `ManualCoolingEndDate` failed, so the zone `OpMode` was never written to
+  `day`. The cancel now only runs when the previous mode was `COOL` or the
+  controller still reports an active cooling state. `Heat` therefore always
+  writes the day mode, while leaving an active manual-cooling window still
+  resets `ManualCoolingEndDate`.
+- **Energy Manager State now reports `Cooling` (issue #102).** On units without
+  `Status00`/`Status07` (HMU00/CTLV3-style), `RunDataStatuscode` stays at 0
+  while a cooling period is active, so the derived sensor stuck on `Standby`.
+  The `releaseCooling` request flag in `hmu SetMode` is now a fallback cooling
+  signal, used only when no defrost, shutdown/standby, compressor-off, DHW, or
+  heating signal is present.
+- **Energy Manager State now reports `DHW` from the 3-way valve position
+  (issue #102).** On the same units, `RunDataStatuscode` also stays at 0 while
+  DHW/boost demand is active and no `Status00`/`Status07` field exists, so the
+  sensor fell through to `Standby`. The `Status01.pumpstate == hwc` position
+  (the 3-way valve feeding the tank) is now a fallback DHW signal, used only
+  when no shutdown/standby or compressor-off state outranks it.
+- **Sensors no longer freeze on a stale value (issue #99).** A register that
+  stops being read (for example a DHW storage-temp register after an ebusd
+  circuit/resolution change) previously kept emitting its last value, so the
+  entity stayed "available" at a frozen reading. A register that returns no
+  data on a poll is now cleared, and sensors report `unknown` instead of a
+  cached value, so a dead read can never freeze an entity at a stale value.
+- **eloBLOCK VE 28 switch control (issue #111).** The BAI `HeatingSwitch` /
+  `HwcSwitch` writable redefinitions used an `onoff` field type that is not in
+  the runtime define's template scope, so element lookup failed with
+  `ERR: element not found` and every toggle did nothing. They now use an
+  explicit UCH onoff encoding and the upstream `0e` write-prefix byte
+  (`0eF203`/`0eF303`), matching the product-specific BAI includes.
+- **Write verification bypasses the ebusd cache (issue #99).** A cached
+  read-back always "verified" a write the controller may never have applied;
+  strict verification now re-reads from the bus (`read -f`) and retries once.
+  A write-only register without read-back no longer fails when the caller
+  opted out of strict verification.
+
+### Changed
+
+- **Version tool keeps pyproject PEP 440.** `tools/version.py bump 1.8.3-rcN`
+  writes `1.8.3rcN` to `pyproject.toml` while `manifest.json` keeps the display
+  form, so the RC release line no longer drifts from valid PEP 440.
+- **Docs: ebusd read-back semantics.** `docs/developer.md` documents the
+  read-cache vs forced-read (`read -f`) behavior behind write verification, and
+  `docs/troubleshooting.md` points at the `-f` check.
+
+### Added
+
+- **Climate HEAT-mode regression tests.** The non-cooling `Heat` write (no
+  cooling cancel), the `COOL → HEAT` cancel path, and the active-cooling-state
+  cancel are all pinned.
+- **New community fixtures.** The latest issue #99 (HMUX0/CTLV3, aroTHERM Pro
+  35), issue #111 (eloBLOCK VE 28), and issue #109 (ecoTEC/VRT380) discovery
+  dumps were added under `tests/fixtures/community/`, each with provenance
+  metadata, and drive the Energy-Manager, sensor, and switch regressions.
+- **Energy-Manager DHW and sensor regressions.** `Status01.pumpstate == hwc`
+  maps to `DHW` with an absent-signal path, and the sensor no-data/unknown
+  behavior is pinned so a dead register cannot freeze an entity.
+
+### Validation
+
+- Full test suite passing (584 tests), including the write-verification,
+  issue #102 cooling + DHW, climate HEAT-mode, sensor frozen-value, and the
+  new community-fixture regressions.
+- Ruff, scoped format, strict mypy, YAML, compileall, version consistency, and
+  whitespace checks passing.
+
 ## 1.8.3-rc2 - 2026-09-12
 
 ### Fixed

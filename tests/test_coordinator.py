@@ -798,10 +798,15 @@ async def test_bai_switch_definitions_use_b509_write_message() -> None:
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         heating = next(item for item in definitions if ",bai,HeatingSwitch," in item)
         hwc = next(item for item in definitions if ",bai,HwcSwitch," in item)
-        assert ",08,B509,f203," in heating
-        assert ",08,B509,f303," in hwc
-        assert heating.endswith("value,,onoff,,,")
-        assert hwc.endswith("value,,onoff,,,")
+        # The write message uses the upstream `0e` write-prefix byte (read is
+        # `0d`), so the wire write targets the boiler's writable register rather
+        # than the read-only CSV element.
+        assert ",08,B509,0ef203," in heating
+        assert ",08,B509,0ef303," in hwc
+        # `onoff` is not in the runtime define's template scope, so the field
+        # must use an explicit UCH onoff encoding or element lookup fails.
+        assert heating.endswith("value,,UCH,0=off;1=on,,")
+        assert hwc.endswith("value,,UCH,0=off;1=on,,")
         # The switch definitions must not leak onto a heat-pump alias.
         assert all(",hmu," not in item for item in definitions)
 
@@ -1189,6 +1194,29 @@ async def test_cached_energy_recovers_after_no_data_discovery(monkeypatch) -> No
         values = await c._async_update_data()
         assert values["ebusd"][f"{key}.value"] == "200"
         assert key in c._graph.raw_registers
+
+
+# Intent: a register that previously reported a value is cleared when a later
+# find returns no data, so the entity cannot freeze on a stale reading.
+# Why: issue #99 - without clearing, _async_values_from_registers keeps emitting
+# the old value and the sensor shows a frozen state even though ebusd no longer
+# exposes data for the register.
+async def test_register_cleared_when_find_returns_no_data() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c.ebus.read_register = AsyncMock(return_value=None)
+        # First poll: register carries a value.
+        c.ebus.find_registers = AsyncMock(return_value=["hmu OutsideTemp = 18.5"])
+        values = await c._async_update_data()
+        assert values["ebusd"]["hmu.OutsideTemp.value"] == "18.5"
+        # Second poll: ebusd no longer returns data for the register.
+        c.ebus.find_registers = AsyncMock(return_value=["hmu OutsideTemp = no data stored"])
+        values = await c._async_update_data()
+        assert "hmu.OutsideTemp.value" not in values["ebusd"]
 
 
 # Intent: a transport reconnect clears runtime definitions and re-defines them on the next pass.

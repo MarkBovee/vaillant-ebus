@@ -638,11 +638,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             ",,,,remoteControlHcPump,,BI0,,,,releaseBackup,,BI1,,,,releaseCooling,,BI2",
             # eloBLOCK/BAI boiler control: the generic BAI configuration exposes
             # HeatingSwitch/HwcSwitch read-only. Redefine them writable on B509
-            # (ID F203/F303) as the upstream product-specific includes do and as
-            # the community eloBLOCK guide uses. Only emitted when a BAI
-            # controller is discovered; absent hardware is filtered by resolution.
-            "wi,bai,HeatingSwitch,Heating Switch,,08,B509,f203,value,,onoff,,,",
-            "wi,bai,HwcSwitch,DHW Switch,,08,B509,f303,value,,onoff,,,",
+            # using the upstream product-specific convention: read id `0dF203` /
+            # `0dF303`, write prefix byte `0e` (`0eF203`/`0eF303`), and a UCH
+            # onoff field. The `onoff` template is not in the runtime define's
+            # template scope, so `value,,onoff` fails element lookup with
+            # `ERR: element not found`; UCH decodes identically. Only emitted
+            # when a BAI controller is discovered.
+            "wi,bai,HeatingSwitch,Heating Switch,,08,B509,0ef203,value,,UCH,0=off;1=on,,",
+            "wi,bai,HwcSwitch,DHW Switch,,08,B509,0ef303,value,,UCH,0=off;1=on,,",
             # VWZIO/VWZ Hydraulikstation process telemetry (upstream PR #598).
             # Status01 (b511 01, 9 bytes) reuses the HMU layout: flow, return,
             # outside, DHW, storage, pump. Read actively like hmu.Status01 so it
@@ -1197,12 +1200,17 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         continue
                     key = f"{circuit}.{name}"
                     if val is None:
+                        # A register that no longer carries data must not keep
+                        # emitting its last value, otherwise the entity freezes
+                        # at a stale reading (issue #99). Clearing the value
+                        # lets _async_values_from_registers drop it so the
+                        # sensor reports unknown instead of a stale value.
+                        if key in self.registers:
+                            self.registers[key].value["value"] = None
                         if key.lower() == "hmux0.rundatareturntemp":
                             raw = line.split("=", 1)[1].strip()
                             if not is_no_data_value(raw):
                                 invalid_values.add(key)
-                            if key in self.registers:
-                                self.registers[key].value["value"] = None
                         continue
                     val = _usable_register_value(key, val)
                     if val is None:

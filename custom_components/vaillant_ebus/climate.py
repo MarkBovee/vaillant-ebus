@@ -322,7 +322,11 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if hvac_mode == HVACMode.COOL:
             ok = await self._start_manual_cooling()
         elif hvac_mode == HVACMode.HEAT:
-            if previous_hvac_mode == HVACMode.COOL:
+            # The optimistic COOL flag can clear while manual cooling is still
+            # armed (the device re-reports OpMode auto), so also clear the
+            # cooling window when the controller still reports cooling.
+            cooling_active = previous_hvac_mode == HVACMode.COOL or self._global_cooling_active()
+            if cooling_active:
                 ok = await self._cancel_manual_cooling()
                 if ok:
                     ok = await self._write(f"{self._zn}OpMode", "day")

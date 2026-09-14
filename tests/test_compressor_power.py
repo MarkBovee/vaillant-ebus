@@ -199,6 +199,22 @@ def test_derive_operating_state_from_status07_bits() -> None:
     assert derive_operating_state({"hmu.Status07.heatermain_b7_warmwater": "on"}, "hmu") == "DHW"
 
 
+# Intent: derive_operating_state reports DHW from Status01.pumpstate == "hwc",
+# the only DHW-active signal on units without Status00/Status07 where
+# RunDataStatuscode stays 0 while the 3-way valve feeds DHW.
+# Why: issue #102 - Energy Manager State did not classify DHW/boost demand.
+def test_derive_operating_state_from_pumpstate_hwc() -> None:
+    assert derive_operating_state({"hmu.Status01.pumpstate": "hwc"}, "hmu") == "DHW"
+    assert derive_operating_state({"hmu.Status01.pumpstate": "off"}, "hmu") is None
+    # An explicit controller state always outranks the pump position.
+    assert derive_operating_state(
+        {"hmu.Status01.pumpstate": "hwc", "hmu.RunDataStatuscode.value": "standby"}, "hmu"
+    ) == "Standby"
+    assert derive_operating_state(
+        {"hmu.Status01.pumpstate": "hwc", "hmu.Status00.compressorstate": "off"}, "hmu"
+    ) == "Standby"
+
+
 # Intent: derive_operating_state maps HMUX0 Status00 compressor states.
 # Why: issue #102 - HMUX0 reports operating state through Status00, not Statuscode.
 def test_derive_operating_state_from_status00() -> None:
