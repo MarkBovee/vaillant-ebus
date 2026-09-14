@@ -273,32 +273,44 @@ class EbusService:
         )
         return result
 
-    # Send a complete find command, holding the lock for the whole multi-line
-    # transaction so concurrent commands cannot drain find lines or receive
-    # one as their own response.
+    # Send one command and collect every response line until ebusd goes quiet.
+    # Holds the lock for the whole multi-line transaction so concurrent
+    # commands cannot drain these lines or receive one as their own response.
+    # Multi-line responses (find, info) must be read to completion: leaving
+    # lines buffered would pollute the next command's read.
+    async def _send_lines_locked(self, cmd: str) -> list[str]:
+        if not self._writer or not self._reader:
+            self._log_cmd(cmd, SendResult(data="", error="not_connected"))
+            return []
+        t0 = time.monotonic()
+        first = await self._send_line_locked(cmd)
+        self._log_cmd(cmd, first, t0)
+        if first.error:
+            return []
+        lines: list[str] = []
+        if first.data.strip():
+            lines.append(first.data)
+        while True:
+            try:
+                line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
+            except TimeoutError:
+                break
+            if not line:
+                break
+            lines.append(line.decode("utf-8").rstrip("\n\r"))
+        return lines
+
+    # Send a complete find command (see _send_lines_locked).
     async def _send_find(self) -> list[str]:
         async with self._lock:
-            if not self._writer or not self._reader:
-                self._log_cmd("f -a", SendResult(data="", error="not_connected"))
-                return []
-            t0 = time.monotonic()
-            first = await self._send_line_locked("f -a")
-            self._log_cmd("f -a", first, t0)
-            if first.error:
-                return []
-            lines: list[str] = []
-            if first.data.strip():
-                lines.append(first.data)
-            while True:
-                try:
-                    line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
-                except TimeoutError:
-                    break
-                if not line:
-                    break
-                decoded = line.decode("utf-8").rstrip("\n\r")
-                lines.append(decoded)
-            return lines
+            return await self._send_lines_locked("f -a")
+
+    # Send 'info' and return every banner line. ebusd lists the per-address
+    # loaded CSV/include files after the version line, so get_info needs the
+    # whole response rather than the first line only.
+    async def _send_info(self) -> list[str]:
+        async with self._lock:
+            return await self._send_lines_locked("info")
 
     # Return raw find response lines
     async def find_registers(self) -> list[str]:
@@ -392,12 +404,12 @@ class EbusService:
         _LOGGER.debug("Write %s.%s=%r acked, verification read-back %r", circuit, name, value, verified)
         return WriteResult(success=True, verified_value=verified)
 
-    # Send 'info' command and parse key=value response
+    # Send 'info' command and parse the full multi-line banner
     async def get_info(self) -> dict[str, str | dict[str, AddressConfig]]:
-        result = await self.send_command("info")
-        if result.error:
+        lines = await self._send_info()
+        if not lines:
             return {}
-        return _parse_info_data(result.data)
+        return _parse_info_data("\n".join(lines))
 
     # Send 'define' command for runtime register definition
     async def define_register(self, definition: str) -> str:

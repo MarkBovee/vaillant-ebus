@@ -426,7 +426,9 @@ async def test_find_registers_not_connected_returns_empty() -> None:
 # Why: version and signal metadata feed diagnostics and discovery dumps.
 async def test_get_info_returns_dict() -> None:
     s = _service()
-    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"version: ebusd 1.0, signal: acquired\n"])
+    s._reader.readline = AsyncMock(
+        side_effect=[TimeoutError(), b"version: ebusd 1.0, signal: acquired\n", TimeoutError()]
+    )
     info = await s.get_info()
     assert info == {"version": "ebusd 1.0", "signal": "acquired"}
 
@@ -446,7 +448,7 @@ async def test_get_info_error_returns_empty() -> None:
 # Why: guards the parser against an empty banner.
 async def test_get_info_empty_response() -> None:
     s = _service()
-    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"\n"])
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"\n", TimeoutError()])
     info = await s.get_info()
     assert info == {}
 
@@ -627,6 +629,21 @@ async def test_integration_get_info() -> None:
         info = await s.get_info()
         assert "version" in info
         assert "ebusd" in info["version"]
+        await s.disconnect()
+
+
+# Regression: get_info must read every line of ebusd's multi-line info banner,
+# not just the first. Reading one line dropped the per-address `loaded` CSV
+# files, so a discovery dump on real hardware carried a bare version and no
+# loaded_configs. Why: the live banner is multi-line by nature.
+async def test_get_info_reads_full_multiline_banner() -> None:
+    async with FakeEbusdServer() as fake:
+        s = EbusService(host=fake.host, port=fake.port)
+        await s.connect()
+        info = await s.get_info()
+        assert info["signal"] == "acquired"
+        assert info["loaded_configs"]["08"]["loaded"] == ["vaillant/08.bai.csv"]
+        assert info["loaded_configs"]["15"]["scanned"] == "MF=Vaillant;ID=CTLV2;SW=0514;HW=1104"
         await s.disconnect()
 
 
