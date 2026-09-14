@@ -314,6 +314,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Set HVAC mode: cancel boost first, then write ebusd op mode
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
+        previous_hvac_mode = self.hvac_mode
         self._optimistic_hvac_mode = hvac_mode
         self.async_write_ha_state()
         if self.preset_mode == PRESET_BOOST:
@@ -321,8 +322,11 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if hvac_mode == HVACMode.COOL:
             ok = await self._start_manual_cooling()
         elif hvac_mode == HVACMode.HEAT:
-            ok = await self._cancel_manual_cooling()
-            if ok:
+            if previous_hvac_mode == HVACMode.COOL:
+                ok = await self._cancel_manual_cooling()
+                if ok:
+                    ok = await self._write(f"{self._zn}OpMode", "day")
+            else:
                 ok = await self._write(f"{self._zn}OpMode", "day")
         else:
             ebusd_mode = HA_TO_EBUSD_HVAC.get(hvac_mode.value)
