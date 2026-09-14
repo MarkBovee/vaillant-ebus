@@ -225,6 +225,17 @@ async def test_device_names_for_bai_and_sc_are_descriptive() -> None:
         assert c.get_device_info("sc")["name"] == "Vaillant solar controller"
 
 
+# Intent: the VWZ hydraulic station gets a descriptive English device name
+# instead of the raw scan code, on an English Home Assistant.
+# Why: device registry names are not translatable, so the default must read
+# well; upstream calls the module a "Hydraulikstation".
+async def test_device_names_for_vwz_are_descriptive() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        assert c.get_device_info("vwz")["name"] == "Vaillant Hydraulic Station"
+        assert c.get_device_info("vwzio")["name"] == "Vaillant Hydraulic Station"
+
+
 # Intent: a fresh coordinator starts with zero generated entities.
 # Why: prevents entity creation during init before discovery or cache seeding runs.
 async def test_coordinator_seeds_from_cache() -> None:

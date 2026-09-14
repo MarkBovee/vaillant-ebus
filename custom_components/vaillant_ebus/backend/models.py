@@ -309,6 +309,8 @@ CIRCUIT_NAMES: dict[str, str] = {
     "basv": "Vaillant BASV2 Heating Control",
     "bai": "Vaillant boiler controller",
     "sc": "Vaillant solar controller",
+    "vwz": "Vaillant Hydraulic Station",
+    "vwzio": "Vaillant Hydraulic Station",
     "z1": "Zone 1",
     "dhw": "Boiler (DHW)",
     "hc1": "Heating Circuit 1",
