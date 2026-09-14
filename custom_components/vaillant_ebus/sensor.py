@@ -109,34 +109,32 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
             cat = desc.meta.entity_category
             self._attr_entity_category = EntityCategory(cat) if cat != "config" else None
 
-    # Restore last known state from HA registry on startup
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        if last and last.state not in (None, "unknown", "unavailable", ""):
-            self._cached_value = last.state
-
     @property
     def native_value(self) -> float | str | None:
         data = self.coordinator.data.get("ebusd", {})
         raw = data.get(self._desc.key)
         if raw is None or raw in ("-", "empty", "") or (raw and "no data stored" in raw):
-            return getattr(self, "_cached_value", None)
+            # No live register data: report unknown rather than a stale cached
+            # value, so a register that stops being read (e.g. a dead circuit
+            # after a resolution change) cannot freeze the entity on its last
+            # value. Do not conflate this with an idle register's "no data
+            # stored" sentinel, which also yields None here.
+            return None
         # Numeric registers become floats; unitless text registers (status
         # codes) keep their raw string so the UI still shows something useful.
         val: float | str | None
         try:
             val = float(raw)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             if getattr(self, "_attr_native_unit_of_measurement", None):
                 val = None
             else:
                 val = str(raw) if raw else None
-        if val is not None:
-            self._cached_value = val
         return val
 
     @property
     def available(self) -> bool:
-        # Entity available when coordinator updates succeed
+        # Entity available when coordinator updates succeed. A missing register
+        # key surfaces as unknown (native_value None) without flipping
+        # availability, so idle "no data stored" registers do not flicker.
         return self.coordinator.last_update_success

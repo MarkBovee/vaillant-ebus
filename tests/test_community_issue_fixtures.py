@@ -138,6 +138,42 @@ def test_hmux0_latest_issue99_values_keep_entity_metadata() -> None:
     assert entities["hmux0.Status01.temp"].meta.device_class == "temperature"
 
 
+# Intent: the issue #99 aroTHERM Pro 35 dump exposes HwcStorageTemp only as an
+# unavailable (ERR) register, not as live find data.
+# Why: issue #99 - a register that is no longer readable must not feed a frozen
+# entity value; the sensor/coordinator changes report unknown instead.
+def test_arotherm_pro35_hwcstoragetemp_not_live() -> None:
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/arotherm_pro35_issue99_2026-09-13_162416.yaml")
+    )
+    assert "ctlv2.HwcStorageTemp" not in graph.raw_registers
+    assert graph.raw_registers["hmu.RunDataStatuscode"] == "standby"
+
+
+# Intent: the issue #99 HMUX0/CTLV3 dump resolves the holiday period registers
+# to the discovered controller circuit with live dates.
+# Why: issue #99 - holiday date writes must target the discovered circuit
+# (ctlv3), and the read side carries the real app-set dates.
+def test_hmux0_issue99_holiday_registers_on_ctlv3() -> None:
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/hmux0_issue99_2026-09-13_173740.yaml")
+    )
+    assert graph.raw_registers["ctlv3.HwcHolidayStartPeriod"] == "23.09.2026"
+    assert graph.raw_registers["ctlv3.HwcHolidayEndPeriod"] == "31.10.2026"
+
+
+# Intent: the issue #111 eloBLOCK VE 28 dump exposes the bai switch registers
+# as unavailable, not as live values.
+# Why: issue #111 - HeatingSwitch/HwcSwitch read back as unavailable until the
+# integration redefines them writable at runtime on B509.
+def test_eloblock_ve28_switches_unavailable_in_find() -> None:
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/eloblock_ve28_issue111_2026-09-11_193100.yaml")
+    )
+    assert "bai.HeatingSwitch" not in graph.raw_registers
+    assert "bai.HwcSwitch" not in graph.raw_registers
+
+
 # Intent: issue #99 dumps keep ctlv3 DHW values and reject invalid HMUX0 return temperature.
 # Why: issue #99 - spurious hmux0 readings must not overwrite valid controller data.
 @pytest.mark.parametrize(

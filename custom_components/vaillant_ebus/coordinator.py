@@ -55,6 +55,7 @@ DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
 ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 ENERGY_POLL_INTERVAL = timedelta(minutes=5)
+WRITE_LOG_SIZE = 100
 
 # VWZIO/VWZ Status01 field layout (upstream PR #598); reuses the HMU layout.
 # Explicit types are required: the hcmode_inc template aliases (temp1/temp2/
@@ -109,6 +110,21 @@ def _usable_register_value(register_key: str, raw: str | None) -> str | None:
     if register_key.lower() == "hmux0.rundatareturntemp" and not is_valid_hmux0_return_temperature(raw):
         return None
     return raw
+
+
+# Whether an enabled REGISTER_MAP entry accounts for a register, applying the
+# same ctlv2/hmu circuit aliasing as get_meta(). Registers covered by the map
+# may legitimately be present via runtime definitions or the fallback read even
+# when the current find output does not list them.
+def _register_has_enabled_map_entry(register_key: str) -> bool:
+    if "." not in register_key:
+        return False
+    circuit, name = register_key.split(".", 1)
+    for alt in (circuit, "ctlv2", "hmu"):
+        meta = REGISTER_MAP.get(f"{alt}.{name}")
+        if meta is not None and meta.enabled:
+            return True
+    return False
 
 
 # Merge a delayed graph without removing devices that initial discovery found.
@@ -188,6 +204,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self._last_placeholder_poll = datetime.min
         self._last_energy_poll = datetime.min
         self._runtime_definitions: dict[str, str] = {}
+        self._write_log: list[dict] = []  # recent write attempts (verification/telegram diag)
         self._cancel_set_mode_override: Callable[[], None] | None = None
         self._set_mode_override_payload: str | None = None
         self._analysis = AnalysisService()
@@ -412,6 +429,25 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 self.registers[rk].has_data = True
 
         self._last_find_keys.update(graph.raw_registers)
+
+        # A cache-seeded rebuild at startup can carry registers the real bus no
+        # longer exposes (e.g. a stale test register from an old CSV or session).
+        # Registers explained by neither the discovered graph nor an enabled
+        # REGISTER_MAP entry are pruned so ghost devices cannot survive on
+        # cached leftovers. Only on initial discovery: delayed rediscovery blends
+        # into a growing graph and must not drop registers that were merely slow
+        # to appear.
+        if source == "initial":
+            live_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
+            stale = [rk for rk in self.registers if rk not in live_keys and not _register_has_enabled_map_entry(rk)]
+            for rk in stale:
+                del self.registers[rk]
+            if stale:
+                _LOGGER.info(
+                    "Pruned %d stale cache register(s) absent from the bus: %s",
+                    len(stale),
+                    ", ".join(sorted(stale)),
+                )
 
         try:
             await self._fallback_read()
@@ -638,11 +674,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             ",,,,remoteControlHcPump,,BI0,,,,releaseBackup,,BI1,,,,releaseCooling,,BI2",
             # eloBLOCK/BAI boiler control: the generic BAI configuration exposes
             # HeatingSwitch/HwcSwitch read-only. Redefine them writable on B509
-            # (ID F203/F303) as the upstream product-specific includes do and as
-            # the community eloBLOCK guide uses. Only emitted when a BAI
-            # controller is discovered; absent hardware is filtered by resolution.
-            "wi,bai,HeatingSwitch,Heating Switch,,08,B509,f203,value,,onoff,,,",
-            "wi,bai,HwcSwitch,DHW Switch,,08,B509,f303,value,,onoff,,,",
+            # using the upstream product-specific convention: read id `0dF203` /
+            # `0dF303`, write prefix byte `0e` (`0eF203`/`0eF303`), and a UCH
+            # onoff field. The `onoff` template is not in the runtime define's
+            # template scope, so `value,,onoff` fails element lookup with
+            # `ERR: element not found`; UCH decodes identically. Only emitted
+            # when a BAI controller is discovered.
+            "wi,bai,HeatingSwitch,Heating Switch,,08,B509,0ef203,value,,UCH,0=off;1=on,,",
+            "wi,bai,HwcSwitch,DHW Switch,,08,B509,0ef303,value,,UCH,0=off;1=on,,",
             # VWZIO/VWZ Hydraulikstation process telemetry (upstream PR #598).
             # Status01 (b511 01, 9 bytes) reuses the HMU layout: flow, return,
             # outside, DHW, storage, pump. Read actively like hmu.Status01 so it
@@ -1123,11 +1162,18 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 if value and (value.startswith("or:") or "read [-" in value):
                     value = None
                 if value is None:
-                    cache = await self._async_load_cache()
-                    cached = cache.get(f"{circuit}.{name}.value")
-                    cached = _usable_register_value(key, cached)
-                    if cached is not None and key not in (skip_cache or set()):
-                        value = cached
+                    # Never resurrect a stale value for a register the bus no
+                    # longer exposes: the issue #99 clearing reports "no data
+                    # stored" as unknown, so the cache may only back a value for
+                    # a register the discovery graph still configures (currently
+                    # idle) or before a graph exists (startup/cache seeding).
+                    graph = self._graph
+                    if graph is None or key in graph.raw_registers or key in graph.placeholder_registers:
+                        cache = await self._async_load_cache()
+                        cached = cache.get(f"{circuit}.{name}.value")
+                        cached = _usable_register_value(key, cached)
+                        if cached is not None and key not in (skip_cache or set()):
+                            value = cached
                 if value is not None:
                     read_with_data += 1
                     if was_new:
@@ -1190,6 +1236,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 lines = await self.ebus.find_registers()
                 updated = 0
                 invalid_values: set[str] = set()
+                batch_with_data: set[str] = set()
                 for line in lines:
                     # Shared parser: sentinel/no-data values come back as None.
                     circuit, name, val = DiscoveryService._parse_register(line)
@@ -1201,13 +1248,26 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                             raw = line.split("=", 1)[1].strip()
                             if not is_no_data_value(raw):
                                 invalid_values.add(key)
-                            if key in self.registers:
-                                self.registers[key].value["value"] = None
+                        # A register that no longer carries data must not keep
+                        # emitting its last value, otherwise the entity freezes
+                        # at a stale reading (issue #99). But ebusd's `find -a`
+                        # lists some registers twice — a readable definition and
+                        # a stale one reporting "no data stored". When this batch
+                        # already carried a readable value for the key, the stale
+                        # line must not wipe it.
+                        if key not in batch_with_data and key in self.registers:
+                            # Clear every field, not just the synthetic `value`:
+                            # a multi-field register (e.g. hmu Status01) stores
+                            # its named fields separately, and leaving them set
+                            # would keep the per-field sensors frozen at their
+                            # last decode (issue #99/#102).
+                            self.registers[key].value = _register_values(key, None)
                         continue
                     val = _usable_register_value(key, val)
                     if val is None:
                         continue
                     self._live_since_analysis.add(key)
+                    batch_with_data.add(key)
                     if key not in self.registers:
                         self.registers[key] = EbusdRegister(
                             circuit=circuit,
@@ -1259,6 +1319,29 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # verified by read-back. Sequences are dependent: stop at the first failure
     # instead of writing later registers on a broken assumption; refresh only
     # after full success. Already-written registers are reported, not rolled back.
+    # Keep the most recent write attempts for the discovery dump's `writes`
+    # section. Bounded ring buffer; never raises — diagnostics must not break
+    # the write path.
+    def _record_write(
+        self, circuit: str, name: str, value: str, resolved_circuit: str | None, success: bool, error: str | None = None
+    ) -> None:
+        try:
+            self._write_log.append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "circuit": circuit,
+                    "name": name,
+                    "value": str(value),
+                    "resolved_circuit": resolved_circuit,
+                    "success": bool(success),
+                    "error": error,
+                }
+            )
+        except Exception:
+            return
+        if len(self._write_log) > WRITE_LOG_SIZE:
+            del self._write_log[: len(self._write_log) - WRITE_LOG_SIZE]
+
     async def async_write_registers(
         self,
         writes: list[tuple[str, str, str]],
@@ -1271,11 +1354,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             resolved_circuit = self.resolve_register_circuit(circuit)
             if resolved_circuit is None:
                 _LOGGER.warning("Write skipped: ambiguous discovered circuit for %s.%s", circuit, name)
+                self._record_write(circuit, name, value, None, False, "ambiguous discovered circuit")
                 return False
             result = await self.ebus.write_register(resolved_circuit, name, value, strict_verify=strict_verify)
             if not result.success:
                 _LOGGER.warning("Write failed %s.%s=%s: %s", circuit, name, value, result.error_message)
+                self._record_write(circuit, name, value, resolved_circuit, False, result.error_message)
                 return False
+            self._record_write(circuit, name, value, resolved_circuit, True)
         if refresh:
             await self.async_request_refresh()
         return True

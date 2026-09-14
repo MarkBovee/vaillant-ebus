@@ -1,5 +1,140 @@
 # Changelog
 
+## 1.8.3 - 2026-09-14
+
+### Fixed
+
+- **Heating mode now applies on systems without cooling (#130).** Setting the
+  `Heat` HVAC mode always ran the manual-cooling cancel first, and on
+  heating-only hardware the strict read-back verification of
+  `ManualCoolingEndDate` failed, so the zone `OpMode` was never written to
+  `day`. The cancel now only runs when the previous mode was `COOL`, the
+  controller still reports an active cooling state, or the manual-cooling
+  window is still armed — so a restart, which loses the optimistic `COOL`
+  flag while `OpMode` reads `auto`, still disarms cooling on `Heat`.
+  Heating-only `Heat` therefore always writes the day mode, while leaving an
+  active manual-cooling window still resets `ManualCoolingEndDate`.
+- **Energy Manager State now reports `Cooling` (issue #102).** On units without
+  `Status00`/`Status07` (HMU00/CTLV3-style), `RunDataStatuscode` stays at 0
+  while a cooling period is active, so the derived sensor stuck on `Standby`.
+  The `releaseCooling` request flag in `hmu SetMode` is now a fallback cooling
+  signal, used only when no defrost, shutdown/standby, compressor-off, DHW, or
+  heating signal is present.
+- **Energy Manager State now reports `DHW` from the 3-way valve position
+  (issue #102).** On the same units, `RunDataStatuscode` also stays at 0 while
+  DHW/boost demand is active and no `Status00`/`Status07` field exists, so the
+  sensor fell through to `Standby`. The `Status01.pumpstate == hwc` position
+  (the 3-way valve feeding the tank) is now a fallback DHW signal, used only
+  when no shutdown/standby or compressor-off state outranks it.
+- **Sensors no longer freeze on a stale value (issue #99).** A register that
+  stops being read (for example a DHW storage-temp register after an ebusd
+  circuit/resolution change) previously kept emitting its last value, so the
+  entity stayed "available" at a frozen reading. A register that returns no
+  data on a poll is now cleared — including every named field of a multi-field
+  register such as `Status01` — and sensors report `unknown` instead of a
+  cached value, so a dead read can never freeze an entity at a stale value.
+- **Duplicate "no data stored" find lines no longer wipe a readable value
+  (issue #99).** ebusd's `find -a` lists some writable registers twice (a
+  readable definition and a stale one), and the stale line used to clear the
+  good value every poll, flipping entities to `unknown`.
+- **Ghost devices from stale cache registers are pruned.** A cache-seeded
+  rebuild could resurrect registers the real bus no longer exposes (for
+  example a leftover `hmux0.ZZTest` test register), each with its own ghost
+  device that kept reporting the leftover value. The first real discovery now
+  prunes registers explained by neither the discovered graph nor an enabled
+  register-map entry, and a fallback read never revives a register absent from
+  the discovered graph from the cache.
+- **Discovery dumps carry the full ebusd banner.** `get_info` read only the
+  first line of ebusd's multi-line `info` response, so a dump's
+  `ebusd_info` showed a bare version and no per-address loaded CSV files.
+- **eloBLOCK VE 28 switch control (issue #111).** The BAI `HeatingSwitch` /
+  `HwcSwitch` writable redefinitions used an `onoff` field type that is not in
+  the runtime define's template scope, so element lookup failed with
+  `ERR: element not found` and every toggle did nothing. They now use an
+  explicit UCH onoff encoding and the upstream `0e` write-prefix byte
+  (`0eF203`/`0eF303`), matching the product-specific BAI includes.
+- **Write verification bypasses the ebusd cache (issue #99).** A cached
+  read-back always "verified" a write the controller may never have applied;
+  strict verification now re-reads from the bus (`read -f`) and retries once.
+  A write-only register without read-back no longer fails when the caller
+  opted out of strict verification.
+
+### Changed
+
+- **Version tool keeps pyproject PEP 440.** `tools/version.py bump 1.8.3-rcN`
+  writes `1.8.3rcN` to `pyproject.toml` while `manifest.json` keeps the display
+  form, so the RC release line no longer drifts from valid PEP 440.
+- **VWZ device named "Vaillant Hydraulic Station".** The VWZ/VWZIO hydraulic
+  station previously fell back to the raw scan code and showed as "Vaillant
+  VWZ00"; the default name now reads well on an English Home Assistant.
+- **Docs: ebusd read-back semantics.** `docs/developer.md` documents the
+  read-cache vs forced-read (`read -f`) behavior behind write verification, and
+  `docs/troubleshooting.md` points at the `-f` check.
+
+### Added
+
+- **Climate HEAT-mode regression tests.** The non-cooling `Heat` write (no
+  cooling cancel), the `COOL → HEAT` cancel path, and the active-cooling-state
+  cancel are all pinned.
+- **New community fixtures.** The latest issue #99 (HMUX0/CTLV3, aroTHERM Pro
+  35), issue #111 (eloBLOCK VE 28), and issue #109 (ecoTEC/VRT380) discovery
+  dumps were added under `tests/fixtures/community/`, each with provenance
+  metadata, and drive the Energy-Manager, sensor, and switch regressions.
+- **Discovery dump shows loaded ebusd configs and integration writes.** A dump
+  now lists, per bus address, the scanned identity and the CSV/include files
+  ebusd actually loaded (so the active register layout, e.g. `15.700.csv` vs
+  `15.ctlv2.csv`, is visible without ebusctl), and a `writes` section records
+  the recent register writes the integration itself sent — register, value,
+  resolved circuit, and verification result — for write-vs-app correlation.
+- **Energy-Manager DHW and sensor regressions.** `Status01.pumpstate == hwc`
+  maps to `DHW` with an absent-signal path, and the sensor no-data/unknown
+  behavior is pinned so a dead register cannot freeze an entity.
+
+### Validation
+
+- Full test suite passing (596 tests), including the write-verification,
+  issue #102 cooling + DHW, climate HEAT-mode, sensor frozen-value, and the
+  new community-fixture regressions.
+- Ruff, scoped format, strict mypy, YAML, compileall, version consistency, and
+  whitespace checks passing.
+
+## 1.8.3-rc2 - 2026-09-12
+
+### Fixed
+
+- **Energy Manager State now reports `Cooling` (issue #102).** On units without
+  `Status00`/`Status07` (HMU00/CTLV3-style), `RunDataStatuscode` stays at 0
+  while a cooling period is active, so the derived sensor stuck on `Standby`.
+  The `releaseCooling` request flag in `hmu SetMode` is now used as a fallback
+  cooling signal, and only when no explicit defrost, shutdown/standby,
+  compressor-off, DHW, or heating signal is present. A new GOLDEN fixture from
+  the issue #102 capture pins the behavior. This is classified as a strong
+  assumption pending the reporter's short grab around a cooling transition.
+
+### Changed
+
+- **Version tool keeps pyproject PEP 440.** `tools/version.py bump 1.8.3-rcN`
+  now writes `1.8.3rcN` to `pyproject.toml` while `manifest.json` keeps the
+  display form, so the RC release line no longer drifts from valid PEP 440.
+- **Docs: ebusd read-back semantics.** `docs/developer.md` documents the
+  read-cache vs forced-read (`read -f`) behavior behind write verification, and
+  `docs/troubleshooting.md` points at the `-f` check.
+
+### Validation
+
+- Full test suite passing, including the issue #102 cooling regression and the
+  rc1 write-verification tests.
+- Ruff, scoped format, strict mypy, YAML, compileall, version consistency, and
+  whitespace checks passing; independent adversarial audit of the cooling
+  mapping closed out.
+
+### Note
+
+- Pre-release for verification. Contains everything in **1.8.3-rc1** (write
+  verification now bypasses ebusd's cache) plus the cooling change. The
+  holiday/away write verification (issue #99) is still awaiting user
+  confirmation.
+
 ## 1.8.3-rc1 - 2026-09-12
 
 ### Fixed

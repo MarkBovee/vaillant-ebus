@@ -1,0 +1,7147 @@
+# Discovery dump for vaillant_ebus
+# Review this file for sensitive information before sharing
+metadata:
+  timestamp: '2026-09-13T16:24:16.982143'
+  ebusd_version: ebusd 26.1.26.1
+  register_count: 290
+  grab_duration: 10
+  dump_version: 4
+  integration_version: 1.8.3-rc2
+  ebusd_info:
+    version: ebusd 26.1.26.1
+  ebusd_configuration:
+    available: false
+    reason: ebusd info does not expose addon command-line options or seed_mqtt_cfg
+    requested_fields:
+    - seed_mqtt_cfg
+    - commandline_options
+raw_find_lines:
+- bai SetModeOverride = no data stored
+- Broadcast Datetime = no data stored
+- Broadcast Error = no data stored
+- Broadcast HwcStatus = no data stored
+- Broadcast Id = no data stored
+- Broadcast IdAnswer = no data stored
+- Broadcast IdQuery = no data stored
+- Broadcast Load = no data stored
+- Broadcast Outsidetemp = 25.625
+- Broadcast Queryexistence =  (empty for 31fe07fe00 / )
+- Broadcast Signoflife = no data stored
+- Broadcast Vdatetime = 16:22:56;13.09.2026
+- Broadcast Vdatetime = no data stored
+- 'ctlv2 Hc1DewPointTemp =  (ERR: invalid position for 3115b52406020002002300 / 00)'
+- 'ctlv2 Hc1FlowTempCalc =  (ERR: invalid position for 3115b52406020002002000 / 050102200000)'
+- 'ctlv2 Hc1Humidity =  (ERR: invalid position for 3115b52406020002002200 / 00)'
+- 'ctlv2 Hc1MixerPosition =  (ERR: invalid position for 3115b52406020002002100 / 00)'
+- 'ctlv2 Hc1PumpHours =  (ERR: invalid position for 3115b52406020002002400 / 00)'
+- 'ctlv2 Hc1PumpStarts =  (ERR: invalid position for 3115b52406020002002500 / 00)'
+- 'ctlv2 Hc2DewPointTemp =  (ERR: invalid position for 3115b52406020002012300 / 00)'
+- 'ctlv2 Hc2FlowTempCalc =  (ERR: invalid position for 3115b52406020002012000 / 050102200000)'
+- 'ctlv2 Hc2Humidity =  (ERR: invalid position for 3115b52406020002012200 / 00)'
+- 'ctlv2 Hc2MixerPosition =  (ERR: invalid position for 3115b52406020002012100 / 00)'
+- 'ctlv2 Hc2PumpHours =  (ERR: invalid position for 3115b52406020002012400 / 00)'
+- 'ctlv2 Hc2PumpStarts =  (ERR: invalid position for 3115b52406020002012500 / 00)'
+- ctlv2 ManualCoolingEndDate = 01.01.2015
+- ctlv2 ManualCoolingEndDate = no data stored
+- ctlv2 ManualCoolingStartDate = 01.01.2019
+- ctlv2 ManualCoolingStartDate = no data stored
+- ctlv2 z1RoomHumidity = 61
+- General Valuerange = no data stored
+- hmu BuildingCircuitFlow = 0
+- hmu Clearerrorhistory = no data stored
+- hmu CompressorBlocktime = no data stored
+- hmu CompressorHc = 188314;4401
+- hmu CompressorHwc = 53339;748
+- hmu CoolElecConsDay = 0.0491667
+- hmu CoolElecConsTotal = 144857
+- hmu CoolEnvYieldDay = 0.0
+- hmu CoolEnvYieldMonth = 0.0
+- hmu CoolEnvYieldTotal = 0.0
+- hmu CopCooling = 6.8
+- hmu CopCoolingMonth = 7.4
+- hmu CopHc = 3.4
+- hmu CopHcMonth = 2.7
+- hmu CopHwc = 2.7
+- hmu CopHwcMonth = 3.6
+- hmu CurrentCompressorUtil = 0.00
+- hmu CurrentConsumedPower = 0.0
+- hmu Currenterror = -;-;-;-;-
+- hmu CurrentYieldPower = 0.0
+- hmu DateTime = nosignal;-:-:-;-.-.-;-
+- hmu EnergyIntegral = no data stored
+- hmu Errorhistory = no data stored
+- hmu FlowPressure = no data stored
+- hmu FlowTemp = 23.75
+- hmu HcElecConsDay = 289.275
+- hmu HcElecConsTotal = 2.36067e+06
+- hmu HwcElecConsDay = 1332.62
+- hmu HwcElecConsTotal = 1.07216e+06
+- hmu PowerConsumptionHmu = 0.006500000
+- hmu RunDataAirInletTemp = 21.009
+- hmu RunDataBuildingCPumpPower = 0.0
+- hmu RunDataCompressorInletTemp = 22.9821
+- hmu RunDataCompressorOutletTemp = 23.3824
+- hmu RunDataCompressorSpeed = 0.0
+- hmu RunDataEEVOutletTemp = 22.9375
+- hmu RunDataEEVPositionAbs = 250
+- hmu RunDataFan1Speed = 0.0
+- hmu RunDataFan2Speed = 0.0
+- hmu RunDataHighPressure = 7.80464
+- hmu RunDataStatuscode = standby
+- hmu RunStats4PortValveHours = 356
+- hmu RunStats4PortValveSwitches = 1434
+- hmu RunStatsBuildingCPumpStarts = 2181
+- hmu RunStatsBuildingPumpHours = 11769
+- hmu RunStatsCompressorHours = 4360
+- hmu RunStatsCompressorStarts = 6353
+- hmu RunStatsFan1Hours = 4806
+- hmu RunStatsFan1Starts = 8702
+- hmu RunStatsFan2Hours = 0
+- hmu RunStatsFan2Starts = 0
+- hmu RunStatsHcHours = 8403
+- hmu RunStatsHMUHours = 18456
+- hmu RunStatsHwcHours = 931
+- hmu SetMode = auto;0.0;-;-;1;1;1;0;0;0
+- 'hmu SourceTempInput =  (ERR: invalid position for 3108b51a0405ff3222 / 02ff01)'
+- hmu Status01 = 23.5;22.5;-;-;-;off
+- hmu Status02 = no data stored
+- hmu Status16 = no data stored
+- hmu Status = no data stored
+- hmu StatusCirPump = off
+- hmu SupplyTempWeighted = 20.50
+- hmu TotalEnergyUsage = 3575
+- hmu YieldCoolDay = 0.0
+- hmu YieldCooling = 0.0
+- hmu YieldCoolingMonth = 0.0
+- hmu YieldHc = 6268
+- hmu YieldHcDay = 0.8
+- hmu YieldHcMonth = 22.2
+- hmu YieldHwc = 1912
+- hmu YieldHwcDay = 3.5
+- hmu YieldHwcMonth = 23.7
+- Memory Eeprom = no data stored
+- Memory Eeprom = no data stored
+- Memory Ram = no data stored
+- Memory Ram = no data stored
+- Scan Id = no data stored
+- scan.08  = Vaillant;HMU00;0902;5103
+- Scan.08 Id = 21;24;18;0010047380;1300;105808;N4
+- scan.15  = Vaillant;CTLV3;0709;3704
+- scan.26  = Vaillant;VR_71;0201;0503
+- scan.35  = Vaillant;VR_92;0122;9403
+- scan.76  = Vaillant;VWZIO;0202;0103
+- scan.f6  = no data stored
+- ''
+before_registers:
+- circuit: Broadcast
+  name: Datetime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Error
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: Broadcast
+  name: HwcStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Id
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: IdAnswer
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: IdQuery
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Load
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Outsidetemp
+  fields:
+  - value
+  values: &id291
+  - '25.625'
+  writable: false
+  has_data: true
+- circuit: Broadcast
+  name: Queryexistence
+  fields:
+  - value
+  values:
+  - (empty for 31fe07fe00 / )
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Signoflife
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: Vdatetime
+  fields:
+  - value
+  values:
+  - 16:22:56;13.09.2026
+  writable: false
+  has_data: true
+- circuit: Broadcast
+  name: Vdatetime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Broadcast
+  name: WaterPressure
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: General
+  name: Valuerange
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Eeprom
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Eeprom
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Ram
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Memory
+  name: Ram
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Scan
+  name: Id
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: Scan.08
+  name: Id
+  fields:
+  - value
+  values:
+  - 21;24;18;0010047380;1300;105808;N4
+  writable: false
+  has_data: true
+- circuit: bai
+  name: SetModeOverride
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: AdaptHeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: CcTimer_Config
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: CcTimer_Timeframes
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: ContinuousHeating
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: CylinderChargeHyst
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: CylinderChargeOffset
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Date
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: DisplayedOutsideTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: FrostOverRideTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1AutoOffMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1CircuitType
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1CoolingEnabled
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1CoolingFlowTempMin
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1DewPointMonitoring
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1DewPointOffset
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1DewPointTemp
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002300 / 00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1ExcessTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1FlowTempCalc
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002000 / 050102200000)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1HeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1Humidity
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002200 / 00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1MixerMovement
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1MixerPosition
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002100 / 00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1PumpHours
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002400 / 00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1PumpStarts
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002500 / 00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc1PumpStatus
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1RoomTempModulation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1Status
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc1SummerTempLimit
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2AutoOffMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2CircuitType
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2DewPointTemp
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012300 / 00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2ExcessTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2FlowTempCalc
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012000 / 050102200000)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2HeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2Humidity
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012200 / 00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2MixerMovement
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2MixerPosition
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012100 / 00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2PumpHours
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012400 / 00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2PumpStarts
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012500 / 00)'
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: Hc2PumpStatus
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2Status
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc2SummerTempLimit
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3AutoOffMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3CircuitType
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3ExcessTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3HeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3MixerMovement
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3PumpStatus
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3Status
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Hc3SummerTempLimit
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HcStorageTempBottom
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- circuit: ctlv2
+  name: HcStorageTempTop
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- circuit: ctlv2
+  name: HwcFlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcLockTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcMaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcOpMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcParallelLoading
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcSFMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcSfMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcStorageTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcStorageTempBottom
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcStorageTempTop
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HwcTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: HydraulicScheme
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: ManualCoolingEndDate
+  fields:
+  - value
+  values:
+  - 01.01.2015
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: ManualCoolingEndDate
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: ManualCoolingStartDate
+  fields:
+  - value
+  values:
+  - 01.01.2019
+  writable: false
+  has_data: true
+- circuit: ctlv2
+  name: ManualCoolingStartDate
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: ctlv2
+  name: MaxCylinderChargeTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: MaxRoomHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: MultiRelaySetting
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: OutsideTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: OutsideTempAvg
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySum
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHcLastMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHcThisMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHwcLastMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: PrEnergySumHwcThisMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: SystemFlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: WaterPressure
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingManualTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingOpMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingSetbackTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1CoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1DayTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1HolidayTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1NightTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1OpMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1QuickVetoDuration
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1QuickVetoEndDate
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1QuickVetoEndTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1QuickVetoTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1RoomTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z1SFMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: Z2RoomTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: ctlv2
+  name: z1RoomHumidity
+  fields:
+  - value
+  values:
+  - '61'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: BuildingCircuitFlow
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: BuildingCircuitPumpSpeed
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: Clearerrorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CompressorBlocktime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: CompressorHc
+  fields:
+  - value
+  values:
+  - 188314;4401
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CompressorHwc
+  fields:
+  - value
+  values:
+  - 53339;748
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: ConsumptionTotal
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: CoolElecConsDay
+  fields:
+  - value
+  values:
+  - '0.0491667'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CoolElecConsTotal
+  fields:
+  - value
+  values:
+  - '144857'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CoolEnvYieldDay
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CoolEnvYieldMonth
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CoolEnvYieldTotal
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopCooling
+  fields:
+  - value
+  values:
+  - '6.8'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopCoolingMonth
+  fields:
+  - value
+  values:
+  - '7.4'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopHc
+  fields:
+  - value
+  values:
+  - '3.4'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopHcMonth
+  fields:
+  - value
+  values:
+  - '2.7'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopHwc
+  fields:
+  - value
+  values:
+  - '2.7'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CopHwcMonth
+  fields:
+  - value
+  values:
+  - '3.6'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CurrentCompressorUtil
+  fields:
+  - value
+  values:
+  - '0.00'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CurrentConsumedPower
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: CurrentYieldPower
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - -;-;-;-;-
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: DateTime
+  fields:
+  - value
+  values:
+  - nosignal;-:-:-;-.-.-;-
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: EnergyIntegral
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FlowPressure
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: FlowTemp
+  fields:
+  - value
+  values:
+  - '23.75'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: FlowTemperature
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: HcElecConsDay
+  fields:
+  - value
+  values:
+  - '289.275'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: HcElecConsTotal
+  fields:
+  - value
+  values:
+  - '2.36067e+06'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: HoursCool
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: HwcElecConsDay
+  fields:
+  - value
+  values:
+  - '1332.62'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: HwcElecConsTotal
+  fields:
+  - value
+  values:
+  - '1.07216e+06'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: LiveMonitorCurrentConsumedPower
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: PowerConsumptionHmu
+  fields:
+  - value
+  values:
+  - '0.006500000'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataAirInletTemp
+  fields:
+  - value
+  values:
+  - '21.009'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataBuildingCPumpPower
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataCompressorInletTemp
+  fields:
+  - value
+  values:
+  - '22.9821'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataCompressorOutletTemp
+  fields:
+  - value
+  values:
+  - '23.3824'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataCompressorSpeed
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataEEVOutletTemp
+  fields:
+  - value
+  values:
+  - '22.9375'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataEEVPositionAbs
+  fields:
+  - value
+  values:
+  - '250'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataElPowerConsumption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: RunDataElectricPowerConsumption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: RunDataFan1Speed
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataFan2Speed
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataHighPressure
+  fields:
+  - value
+  values:
+  - '7.80464'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunDataLowPressure
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- circuit: hmu
+  name: RunDataReturnTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: RunDataStatuscode
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStats4PortValveHours
+  fields:
+  - value
+  values:
+  - '356'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStats4PortValveSwitches
+  fields:
+  - value
+  values:
+  - '1434'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsBuildingCPumpStarts
+  fields:
+  - value
+  values:
+  - '2181'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsBuildingPumpHours
+  fields:
+  - value
+  values:
+  - '11769'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsCompressorHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- circuit: hmu
+  name: RunStatsCompressorHours
+  fields:
+  - value
+  values:
+  - '4360'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsCompressorHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- circuit: hmu
+  name: RunStatsCompressorStarts
+  fields:
+  - value
+  values:
+  - '6353'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan1Hours
+  fields:
+  - value
+  values:
+  - '4806'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan1Starts
+  fields:
+  - value
+  values:
+  - '8702'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan2Hours
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsFan2Starts
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsHMUHours
+  fields:
+  - value
+  values:
+  - '18456'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsHcHours
+  fields:
+  - value
+  values:
+  - '8403'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: RunStatsHwcHours
+  fields:
+  - value
+  values:
+  - '931'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: SetMode
+  fields:
+  - value
+  values:
+  - auto;0.0;-;-;1;1;1;0;0;0
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: SourceTempInput
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: SourceTempOutput
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: StatElectricEnergySum
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: StatElectricEnergySumCool
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: StatElectricEnergySumHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: StatElectricEnergySumHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: StatEnvironmentEnergySum
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: StatEnvironmentEnergySumCool
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: StatEnvironmentEnergySumHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: StatEnvironmentEnergySumHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: StatSolarEnergySum
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: StatSolarEnergySumHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: StatSolarEnergySumHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: Status
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Status00
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: Status01
+  fields:
+  - value
+  values:
+  - 23.5;22.5;-;-;-;off
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: Status02
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: Status07
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: hmu
+  name: Status16
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- circuit: hmu
+  name: StatusCirPump
+  fields:
+  - value
+  values:
+  - 'off'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: SupplyTempWeighted
+  fields:
+  - value
+  values:
+  - '20.50'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: TotalEnergyUsage
+  fields:
+  - value
+  values:
+  - '3575'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldCoolDay
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldCooling
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldCoolingMonth
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHc
+  fields:
+  - value
+  values:
+  - '6268'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHcDay
+  fields:
+  - value
+  values:
+  - '0.8'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHcMonth
+  fields:
+  - value
+  values:
+  - '22.2'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHwc
+  fields:
+  - value
+  values:
+  - '1912'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHwcDay
+  fields:
+  - value
+  values:
+  - '3.5'
+  writable: false
+  has_data: true
+- circuit: hmu
+  name: YieldHwcMonth
+  fields:
+  - value
+  values:
+  - '23.7'
+  writable: false
+  has_data: true
+- circuit: hmux0
+  name: Status01
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: BypassPosition
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: ExhaustAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: ExhaustAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: FanHours
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: FlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: FlowTempMax
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: HcHours
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: HoursTillService
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: HwcHours
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: HwcTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- circuit: v32
+  name: Maintenancedata_HwcTempMax
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- circuit: v32
+  name: MaxAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: MinAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: OutdoorstempSensor
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- circuit: v32
+  name: OutsideAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: PumpHours
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: PumpPower
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: ReturnTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: ReturnTempMax
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: StorageLoadPumpHours
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: StorageTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: StorageTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: SupplyAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: VentilationLevelDay
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: VentilationLevelNight
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: YieldMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: YieldToday
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: YieldTotal
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: v32
+  name: YieldYear
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: vr_71
+  name: Clearerrorhistory
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: vr_71
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: vr_71
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: vr_71
+  name: Mc1Operation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: vr_71
+  name: Mc2Operation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: vr_71
+  name: Mc3Operation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: vr_71
+  name: SensorData1
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: vr_71
+  name: SensorData2
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: vr_71
+  name: SetActorState
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: vwz
+  name: Status01
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- circuit: vwz
+  name: TestHwcTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- circuit: vwz
+  name: TestOutdoorTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- circuit: vwz
+  name: TestThreeWayValve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- circuit: vwzio
+  name: Status01
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+grab:
+- '[grab] grab started'
+- '1008b51009000000ffffff070000 / 0101 = 1: hmu SetMode'
+- '10feb516080056231613090726 = 1: Broadcast Vdatetime'
+- '10feb51603019019 = 1: Broadcast Outsidetemp'
+- 1008b5110100 / 097c0113000000000000 = 1
+- 1026b5230106 / 100080b301b20100800080008000804101 = 1
+- 1026b5230107 / 0f008000800080008000008000805405 = 1
+- 1076b5040100 / 0a00ffffffffffffff8019 = 1
+- 1076b5110101 / 09ffff8019ff610000ff = 1
+- 10feb505025c00 = 1
+- 7108b5110107 / 0a00280080003900000000 = 4
+- '1008b5110101 / 092f2d0080ffff0000ff = 1: hmu Status01'
+- 1008b507020900 / 024a06 = 1
+- 1076b512030f0001 / 070a03000080ff03 = 1
+- 1026b5230402000000 / 02019c = 1
+- 1026b5230402010000 / 02019c = 1
+- 1026b5230f05ffff00000000ffffffff00000000 / 0101 = 1
+- 1076b51009000000ffffff050000 / 0101 = 1
+- f115b52406020000000900 / 050300090001 = 1
+- f115b52406020001000f00 / 0601010f000000 = 1
+- f115b52406020002000700 / 080102070000000000 = 1
+- f115b52406020002010700 / 080102070000000000 = 2
+- f115b52406020003001b00 / 0601031b000000 = 5
+- f115b52406020003011b00 / 0601031b000000 = 4
+- 0376b51206130013000006 / 0200ff = 2
+- '3115b52406020002002000 / 050102200000 = 1: ctlv2 Hc1FlowTempCalc'
+- '3115b52406020002012400 / 00 = 1: ctlv2 Hc2PumpHours'
+- 'f115b5240602000000da00 / 070300da00010113 = 1: ctlv2 ManualCoolingStartDate'
+- 'f115b5240602000000db00 / 070300db0001010f = 1: ctlv2 ManualCoolingEndDate'
+- '[grab stop] grab stopped'
+labeled_telegrams:
+- msgid: b510
+  master: '10'
+  slave: 08
+  request: 1008b51009000000ffffff070000
+  sub: 09000000ffffff070000
+  resp: '0101'
+  count: '1'
+  label: hmu SetMode
+- msgid: b516
+  master: '10'
+  slave: fe
+  request: 10feb516080056231613090726
+  sub: 080056231613090726
+  resp: null
+  count: '1'
+  label: Broadcast Vdatetime
+- msgid: b516
+  master: '10'
+  slave: fe
+  request: 10feb51603019019
+  sub: 03019019
+  resp: null
+  count: '1'
+  label: Broadcast Outsidetemp
+- msgid: b511
+  master: '10'
+  slave: 08
+  request: 1008b5110101
+  sub: '0101'
+  resp: 092f2d0080ffff0000ff
+  count: '1'
+  label: hmu Status01
+- msgid: b524
+  master: '31'
+  slave: '15'
+  request: 3115b52406020002002000
+  sub: '06020002002000'
+  resp: '050102200000'
+  count: '1'
+  label: ctlv2 Hc1FlowTempCalc
+- msgid: b524
+  master: '31'
+  slave: '15'
+  request: 3115b52406020002012400
+  sub: '06020002012400'
+  resp: '00'
+  count: '1'
+  label: ctlv2 Hc2PumpHours
+- msgid: b524
+  master: f1
+  slave: '15'
+  request: f115b5240602000000da00
+  sub: 0602000000da00
+  resp: 070300da00010113
+  count: '1'
+  label: ctlv2 ManualCoolingStartDate
+- msgid: b524
+  master: f1
+  slave: '15'
+  request: f115b5240602000000db00
+  sub: 0602000000db00
+  resp: 070300db0001010f
+  count: '1'
+  label: ctlv2 ManualCoolingEndDate
+unknown_telegrams:
+- msgid: b511
+  master: '10'
+  slave: 08
+  request: 1008b5110100
+  sub: '0100'
+  resp: 097c0113000000000000
+  count: '1'
+  label: null
+- msgid: b523
+  master: '10'
+  slave: '26'
+  request: 1026b5230106
+  sub: '0106'
+  resp: 100080b301b20100800080008000804101
+  count: '1'
+  label: null
+- msgid: b523
+  master: '10'
+  slave: '26'
+  request: 1026b5230107
+  sub: '0107'
+  resp: 0f008000800080008000008000805405
+  count: '1'
+  label: null
+- msgid: b504
+  master: '10'
+  slave: '76'
+  request: 1076b5040100
+  sub: '0100'
+  resp: 0a00ffffffffffffff8019
+  count: '1'
+  label: null
+- msgid: b511
+  master: '10'
+  slave: '76'
+  request: 1076b5110101
+  sub: '0101'
+  resp: 09ffff8019ff610000ff
+  count: '1'
+  label: null
+- msgid: b505
+  master: '10'
+  slave: fe
+  request: 10feb505025c00
+  sub: 025c00
+  resp: null
+  count: '1'
+  label: null
+- msgid: b511
+  master: '71'
+  slave: 08
+  request: 7108b5110107
+  sub: '0107'
+  resp: 0a00280080003900000000
+  count: '4'
+  label: null
+- msgid: b507
+  master: '10'
+  slave: 08
+  request: 1008b507020900
+  sub: 020900
+  resp: 024a06
+  count: '1'
+  label: null
+- msgid: b512
+  master: '10'
+  slave: '76'
+  request: 1076b512030f0001
+  sub: 030f0001
+  resp: 070a03000080ff03
+  count: '1'
+  label: null
+- msgid: b523
+  master: '10'
+  slave: '26'
+  request: 1026b5230402000000
+  sub: '0402000000'
+  resp: 02019c
+  count: '1'
+  label: null
+- msgid: b523
+  master: '10'
+  slave: '26'
+  request: 1026b5230402010000
+  sub: '0402010000'
+  resp: 02019c
+  count: '1'
+  label: null
+- msgid: b523
+  master: '10'
+  slave: '26'
+  request: 1026b5230f05ffff00000000ffffffff00000000
+  sub: 0f05ffff00000000ffffffff00000000
+  resp: '0101'
+  count: '1'
+  label: null
+- msgid: b510
+  master: '10'
+  slave: '76'
+  request: 1076b51009000000ffffff050000
+  sub: 09000000ffffff050000
+  resp: '0101'
+  count: '1'
+  label: null
+- msgid: b524
+  master: f1
+  slave: '15'
+  request: f115b52406020000000900
+  sub: 06020000000900
+  resp: 050300090001
+  count: '1'
+  label: null
+- msgid: b524
+  master: f1
+  slave: '15'
+  request: f115b52406020001000f00
+  sub: 06020001000f00
+  resp: 0601010f000000
+  count: '1'
+  label: null
+- msgid: b524
+  master: f1
+  slave: '15'
+  request: f115b52406020002000700
+  sub: '06020002000700'
+  resp: 080102070000000000
+  count: '1'
+  label: null
+- msgid: b524
+  master: f1
+  slave: '15'
+  request: f115b52406020002010700
+  sub: '06020002010700'
+  resp: 080102070000000000
+  count: '2'
+  label: null
+- msgid: b524
+  master: f1
+  slave: '15'
+  request: f115b52406020003001b00
+  sub: 06020003001b00
+  resp: 0601031b000000
+  count: '5'
+  label: null
+- msgid: b524
+  master: f1
+  slave: '15'
+  request: f115b52406020003011b00
+  sub: 06020003011b00
+  resp: 0601031b000000
+  count: '4'
+  label: null
+after_registers:
+- &id001
+  circuit: Broadcast
+  name: Datetime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id002
+  circuit: Broadcast
+  name: Error
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id003
+  circuit: Broadcast
+  name: FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id004
+  circuit: Broadcast
+  name: HwcStatus
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id005
+  circuit: Broadcast
+  name: Id
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id006
+  circuit: Broadcast
+  name: IdAnswer
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id007
+  circuit: Broadcast
+  name: IdQuery
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id008
+  circuit: Broadcast
+  name: Load
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id009
+  circuit: Broadcast
+  name: Outsidetemp
+  fields:
+  - value
+  values: &id292
+  - '25.562'
+  writable: false
+  has_data: true
+- &id010
+  circuit: Broadcast
+  name: Queryexistence
+  fields:
+  - value
+  values:
+  - (empty for 31fe07fe00 / )
+  writable: false
+  has_data: false
+- &id011
+  circuit: Broadcast
+  name: Signoflife
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id012
+  circuit: Broadcast
+  name: Vdatetime
+  fields:
+  - value
+  values:
+  - 16:23:56;13.09.2026
+  writable: false
+  has_data: true
+- &id013
+  circuit: Broadcast
+  name: Vdatetime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id014
+  circuit: Broadcast
+  name: WaterPressure
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id015
+  circuit: General
+  name: Valuerange
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id016
+  circuit: Memory
+  name: Eeprom
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id017
+  circuit: Memory
+  name: Eeprom
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id018
+  circuit: Memory
+  name: Ram
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id019
+  circuit: Memory
+  name: Ram
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id020
+  circuit: Scan
+  name: Id
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id021
+  circuit: Scan.08
+  name: Id
+  fields:
+  - value
+  values:
+  - 21;24;18;0010047380;1300;105808;N4
+  writable: false
+  has_data: true
+- &id022
+  circuit: bai
+  name: SetModeOverride
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id023
+  circuit: ctlv2
+  name: AdaptHeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id024
+  circuit: ctlv2
+  name: CcTimer_Config
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id025
+  circuit: ctlv2
+  name: CcTimer_Timeframes
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id026
+  circuit: ctlv2
+  name: ContinuousHeating
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id027
+  circuit: ctlv2
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id028
+  circuit: ctlv2
+  name: CylinderChargeHyst
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id029
+  circuit: ctlv2
+  name: CylinderChargeOffset
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id030
+  circuit: ctlv2
+  name: Date
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id031
+  circuit: ctlv2
+  name: DisplayedOutsideTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id032
+  circuit: ctlv2
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id033
+  circuit: ctlv2
+  name: FrostOverRideTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id034
+  circuit: ctlv2
+  name: Hc1ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id035
+  circuit: ctlv2
+  name: Hc1AutoOffMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id036
+  circuit: ctlv2
+  name: Hc1CircuitType
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id037
+  circuit: ctlv2
+  name: Hc1CoolingEnabled
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id038
+  circuit: ctlv2
+  name: Hc1CoolingFlowTempMin
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id039
+  circuit: ctlv2
+  name: Hc1DewPointMonitoring
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id040
+  circuit: ctlv2
+  name: Hc1DewPointOffset
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id041
+  circuit: ctlv2
+  name: Hc1DewPointTemp
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002300 / 00)'
+  writable: false
+  has_data: false
+- &id042
+  circuit: ctlv2
+  name: Hc1ExcessTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id043
+  circuit: ctlv2
+  name: Hc1FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id044
+  circuit: ctlv2
+  name: Hc1FlowTempCalc
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002000 / 050102200000)'
+  writable: false
+  has_data: false
+- &id045
+  circuit: ctlv2
+  name: Hc1HeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id046
+  circuit: ctlv2
+  name: Hc1HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id047
+  circuit: ctlv2
+  name: Hc1Humidity
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002200 / 00)'
+  writable: false
+  has_data: false
+- &id048
+  circuit: ctlv2
+  name: Hc1MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id049
+  circuit: ctlv2
+  name: Hc1MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id050
+  circuit: ctlv2
+  name: Hc1MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id051
+  circuit: ctlv2
+  name: Hc1MixerMovement
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id052
+  circuit: ctlv2
+  name: Hc1MixerPosition
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002100 / 00)'
+  writable: false
+  has_data: false
+- &id053
+  circuit: ctlv2
+  name: Hc1PumpHours
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002400 / 00)'
+  writable: false
+  has_data: false
+- &id054
+  circuit: ctlv2
+  name: Hc1PumpStarts
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002002500 / 00)'
+  writable: false
+  has_data: false
+- &id055
+  circuit: ctlv2
+  name: Hc1PumpStatus
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id056
+  circuit: ctlv2
+  name: Hc1RoomTempModulation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id057
+  circuit: ctlv2
+  name: Hc1RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id058
+  circuit: ctlv2
+  name: Hc1Status
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id059
+  circuit: ctlv2
+  name: Hc1SummerTempLimit
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id060
+  circuit: ctlv2
+  name: Hc2ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id061
+  circuit: ctlv2
+  name: Hc2AutoOffMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id062
+  circuit: ctlv2
+  name: Hc2CircuitType
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id063
+  circuit: ctlv2
+  name: Hc2DewPointTemp
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012300 / 00)'
+  writable: false
+  has_data: false
+- &id064
+  circuit: ctlv2
+  name: Hc2ExcessTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id065
+  circuit: ctlv2
+  name: Hc2FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id066
+  circuit: ctlv2
+  name: Hc2FlowTempCalc
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012000 / 050102200000)'
+  writable: false
+  has_data: false
+- &id067
+  circuit: ctlv2
+  name: Hc2HeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id068
+  circuit: ctlv2
+  name: Hc2HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id069
+  circuit: ctlv2
+  name: Hc2Humidity
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012200 / 00)'
+  writable: false
+  has_data: false
+- &id070
+  circuit: ctlv2
+  name: Hc2MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id071
+  circuit: ctlv2
+  name: Hc2MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id072
+  circuit: ctlv2
+  name: Hc2MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id073
+  circuit: ctlv2
+  name: Hc2MixerMovement
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id074
+  circuit: ctlv2
+  name: Hc2MixerPosition
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012100 / 00)'
+  writable: false
+  has_data: false
+- &id075
+  circuit: ctlv2
+  name: Hc2PumpHours
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012400 / 00)'
+  writable: false
+  has_data: false
+- &id076
+  circuit: ctlv2
+  name: Hc2PumpStarts
+  fields:
+  - value
+  values:
+  - '(ERR: invalid position for 3115b52406020002012500 / 00)'
+  writable: false
+  has_data: false
+- &id077
+  circuit: ctlv2
+  name: Hc2PumpStatus
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id078
+  circuit: ctlv2
+  name: Hc2RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id079
+  circuit: ctlv2
+  name: Hc2Status
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id080
+  circuit: ctlv2
+  name: Hc2SummerTempLimit
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id081
+  circuit: ctlv2
+  name: Hc3ActualFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id082
+  circuit: ctlv2
+  name: Hc3AutoOffMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id083
+  circuit: ctlv2
+  name: Hc3CircuitType
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id084
+  circuit: ctlv2
+  name: Hc3ExcessTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id085
+  circuit: ctlv2
+  name: Hc3FlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id086
+  circuit: ctlv2
+  name: Hc3HeatCurve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id087
+  circuit: ctlv2
+  name: Hc3HeatCurveAdaption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id088
+  circuit: ctlv2
+  name: Hc3MaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id089
+  circuit: ctlv2
+  name: Hc3MinCoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id090
+  circuit: ctlv2
+  name: Hc3MinFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id091
+  circuit: ctlv2
+  name: Hc3MixerMovement
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id092
+  circuit: ctlv2
+  name: Hc3PumpStatus
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id093
+  circuit: ctlv2
+  name: Hc3RoomTempSwitchOn
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id094
+  circuit: ctlv2
+  name: Hc3Status
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id095
+  circuit: ctlv2
+  name: Hc3SummerTempLimit
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id096
+  circuit: ctlv2
+  name: HcStorageTempBottom
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- &id097
+  circuit: ctlv2
+  name: HcStorageTempTop
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- &id098
+  circuit: ctlv2
+  name: HwcFlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id099
+  circuit: ctlv2
+  name: HwcHolidayEndPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id100
+  circuit: ctlv2
+  name: HwcHolidayStartPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id101
+  circuit: ctlv2
+  name: HwcLockTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id102
+  circuit: ctlv2
+  name: HwcMaxFlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id103
+  circuit: ctlv2
+  name: HwcOpMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id104
+  circuit: ctlv2
+  name: HwcParallelLoading
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id105
+  circuit: ctlv2
+  name: HwcSFMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id106
+  circuit: ctlv2
+  name: HwcSfMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id107
+  circuit: ctlv2
+  name: HwcStorageTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id108
+  circuit: ctlv2
+  name: HwcStorageTempBottom
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id109
+  circuit: ctlv2
+  name: HwcStorageTempTop
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id110
+  circuit: ctlv2
+  name: HwcTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id111
+  circuit: ctlv2
+  name: HydraulicScheme
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id112
+  circuit: ctlv2
+  name: ManualCoolingEndDate
+  fields:
+  - value
+  values:
+  - 01.01.2015
+  writable: false
+  has_data: true
+- &id113
+  circuit: ctlv2
+  name: ManualCoolingEndDate
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id114
+  circuit: ctlv2
+  name: ManualCoolingStartDate
+  fields:
+  - value
+  values:
+  - 01.01.2019
+  writable: false
+  has_data: true
+- &id115
+  circuit: ctlv2
+  name: ManualCoolingStartDate
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id116
+  circuit: ctlv2
+  name: MaxCylinderChargeTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id117
+  circuit: ctlv2
+  name: MaxRoomHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id118
+  circuit: ctlv2
+  name: MultiRelaySetting
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id119
+  circuit: ctlv2
+  name: OutsideTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id120
+  circuit: ctlv2
+  name: OutsideTempAvg
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id121
+  circuit: ctlv2
+  name: PrEnergySum
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id122
+  circuit: ctlv2
+  name: PrEnergySumHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id123
+  circuit: ctlv2
+  name: PrEnergySumHcLastMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id124
+  circuit: ctlv2
+  name: PrEnergySumHcThisMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id125
+  circuit: ctlv2
+  name: PrEnergySumHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id126
+  circuit: ctlv2
+  name: PrEnergySumHwcLastMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id127
+  circuit: ctlv2
+  name: PrEnergySumHwcThisMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id128
+  circuit: ctlv2
+  name: SystemFlowTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id129
+  circuit: ctlv2
+  name: WaterPressure
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id130
+  circuit: ctlv2
+  name: Z1ActualRoomTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id131
+  circuit: ctlv2
+  name: Z1CoolingManualTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id132
+  circuit: ctlv2
+  name: Z1CoolingOpMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id133
+  circuit: ctlv2
+  name: Z1CoolingSetbackTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id134
+  circuit: ctlv2
+  name: Z1CoolingTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id135
+  circuit: ctlv2
+  name: Z1CoolingTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id136
+  circuit: ctlv2
+  name: Z1DayTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id137
+  circuit: ctlv2
+  name: Z1HolidayEndPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id138
+  circuit: ctlv2
+  name: Z1HolidayStartPeriod
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id139
+  circuit: ctlv2
+  name: Z1HolidayTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id140
+  circuit: ctlv2
+  name: Z1NightTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id141
+  circuit: ctlv2
+  name: Z1OpMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id142
+  circuit: ctlv2
+  name: Z1QuickVetoDuration
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id143
+  circuit: ctlv2
+  name: Z1QuickVetoEndDate
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id144
+  circuit: ctlv2
+  name: Z1QuickVetoEndTime
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id145
+  circuit: ctlv2
+  name: Z1QuickVetoTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: true
+  has_data: false
+  from_map: true
+- &id146
+  circuit: ctlv2
+  name: Z1RoomTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id147
+  circuit: ctlv2
+  name: Z1SFMode
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id148
+  circuit: ctlv2
+  name: Z2RoomTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id149
+  circuit: ctlv2
+  name: z1RoomHumidity
+  fields:
+  - value
+  values:
+  - '61'
+  writable: false
+  has_data: true
+- &id150
+  circuit: hmu
+  name: BuildingCircuitFlow
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- &id151
+  circuit: hmu
+  name: BuildingCircuitPumpSpeed
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id152
+  circuit: hmu
+  name: Clearerrorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id153
+  circuit: hmu
+  name: CompressorBlocktime
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id154
+  circuit: hmu
+  name: CompressorHc
+  fields:
+  - value
+  values:
+  - 188314;4401
+  writable: false
+  has_data: true
+- &id155
+  circuit: hmu
+  name: CompressorHwc
+  fields:
+  - value
+  values:
+  - 53339;748
+  writable: false
+  has_data: true
+- &id156
+  circuit: hmu
+  name: ConsumptionTotal
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id157
+  circuit: hmu
+  name: CoolElecConsDay
+  fields:
+  - value
+  values:
+  - '0.0491667'
+  writable: false
+  has_data: true
+- &id158
+  circuit: hmu
+  name: CoolElecConsTotal
+  fields:
+  - value
+  values:
+  - '144857'
+  writable: false
+  has_data: true
+- &id159
+  circuit: hmu
+  name: CoolEnvYieldDay
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id160
+  circuit: hmu
+  name: CoolEnvYieldMonth
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id161
+  circuit: hmu
+  name: CoolEnvYieldTotal
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id162
+  circuit: hmu
+  name: CopCooling
+  fields:
+  - value
+  values:
+  - '6.8'
+  writable: false
+  has_data: true
+- &id163
+  circuit: hmu
+  name: CopCoolingMonth
+  fields:
+  - value
+  values:
+  - '7.4'
+  writable: false
+  has_data: true
+- &id164
+  circuit: hmu
+  name: CopHc
+  fields:
+  - value
+  values:
+  - '3.4'
+  writable: false
+  has_data: true
+- &id165
+  circuit: hmu
+  name: CopHcMonth
+  fields:
+  - value
+  values:
+  - '2.7'
+  writable: false
+  has_data: true
+- &id166
+  circuit: hmu
+  name: CopHwc
+  fields:
+  - value
+  values:
+  - '2.7'
+  writable: false
+  has_data: true
+- &id167
+  circuit: hmu
+  name: CopHwcMonth
+  fields:
+  - value
+  values:
+  - '3.6'
+  writable: false
+  has_data: true
+- &id168
+  circuit: hmu
+  name: CurrentCompressorUtil
+  fields:
+  - value
+  values:
+  - '0.00'
+  writable: false
+  has_data: true
+- &id169
+  circuit: hmu
+  name: CurrentConsumedPower
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id170
+  circuit: hmu
+  name: CurrentYieldPower
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id171
+  circuit: hmu
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - -;-;-;-;-
+  writable: false
+  has_data: false
+- &id172
+  circuit: hmu
+  name: DateTime
+  fields:
+  - value
+  values:
+  - nosignal;-:-:-;-.-.-;-
+  writable: false
+  has_data: true
+- &id173
+  circuit: hmu
+  name: EnergyIntegral
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id174
+  circuit: hmu
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id175
+  circuit: hmu
+  name: FlowPressure
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id176
+  circuit: hmu
+  name: FlowTemp
+  fields:
+  - value
+  values:
+  - '23.75'
+  writable: false
+  has_data: true
+- &id177
+  circuit: hmu
+  name: FlowTemperature
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id178
+  circuit: hmu
+  name: HcElecConsDay
+  fields:
+  - value
+  values:
+  - '289.275'
+  writable: false
+  has_data: true
+- &id179
+  circuit: hmu
+  name: HcElecConsTotal
+  fields:
+  - value
+  values:
+  - '2.36067e+06'
+  writable: false
+  has_data: true
+- &id180
+  circuit: hmu
+  name: HoursCool
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id181
+  circuit: hmu
+  name: HwcElecConsDay
+  fields:
+  - value
+  values:
+  - '1332.62'
+  writable: false
+  has_data: true
+- &id182
+  circuit: hmu
+  name: HwcElecConsTotal
+  fields:
+  - value
+  values:
+  - '1.07216e+06'
+  writable: false
+  has_data: true
+- &id183
+  circuit: hmu
+  name: LiveMonitorCurrentConsumedPower
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id184
+  circuit: hmu
+  name: PowerConsumptionHmu
+  fields:
+  - value
+  values:
+  - '0.006500000'
+  writable: false
+  has_data: true
+- &id185
+  circuit: hmu
+  name: RunDataAirInletTemp
+  fields:
+  - value
+  values:
+  - '21.009'
+  writable: false
+  has_data: true
+- &id186
+  circuit: hmu
+  name: RunDataBuildingCPumpPower
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id187
+  circuit: hmu
+  name: RunDataCompressorInletTemp
+  fields:
+  - value
+  values:
+  - '22.9821'
+  writable: false
+  has_data: true
+- &id188
+  circuit: hmu
+  name: RunDataCompressorOutletTemp
+  fields:
+  - value
+  values:
+  - '23.3824'
+  writable: false
+  has_data: true
+- &id189
+  circuit: hmu
+  name: RunDataCompressorSpeed
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id190
+  circuit: hmu
+  name: RunDataEEVOutletTemp
+  fields:
+  - value
+  values:
+  - '22.9375'
+  writable: false
+  has_data: true
+- &id191
+  circuit: hmu
+  name: RunDataEEVPositionAbs
+  fields:
+  - value
+  values:
+  - '250'
+  writable: false
+  has_data: true
+- &id192
+  circuit: hmu
+  name: RunDataElPowerConsumption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id193
+  circuit: hmu
+  name: RunDataElectricPowerConsumption
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id194
+  circuit: hmu
+  name: RunDataFan1Speed
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id195
+  circuit: hmu
+  name: RunDataFan2Speed
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id196
+  circuit: hmu
+  name: RunDataHighPressure
+  fields:
+  - value
+  values:
+  - '7.80464'
+  writable: false
+  has_data: true
+- &id197
+  circuit: hmu
+  name: RunDataLowPressure
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- &id198
+  circuit: hmu
+  name: RunDataReturnTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id199
+  circuit: hmu
+  name: RunDataStatuscode
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: true
+- &id200
+  circuit: hmu
+  name: RunStats4PortValveHours
+  fields:
+  - value
+  values:
+  - '356'
+  writable: false
+  has_data: true
+- &id201
+  circuit: hmu
+  name: RunStats4PortValveSwitches
+  fields:
+  - value
+  values:
+  - '1434'
+  writable: false
+  has_data: true
+- &id202
+  circuit: hmu
+  name: RunStatsBuildingCPumpStarts
+  fields:
+  - value
+  values:
+  - '2181'
+  writable: false
+  has_data: true
+- &id203
+  circuit: hmu
+  name: RunStatsBuildingPumpHours
+  fields:
+  - value
+  values:
+  - '11769'
+  writable: false
+  has_data: true
+- &id204
+  circuit: hmu
+  name: RunStatsCompressorHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- &id205
+  circuit: hmu
+  name: RunStatsCompressorHours
+  fields:
+  - value
+  values:
+  - '4360'
+  writable: false
+  has_data: true
+- &id206
+  circuit: hmu
+  name: RunStatsCompressorHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- &id207
+  circuit: hmu
+  name: RunStatsCompressorStarts
+  fields:
+  - value
+  values:
+  - '6353'
+  writable: false
+  has_data: true
+- &id208
+  circuit: hmu
+  name: RunStatsFan1Hours
+  fields:
+  - value
+  values:
+  - '4806'
+  writable: false
+  has_data: true
+- &id209
+  circuit: hmu
+  name: RunStatsFan1Starts
+  fields:
+  - value
+  values:
+  - '8702'
+  writable: false
+  has_data: true
+- &id210
+  circuit: hmu
+  name: RunStatsFan2Hours
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- &id211
+  circuit: hmu
+  name: RunStatsFan2Starts
+  fields:
+  - value
+  values:
+  - '0'
+  writable: false
+  has_data: true
+- &id212
+  circuit: hmu
+  name: RunStatsHMUHours
+  fields:
+  - value
+  values:
+  - '18456'
+  writable: false
+  has_data: true
+- &id213
+  circuit: hmu
+  name: RunStatsHcHours
+  fields:
+  - value
+  values:
+  - '8403'
+  writable: false
+  has_data: true
+- &id214
+  circuit: hmu
+  name: RunStatsHwcHours
+  fields:
+  - value
+  values:
+  - '931'
+  writable: false
+  has_data: true
+- &id215
+  circuit: hmu
+  name: SetMode
+  fields:
+  - value
+  values:
+  - auto;0.0;-;-;1;1;1;0;0;0
+  writable: false
+  has_data: true
+- &id216
+  circuit: hmu
+  name: SourceTempInput
+  fields:
+  - value
+  values:
+  - <redacted>
+  writable: false
+  has_data: false
+- &id217
+  circuit: hmu
+  name: SourceTempOutput
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id218
+  circuit: hmu
+  name: StatElectricEnergySum
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id219
+  circuit: hmu
+  name: StatElectricEnergySumCool
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id220
+  circuit: hmu
+  name: StatElectricEnergySumHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id221
+  circuit: hmu
+  name: StatElectricEnergySumHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id222
+  circuit: hmu
+  name: StatEnvironmentEnergySum
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id223
+  circuit: hmu
+  name: StatEnvironmentEnergySumCool
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id224
+  circuit: hmu
+  name: StatEnvironmentEnergySumHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id225
+  circuit: hmu
+  name: StatEnvironmentEnergySumHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id226
+  circuit: hmu
+  name: StatSolarEnergySum
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id227
+  circuit: hmu
+  name: StatSolarEnergySumHc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id228
+  circuit: hmu
+  name: StatSolarEnergySumHwc
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id229
+  circuit: hmu
+  name: Status
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id230
+  circuit: hmu
+  name: Status00
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id231
+  circuit: hmu
+  name: Status01
+  fields:
+  - value
+  values:
+  - 23.5;22.5;-;-;-;off
+  writable: false
+  has_data: true
+- &id232
+  circuit: hmu
+  name: Status02
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id233
+  circuit: hmu
+  name: Status07
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id234
+  circuit: hmu
+  name: Status16
+  fields:
+  - value
+  values:
+  - no data stored
+  writable: false
+  has_data: false
+- &id235
+  circuit: hmu
+  name: StatusCirPump
+  fields:
+  - value
+  values:
+  - 'off'
+  writable: false
+  has_data: true
+- &id236
+  circuit: hmu
+  name: SupplyTempWeighted
+  fields:
+  - value
+  values:
+  - '20.50'
+  writable: false
+  has_data: true
+- &id237
+  circuit: hmu
+  name: TotalEnergyUsage
+  fields:
+  - value
+  values:
+  - '3575'
+  writable: false
+  has_data: true
+- &id238
+  circuit: hmu
+  name: YieldCoolDay
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id239
+  circuit: hmu
+  name: YieldCooling
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id240
+  circuit: hmu
+  name: YieldCoolingMonth
+  fields:
+  - value
+  values:
+  - '0.0'
+  writable: false
+  has_data: true
+- &id241
+  circuit: hmu
+  name: YieldHc
+  fields:
+  - value
+  values:
+  - '6268'
+  writable: false
+  has_data: true
+- &id242
+  circuit: hmu
+  name: YieldHcDay
+  fields:
+  - value
+  values:
+  - '0.8'
+  writable: false
+  has_data: true
+- &id243
+  circuit: hmu
+  name: YieldHcMonth
+  fields:
+  - value
+  values:
+  - '22.2'
+  writable: false
+  has_data: true
+- &id244
+  circuit: hmu
+  name: YieldHwc
+  fields:
+  - value
+  values:
+  - '1912'
+  writable: false
+  has_data: true
+- &id245
+  circuit: hmu
+  name: YieldHwcDay
+  fields:
+  - value
+  values:
+  - '3.5'
+  writable: false
+  has_data: true
+- &id246
+  circuit: hmu
+  name: YieldHwcMonth
+  fields:
+  - value
+  values:
+  - '23.7'
+  writable: false
+  has_data: true
+- &id247
+  circuit: hmux0
+  name: Status01
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id248
+  circuit: v32
+  name: BypassPosition
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id249
+  circuit: v32
+  name: ExhaustAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id250
+  circuit: v32
+  name: ExhaustAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id251
+  circuit: v32
+  name: FanHours
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id252
+  circuit: v32
+  name: FlowTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id253
+  circuit: v32
+  name: FlowTempMax
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id254
+  circuit: v32
+  name: HcHours
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id255
+  circuit: v32
+  name: HoursTillService
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id256
+  circuit: v32
+  name: HwcHours
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id257
+  circuit: v32
+  name: HwcTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- &id258
+  circuit: v32
+  name: Maintenancedata_HwcTempMax
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- &id259
+  circuit: v32
+  name: MaxAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id260
+  circuit: v32
+  name: MinAirHumidity
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id261
+  circuit: v32
+  name: OutdoorstempSensor
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- &id262
+  circuit: v32
+  name: OutsideAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id263
+  circuit: v32
+  name: PumpHours
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id264
+  circuit: v32
+  name: PumpPower
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id265
+  circuit: v32
+  name: ReturnTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id266
+  circuit: v32
+  name: ReturnTempMax
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id267
+  circuit: v32
+  name: StorageLoadPumpHours
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id268
+  circuit: v32
+  name: StorageTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id269
+  circuit: v32
+  name: StorageTempDesired
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id270
+  circuit: v32
+  name: SupplyAirTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id271
+  circuit: v32
+  name: VentilationLevelDay
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id272
+  circuit: v32
+  name: VentilationLevelNight
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id273
+  circuit: v32
+  name: YieldMonth
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id274
+  circuit: v32
+  name: YieldToday
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id275
+  circuit: v32
+  name: YieldTotal
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id276
+  circuit: v32
+  name: YieldYear
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id277
+  circuit: vr_71
+  name: Clearerrorhistory
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id278
+  circuit: vr_71
+  name: Currenterror
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id279
+  circuit: vr_71
+  name: Errorhistory
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id280
+  circuit: vr_71
+  name: Mc1Operation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id281
+  circuit: vr_71
+  name: Mc2Operation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id282
+  circuit: vr_71
+  name: Mc3Operation
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id283
+  circuit: vr_71
+  name: SensorData1
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id284
+  circuit: vr_71
+  name: SensorData2
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id285
+  circuit: vr_71
+  name: SetActorState
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id286
+  circuit: vwz
+  name: Status01
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+- &id287
+  circuit: vwz
+  name: TestHwcTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- &id288
+  circuit: vwz
+  name: TestOutdoorTemp
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- &id289
+  circuit: vwz
+  name: TestThreeWayValve
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+  disabled: true
+- &id290
+  circuit: vwzio
+  name: Status01
+  fields:
+  - value
+  values:
+  - 'ERR: element not found'
+  writable: false
+  has_data: false
+  from_map: true
+raw_find_lines_after:
+- bai SetModeOverride = no data stored
+- Broadcast Datetime = no data stored
+- Broadcast Error = no data stored
+- Broadcast HwcStatus = no data stored
+- Broadcast Id = no data stored
+- Broadcast IdAnswer = no data stored
+- Broadcast IdQuery = no data stored
+- Broadcast Load = no data stored
+- Broadcast Outsidetemp = 25.562
+- Broadcast Queryexistence =  (empty for 31fe07fe00 / )
+- Broadcast Signoflife = no data stored
+- Broadcast Vdatetime = 16:23:56;13.09.2026
+- Broadcast Vdatetime = no data stored
+- 'ctlv2 Hc1DewPointTemp =  (ERR: invalid position for 3115b52406020002002300 / 00)'
+- 'ctlv2 Hc1FlowTempCalc =  (ERR: invalid position for 3115b52406020002002000 / 050102200000)'
+- 'ctlv2 Hc1Humidity =  (ERR: invalid position for 3115b52406020002002200 / 00)'
+- 'ctlv2 Hc1MixerPosition =  (ERR: invalid position for 3115b52406020002002100 / 00)'
+- 'ctlv2 Hc1PumpHours =  (ERR: invalid position for 3115b52406020002002400 / 00)'
+- 'ctlv2 Hc1PumpStarts =  (ERR: invalid position for 3115b52406020002002500 / 00)'
+- 'ctlv2 Hc2DewPointTemp =  (ERR: invalid position for 3115b52406020002012300 / 00)'
+- 'ctlv2 Hc2FlowTempCalc =  (ERR: invalid position for 3115b52406020002012000 / 050102200000)'
+- 'ctlv2 Hc2Humidity =  (ERR: invalid position for 3115b52406020002012200 / 00)'
+- 'ctlv2 Hc2MixerPosition =  (ERR: invalid position for 3115b52406020002012100 / 00)'
+- 'ctlv2 Hc2PumpHours =  (ERR: invalid position for 3115b52406020002012400 / 00)'
+- 'ctlv2 Hc2PumpStarts =  (ERR: invalid position for 3115b52406020002012500 / 00)'
+- ctlv2 ManualCoolingEndDate = 01.01.2015
+- ctlv2 ManualCoolingEndDate = no data stored
+- ctlv2 ManualCoolingStartDate = 01.01.2019
+- ctlv2 ManualCoolingStartDate = no data stored
+- ctlv2 z1RoomHumidity = 61
+- General Valuerange = no data stored
+- hmu BuildingCircuitFlow = 0
+- hmu Clearerrorhistory = no data stored
+- hmu CompressorBlocktime = no data stored
+- hmu CompressorHc = 188314;4401
+- hmu CompressorHwc = 53339;748
+- hmu CoolElecConsDay = 0.0491667
+- hmu CoolElecConsTotal = 144857
+- hmu CoolEnvYieldDay = 0.0
+- hmu CoolEnvYieldMonth = 0.0
+- hmu CoolEnvYieldTotal = 0.0
+- hmu CopCooling = 6.8
+- hmu CopCoolingMonth = 7.4
+- hmu CopHc = 3.4
+- hmu CopHcMonth = 2.7
+- hmu CopHwc = 2.7
+- hmu CopHwcMonth = 3.6
+- hmu CurrentCompressorUtil = 0.00
+- hmu CurrentConsumedPower = 0.0
+- hmu Currenterror = -;-;-;-;-
+- hmu CurrentYieldPower = 0.0
+- hmu DateTime = nosignal;-:-:-;-.-.-;-
+- hmu EnergyIntegral = no data stored
+- hmu Errorhistory = no data stored
+- hmu FlowPressure = no data stored
+- hmu FlowTemp = 23.75
+- hmu HcElecConsDay = 289.275
+- hmu HcElecConsTotal = 2.36067e+06
+- hmu HwcElecConsDay = 1332.62
+- hmu HwcElecConsTotal = 1.07216e+06
+- hmu PowerConsumptionHmu = 0.006500000
+- hmu RunDataAirInletTemp = 21.009
+- hmu RunDataBuildingCPumpPower = 0.0
+- hmu RunDataCompressorInletTemp = 22.9821
+- hmu RunDataCompressorOutletTemp = 23.3824
+- hmu RunDataCompressorSpeed = 0.0
+- hmu RunDataEEVOutletTemp = 22.9375
+- hmu RunDataEEVPositionAbs = 250
+- hmu RunDataFan1Speed = 0.0
+- hmu RunDataFan2Speed = 0.0
+- hmu RunDataHighPressure = 7.80464
+- hmu RunDataStatuscode = standby
+- hmu RunStats4PortValveHours = 356
+- hmu RunStats4PortValveSwitches = 1434
+- hmu RunStatsBuildingCPumpStarts = 2181
+- hmu RunStatsBuildingPumpHours = 11769
+- hmu RunStatsCompressorHours = 4360
+- hmu RunStatsCompressorStarts = 6353
+- hmu RunStatsFan1Hours = 4806
+- hmu RunStatsFan1Starts = 8702
+- hmu RunStatsFan2Hours = 0
+- hmu RunStatsFan2Starts = 0
+- hmu RunStatsHcHours = 8403
+- hmu RunStatsHMUHours = 18456
+- hmu RunStatsHwcHours = 931
+- hmu SetMode = auto;0.0;-;-;1;1;1;0;0;0
+- 'hmu SourceTempInput =  (ERR: invalid position for 3108b51a0405ff3222 / 02ff01)'
+- hmu Status01 = 23.5;22.5;-;-;-;off
+- hmu Status02 = no data stored
+- hmu Status16 = no data stored
+- hmu Status = no data stored
+- hmu StatusCirPump = off
+- hmu SupplyTempWeighted = 20.50
+- hmu TotalEnergyUsage = 3575
+- hmu YieldCoolDay = 0.0
+- hmu YieldCooling = 0.0
+- hmu YieldCoolingMonth = 0.0
+- hmu YieldHc = 6268
+- hmu YieldHcDay = 0.8
+- hmu YieldHcMonth = 22.2
+- hmu YieldHwc = 1912
+- hmu YieldHwcDay = 3.5
+- hmu YieldHwcMonth = 23.7
+- Memory Eeprom = no data stored
+- Memory Eeprom = no data stored
+- Memory Ram = no data stored
+- Memory Ram = no data stored
+- Scan Id = no data stored
+- scan.08  = Vaillant;HMU00;0902;5103
+- Scan.08 Id = 21;24;18;0010047380;1300;105808;N4
+- scan.15  = Vaillant;CTLV3;0709;3704
+- scan.26  = Vaillant;VR_71;0201;0503
+- scan.35  = Vaillant;VR_92;0122;9403
+- scan.76  = Vaillant;VWZIO;0202;0103
+- scan.f6  = no data stored
+- ''
+traffic:
+  summary:
+  - master: '10'
+    slave: '76'
+    msgid: b504
+    sub: '0100'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1076b5040100
+    unique_responses:
+    - 0a00ffffffffffffff8019
+  - master: '10'
+    slave: fe
+    msgid: b505
+    sub: 025c00
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 10feb505025c00
+    unique_responses: []
+  - master: '10'
+    slave: 08
+    msgid: b507
+    sub: 020900
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1008b507020900
+    unique_responses:
+    - 024a06
+  - master: '10'
+    slave: 08
+    msgid: b510
+    sub: 09000000ffffff070000
+    label: hmu SetMode
+    known: true
+    occurrence_count: 1
+    unique_requests:
+    - 1008b51009000000ffffff070000
+    unique_responses:
+    - '0101'
+  - master: '10'
+    slave: '76'
+    msgid: b510
+    sub: 09000000ffffff050000
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1076b51009000000ffffff050000
+    unique_responses:
+    - '0101'
+  - master: '10'
+    slave: 08
+    msgid: b511
+    sub: '0100'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1008b5110100
+    unique_responses:
+    - 097c0113000000000000
+  - master: '10'
+    slave: 08
+    msgid: b511
+    sub: '0101'
+    label: hmu Status01
+    known: true
+    occurrence_count: 1
+    unique_requests:
+    - 1008b5110101
+    unique_responses:
+    - 092f2d0080ffff0000ff
+  - master: '10'
+    slave: '76'
+    msgid: b511
+    sub: '0101'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1076b5110101
+    unique_responses:
+    - 09ffff8019ff610000ff
+  - master: '71'
+    slave: 08
+    msgid: b511
+    sub: '0107'
+    label: null
+    known: false
+    occurrence_count: 4
+    unique_requests:
+    - 7108b5110107
+    unique_responses:
+    - 0a00280080003900000000
+  - master: '10'
+    slave: '76'
+    msgid: b512
+    sub: 030f0001
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1076b512030f0001
+    unique_responses:
+    - 070a03000080ff03
+  - master: '10'
+    slave: fe
+    msgid: b516
+    sub: 03019019
+    label: Broadcast Outsidetemp
+    known: true
+    occurrence_count: 1
+    unique_requests:
+    - 10feb51603019019
+    unique_responses: []
+  - master: '10'
+    slave: fe
+    msgid: b516
+    sub: 080056231613090726
+    label: Broadcast Vdatetime
+    known: true
+    occurrence_count: 1
+    unique_requests:
+    - 10feb516080056231613090726
+    unique_responses: []
+  - master: '10'
+    slave: '26'
+    msgid: b523
+    sub: '0106'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1026b5230106
+    unique_responses:
+    - 100080b301b20100800080008000804101
+  - master: '10'
+    slave: '26'
+    msgid: b523
+    sub: '0107'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1026b5230107
+    unique_responses:
+    - 0f008000800080008000008000805405
+  - master: '10'
+    slave: '26'
+    msgid: b523
+    sub: '0402000000'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1026b5230402000000
+    unique_responses:
+    - 02019c
+  - master: '10'
+    slave: '26'
+    msgid: b523
+    sub: '0402010000'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1026b5230402010000
+    unique_responses:
+    - 02019c
+  - master: '10'
+    slave: '26'
+    msgid: b523
+    sub: 0f05ffff00000000ffffffff00000000
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1026b5230f05ffff00000000ffffffff00000000
+    unique_responses:
+    - '0101'
+  - master: '31'
+    slave: '15'
+    msgid: b524
+    sub: '06020002002000'
+    label: ctlv2 Hc1FlowTempCalc
+    known: true
+    occurrence_count: 1
+    unique_requests:
+    - 3115b52406020002002000
+    unique_responses:
+    - '050102200000'
+  - master: '31'
+    slave: '15'
+    msgid: b524
+    sub: '06020002012400'
+    label: ctlv2 Hc2PumpHours
+    known: true
+    occurrence_count: 1
+    unique_requests:
+    - 3115b52406020002012400
+    unique_responses:
+    - '00'
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: 06020000000900
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - f115b52406020000000900
+    unique_responses:
+    - 050300090001
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: 0602000000da00
+    label: ctlv2 ManualCoolingStartDate
+    known: true
+    occurrence_count: 1
+    unique_requests:
+    - f115b5240602000000da00
+    unique_responses:
+    - 070300da00010113
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: 0602000000db00
+    label: ctlv2 ManualCoolingEndDate
+    known: true
+    occurrence_count: 1
+    unique_requests:
+    - f115b5240602000000db00
+    unique_responses:
+    - 070300db0001010f
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: 06020001000f00
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - f115b52406020001000f00
+    unique_responses:
+    - 0601010f000000
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: '06020002000700'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - f115b52406020002000700
+    unique_responses:
+    - 080102070000000000
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: '06020002010700'
+    label: null
+    known: false
+    occurrence_count: 2
+    unique_requests:
+    - f115b52406020002010700
+    unique_responses:
+    - 080102070000000000
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: 06020003001b00
+    label: null
+    known: false
+    occurrence_count: 5
+    unique_requests:
+    - f115b52406020003001b00
+    unique_responses:
+    - 0601031b000000
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: 06020003011b00
+    label: null
+    known: false
+    occurrence_count: 4
+    unique_requests:
+    - f115b52406020003011b00
+    unique_responses:
+    - 0601031b000000
+  unknown:
+  - master: '10'
+    slave: '76'
+    msgid: b504
+    sub: '0100'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1076b5040100
+    unique_responses:
+    - 0a00ffffffffffffff8019
+  - master: '10'
+    slave: fe
+    msgid: b505
+    sub: 025c00
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 10feb505025c00
+    unique_responses: []
+  - master: '10'
+    slave: 08
+    msgid: b507
+    sub: 020900
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1008b507020900
+    unique_responses:
+    - 024a06
+  - master: '10'
+    slave: '76'
+    msgid: b510
+    sub: 09000000ffffff050000
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1076b51009000000ffffff050000
+    unique_responses:
+    - '0101'
+  - master: '10'
+    slave: 08
+    msgid: b511
+    sub: '0100'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1008b5110100
+    unique_responses:
+    - 097c0113000000000000
+  - master: '10'
+    slave: '76'
+    msgid: b511
+    sub: '0101'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1076b5110101
+    unique_responses:
+    - 09ffff8019ff610000ff
+  - master: '71'
+    slave: 08
+    msgid: b511
+    sub: '0107'
+    label: null
+    known: false
+    occurrence_count: 4
+    unique_requests:
+    - 7108b5110107
+    unique_responses:
+    - 0a00280080003900000000
+  - master: '10'
+    slave: '76'
+    msgid: b512
+    sub: 030f0001
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1076b512030f0001
+    unique_responses:
+    - 070a03000080ff03
+  - master: '10'
+    slave: '26'
+    msgid: b523
+    sub: '0106'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1026b5230106
+    unique_responses:
+    - 100080b301b20100800080008000804101
+  - master: '10'
+    slave: '26'
+    msgid: b523
+    sub: '0107'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1026b5230107
+    unique_responses:
+    - 0f008000800080008000008000805405
+  - master: '10'
+    slave: '26'
+    msgid: b523
+    sub: '0402000000'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1026b5230402000000
+    unique_responses:
+    - 02019c
+  - master: '10'
+    slave: '26'
+    msgid: b523
+    sub: '0402010000'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1026b5230402010000
+    unique_responses:
+    - 02019c
+  - master: '10'
+    slave: '26'
+    msgid: b523
+    sub: 0f05ffff00000000ffffffff00000000
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - 1026b5230f05ffff00000000ffffffff00000000
+    unique_responses:
+    - '0101'
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: 06020000000900
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - f115b52406020000000900
+    unique_responses:
+    - 050300090001
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: 06020001000f00
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - f115b52406020001000f00
+    unique_responses:
+    - 0601010f000000
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: '06020002000700'
+    label: null
+    known: false
+    occurrence_count: 1
+    unique_requests:
+    - f115b52406020002000700
+    unique_responses:
+    - 080102070000000000
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: '06020002010700'
+    label: null
+    known: false
+    occurrence_count: 2
+    unique_requests:
+    - f115b52406020002010700
+    unique_responses:
+    - 080102070000000000
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: 06020003001b00
+    label: null
+    known: false
+    occurrence_count: 5
+    unique_requests:
+    - f115b52406020003001b00
+    unique_responses:
+    - 0601031b000000
+  - master: f1
+    slave: '15'
+    msgid: b524
+    sub: 06020003011b00
+    label: null
+    known: false
+    occurrence_count: 4
+    unique_requests:
+    - f115b52406020003011b00
+    unique_responses:
+    - 0601031b000000
+registers:
+  discovered:
+  - Broadcast.Datetime
+  - Broadcast.Error
+  - Broadcast.HwcStatus
+  - Broadcast.Id
+  - Broadcast.IdAnswer
+  - Broadcast.IdQuery
+  - Broadcast.Load
+  - Broadcast.Outsidetemp
+  - Broadcast.Queryexistence
+  - Broadcast.Signoflife
+  - Broadcast.Vdatetime
+  - Broadcast.Vdatetime
+  - General.Valuerange
+  - Memory.Eeprom
+  - Memory.Eeprom
+  - Memory.Ram
+  - Memory.Ram
+  - Scan.08.Id
+  - Scan.Id
+  - bai.SetModeOverride
+  - ctlv2.Hc1DewPointTemp
+  - ctlv2.Hc1FlowTempCalc
+  - ctlv2.Hc1Humidity
+  - ctlv2.Hc1MixerPosition
+  - ctlv2.Hc1PumpHours
+  - ctlv2.Hc1PumpStarts
+  - ctlv2.Hc2DewPointTemp
+  - ctlv2.Hc2FlowTempCalc
+  - ctlv2.Hc2Humidity
+  - ctlv2.Hc2MixerPosition
+  - ctlv2.Hc2PumpHours
+  - ctlv2.Hc2PumpStarts
+  - ctlv2.ManualCoolingEndDate
+  - ctlv2.ManualCoolingEndDate
+  - ctlv2.ManualCoolingStartDate
+  - ctlv2.ManualCoolingStartDate
+  - ctlv2.z1RoomHumidity
+  - hmu.BuildingCircuitFlow
+  - hmu.Clearerrorhistory
+  - hmu.CompressorBlocktime
+  - hmu.CompressorHc
+  - hmu.CompressorHwc
+  - hmu.CoolElecConsDay
+  - hmu.CoolElecConsTotal
+  - hmu.CoolEnvYieldDay
+  - hmu.CoolEnvYieldMonth
+  - hmu.CoolEnvYieldTotal
+  - hmu.CopCooling
+  - hmu.CopCoolingMonth
+  - hmu.CopHc
+  - hmu.CopHcMonth
+  - hmu.CopHwc
+  - hmu.CopHwcMonth
+  - hmu.CurrentCompressorUtil
+  - hmu.CurrentConsumedPower
+  - hmu.CurrentYieldPower
+  - hmu.Currenterror
+  - hmu.DateTime
+  - hmu.EnergyIntegral
+  - hmu.Errorhistory
+  - hmu.FlowPressure
+  - hmu.FlowTemp
+  - hmu.HcElecConsDay
+  - hmu.HcElecConsTotal
+  - hmu.HwcElecConsDay
+  - hmu.HwcElecConsTotal
+  - hmu.PowerConsumptionHmu
+  - hmu.RunDataAirInletTemp
+  - hmu.RunDataBuildingCPumpPower
+  - hmu.RunDataCompressorInletTemp
+  - hmu.RunDataCompressorOutletTemp
+  - hmu.RunDataCompressorSpeed
+  - hmu.RunDataEEVOutletTemp
+  - hmu.RunDataEEVPositionAbs
+  - hmu.RunDataFan1Speed
+  - hmu.RunDataFan2Speed
+  - hmu.RunDataHighPressure
+  - hmu.RunDataStatuscode
+  - hmu.RunStats4PortValveHours
+  - hmu.RunStats4PortValveSwitches
+  - hmu.RunStatsBuildingCPumpStarts
+  - hmu.RunStatsBuildingPumpHours
+  - hmu.RunStatsCompressorHours
+  - hmu.RunStatsCompressorStarts
+  - hmu.RunStatsFan1Hours
+  - hmu.RunStatsFan1Starts
+  - hmu.RunStatsFan2Hours
+  - hmu.RunStatsFan2Starts
+  - hmu.RunStatsHMUHours
+  - hmu.RunStatsHcHours
+  - hmu.RunStatsHwcHours
+  - hmu.SetMode
+  - hmu.SourceTempInput
+  - hmu.Status
+  - hmu.Status01
+  - hmu.Status02
+  - hmu.Status16
+  - hmu.StatusCirPump
+  - hmu.SupplyTempWeighted
+  - hmu.TotalEnergyUsage
+  - hmu.YieldCoolDay
+  - hmu.YieldCooling
+  - hmu.YieldCoolingMonth
+  - hmu.YieldHc
+  - hmu.YieldHcDay
+  - hmu.YieldHcMonth
+  - hmu.YieldHwc
+  - hmu.YieldHwcDay
+  - hmu.YieldHwcMonth
+  mapped:
+  - Broadcast.FlowTemp
+  - Broadcast.WaterPressure
+  - ctlv2.AdaptHeatCurve
+  - ctlv2.CcTimer_Config
+  - ctlv2.CcTimer_Timeframes
+  - ctlv2.ContinuousHeating
+  - ctlv2.Currenterror
+  - ctlv2.CylinderChargeHyst
+  - ctlv2.CylinderChargeOffset
+  - ctlv2.Date
+  - ctlv2.DisplayedOutsideTemp
+  - ctlv2.Errorhistory
+  - ctlv2.FrostOverRideTime
+  - ctlv2.Hc1ActualFlowTempDesired
+  - ctlv2.Hc1AutoOffMode
+  - ctlv2.Hc1CircuitType
+  - ctlv2.Hc1CoolingEnabled
+  - ctlv2.Hc1CoolingFlowTempMin
+  - ctlv2.Hc1DewPointMonitoring
+  - ctlv2.Hc1DewPointOffset
+  - ctlv2.Hc1ExcessTemp
+  - ctlv2.Hc1FlowTemp
+  - ctlv2.Hc1HeatCurve
+  - ctlv2.Hc1HeatCurveAdaption
+  - ctlv2.Hc1MaxFlowTempDesired
+  - ctlv2.Hc1MinCoolingTempDesired
+  - ctlv2.Hc1MinFlowTempDesired
+  - ctlv2.Hc1MixerMovement
+  - ctlv2.Hc1PumpStatus
+  - ctlv2.Hc1RoomTempModulation
+  - ctlv2.Hc1RoomTempSwitchOn
+  - ctlv2.Hc1Status
+  - ctlv2.Hc1SummerTempLimit
+  - ctlv2.Hc2ActualFlowTempDesired
+  - ctlv2.Hc2AutoOffMode
+  - ctlv2.Hc2CircuitType
+  - ctlv2.Hc2ExcessTemp
+  - ctlv2.Hc2FlowTemp
+  - ctlv2.Hc2HeatCurve
+  - ctlv2.Hc2HeatCurveAdaption
+  - ctlv2.Hc2MaxFlowTempDesired
+  - ctlv2.Hc2MinCoolingTempDesired
+  - ctlv2.Hc2MinFlowTempDesired
+  - ctlv2.Hc2MixerMovement
+  - ctlv2.Hc2PumpStatus
+  - ctlv2.Hc2RoomTempSwitchOn
+  - ctlv2.Hc2Status
+  - ctlv2.Hc2SummerTempLimit
+  - ctlv2.Hc3ActualFlowTempDesired
+  - ctlv2.Hc3AutoOffMode
+  - ctlv2.Hc3CircuitType
+  - ctlv2.Hc3ExcessTemp
+  - ctlv2.Hc3FlowTemp
+  - ctlv2.Hc3HeatCurve
+  - ctlv2.Hc3HeatCurveAdaption
+  - ctlv2.Hc3MaxFlowTempDesired
+  - ctlv2.Hc3MinCoolingTempDesired
+  - ctlv2.Hc3MinFlowTempDesired
+  - ctlv2.Hc3MixerMovement
+  - ctlv2.Hc3PumpStatus
+  - ctlv2.Hc3RoomTempSwitchOn
+  - ctlv2.Hc3Status
+  - ctlv2.Hc3SummerTempLimit
+  - ctlv2.HcStorageTempBottom
+  - ctlv2.HcStorageTempTop
+  - ctlv2.HwcFlowTemp
+  - ctlv2.HwcHolidayEndPeriod
+  - ctlv2.HwcHolidayStartPeriod
+  - ctlv2.HwcLockTime
+  - ctlv2.HwcMaxFlowTempDesired
+  - ctlv2.HwcOpMode
+  - ctlv2.HwcParallelLoading
+  - ctlv2.HwcSFMode
+  - ctlv2.HwcSfMode
+  - ctlv2.HwcStorageTemp
+  - ctlv2.HwcStorageTempBottom
+  - ctlv2.HwcStorageTempTop
+  - ctlv2.HwcTempDesired
+  - ctlv2.HydraulicScheme
+  - ctlv2.MaxCylinderChargeTime
+  - ctlv2.MaxRoomHumidity
+  - ctlv2.MultiRelaySetting
+  - ctlv2.OutsideTemp
+  - ctlv2.OutsideTempAvg
+  - ctlv2.PrEnergySum
+  - ctlv2.PrEnergySumHc
+  - ctlv2.PrEnergySumHcLastMonth
+  - ctlv2.PrEnergySumHcThisMonth
+  - ctlv2.PrEnergySumHwc
+  - ctlv2.PrEnergySumHwcLastMonth
+  - ctlv2.PrEnergySumHwcThisMonth
+  - ctlv2.SystemFlowTemp
+  - ctlv2.WaterPressure
+  - ctlv2.Z1ActualRoomTempDesired
+  - ctlv2.Z1CoolingManualTemp
+  - ctlv2.Z1CoolingOpMode
+  - ctlv2.Z1CoolingSetbackTemp
+  - ctlv2.Z1CoolingTemp
+  - ctlv2.Z1CoolingTempDesired
+  - ctlv2.Z1DayTemp
+  - ctlv2.Z1HolidayEndPeriod
+  - ctlv2.Z1HolidayStartPeriod
+  - ctlv2.Z1HolidayTemp
+  - ctlv2.Z1NightTemp
+  - ctlv2.Z1OpMode
+  - ctlv2.Z1QuickVetoDuration
+  - ctlv2.Z1QuickVetoEndDate
+  - ctlv2.Z1QuickVetoEndTime
+  - ctlv2.Z1QuickVetoTemp
+  - ctlv2.Z1RoomTemp
+  - ctlv2.Z1SFMode
+  - ctlv2.Z2RoomTemp
+  - hmu.BuildingCircuitPumpSpeed
+  - hmu.ConsumptionTotal
+  - hmu.FlowTemperature
+  - hmu.HoursCool
+  - hmu.LiveMonitorCurrentConsumedPower
+  - hmu.RunDataElPowerConsumption
+  - hmu.RunDataElectricPowerConsumption
+  - hmu.RunDataLowPressure
+  - hmu.RunDataReturnTemp
+  - hmu.RunStatsCompressorHc
+  - hmu.RunStatsCompressorHwc
+  - hmu.SourceTempOutput
+  - hmu.StatElectricEnergySum
+  - hmu.StatElectricEnergySumCool
+  - hmu.StatElectricEnergySumHc
+  - hmu.StatElectricEnergySumHwc
+  - hmu.StatEnvironmentEnergySum
+  - hmu.StatEnvironmentEnergySumCool
+  - hmu.StatEnvironmentEnergySumHc
+  - hmu.StatEnvironmentEnergySumHwc
+  - hmu.StatSolarEnergySum
+  - hmu.StatSolarEnergySumHc
+  - hmu.StatSolarEnergySumHwc
+  - hmu.Status00
+  - hmu.Status07
+  - hmux0.Status01
+  - v32.BypassPosition
+  - v32.ExhaustAirHumidity
+  - v32.ExhaustAirTemp
+  - v32.FanHours
+  - v32.FlowTempDesired
+  - v32.FlowTempMax
+  - v32.HcHours
+  - v32.HoursTillService
+  - v32.HwcHours
+  - v32.HwcTemp
+  - v32.Maintenancedata_HwcTempMax
+  - v32.MaxAirHumidity
+  - v32.MinAirHumidity
+  - v32.OutdoorstempSensor
+  - v32.OutsideAirTemp
+  - v32.PumpHours
+  - v32.PumpPower
+  - v32.ReturnTemp
+  - v32.ReturnTempMax
+  - v32.StorageLoadPumpHours
+  - v32.StorageTemp
+  - v32.StorageTempDesired
+  - v32.SupplyAirTemp
+  - v32.VentilationLevelDay
+  - v32.VentilationLevelNight
+  - v32.YieldMonth
+  - v32.YieldToday
+  - v32.YieldTotal
+  - v32.YieldYear
+  - vr_71.Clearerrorhistory
+  - vr_71.Currenterror
+  - vr_71.Errorhistory
+  - vr_71.Mc1Operation
+  - vr_71.Mc2Operation
+  - vr_71.Mc3Operation
+  - vr_71.SensorData1
+  - vr_71.SensorData2
+  - vr_71.SetActorState
+  - vwz.Status01
+  - vwz.TestHwcTemp
+  - vwz.TestOutdoorTemp
+  - vwz.TestThreeWayValve
+  - vwzio.Status01
+  unavailable:
+  - Broadcast.Datetime
+  - Broadcast.Error
+  - Broadcast.FlowTemp
+  - Broadcast.HwcStatus
+  - Broadcast.Id
+  - Broadcast.IdAnswer
+  - Broadcast.IdQuery
+  - Broadcast.Load
+  - Broadcast.Queryexistence
+  - Broadcast.Signoflife
+  - Broadcast.Vdatetime
+  - Broadcast.WaterPressure
+  - General.Valuerange
+  - Memory.Eeprom
+  - Memory.Eeprom
+  - Memory.Ram
+  - Memory.Ram
+  - Scan.Id
+  - bai.SetModeOverride
+  - ctlv2.AdaptHeatCurve
+  - ctlv2.CcTimer_Config
+  - ctlv2.CcTimer_Timeframes
+  - ctlv2.ContinuousHeating
+  - ctlv2.Currenterror
+  - ctlv2.CylinderChargeHyst
+  - ctlv2.CylinderChargeOffset
+  - ctlv2.Date
+  - ctlv2.DisplayedOutsideTemp
+  - ctlv2.Errorhistory
+  - ctlv2.FrostOverRideTime
+  - ctlv2.Hc1ActualFlowTempDesired
+  - ctlv2.Hc1AutoOffMode
+  - ctlv2.Hc1CircuitType
+  - ctlv2.Hc1CoolingEnabled
+  - ctlv2.Hc1CoolingFlowTempMin
+  - ctlv2.Hc1DewPointMonitoring
+  - ctlv2.Hc1DewPointOffset
+  - ctlv2.Hc1DewPointTemp
+  - ctlv2.Hc1ExcessTemp
+  - ctlv2.Hc1FlowTemp
+  - ctlv2.Hc1FlowTempCalc
+  - ctlv2.Hc1HeatCurve
+  - ctlv2.Hc1HeatCurveAdaption
+  - ctlv2.Hc1Humidity
+  - ctlv2.Hc1MaxFlowTempDesired
+  - ctlv2.Hc1MinCoolingTempDesired
+  - ctlv2.Hc1MinFlowTempDesired
+  - ctlv2.Hc1MixerMovement
+  - ctlv2.Hc1MixerPosition
+  - ctlv2.Hc1PumpHours
+  - ctlv2.Hc1PumpStarts
+  - ctlv2.Hc1PumpStatus
+  - ctlv2.Hc1RoomTempModulation
+  - ctlv2.Hc1RoomTempSwitchOn
+  - ctlv2.Hc1Status
+  - ctlv2.Hc1SummerTempLimit
+  - ctlv2.Hc2ActualFlowTempDesired
+  - ctlv2.Hc2AutoOffMode
+  - ctlv2.Hc2CircuitType
+  - ctlv2.Hc2DewPointTemp
+  - ctlv2.Hc2ExcessTemp
+  - ctlv2.Hc2FlowTemp
+  - ctlv2.Hc2FlowTempCalc
+  - ctlv2.Hc2HeatCurve
+  - ctlv2.Hc2HeatCurveAdaption
+  - ctlv2.Hc2Humidity
+  - ctlv2.Hc2MaxFlowTempDesired
+  - ctlv2.Hc2MinCoolingTempDesired
+  - ctlv2.Hc2MinFlowTempDesired
+  - ctlv2.Hc2MixerMovement
+  - ctlv2.Hc2MixerPosition
+  - ctlv2.Hc2PumpHours
+  - ctlv2.Hc2PumpStarts
+  - ctlv2.Hc2PumpStatus
+  - ctlv2.Hc2RoomTempSwitchOn
+  - ctlv2.Hc2Status
+  - ctlv2.Hc2SummerTempLimit
+  - ctlv2.Hc3ActualFlowTempDesired
+  - ctlv2.Hc3AutoOffMode
+  - ctlv2.Hc3CircuitType
+  - ctlv2.Hc3ExcessTemp
+  - ctlv2.Hc3FlowTemp
+  - ctlv2.Hc3HeatCurve
+  - ctlv2.Hc3HeatCurveAdaption
+  - ctlv2.Hc3MaxFlowTempDesired
+  - ctlv2.Hc3MinCoolingTempDesired
+  - ctlv2.Hc3MinFlowTempDesired
+  - ctlv2.Hc3MixerMovement
+  - ctlv2.Hc3PumpStatus
+  - ctlv2.Hc3RoomTempSwitchOn
+  - ctlv2.Hc3Status
+  - ctlv2.Hc3SummerTempLimit
+  - ctlv2.HcStorageTempBottom
+  - ctlv2.HcStorageTempTop
+  - ctlv2.HwcFlowTemp
+  - ctlv2.HwcHolidayEndPeriod
+  - ctlv2.HwcHolidayStartPeriod
+  - ctlv2.HwcLockTime
+  - ctlv2.HwcMaxFlowTempDesired
+  - ctlv2.HwcOpMode
+  - ctlv2.HwcParallelLoading
+  - ctlv2.HwcSFMode
+  - ctlv2.HwcSfMode
+  - ctlv2.HwcStorageTemp
+  - ctlv2.HwcStorageTempBottom
+  - ctlv2.HwcStorageTempTop
+  - ctlv2.HwcTempDesired
+  - ctlv2.HydraulicScheme
+  - ctlv2.ManualCoolingEndDate
+  - ctlv2.ManualCoolingStartDate
+  - ctlv2.MaxCylinderChargeTime
+  - ctlv2.MaxRoomHumidity
+  - ctlv2.MultiRelaySetting
+  - ctlv2.OutsideTemp
+  - ctlv2.OutsideTempAvg
+  - ctlv2.PrEnergySum
+  - ctlv2.PrEnergySumHc
+  - ctlv2.PrEnergySumHcLastMonth
+  - ctlv2.PrEnergySumHcThisMonth
+  - ctlv2.PrEnergySumHwc
+  - ctlv2.PrEnergySumHwcLastMonth
+  - ctlv2.PrEnergySumHwcThisMonth
+  - ctlv2.SystemFlowTemp
+  - ctlv2.WaterPressure
+  - ctlv2.Z1ActualRoomTempDesired
+  - ctlv2.Z1CoolingManualTemp
+  - ctlv2.Z1CoolingOpMode
+  - ctlv2.Z1CoolingSetbackTemp
+  - ctlv2.Z1CoolingTemp
+  - ctlv2.Z1CoolingTempDesired
+  - ctlv2.Z1DayTemp
+  - ctlv2.Z1HolidayEndPeriod
+  - ctlv2.Z1HolidayStartPeriod
+  - ctlv2.Z1HolidayTemp
+  - ctlv2.Z1NightTemp
+  - ctlv2.Z1OpMode
+  - ctlv2.Z1QuickVetoDuration
+  - ctlv2.Z1QuickVetoEndDate
+  - ctlv2.Z1QuickVetoEndTime
+  - ctlv2.Z1QuickVetoTemp
+  - ctlv2.Z1RoomTemp
+  - ctlv2.Z1SFMode
+  - ctlv2.Z2RoomTemp
+  - hmu.BuildingCircuitPumpSpeed
+  - hmu.Clearerrorhistory
+  - hmu.CompressorBlocktime
+  - hmu.ConsumptionTotal
+  - hmu.Currenterror
+  - hmu.EnergyIntegral
+  - hmu.Errorhistory
+  - hmu.FlowPressure
+  - hmu.FlowTemperature
+  - hmu.HoursCool
+  - hmu.LiveMonitorCurrentConsumedPower
+  - hmu.RunDataElPowerConsumption
+  - hmu.RunDataElectricPowerConsumption
+  - hmu.RunDataLowPressure
+  - hmu.RunDataReturnTemp
+  - hmu.RunStatsCompressorHc
+  - hmu.RunStatsCompressorHwc
+  - hmu.SourceTempInput
+  - hmu.SourceTempOutput
+  - hmu.StatElectricEnergySum
+  - hmu.StatElectricEnergySumCool
+  - hmu.StatElectricEnergySumHc
+  - hmu.StatElectricEnergySumHwc
+  - hmu.StatEnvironmentEnergySum
+  - hmu.StatEnvironmentEnergySumCool
+  - hmu.StatEnvironmentEnergySumHc
+  - hmu.StatEnvironmentEnergySumHwc
+  - hmu.StatSolarEnergySum
+  - hmu.StatSolarEnergySumHc
+  - hmu.StatSolarEnergySumHwc
+  - hmu.Status
+  - hmu.Status00
+  - hmu.Status02
+  - hmu.Status07
+  - hmu.Status16
+  - hmux0.Status01
+  - v32.BypassPosition
+  - v32.ExhaustAirHumidity
+  - v32.ExhaustAirTemp
+  - v32.FanHours
+  - v32.FlowTempDesired
+  - v32.FlowTempMax
+  - v32.HcHours
+  - v32.HoursTillService
+  - v32.HwcHours
+  - v32.HwcTemp
+  - v32.Maintenancedata_HwcTempMax
+  - v32.MaxAirHumidity
+  - v32.MinAirHumidity
+  - v32.OutdoorstempSensor
+  - v32.OutsideAirTemp
+  - v32.PumpHours
+  - v32.PumpPower
+  - v32.ReturnTemp
+  - v32.ReturnTempMax
+  - v32.StorageLoadPumpHours
+  - v32.StorageTemp
+  - v32.StorageTempDesired
+  - v32.SupplyAirTemp
+  - v32.VentilationLevelDay
+  - v32.VentilationLevelNight
+  - v32.YieldMonth
+  - v32.YieldToday
+  - v32.YieldTotal
+  - v32.YieldYear
+  - vr_71.Clearerrorhistory
+  - vr_71.Currenterror
+  - vr_71.Errorhistory
+  - vr_71.Mc1Operation
+  - vr_71.Mc2Operation
+  - vr_71.Mc3Operation
+  - vr_71.SensorData1
+  - vr_71.SensorData2
+  - vr_71.SetActorState
+  - vwz.Status01
+  - vwz.TestHwcTemp
+  - vwz.TestOutdoorTemp
+  - vwz.TestThreeWayValve
+  - vwzio.Status01
+  disabled:
+  - ctlv2.HcStorageTempBottom
+  - ctlv2.HcStorageTempTop
+  - hmu.RunDataLowPressure
+  - hmu.RunStatsCompressorHc
+  - hmu.RunStatsCompressorHwc
+  - v32.HwcTemp
+  - v32.Maintenancedata_HwcTempMax
+  - v32.OutdoorstempSensor
+  - vwz.TestHwcTemp
+  - vwz.TestOutdoorTemp
+  - vwz.TestThreeWayValve
+  entries:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - *id009
+  - *id010
+  - *id011
+  - *id012
+  - *id013
+  - *id014
+  - *id015
+  - *id016
+  - *id017
+  - *id018
+  - *id019
+  - *id020
+  - *id021
+  - *id022
+  - *id023
+  - *id024
+  - *id025
+  - *id026
+  - *id027
+  - *id028
+  - *id029
+  - *id030
+  - *id031
+  - *id032
+  - *id033
+  - *id034
+  - *id035
+  - *id036
+  - *id037
+  - *id038
+  - *id039
+  - *id040
+  - *id041
+  - *id042
+  - *id043
+  - *id044
+  - *id045
+  - *id046
+  - *id047
+  - *id048
+  - *id049
+  - *id050
+  - *id051
+  - *id052
+  - *id053
+  - *id054
+  - *id055
+  - *id056
+  - *id057
+  - *id058
+  - *id059
+  - *id060
+  - *id061
+  - *id062
+  - *id063
+  - *id064
+  - *id065
+  - *id066
+  - *id067
+  - *id068
+  - *id069
+  - *id070
+  - *id071
+  - *id072
+  - *id073
+  - *id074
+  - *id075
+  - *id076
+  - *id077
+  - *id078
+  - *id079
+  - *id080
+  - *id081
+  - *id082
+  - *id083
+  - *id084
+  - *id085
+  - *id086
+  - *id087
+  - *id088
+  - *id089
+  - *id090
+  - *id091
+  - *id092
+  - *id093
+  - *id094
+  - *id095
+  - *id096
+  - *id097
+  - *id098
+  - *id099
+  - *id100
+  - *id101
+  - *id102
+  - *id103
+  - *id104
+  - *id105
+  - *id106
+  - *id107
+  - *id108
+  - *id109
+  - *id110
+  - *id111
+  - *id112
+  - *id113
+  - *id114
+  - *id115
+  - *id116
+  - *id117
+  - *id118
+  - *id119
+  - *id120
+  - *id121
+  - *id122
+  - *id123
+  - *id124
+  - *id125
+  - *id126
+  - *id127
+  - *id128
+  - *id129
+  - *id130
+  - *id131
+  - *id132
+  - *id133
+  - *id134
+  - *id135
+  - *id136
+  - *id137
+  - *id138
+  - *id139
+  - *id140
+  - *id141
+  - *id142
+  - *id143
+  - *id144
+  - *id145
+  - *id146
+  - *id147
+  - *id148
+  - *id149
+  - *id150
+  - *id151
+  - *id152
+  - *id153
+  - *id154
+  - *id155
+  - *id156
+  - *id157
+  - *id158
+  - *id159
+  - *id160
+  - *id161
+  - *id162
+  - *id163
+  - *id164
+  - *id165
+  - *id166
+  - *id167
+  - *id168
+  - *id169
+  - *id170
+  - *id171
+  - *id172
+  - *id173
+  - *id174
+  - *id175
+  - *id176
+  - *id177
+  - *id178
+  - *id179
+  - *id180
+  - *id181
+  - *id182
+  - *id183
+  - *id184
+  - *id185
+  - *id186
+  - *id187
+  - *id188
+  - *id189
+  - *id190
+  - *id191
+  - *id192
+  - *id193
+  - *id194
+  - *id195
+  - *id196
+  - *id197
+  - *id198
+  - *id199
+  - *id200
+  - *id201
+  - *id202
+  - *id203
+  - *id204
+  - *id205
+  - *id206
+  - *id207
+  - *id208
+  - *id209
+  - *id210
+  - *id211
+  - *id212
+  - *id213
+  - *id214
+  - *id215
+  - *id216
+  - *id217
+  - *id218
+  - *id219
+  - *id220
+  - *id221
+  - *id222
+  - *id223
+  - *id224
+  - *id225
+  - *id226
+  - *id227
+  - *id228
+  - *id229
+  - *id230
+  - *id231
+  - *id232
+  - *id233
+  - *id234
+  - *id235
+  - *id236
+  - *id237
+  - *id238
+  - *id239
+  - *id240
+  - *id241
+  - *id242
+  - *id243
+  - *id244
+  - *id245
+  - *id246
+  - *id247
+  - *id248
+  - *id249
+  - *id250
+  - *id251
+  - *id252
+  - *id253
+  - *id254
+  - *id255
+  - *id256
+  - *id257
+  - *id258
+  - *id259
+  - *id260
+  - *id261
+  - *id262
+  - *id263
+  - *id264
+  - *id265
+  - *id266
+  - *id267
+  - *id268
+  - *id269
+  - *id270
+  - *id271
+  - *id272
+  - *id273
+  - *id274
+  - *id275
+  - *id276
+  - *id277
+  - *id278
+  - *id279
+  - *id280
+  - *id281
+  - *id282
+  - *id283
+  - *id284
+  - *id285
+  - *id286
+  - *id287
+  - *id288
+  - *id289
+  - *id290
+changes:
+  new_registers: []
+  changed_registers:
+  - key: Broadcast.Outsidetemp
+    before: *id291
+    after: *id292
+  disappeared_registers: []

@@ -608,6 +608,90 @@ async def test_zone2_manual_cooling_uses_shared_date() -> None:
         assert ("ctlv2", "Z2OpMode", "auto") in writes
 
 
+# Intent: switching to HEAT from a non-COOL mode writes day without touching
+# the shared manual-cooling date, so heating-only hardware never depends on
+# the cooling cancel path (issue #130).
+# Why: _cancel_manual_cooling() can fail when no cooling system is installed
+# (strict read-back of ManualCoolingEndDate fails), blocking the Z*OpMode day
+# write entirely.
+async def test_heat_from_non_cool_writes_day_without_cancel() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(),
+            data={"ebusd": {"ctlv2.Z2OpMode.value": "auto"}},
+        )
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        coordinator.async_write_registers = AsyncMock(return_value=True)
+        z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
+        await z2.async_set_hvac_mode(HVACMode.HEAT)
+        calls = [(c.args[0], c.args[1], c.args[2]) for c in coordinator.async_write_register.call_args_list]
+        assert ("ctlv2", "Z2OpMode", "day") in calls
+        assert not any(name == "ManualCoolingEndDate" for _, name, _ in calls)
+
+
+# Intent: switching from COOL to HEAT clears the armed cooling window first.
+# Why: keeps the cooling-exit path pinned so a future cleanup cannot drop the
+# ManualCoolingEndDate reset when leaving manual cooling.
+async def test_heat_from_cool_cancels_manual_cooling_then_writes_day() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, _graph_two_zone())
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        coordinator.async_write_registers = AsyncMock(return_value=True)
+        z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
+        await z2.async_set_hvac_mode(HVACMode.COOL)
+        await z2.async_set_hvac_mode(HVACMode.HEAT)
+        calls = [(c.args[0], c.args[1], c.args[2]) for c in coordinator.async_write_register.call_args_list]
+        assert ("ctlv2", "ManualCoolingEndDate", "01.01.2015") in calls
+        assert ("ctlv2", "Z2OpMode", "day") in calls
+
+
+# Intent: switching to HEAT clears the armed cooling window even when the
+# compressor is idle and OpMode reads auto (post-restart scenario).
+# Why: the cooling-exit path must not depend on the live compressor state; an
+# armed window would otherwise survive a switch to heating after a restart.
+async def test_heat_cancels_armed_cooling_window_when_idle() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(),
+            data={"ebusd": {"ctlv2.Z2OpMode.value": "auto", "ctlv2.ManualCoolingEndDate.value": "25.09.2026"}},
+        )
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        coordinator.async_write_registers = AsyncMock(return_value=True)
+        z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
+        await z2.async_set_hvac_mode(HVACMode.HEAT)
+        calls = [(c.args[0], c.args[1], c.args[2]) for c in coordinator.async_write_register.call_args_list]
+        assert ("ctlv2", "ManualCoolingEndDate", "01.01.2015") in calls
+        assert ("ctlv2", "Z2OpMode", "day") in calls
+
+
+# Intent: the cooling window is also cleared when the device still reports an
+# active cooling state even though the optimistic COOL flag was confirmed away.
+# Why: after a refresh the device reports OpMode auto while manual cooling is
+# still running; previous mode alone would skip the cancel and leave the armed
+# cooling window active under HEAT.
+async def test_heat_with_active_cooling_state_cancels_manual_cooling() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(),
+            data={
+                "ebusd": {
+                    "hmu.RunDataStatuscode.value": "cool_compressor_active",
+                    "ctlv2.Z2OpMode.value": "auto",
+                }
+            },
+        )
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        coordinator.async_write_registers = AsyncMock(return_value=True)
+        z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
+        await z2.async_set_hvac_mode(HVACMode.HEAT)
+        calls = [(c.args[0], c.args[1], c.args[2]) for c in coordinator.async_write_register.call_args_list]
+        assert ("ctlv2", "ManualCoolingEndDate", "01.01.2015") in calls
+        assert ("ctlv2", "Z2OpMode", "day") in calls
+
+
 # Intent: The climate entity is available whenever the coordinator's last refresh succeeded.
 # Why: decouples entity availability from per-register data so a zone with no live values still reports a state.
 async def test_available_tracks_coordinator() -> None:

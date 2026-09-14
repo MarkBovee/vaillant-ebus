@@ -262,11 +262,17 @@ def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | N
     cooling_bit = values.get(f"{hp_circuit}.Status07.heatermain_b4_cooling")
     warmwater_bit = values.get(f"{hp_circuit}.Status07.heatermain_b7_warmwater")
     release_cooling = _setmode_release_cooling(values, hp_circuit)
+    # Status01.pumpstate reports the 3-way valve / pump position (0=off,
+    # 1=on, 2=overrun, 4=hwc). On units without Status00/Status07 and with
+    # RunDataStatuscode stuck at 0 during DHW demand (e.g. HMU00/CTLV3), the
+    # DHW position is the only reliable DHW-active signal.
+    pumpstate_hwc = _clean(values.get(f"{hp_circuit}.Status01.pumpstate")) == "hwc"
 
     blob = " ".join(part for part in (status, compressor, heating_state) if part)
     if (
         not blob
         and not release_cooling
+        and not pumpstate_hwc
         and not any(_value_is_on(bit) for bit in (heating_bit, cooling_bit, warmwater_bit, defrost_bit))
     ):
         return None
@@ -281,7 +287,7 @@ def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | N
     # cooling descriptor or request flag.
     if compressor in ("off", "0"):
         return OPERATING_STATE_STANDBY
-    if "hwc" in blob or "hot_water" in blob or "dhw" in blob or _value_is_on(warmwater_bit):
+    if "hwc" in blob or "hot_water" in blob or "dhw" in blob or _value_is_on(warmwater_bit) or pumpstate_hwc:
         return OPERATING_STATE_DHW
     if "cool" in blob or _value_is_on(cooling_bit):
         return OPERATING_STATE_COOLING
@@ -303,6 +309,8 @@ CIRCUIT_NAMES: dict[str, str] = {
     "basv": "Vaillant BASV2 Heating Control",
     "bai": "Vaillant boiler controller",
     "sc": "Vaillant solar controller",
+    "vwz": "Vaillant Hydraulic Station",
+    "vwzio": "Vaillant Hydraulic Station",
     "z1": "Zone 1",
     "dhw": "Boiler (DHW)",
     "hc1": "Heating Circuit 1",

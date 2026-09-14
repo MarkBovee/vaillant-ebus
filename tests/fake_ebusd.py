@@ -305,7 +305,20 @@ class FakeEbusdServer:
         return f"ERR: unknown command: {command}"
 
     def _handle_info(self, parts: list[str]) -> str:
-        return "version: ebusd 26.1.p20260503 (fake)"
+        # Realistic multi-line banner: the per-address `loaded` lines are what
+        # the discovery dump mines for the register layout each device applies.
+        return (
+            "version: ebusd 26.1.p20260503 (fake)\n"
+            "device: 127.0.0.1:9999, TCP, enhanced\n"
+            "signal: acquired\n"
+            "masters: 3\n"
+            "messages: 641\n"
+            'address 08: slave #11, scanned "MF=Vaillant;ID=BAI00;SW=0503;HW=9602", '
+            'loaded "vaillant/08.bai.csv"\n'
+            'address 15: slave #2, scanned "MF=Vaillant;ID=CTLV2;SW=0514;HW=1104", '
+            'loaded "vaillant/15.ctlv2.csv"\n'
+            "address 31: master #8, ebusd"
+        )
 
     def _handle_read(self, parts: list[str]) -> str:
         """Handle ``read [-f] [-c circuit] name [field]``."""

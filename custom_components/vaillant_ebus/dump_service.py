@@ -240,6 +240,12 @@ async def async_export_discovery_dump(
             dump_data["unknown_telegrams"] = unknown_telegrams(grab_lines)
         except Exception as exc:  # pragma: no cover - defensive
             _LOGGER.warning("Failed to parse grab telegrams: %s", exc)
+    # Recent writes the integration itself sent (register, value, resolved
+    # circuit, verification result). Correlates with grab traffic for
+    # write-vs-app analysis; empty when nothing was written this session.
+    write_log = list(getattr(coordinator, "_write_log", []) or [])
+    if write_log:
+        dump_data["writes"] = write_log
     if after_registers:
         dump_data["after_registers"] = after_registers
         dump_data["raw_find_lines_after"] = after_raw_lines

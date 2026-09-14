@@ -61,6 +61,12 @@ async def test_arotherm_fixture_loads() -> None:
         ("community/arotherm_hmux0_dhw_holiday_discovery.yaml", 50),
         ("community/ecotec_vrt380_15700_discovery.yaml", 50),
         ("community/ecotec_vrt380_ctlv2_discovery.yaml", 50),
+        ("community/hmux0_issue99_2026-09-10_233024.yaml", 50),
+        ("community/hmux0_issue99_2026-09-13_173740.yaml", 50),
+        ("community/arotherm_pro35_issue99_2026-09-13_162416.yaml", 50),
+        ("community/eloblock_ve28_issue111_2026-09-11_193100.yaml", 20),
+        ("community/ecotec_vrt380_issue109_2026-09-11_230710.yaml", 50),
+        ("community/ecotec_vrt380_issue109_2026-09-13_033552.yaml", 50),
     ],
 )
 async def test_all_fixtures_load(fixture: str, min_registers: int) -> None:

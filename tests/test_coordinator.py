@@ -225,6 +225,17 @@ async def test_device_names_for_bai_and_sc_are_descriptive() -> None:
         assert c.get_device_info("sc")["name"] == "Vaillant solar controller"
 
 
+# Intent: the VWZ hydraulic station gets a descriptive English device name
+# instead of the raw scan code, on an English Home Assistant.
+# Why: device registry names are not translatable, so the default must read
+# well; upstream calls the module a "Hydraulikstation".
+async def test_device_names_for_vwz_are_descriptive() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        assert c.get_device_info("vwz")["name"] == "Vaillant Hydraulic Station"
+        assert c.get_device_info("vwzio")["name"] == "Vaillant Hydraulic Station"
+
+
 # Intent: a fresh coordinator starts with zero generated entities.
 # Why: prevents entity creation during init before discovery or cache seeding runs.
 async def test_coordinator_seeds_from_cache() -> None:
@@ -729,6 +740,49 @@ async def test_initial_discovery_pushes_new_entities_once(seed_cache, caplog) ->
         assert "0 new entities" in caplog.text
 
 
+# Intent: a register that only exists in the cache (stale from an earlier
+# session or CSV) is pruned from self.registers on the first real discovery,
+# while an enabled REGISTER_MAP register that find does not list is preserved.
+# Why: ghost devices such as a hmux0-owned ZZTest survived on cached leftovers
+# even though the real bus never exposes them.
+async def test_initial_discovery_prunes_stale_cache_registers() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.registers["hmux0.ZZTest"] = EbusdRegister(
+            circuit="hmux0", name="ZZTest", fields=["value"], value={"value": "-0.06"}, has_data=True
+        )
+        c.registers["hmu.SourceTempInput"] = EbusdRegister(
+            circuit="hmu", name="SourceTempInput", fields=["value"], value={"value": "3.2"}, has_data=True
+        )
+        graph = DISCOVERY.DiscoveryService.build_device_graph(["hmu OutsideTemp = 18.5"])
+        await c._apply_discovery_graph(graph, "initial")
+        assert "hmux0.ZZTest" not in c.registers
+        assert "hmu.SourceTempInput" in c.registers
+
+
+# Intent: a register the discovery graph does not configure is never revived
+# from the cache during a fallback read, even when the cache still holds a
+# stale value from an earlier session.
+# Why: issue #99 - the cache backfill used to resurrect any register whose read
+# returned None, freezing the sensor on a stale value although the register is
+# absent from the discovered graph.
+async def test_fallback_read_does_not_refill_absent_register_from_cache() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value=None)
+        c.ebus = mock_ebus
+        c._graph = _make_graph()
+        c._last_find_keys = set(c._graph.raw_registers)
+        c.registers["ctlv2.HwcStorageTemp"] = EbusdRegister(
+            circuit="ctlv2", name="HwcStorageTemp", fields=["value"], value={"value": None}, has_data=False
+        )
+        await c._async_save_cache({"ctlv2.HwcStorageTemp.value": "45.2"})
+        await c._fallback_read()
+        assert c.registers["ctlv2.HwcStorageTemp"].value["value"] is None
+
+
 # Intent: energy registers read from ebusd cache between polls and force a read only after the interval.
 # Why: protects runtime energy refresh (issue #50 family) without requiring an integration reload.
 async def test_runtime_energy_refreshes_without_reload(monkeypatch) -> None:
@@ -798,10 +852,15 @@ async def test_bai_switch_definitions_use_b509_write_message() -> None:
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         heating = next(item for item in definitions if ",bai,HeatingSwitch," in item)
         hwc = next(item for item in definitions if ",bai,HwcSwitch," in item)
-        assert ",08,B509,f203," in heating
-        assert ",08,B509,f303," in hwc
-        assert heating.endswith("value,,onoff,,,")
-        assert hwc.endswith("value,,onoff,,,")
+        # The write message uses the upstream `0e` write-prefix byte (read is
+        # `0d`), so the wire write targets the boiler's writable register rather
+        # than the read-only CSV element.
+        assert ",08,B509,0ef203," in heating
+        assert ",08,B509,0ef303," in hwc
+        # `onoff` is not in the runtime define's template scope, so the field
+        # must use an explicit UCH onoff encoding or element lookup fails.
+        assert heating.endswith("value,,UCH,0=off;1=on,,")
+        assert hwc.endswith("value,,UCH,0=off;1=on,,")
         # The switch definitions must not leak onto a heat-pump alias.
         assert all(",hmu," not in item for item in definitions)
 
@@ -1191,6 +1250,76 @@ async def test_cached_energy_recovers_after_no_data_discovery(monkeypatch) -> No
         assert key in c._graph.raw_registers
 
 
+# Intent: a register that previously reported a value is cleared when a later
+# find returns no data, so the entity cannot freeze on a stale reading.
+# Why: issue #99 - without clearing, _async_values_from_registers keeps emitting
+# the old value and the sensor shows a frozen state even though ebusd no longer
+# exposes data for the register.
+async def test_register_cleared_when_find_returns_no_data() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c.ebus.read_register = AsyncMock(return_value=None)
+        # First poll: register carries a value.
+        c.ebus.find_registers = AsyncMock(return_value=["hmu OutsideTemp = 18.5"])
+        values = await c._async_update_data()
+        assert values["ebusd"]["hmu.OutsideTemp.value"] == "18.5"
+        # Second poll: ebusd no longer returns data for the register.
+        c.ebus.find_registers = AsyncMock(return_value=["hmu OutsideTemp = no data stored"])
+        values = await c._async_update_data()
+        assert "hmu.OutsideTemp.value" not in values["ebusd"]
+
+
+# Intent: a duplicate stale "no data stored" line in the same find batch must
+# not wipe a readable value for the same register, in either line order.
+# Why: ebusd's `find -a` lists some writable registers twice (a readable
+# definition and a stale one), which made the issue #99 clearing flip the DHW
+# entities to unknown on every poll.
+async def test_duplicate_no_data_line_does_not_clear_readable_value() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c.ebus.find_registers = AsyncMock(
+            return_value=["ctlv2 HwcOpMode = day", "ctlv2 HwcOpMode = no data stored"]
+        )
+        values = await c._async_update_data()
+        assert values["ebusd"]["ctlv2.HwcOpMode.value"] == "day"
+        c.ebus.find_registers = AsyncMock(
+            return_value=["ctlv2 HwcOpMode = no data stored", "ctlv2 HwcOpMode = day"]
+        )
+        values = await c._async_update_data()
+        assert values["ebusd"]["ctlv2.HwcOpMode.value"] == "day"
+
+
+# Intent: a no-data find line clears every field of a multi-field register, not
+# just the synthetic `value`, so the per-field sensors cannot freeze.
+# Why: issue #99/#102 - a whole-register "Status01 = no data stored" line left
+# the named fields (temp, pumpstate, ...) emitting their last decoded values.
+async def test_multi_field_no_data_clears_all_fields() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c.ebus.find_registers = AsyncMock(return_value=["hmu Status01 = 40;35;12;48;50;1"])
+        values = await c._async_update_data()
+        assert "hmu.Status01.temp" in values["ebusd"]
+        assert "hmu.Status01.pumpstate" in values["ebusd"]
+        c.ebus.find_registers = AsyncMock(return_value=["hmu Status01 = no data stored"])
+        values = await c._async_update_data()
+        assert "hmu.Status01.temp" not in values["ebusd"]
+        assert "hmu.Status01.pumpstate" not in values["ebusd"]
+
+
 # Intent: a transport reconnect clears runtime definitions and re-defines them on the next pass.
 # Why: prevents using definitions tied to a dropped ebusd session and resets the energy poll.
 async def test_transport_reconnect_invalidates_runtime_definitions() -> None:
@@ -1470,6 +1599,49 @@ async def test_async_write_register_rejects_missing_discovered_circuit() -> None
 
         assert await c.async_write_register("hmu", "SetMode", "auto") is False
         mock_ebus.write_register.assert_not_awaited()
+
+
+# Intent: async_write_registers records each attempt in the write log with the
+# resolved circuit and the verification result.
+# Why: the discovery dump's `writes` section needs to show what the integration
+# actually wrote (register, value, resolved circuit, success/error) so write-vs-app
+# analysis works without manual ebusctl.
+async def test_async_write_registers_records_write_log() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(["ctlv3 Z1DayTemp = 22.0"])
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.write_register = AsyncMock(
+            side_effect=[
+                WriteResult(success=True, verified_value="22.0"),
+                WriteResult(success=False, error_message="ERR: element not found"),
+            ]
+        )
+        c.ebus = mock_ebus
+
+        assert await c.async_write_register("ctlv2", "Z1DayTemp", "22.0", refresh=False) is True
+        assert await c.async_write_register("ctlv2", "Z1DayTemp", "23.0", refresh=False) is False
+
+        log = c._write_log
+        assert [entry["success"] for entry in log] == [True, False]
+        assert log[0]["circuit"] == "ctlv2"
+        assert log[0]["resolved_circuit"] == "ctlv3"
+        assert log[0]["value"] == "22.0"
+        assert log[1]["error"] == "ERR: element not found"
+
+
+# Intent: the write log is a bounded ring buffer, so an unbounded write session
+# cannot grow the dump payload without limit.
+# Why: keeps the discovery dump small even after heavy write activity.
+async def test_write_log_is_bounded() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+        for i in range(COORDINATOR.WRITE_LOG_SIZE + 10):
+            c._record_write("ctlv2", "Z1DayTemp", str(i), "ctlv2", True)
+        assert len(c._write_log) == COORDINATOR.WRITE_LOG_SIZE
+        assert c._write_log[0]["value"] == "10"
 
 
 # Issue #109: on a BAI + CTLV0 boiler bus the BAI burner interface also owns a

@@ -71,14 +71,72 @@ def _values_match(written: str, read_back: str) -> bool:
 
 # Parse ebusd 'info' response into key/value pairs. ebusd returns newline-
 # separated "key: value" lines; some lines bundle a second pair after ", ".
-def _parse_info_data(data: str) -> dict[str, str]:
-    info: dict[str, str] = {}
+AddressConfig = dict[str, str | list[str]]
+
+
+def _parse_info_data(data: str) -> dict[str, str | dict[str, AddressConfig]]:
+    info: dict[str, str | dict[str, AddressConfig]] = {}
     for line in data.splitlines():
         for part in line.split(", "):
             pair = part.split(": ", 1)
             if len(pair) == 2:
                 info[pair[0].strip()] = pair[1].strip()
+    loaded = _parse_address_configs(data)
+    if loaded:
+        info["loaded_configs"] = loaded
     return info
+
+
+# Extract per-address load information from the ebusd 'info' output. Each
+# "address NN:" line lists the scanned identity and the CSV/include files the
+# configuration actually loaded for that slave, e.g.:
+#   address 08: slave #11, scanned "MF=Vaillant;ID=BAI00;SW=0503;HW=9602",
+#     loaded "vaillant/bai.0010015600.inc", "vaillant/08.bai.csv"
+# Returns {address: {"role": ..., "scanned": ..., "loaded": [...]}}. This is
+# what tells us which register layout (e.g. 15.700.csv vs 15.ctlv2.csv) the
+# installed ebusd-configuration really applies to each device.
+def _parse_address_configs(data: str) -> dict[str, AddressConfig]:
+    configs: dict[str, AddressConfig] = {}
+    for line in data.splitlines():
+        if not line.startswith("address "):
+            continue
+        address, _, rest = line[len("address ") :].partition(": ")
+        if not address:
+            continue
+        entry: AddressConfig = {}
+        scanned = _extract_quoted(rest, "scanned ")
+        if scanned:
+            entry["scanned"] = scanned
+        loaded_index = rest.find("loaded ")
+        if loaded_index >= 0:
+            loaded: list[str] = []
+            for token in rest[loaded_index:].split('"'):
+                token = token.strip()
+                if token.endswith((".csv", ".inc")) and token not in loaded:
+                    loaded.append(token)
+            if loaded:
+                entry["loaded"] = loaded
+        role = rest.split(",", 1)[0].strip()
+        if role:
+            entry["role"] = role
+        if entry:
+            configs[address] = entry
+    return configs
+
+
+# Return the value of the first quoted token following a marker on a line.
+def _extract_quoted(line: str, marker: str) -> str:
+    start = line.find(marker)
+    if start < 0:
+        return ""
+    rest = line[start + len(marker) :]
+    quote = rest.find('"')
+    if quote < 0:
+        return ""
+    end = rest.find('"', quote + 1)
+    if end < 0:
+        return ""
+    return rest[quote + 1 : end]
 
 
 # Reject empty identifiers and CR/LF injection at the backend boundary, before
@@ -140,8 +198,9 @@ class EbusService:
                 try:
                     info_result = await self._send_line_locked("info")
                     parsed = _parse_info_data(info_result.data)
-                    if parsed.get("version"):
-                        self._version = parsed["version"]
+                    version = parsed.get("version")
+                    if isinstance(version, str) and version:
+                        self._version = version
                 except Exception:
                     self._version = None
             except Exception as exc:
@@ -214,32 +273,44 @@ class EbusService:
         )
         return result
 
-    # Send a complete find command, holding the lock for the whole multi-line
-    # transaction so concurrent commands cannot drain find lines or receive
-    # one as their own response.
+    # Send one command and collect every response line until ebusd goes quiet.
+    # Holds the lock for the whole multi-line transaction so concurrent
+    # commands cannot drain these lines or receive one as their own response.
+    # Multi-line responses (find, info) must be read to completion: leaving
+    # lines buffered would pollute the next command's read.
+    async def _send_lines_locked(self, cmd: str) -> list[str]:
+        if not self._writer or not self._reader:
+            self._log_cmd(cmd, SendResult(data="", error="not_connected"))
+            return []
+        t0 = time.monotonic()
+        first = await self._send_line_locked(cmd)
+        self._log_cmd(cmd, first, t0)
+        if first.error:
+            return []
+        lines: list[str] = []
+        if first.data.strip():
+            lines.append(first.data)
+        while True:
+            try:
+                line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
+            except TimeoutError:
+                break
+            if not line:
+                break
+            lines.append(line.decode("utf-8").rstrip("\n\r"))
+        return lines
+
+    # Send a complete find command (see _send_lines_locked).
     async def _send_find(self) -> list[str]:
         async with self._lock:
-            if not self._writer or not self._reader:
-                self._log_cmd("f -a", SendResult(data="", error="not_connected"))
-                return []
-            t0 = time.monotonic()
-            first = await self._send_line_locked("f -a")
-            self._log_cmd("f -a", first, t0)
-            if first.error:
-                return []
-            lines: list[str] = []
-            if first.data.strip():
-                lines.append(first.data)
-            while True:
-                try:
-                    line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
-                except TimeoutError:
-                    break
-                if not line:
-                    break
-                decoded = line.decode("utf-8").rstrip("\n\r")
-                lines.append(decoded)
-            return lines
+            return await self._send_lines_locked("f -a")
+
+    # Send 'info' and return every banner line. ebusd lists the per-address
+    # loaded CSV/include files after the version line, so get_info needs the
+    # whole response rather than the first line only.
+    async def _send_info(self) -> list[str]:
+        async with self._lock:
+            return await self._send_lines_locked("info")
 
     # Return raw find response lines
     async def find_registers(self) -> list[str]:
@@ -333,12 +404,12 @@ class EbusService:
         _LOGGER.debug("Write %s.%s=%r acked, verification read-back %r", circuit, name, value, verified)
         return WriteResult(success=True, verified_value=verified)
 
-    # Send 'info' command and parse key=value response
-    async def get_info(self) -> dict[str, str]:
-        result = await self.send_command("info")
-        if result.error:
+    # Send 'info' command and parse the full multi-line banner
+    async def get_info(self) -> dict[str, str | dict[str, AddressConfig]]:
+        lines = await self._send_info()
+        if not lines:
             return {}
-        return _parse_info_data(result.data)
+        return _parse_info_data("\n".join(lines))
 
     # Send 'define' command for runtime register definition
     async def define_register(self, definition: str) -> str:
