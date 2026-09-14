@@ -55,6 +55,7 @@ DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
 ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 ENERGY_POLL_INTERVAL = timedelta(minutes=5)
+WRITE_LOG_SIZE = 100
 
 # VWZIO/VWZ Status01 field layout (upstream PR #598); reuses the HMU layout.
 # Explicit types are required: the hcmode_inc template aliases (temp1/temp2/
@@ -188,6 +189,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self._last_placeholder_poll = datetime.min
         self._last_energy_poll = datetime.min
         self._runtime_definitions: dict[str, str] = {}
+        self._write_log: list[dict] = []            # recent write attempts (verification/telegram diag)
         self._cancel_set_mode_override: Callable[[], None] | None = None
         self._set_mode_override_payload: str | None = None
         self._analysis = AnalysisService()
@@ -1267,6 +1269,29 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # verified by read-back. Sequences are dependent: stop at the first failure
     # instead of writing later registers on a broken assumption; refresh only
     # after full success. Already-written registers are reported, not rolled back.
+    # Keep the most recent write attempts for the discovery dump's `writes`
+    # section. Bounded ring buffer; never raises — diagnostics must not break
+    # the write path.
+    def _record_write(
+        self, circuit: str, name: str, value: str, resolved_circuit: str | None, success: bool, error: str | None = None
+    ) -> None:
+        try:
+            self._write_log.append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "circuit": circuit,
+                    "name": name,
+                    "value": str(value),
+                    "resolved_circuit": resolved_circuit,
+                    "success": bool(success),
+                    "error": error,
+                }
+            )
+        except Exception:
+            return
+        if len(self._write_log) > WRITE_LOG_SIZE:
+            del self._write_log[: len(self._write_log) - WRITE_LOG_SIZE]
+
     async def async_write_registers(
         self,
         writes: list[tuple[str, str, str]],
@@ -1279,11 +1304,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             resolved_circuit = self.resolve_register_circuit(circuit)
             if resolved_circuit is None:
                 _LOGGER.warning("Write skipped: ambiguous discovered circuit for %s.%s", circuit, name)
+                self._record_write(circuit, name, value, None, False, "ambiguous discovered circuit")
                 return False
             result = await self.ebus.write_register(resolved_circuit, name, value, strict_verify=strict_verify)
             if not result.success:
                 _LOGGER.warning("Write failed %s.%s=%s: %s", circuit, name, value, result.error_message)
+                self._record_write(circuit, name, value, resolved_circuit, False, result.error_message)
                 return False
+            self._record_write(circuit, name, value, resolved_circuit, True)
         if refresh:
             await self.async_request_refresh()
         return True

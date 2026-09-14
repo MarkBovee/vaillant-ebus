@@ -1500,6 +1500,49 @@ async def test_async_write_register_rejects_missing_discovered_circuit() -> None
         mock_ebus.write_register.assert_not_awaited()
 
 
+# Intent: async_write_registers records each attempt in the write log with the
+# resolved circuit and the verification result.
+# Why: the discovery dump's `writes` section needs to show what the integration
+# actually wrote (register, value, resolved circuit, success/error) so write-vs-app
+# analysis works without manual ebusctl.
+async def test_async_write_registers_records_write_log() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(["ctlv3 Z1DayTemp = 22.0"])
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.write_register = AsyncMock(
+            side_effect=[
+                WriteResult(success=True, verified_value="22.0"),
+                WriteResult(success=False, error_message="ERR: element not found"),
+            ]
+        )
+        c.ebus = mock_ebus
+
+        assert await c.async_write_register("ctlv2", "Z1DayTemp", "22.0", refresh=False) is True
+        assert await c.async_write_register("ctlv2", "Z1DayTemp", "23.0", refresh=False) is False
+
+        log = c._write_log
+        assert [entry["success"] for entry in log] == [True, False]
+        assert log[0]["circuit"] == "ctlv2"
+        assert log[0]["resolved_circuit"] == "ctlv3"
+        assert log[0]["value"] == "22.0"
+        assert log[1]["error"] == "ERR: element not found"
+
+
+# Intent: the write log is a bounded ring buffer, so an unbounded write session
+# cannot grow the dump payload without limit.
+# Why: keeps the discovery dump small even after heavy write activity.
+async def test_write_log_is_bounded() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+        for i in range(COORDINATOR.WRITE_LOG_SIZE + 10):
+            c._record_write("ctlv2", "Z1DayTemp", str(i), "ctlv2", True)
+        assert len(c._write_log) == COORDINATOR.WRITE_LOG_SIZE
+        assert c._write_log[0]["value"] == "10"
+
+
 # Issue #109: on a BAI + CTLV0 boiler bus the BAI burner interface also owns a
 # DHW setpoint, which previously made controller resolution AMBIGUOUS and let
 # the bare runtime ctlv2 probe alias become the write target.

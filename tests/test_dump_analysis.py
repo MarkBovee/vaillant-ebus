@@ -24,6 +24,14 @@ parser_module = importlib.util.module_from_spec(parser_spec)
 sys.modules["vaillant_ebus.backend.grab_parser"] = parser_module
 parser_spec.loader.exec_module(parser_module)
 
+ebus_spec = importlib.util.spec_from_file_location(
+    "vaillant_ebus.backend.ebus_service", BACKEND_PATH / "ebus_service.py"
+)
+assert ebus_spec and ebus_spec.loader
+ebus_module = importlib.util.module_from_spec(ebus_spec)
+sys.modules["vaillant_ebus.backend.ebus_service"] = ebus_module
+ebus_spec.loader.exec_module(ebus_module)
+
 spec = importlib.util.spec_from_file_location("vaillant_ebus.backend.dump_analysis", BACKEND_PATH / "dump_analysis.py")
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
@@ -32,6 +40,65 @@ spec.loader.exec_module(module)
 
 normalize_dump = module.normalize_dump
 group_telegrams = module.group_telegrams
+parse_info_data = ebus_module._parse_info_data
+parse_address_configs = ebus_module._parse_address_configs
+
+
+# Intent: ebusd info parsing extracts the per-address loaded CSV/include files.
+# Why: a discovery dump must show which register layout each device actually
+# loads (e.g. 15.700.csv vs 15.ctlv2.csv on BASS3) without manual ebusctl work.
+def test_parse_info_data_extracts_loaded_configs() -> None:
+    info = (
+        "version: ebusd 26.1.26.1\naccess: *\nmasters: 3\naddress 03: master #11\n"
+        'address 08: slave #11, scanned "MF=Vaillant;ID=BAI00;SW=0503;HW=9602", '
+        'loaded "vaillant/bai.0010015600.inc", "vaillant/08.bai.csv"\n'
+        'address 15: slave #2, scanned "MF=Vaillant;ID=BASS3;SW=0708;HW=4304", '
+        'loaded "vaillant/15.bass.csv"\n'
+        'address 8c: slave, scanned "MF=0;ID=?;SW=0080;HW=" error: ERR: argument value out of valid range'
+    )
+    parsed = parse_info_data(info)
+    configs = parsed["loaded_configs"]
+    assert configs["08"]["scanned"] == "MF=Vaillant;ID=BAI00;SW=0503;HW=9602"
+    assert configs["08"]["loaded"] == ["vaillant/bai.0010015600.inc", "vaillant/08.bai.csv"]
+    assert configs["15"]["loaded"] == ["vaillant/15.bass.csv"]
+    assert configs["15"]["role"] == "slave #2"
+    # A master / errored line yields no loaded entry unless it has any.
+    assert "03" in configs  # masters keep a role entry
+    assert "8c" in configs  # errored line still keeps its scanned identity
+    assert parsed["version"] == "ebusd 26.1.26.1"
+
+
+# Intent: address lines without loaded files or scanned identity stay out of the
+# loaded-configs map entirely, and generic key/value lines are unaffected.
+def test_parse_address_configs_ignores_plain_lines() -> None:
+    parsed = parse_address_configs("version: ebusd\ndevice: a:1\n")
+    assert parsed == {}
+
+
+# Intent: normalize_dump keeps a top-level writes section reflecting recent
+# integration write attempts for write-vs-app correlation.
+# Why: the dump must expose what the integration wrote (register, value,
+# resolved circuit, verification result) alongside the grab traffic.
+def test_normalize_dump_preserves_writes_section() -> None:
+    dump = {
+        "metadata": {"dump_version": 4, "timestamp": "x"},
+        "before_registers": [{"circuit": "ctlv3", "name": "HwcHolidayStartPeriod", "values": [None]}],
+        "raw_find_lines": [],
+        "writes": [
+            {
+                "timestamp": "2026-09-14T12:00:00",
+                "circuit": "ctlv3",
+                "name": "HwcHolidayStartPeriod",
+                "value": "25.09.2026",
+                "resolved_circuit": "ctlv3",
+                "success": False,
+                "error": "ERR: element not found",
+            }
+        ],
+    }
+    normalized = normalize_dump(dump)
+    assert normalized["dump_version"] == 4
+    assert normalized["version_supported"] is True
 
 
 # Intent: normalizes a legacy ctlv2 cooling discovery-dump fixture to version 3 while keeping the raw grab lines.

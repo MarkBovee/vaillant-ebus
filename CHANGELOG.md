@@ -60,13 +60,19 @@
   35), issue #111 (eloBLOCK VE 28), and issue #109 (ecoTEC/VRT380) discovery
   dumps were added under `tests/fixtures/community/`, each with provenance
   metadata, and drive the Energy-Manager, sensor, and switch regressions.
+- **Discovery dump shows loaded ebusd configs and integration writes.** A dump
+  now lists, per bus address, the scanned identity and the CSV/include files
+  ebusd actually loaded (so the active register layout, e.g. `15.700.csv` vs
+  `15.ctlv2.csv`, is visible without ebusctl), and a `writes` section records
+  the recent register writes the integration itself sent — register, value,
+  resolved circuit, and verification result — for write-vs-app correlation.
 - **Energy-Manager DHW and sensor regressions.** `Status01.pumpstate == hwc`
   maps to `DHW` with an absent-signal path, and the sensor no-data/unknown
   behavior is pinned so a dead register cannot freeze an entity.
 
 ### Validation
 
-- Full test suite passing (584 tests), including the write-verification,
+- Full test suite passing (589 tests), including the write-verification,
   issue #102 cooling + DHW, climate HEAT-mode, sensor frozen-value, and the
   new community-fixture regressions.
 - Ruff, scoped format, strict mypy, YAML, compileall, version consistency, and
