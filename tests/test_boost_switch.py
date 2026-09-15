@@ -72,6 +72,11 @@ class _WaterHeaterEntityFeature(enum.IntFlag):
 components_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components", None))
 switch_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components.switch", None))
 switch_pkg.SwitchEntity = _MockBaseEntity
+binary_sensor_pkg = importlib.util.module_from_spec(
+    importlib.machinery.ModuleSpec("homeassistant.components.binary_sensor", None)
+)
+binary_sensor_pkg.BinarySensorDeviceClass = enum.Enum("BinarySensorDeviceClass", "PROBLEM CONNECTIVITY HEAT")
+binary_sensor_pkg.BinarySensorEntity = _MockBaseEntity
 water_heater_pkg = importlib.util.module_from_spec(
     importlib.machinery.ModuleSpec("homeassistant.components.water_heater", None)
 )
@@ -79,6 +84,7 @@ water_heater_pkg.WaterHeaterEntity = _MockBaseEntity
 water_heater_pkg.WaterHeaterEntityFeature = _WaterHeaterEntityFeature
 sys.modules["homeassistant.components"] = components_pkg
 sys.modules["homeassistant.components.switch"] = switch_pkg
+sys.modules["homeassistant.components.binary_sensor"] = binary_sensor_pkg
 sys.modules["homeassistant.components.water_heater"] = water_heater_pkg
 
 ha_const = sys.modules["homeassistant.const"]
@@ -100,14 +106,15 @@ const_module.CONF_AWAY_DURATION = "away_duration"
 const_module.DEFAULT_AWAY_DURATION = 5
 const_module.DOMAIN = "vaillant_ebus"
 
-for _name in ("switch", "water_heater"):
+for _name in ("switch", "water_heater", "binary_sensor"):
     _spec = importlib.util.spec_from_file_location(f"vaillant_ebus.{_name}", COMPONENT_PATH / f"{_name}.py")
     assert _spec and _spec.loader
     _mod = importlib.util.module_from_spec(_spec)
     sys.modules[f"vaillant_ebus.{_name}"] = _mod
     _spec.loader.exec_module(_mod)
 
-from vaillant_ebus.switch import HwcAwayModeSwitch, HwcBoostSwitch, _is_holiday_active  # noqa: E402
+from vaillant_ebus.binary_sensor import EbusdTankPresentSensor  # noqa: E402
+from vaillant_ebus.switch import EbusdSwitch, HwcAwayModeSwitch, HwcBoostSwitch, _is_holiday_active  # noqa: E402
 from vaillant_ebus.water_heater import EbusdWaterHeater  # noqa: E402
 
 
@@ -169,7 +176,6 @@ class _GraphCoordinator:
 def _graph_coordinator(fixture: str) -> _GraphCoordinator:
     graph = tc.DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
     return _GraphCoordinator(graph, _ebusd_data_from_graph(graph))
-
 
 
 # Without a prior toggle, the switch falls back to the raw HwcSFMode register.
@@ -449,3 +455,72 @@ def test_water_heater_away_state_coherence() -> None:
 
     c.data["ebusd"].pop("basv.HwcHolidayStartPeriod.value")
     assert wh.is_away_mode_on is None
+
+
+def _switch_desc(circuit: str = "basv", name: str = "HeatingSwitch") -> MagicMock:
+    d = MagicMock()
+    d.circuit = circuit
+    d.name = name
+    d.field = "value"
+    d.key = f"{circuit}.{name}.value"
+    d.device_circuit = circuit
+    d.enabled_by_default = True
+    d.entity_type = "switch"
+    d.meta = MagicMock()
+    d.meta.friendly_name = name
+    d.meta.icon = None
+    return d
+
+
+# The switch must reflect a successful write immediately, even though the raw
+# ebusd data cache is not refreshed until the next poll. Regression for #133:
+# after `async_turn_on`/`async_turn_off` the HA UI used to bounce back to the
+# old value because `is_on` re-read the stale coordinator cache.
+# Intent: After a successful write, EbusdSwitch.is_on reports the commanded value without waiting for the next poll.
+# Why: fixes the #133 UI bounce-back by showing the requested state immediately on write.
+async def test_switch_reflects_write_immediately_optimistic() -> None:
+    c = _coordinator(dhw_boost_desired=None, sfmode="auto")
+    c.ebus = MagicMock()
+    c.async_update_listeners = MagicMock()
+    sw = EbusdSwitch(c, _switch_desc(), f"entry_{_switch_desc().key}", _entry())
+
+    # Cache still holds the pre-write value (poll has not run yet).
+    c.data["ebusd"]["basv.HeatingSwitch.value"] = "0"
+    assert sw.is_on is False
+
+    await sw.async_turn_on()
+
+    # Optimistic update must have flipped the switch without a poll.
+    assert sw.is_on is True
+    c.async_update_listeners.assert_called_once()
+
+
+# Intent: the DHW tank-present sensor stays available whenever the coordinator
+# updates, even when the storage-temp register carries no value, so a missing
+# tank read surfaces as a genuine "unknown" state rather than "unavailable".
+# Why: a bus without the register must not look like either a connected (on)
+# tank or a confirmed absent (off) tank.
+def test_tank_present_available_when_unknown() -> None:
+    c = _coordinator(dhw_boost_desired=None, sfmode="auto")
+    c.last_update_success = True
+    c.data["ebusd"].pop("basv.HwcSFMode.value", None)
+    sensor = EbusdTankPresentSensor(c, _entry())
+
+    # No storage-temp value -> unknown, but still available (tracked with update).
+    assert sensor.is_on is None
+    assert sensor.available is True
+    c.last_update_success = False
+    assert sensor.available is False
+
+
+# Intent: on/off are driven purely by the storage-temp tri-state; a live temp is
+# on, an empty sentinel is off.
+# Why: the binary sensor value stays a real bool whenever the register reads.
+def test_tank_present_on_off() -> None:
+    c = _coordinator(dhw_boost_desired=None, sfmode="auto")
+    c.data["ebusd"]["basv.HwcStorageTemp.value"] = "46.5"
+    c.last_update_success = True
+    assert EbusdTankPresentSensor(c, _entry()).is_on is True
+
+    c.data["ebusd"]["basv.HwcStorageTemp.value"] = "(empty for 3115b52406020001000500 / 0800010500ffffff7f)"
+    assert EbusdTankPresentSensor(c, _entry()).is_on is False

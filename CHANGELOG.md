@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.8.4 - 2026-09-15
+
+### Added
+
+- **DHW Tank Present binary sensor (issue #135).** On buses without a connected
+  storage tank/cylinder the controller's `HwcStorageTemp` poll returns an
+  empty/NaN sentinel, while a real tank reports a live temperature. A derived
+  binary sensor on the DHW device reports `on` when a tank is detected, `off`
+  when the empty sentinel is read, and `unknown` when no value is available
+  yet. It is enabled by default and stays available alongside the coordinator
+  update, so a missing register read is a genuine `unknown` rather than being
+  conflated with either a connected or absent tank. This is additive and does
+  not change any device naming, so no entity/device migration is required.
+
+### Fixed
+
+- **BASS3/BASV-style controllers now read the zone-1 day setpoint correctly
+  (issue #129).** The shipped `15.700`-lineage CSV polls `Z1DayTemp` at
+  sub-address `0x07`, which returns `ERR: invalid position` on this firmware
+  family (confirmed on a Saunier-Duval `BASS3`/`0708`/`4304` bus). The setpoint
+  lives at sub-address `0x22` — verified live upstream (issue #646), documented
+  as a `0x07` → `0x22` move (#522), and confirmed in ctlv0/ctlv3 community
+  fixtures. The integration now redefines the `Z1DayTemp` read at `0x22` at
+  runtime, gated to BAS-family scan types so ctlv2/ctlv3 (where `0x07` works)
+  are unaffected. The write path is unchanged.
+
+- **Switch entities now reflect a successful write immediately (issue #133).** After
+  toggling a switch the Home Assistant UI bounced back to the previous value for
+  several seconds, because the entity re-read the stale coordinator cache while ebusd
+  had not yet refreshed its read cache. The command value is now written to the cache
+  optimistically and listeners are notified, so the switch shows the requested state
+  right away. The write is already confirmed by the read-back verification, and the
+  next periodic poll still reconciles with the actual bus value, so a later external
+  override wins.
+
 ## 1.8.3 - 2026-09-14
 
 ### Fixed

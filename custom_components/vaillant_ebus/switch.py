@@ -100,6 +100,13 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         ok = await self.coordinator.async_write_register(self._desc.circuit, self._desc.name, value)
         if not ok:
             _LOGGER.warning("Write failed for %s", self._desc.key)
+            return
+        # Reflect the command immediately so the UI does not bounce back to the
+        # previous state while ebusd has not yet refreshed its read cache. The
+        # write is already confirmed by the read-back verification; the next
+        # periodic poll still reconciles and a later external override wins.
+        self.coordinator.data.setdefault("ebusd", {})[self._desc.key] = value
+        self.coordinator.async_update_listeners()
 
 
 # Parse Vaillant date string to date object

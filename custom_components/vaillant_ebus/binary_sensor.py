@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .backend.entity_factory import EntityDescription
-from .backend.models import is_no_data_value
+from .backend.models import derive_tank_presence, is_no_data_value
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator
 
@@ -39,6 +39,10 @@ async def async_setup_entry(
         return entities
 
     async_add_entities(_build(coordinator.entities))
+    # The DHW tank-present sensor is derived from the controller's storage-temp
+    # sentinel, not a register read. It reports unknown until the register
+    # carries data, and is always created so discovery can populate it late.
+    async_add_entities([EbusdTankPresentSensor(coordinator, entry)])
     added_fixed = False
 
     def _ensure_fixed_entities() -> None:
@@ -50,9 +54,7 @@ async def async_setup_entry(
 
     _ensure_fixed_entities()
     coordinator.register_post_discovery_callback(_ensure_fixed_entities)
-    coordinator.register_entity_adder(
-        "binary_sensor", lambda descriptions: async_add_entities(_build(descriptions))
-    )
+    coordinator.register_entity_adder("binary_sensor", lambda descriptions: async_add_entities(_build(descriptions)))
 
 
 BINARY_TRUE_VALUES = {"on", "1", "true", "yes", "running", "day"}
@@ -150,4 +152,39 @@ class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntit
     @property
     def available(self) -> bool:
         # Entity available when coordinator updates succeed
+        return self.coordinator.last_update_success
+
+
+class EbusdTankPresentSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntity):
+    """Derived DHW storage-tank presence from the controller storage-temperature sentinel.
+
+    On buses without a connected tank the controller's HwcStorageTemp poll
+    returns an empty/NaN sentinel; a real tank reports a live temperature. This
+    exposes that as a tri-state binary sensor (on = tank present, off = no tank,
+    unknown = no data yet), attached to the logical DHW device.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "DHW Tank Present"
+    _attr_icon = "mdi:water-boiler"
+    _attr_entity_registry_enabled_default = True
+
+    def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_dhw_tank_present"
+        self._attr_device_info = coordinator.get_device_info("dhw")
+
+    @property
+    def is_on(self) -> bool | None:
+        circuit = self.coordinator.heating_circuit
+        if circuit is None:
+            return None
+        data = (self.coordinator.data or {}).get("ebusd", {})
+        return derive_tank_presence(data, circuit)
+
+    @property
+    def available(self) -> bool:
+        # Always tracked with the coordinator update so a missing storage-temp
+        # register surfaces as a genuine "unknown" state rather than being
+        # conflated with either a connected (on) or absent (off) tank.
         return self.coordinator.last_update_success

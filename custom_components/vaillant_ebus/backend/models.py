@@ -304,6 +304,54 @@ def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | N
     return OPERATING_STATE_STANDBY
 
 
+# Reset sentinel of the HwcStorageTemp poll, returned as "(empty ...7fffffff)".
+# _clean() normalizes an empty/NaN read to "", so we detect it there.
+
+
+def _parse_temp(raw: str | None) -> float | None:
+    """Return a positive storage temperature, or None for a sentinel/absence."""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    if is_no_data_value(s):
+        return None
+    try:
+        val = float(s)
+    except ValueError:
+        return None
+    return val if val > 0.0 else None
+
+
+# Derive whether a DHW storage tank/cylinder is present from the controller's
+# HwcStorageTemp register. On buses without a connected tank the storage-temp
+# read returns an explicit empty/NaN marker ("(empty ...7fffffff)" on the b524
+# poll), while a real tank reports a live temperature. Return tri-state:
+#   True  -> a positive temperature was read (tank present)
+#   False -> the explicit empty-NaN sentinel was read (no tank connected)
+#   None  -> no value at all or an ambiguous/other sentinel (unknown)
+# The owning circuit is the resolved heating controller (the DHW storage
+# registers live on the controller circuit, not the heat-pump or a bare alias).
+# Only the explicit "(empty" NaN marker counts as a proven "no tank"; generic
+# no-data / unavailable sentinels stay unknown so they are never mistaken for a
+# confirmed absent tank.
+def derive_tank_presence(values: Mapping[str, str | None], dhw_circuit: str | None) -> bool | None:
+    if not dhw_circuit:
+        return None
+    raw = values.get(f"{dhw_circuit}.HwcStorageTemp.value")
+    if raw is None:
+        return None
+    temp = _parse_temp(raw)
+    if temp is not None:
+        return True
+    if str(raw).strip().lower().startswith("(empty"):
+        # The ebusd NaN/empty decoded as an explicit marker on the registered
+        # storage-temp message: the controller answers but no tank value exists.
+        return False
+    return None
+
+
 CIRCUIT_NAMES: dict[str, str] = {
     "hmu": "Vaillant aroTHERM heat pump",
     "basv": "Vaillant BASV2 Heating Control",
