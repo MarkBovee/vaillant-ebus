@@ -825,6 +825,22 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             parts[1] = resolved
             return ",".join(parts)
 
+        # BAS*/BASS* heating controllers (e.g. `Vaillant;BASS3;0708;4304`)
+        # expose the zone-1 day setpoint at sub-address 0x22, not the 0x07 slot
+        # the shipped `15.700`-lineage CSV poll uses. On this family the 0x07
+        # read returns `ERR: invalid position` while 0x22 decodes a live value
+        # (upstream issue #646 BASS0 live read, #522 "0700 -> 2200", #1063 root
+        # cause; community fixtures for ctlv0/ctlv3 confirm 0x22). Only the
+        # READ is redefined writable-path is untouched; hardware-gated so
+        # ctlv2/ctlv3 (where 0x07 works) are unaffected.
+        controller_node = self._graph.heating_controller_result().node if self._graph is not None else None
+        if controller_node and controller_node.scan_type.upper().startswith("BAS"):
+            circuit = controller_node.circuit
+            defines.append(
+                f"r5,{circuit},Z1DayTemp,Z1DayTemp,31,15,B524,020003002200"
+                ",ign,,IGN:4,,,,value,,EXP,,°C,day setpoint for zone 1"
+            )
+
         defines = [definition for definition in (_resolve_definition_circuit(item) for item in defines) if definition]
         if is_hmux0_0303_0504:
             assert heat_pump is not None

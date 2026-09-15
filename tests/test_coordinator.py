@@ -1004,6 +1004,68 @@ async def test_hmux0_other_firmware_gets_scan_metadata_without_yield_definitions
         assert not any(",RunDataElPowerConsumption," in definition for definition in definitions)
 
 
+# Intent: on a BAS-family heating controller the zone-1 day setpoint is read at
+# sub-address 0x22, not the 0x07 slot the shipped 15.700-lineage CSV polls.
+# Regression for #129: the 0x07 read returned "ERR: invalid position" on a
+# Saunier-Duval BASS3 (scan Vaillant;BASS3;0708;4304) while the setpoint lives
+# at 0x22 (upstream issue #646 live read, #522 "0700 -> 2200", ctlv0/ctlv3
+# fixtures). The runtime define must replace the CSV read with the 0x22 address
+# only on BAS-family controllers; ctlv2/ctlv3 (where 0x07 works) must not be
+# overridden.
+# Why: pins the hardware-gated 0x22 read override so BASS3/BASV3 setpoints
+# become readable without touching the (unmergeable) upstream CSV, while leaving
+# ctlv2/ctlv3 behavior unchanged.
+async def test_bass3_defines_z1daytemp_read_at_0x22() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/geniaset_bass3_discovery.yaml")
+        )
+        controller = graph.heating_controller_result().node
+        assert controller is not None
+        assert controller.scan_type == "BASS3"
+
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = graph
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        z1day = [definition for definition in definitions if ",Z1DayTemp," in definition]
+        # The BAS-family read override polls the 0x22 sub-address.
+        assert len(z1day) == 1
+        assert ",020003002200," in z1day[0]
+        assert not any(",020003000700," in definition for definition in definitions)
+
+
+# Intent: a ctlv3/ctlv2 controller keeps the shipped day-setpoint definition; the
+# BAS-family 0x22 override must not be emitted when it would needlessly replace a
+# working 0x07 read.
+# Why: guarantees the gating does not regress ctlv2/ctlv3 zone readback.
+async def test_ctlv3_does_not_override_z1daytemp_read() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/hmux0_issue99_2026-09-10_173229.yaml")
+        )
+        controller = graph.heating_controller_result().node
+        assert controller is not None
+        assert controller.scan_type == "CTLV3"
+
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = graph
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        # No 0x22 read override for the day setpoint on a non-BAS controller.
+        assert not any(",Z1DayTemp," in definition for definition in definitions)
+
+
 # Intent: HMUX0 scan bootstrap defines exactly the confirmed hmux0 register set.
 # Why: guards the scan-bootstrap path from emitting generic hmu alias definitions.
 async def test_hmux0_scan_bootstrap_defines_only_confirmed_registers() -> None:
@@ -1286,14 +1348,10 @@ async def test_duplicate_no_data_line_does_not_clear_readable_value() -> None:
         c.ebus.is_connected = True
         c.ebus.define_register = AsyncMock(return_value="done")
         c.ebus.read_register = AsyncMock(return_value=None)
-        c.ebus.find_registers = AsyncMock(
-            return_value=["ctlv2 HwcOpMode = day", "ctlv2 HwcOpMode = no data stored"]
-        )
+        c.ebus.find_registers = AsyncMock(return_value=["ctlv2 HwcOpMode = day", "ctlv2 HwcOpMode = no data stored"])
         values = await c._async_update_data()
         assert values["ebusd"]["ctlv2.HwcOpMode.value"] == "day"
-        c.ebus.find_registers = AsyncMock(
-            return_value=["ctlv2 HwcOpMode = no data stored", "ctlv2 HwcOpMode = day"]
-        )
+        c.ebus.find_registers = AsyncMock(return_value=["ctlv2 HwcOpMode = no data stored", "ctlv2 HwcOpMode = day"])
         values = await c._async_update_data()
         assert values["ebusd"]["ctlv2.HwcOpMode.value"] == "day"
 
