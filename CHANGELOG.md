@@ -2,6 +2,16 @@
 
 ## 1.8.4 - 2026-09-15
 
+### Added
+
+- **DHW Tank Present binary sensor (issue #135).** On buses without a connected
+  storage tank/cylinder the controller's `HwcStorageTemp` poll returns an
+  empty/NaN sentinel, while a real tank reports a live temperature. A new
+  opt-in derived binary sensor on the DHW device reports `on` when a tank is
+  detected, `off` when the empty sentinel is read, and `unknown` when no value
+  is available yet. This is additive and does not change any device naming, so
+  no entity/device migration is required.
+
 ### Fixed
 
 - **Switch entities now reflect a successful write immediately (issue #133).** After
