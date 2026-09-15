@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.4 - 2026-09-15
+
+### Fixed
+
+- **Switch entities now reflect a successful write immediately (issue #133).** After
+  toggling a switch the Home Assistant UI bounced back to the previous value for
+  several seconds, because the entity re-read the stale coordinator cache while ebusd
+  had not yet refreshed its read cache. The command value is now written to the cache
+  optimistically and listeners are notified, so the switch shows the requested state
+  right away. The write is already confirmed by the read-back verification, and the
+  next periodic poll still reconciles with the actual bus value, so a later external
+  override wins.
+
 ## 1.8.3 - 2026-09-14
 
 ### Fixed
