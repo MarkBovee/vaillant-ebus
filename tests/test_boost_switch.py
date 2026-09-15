@@ -107,7 +107,7 @@ for _name in ("switch", "water_heater"):
     sys.modules[f"vaillant_ebus.{_name}"] = _mod
     _spec.loader.exec_module(_mod)
 
-from vaillant_ebus.switch import HwcAwayModeSwitch, HwcBoostSwitch, _is_holiday_active  # noqa: E402
+from vaillant_ebus.switch import EbusdSwitch, HwcAwayModeSwitch, HwcBoostSwitch, _is_holiday_active  # noqa: E402
 from vaillant_ebus.water_heater import EbusdWaterHeater  # noqa: E402
 
 
@@ -169,7 +169,6 @@ class _GraphCoordinator:
 def _graph_coordinator(fixture: str) -> _GraphCoordinator:
     graph = tc.DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
     return _GraphCoordinator(graph, _ebusd_data_from_graph(graph))
-
 
 
 # Without a prior toggle, the switch falls back to the raw HwcSFMode register.
@@ -449,3 +448,41 @@ def test_water_heater_away_state_coherence() -> None:
 
     c.data["ebusd"].pop("basv.HwcHolidayStartPeriod.value")
     assert wh.is_away_mode_on is None
+
+
+def _switch_desc(circuit: str = "basv", name: str = "HeatingSwitch") -> MagicMock:
+    d = MagicMock()
+    d.circuit = circuit
+    d.name = name
+    d.field = "value"
+    d.key = f"{circuit}.{name}.value"
+    d.device_circuit = circuit
+    d.enabled_by_default = True
+    d.entity_type = "switch"
+    d.meta = MagicMock()
+    d.meta.friendly_name = name
+    d.meta.icon = None
+    return d
+
+
+# The switch must reflect a successful write immediately, even though the raw
+# ebusd data cache is not refreshed until the next poll. Regression for #133:
+# after `async_turn_on`/`async_turn_off` the HA UI used to bounce back to the
+# old value because `is_on` re-read the stale coordinator cache.
+# Intent: After a successful write, EbusdSwitch.is_on reports the commanded value without waiting for the next poll.
+# Why: fixes the #133 UI bounce-back by showing the requested state immediately on write.
+async def test_switch_reflects_write_immediately_optimistic() -> None:
+    c = _coordinator(dhw_boost_desired=None, sfmode="auto")
+    c.ebus = MagicMock()
+    c.async_update_listeners = MagicMock()
+    sw = EbusdSwitch(c, _switch_desc(), f"entry_{_switch_desc().key}", _entry())
+
+    # Cache still holds the pre-write value (poll has not run yet).
+    c.data["ebusd"]["basv.HeatingSwitch.value"] = "0"
+    assert sw.is_on is False
+
+    await sw.async_turn_on()
+
+    # Optimistic update must have flipped the switch without a poll.
+    assert sw.is_on is True
+    c.async_update_listeners.assert_called_once()
