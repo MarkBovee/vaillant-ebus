@@ -14,6 +14,16 @@
 
 ### Fixed
 
+- **BASS3/BASV-style controllers now read the zone-1 day setpoint correctly
+  (issue #129).** The shipped `15.700`-lineage CSV polls `Z1DayTemp` at
+  sub-address `0x07`, which returns `ERR: invalid position` on this firmware
+  family (confirmed on a Saunier-Duval `BASS3`/`0708`/`4304` bus). The setpoint
+  lives at sub-address `0x22` — verified live upstream (issue #646), documented
+  as a `0x07` → `0x22` move (#522), and confirmed in ctlv0/ctlv3 community
+  fixtures. The integration now redefines the `Z1DayTemp` read at `0x22` at
+  runtime, gated to BAS-family scan types so ctlv2/ctlv3 (where `0x07` works)
+  are unaffected. The write path is unchanged.
+
 - **Switch entities now reflect a successful write immediately (issue #133).** After
   toggling a switch the Home Assistant UI bounced back to the previous value for
   several seconds, because the entity re-read the stale coordinator cache while ebusd
