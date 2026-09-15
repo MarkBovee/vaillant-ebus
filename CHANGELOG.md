@@ -6,11 +6,13 @@
 
 - **DHW Tank Present binary sensor (issue #135).** On buses without a connected
   storage tank/cylinder the controller's `HwcStorageTemp` poll returns an
-  empty/NaN sentinel, while a real tank reports a live temperature. A new
-  opt-in derived binary sensor on the DHW device reports `on` when a tank is
-  detected, `off` when the empty sentinel is read, and `unknown` when no value
-  is available yet. This is additive and does not change any device naming, so
-  no entity/device migration is required.
+  empty/NaN sentinel, while a real tank reports a live temperature. A derived
+  binary sensor on the DHW device reports `on` when a tank is detected, `off`
+  when the empty sentinel is read, and `unknown` when no value is available
+  yet. It is enabled by default and stays available alongside the coordinator
+  update, so a missing register read is a genuine `unknown` rather than being
+  conflated with either a connected or absent tank. This is additive and does
+  not change any device naming, so no entity/device migration is required.
 
 ### Fixed
 
