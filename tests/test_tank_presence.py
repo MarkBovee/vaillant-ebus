@@ -38,10 +38,12 @@ def test_tank_presence_false_for_empty_sentinel() -> None:
     assert derive_tank_presence({"ctlv0.HwcStorageTemp.value": raw}, "ctlv0") is False
 
 
-# Intent: "no data stored" is an idle/absent reply that must not count as a tank.
-# Why: keeps the detector conservative when the register returns no live value.
-def test_tank_presence_false_for_no_data() -> None:
-    assert derive_tank_presence({"ctlv3.HwcStorageTemp.value": "no data stored"}, "ctlv3") is False
+# Intent: "no data stored" is an idle/absent reply, not the explicit empty-NaN
+# marker. It must stay unknown (never a confirmed "no tank").
+# Why: only the explicit "(empty ...7fffffff)" NaN read proves a missing tank;
+# generic no-data sentinels must not be mistaken for a confirmed absent tank.
+def test_tank_presence_unknown_for_no_data() -> None:
+    assert derive_tank_presence({"ctlv3.HwcStorageTemp.value": "no data stored"}, "ctlv3") is None
 
 
 # Intent: A missing register or missing circuit yields None (unknown), never a guess.
@@ -51,13 +53,13 @@ def test_tank_presence_unknown_when_missing() -> None:
     assert derive_tank_presence({"ctlv2.HwcStorageTemp.value": "no data stored"}, None) is None
 
 
-# Intent: A plain placeholder that is neither a live temperature nor an
-# empty/no-data sentinel stays unknown rather than being treated as a tank.
-# Why: "-" is not a confirmed "no tank"; only an explicit sentinel or a live
-# temperature should decide.
+# Intent: A plain placeholder that is neither a live temperature nor the
+# explicit empty-NaN marker stays unknown rather than being treated as a tank.
+# Why: only the explicit "(empty" marker is a proven "no tank"; "-" and other
+# sentinels are ambiguous.
 def test_tank_presence_unknown_for_plain_placeholder() -> None:
-    # "-" is a no-data sentinel, so it reads as no tank, not a live temperature.
-    assert derive_tank_presence({"ctlv2.HwcStorageTemp.value": "-"}, "ctlv2") is False
+    assert derive_tank_presence({"ctlv2.HwcStorageTemp.value": "-"}, "ctlv2") is None
+    assert derive_tank_presence({"ctlv2.HwcStorageTemp.value": "unknown"}, "ctlv2") is None
 
 
 # Intent: Zero and negative temperatures are not a live tank value.
@@ -105,3 +107,15 @@ def test_tank_presence_tank_fixture_present() -> None:
     ):
         circuit, value = _fixture_storage_temp(name)
         assert derive_tank_presence({f"{circuit}.HwcStorageTemp.value": value}, circuit) is True
+
+
+# Intent: the pure function must treat ONLY the explicit "(empty" marker as a
+# proven no-tank; a live temp is a tank; all other sentinels are unknown.
+# Why: end-to-end correctness without the coordinator filter, matching the
+# tri-state contract (on/off/unknown).
+def test_tank_presence_tri_state_contract() -> None:
+    assert derive_tank_presence({"bass.HwcStorageTemp.value": "46"}, "bass") is True
+    assert derive_tank_presence({"bass.HwcStorageTemp.value": "(empty)"}, "bass") is False
+    assert derive_tank_presence({"bass.HwcStorageTemp.value": "no data stored"}, "bass") is None
+    assert derive_tank_presence({"bass.HwcStorageTemp.value": "-"}, "bass") is None
+    assert derive_tank_presence({"bass.HwcStorageTemp.value": "unavailable"}, "bass") is None

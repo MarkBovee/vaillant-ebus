@@ -760,6 +760,39 @@ async def test_initial_discovery_prunes_stale_cache_registers() -> None:
         assert "hmu.SourceTempInput" in c.registers
 
 
+# Intent: the DHW storage-temp register's explicit empty/NaN sentinel
+# ("(empty ...7fffffff)") must survive the coordinator pipeline into the data
+# dict so the tank-presence sensor can report "off" (no tank). A generic
+# no-data sentinel must NOT be conflated with that explicit marker.
+# Why: regression for #135 - without this, the coordinator collapsed every
+# sentinel to None and the sensor could only ever report unknown, never off.
+async def test_hwc_storage_temp_empty_sentinel_reaches_data() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c._cache_seeded = c._ebusd_connected = True
+        empty = "(empty for 3115b52406020001000500 / 0800010500ffffff7f)"
+        c.ebus.find_registers = AsyncMock(
+            return_value=[
+                "ctlv2 OutsideTemp = 18.5",
+                f"ctlv2 HwcStorageTemp = {empty}",
+            ]
+        )
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            ["ctlv2 OutsideTemp = 18.5", f"ctlv2 HwcStorageTemp = {empty}"]
+        )
+
+        values = await c._async_update_data()
+
+        # The explicit empty-NaN marker is preserved (not None), so the
+        # tank-presence sensor can turn it into a confirmed "off".
+        assert values["ebusd"]["ctlv2.HwcStorageTemp.value"] == empty
+        assert c.registers["ctlv2.HwcStorageTemp"].value["value"] == empty
+
+
 # Intent: a register the discovery graph does not configure is never revived
 # from the cache during a fallback read, even when the cache still holds a
 # stale value from an earlier session.

@@ -1264,6 +1264,33 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                             raw = line.split("=", 1)[1].strip()
                             if not is_no_data_value(raw):
                                 invalid_values.add(key)
+                        # The DHW storage-temp register can return an explicit
+                        # empty/NaN sentinel ("(empty ...7fffffff)") that means a
+                        # cylinder is NOT connected. That is a meaningful value,
+                        # not generic "no data", so keep it through to the
+                        # tank-presence sensor instead of collapsing it to None.
+                        # Only is_no_data_value-known sentinels that are NOT the
+                        # empty-NaN marker stay generic no-data.
+                        elif name.lower() == "hwcstoragetemp":
+                            raw = line.split("=", 1)[1].strip()
+                            is_empty_marker = raw.strip().lower().startswith("(empty")
+                            if is_empty_marker and key not in batch_with_data:
+                                self.registers.setdefault(
+                                    key,
+                                    EbusdRegister(
+                                        circuit=circuit,
+                                        name=name,
+                                        fields=["value"],
+                                        value=_register_values(key, raw.strip()),
+                                        has_data=False,
+                                    ),
+                                ).value.update(_register_values(key, raw.strip()))
+                                # Guard against a later stale "no data stored"
+                                # double-line in the same batch wiping this
+                                # explicit marker: treat it as "has data" for
+                                # this pass like a readable value.
+                                batch_with_data.add(key)
+                                continue
                         # A register that no longer carries data must not keep
                         # emitting its last value, otherwise the entity freezes
                         # at a stale reading (issue #99). But ebusd's `find -a`

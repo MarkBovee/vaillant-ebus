@@ -326,13 +326,16 @@ def _parse_temp(raw: str | None) -> float | None:
 
 # Derive whether a DHW storage tank/cylinder is present from the controller's
 # HwcStorageTemp register. On buses without a connected tank the storage-temp
-# poll returns a NaN/empty sentinel ("(empty ...7fffffff)" or "no data stored"),
-# while a real tank reports a live temperature. Return tri-state:
+# read returns an explicit empty/NaN marker ("(empty ...7fffffff)" on the b524
+# poll), while a real tank reports a live temperature. Return tri-state:
 #   True  -> a positive temperature was read (tank present)
-#   False -> an empty sentinel was read (no tank connected)
-#   None  -> no value or ambiguous (unknown)
+#   False -> the explicit empty-NaN sentinel was read (no tank connected)
+#   None  -> no value at all or an ambiguous/other sentinel (unknown)
 # The owning circuit is the resolved heating controller (the DHW storage
 # registers live on the controller circuit, not the heat-pump or a bare alias).
+# Only the explicit "(empty" NaN marker counts as a proven "no tank"; generic
+# no-data / unavailable sentinels stay unknown so they are never mistaken for a
+# confirmed absent tank.
 def derive_tank_presence(values: Mapping[str, str | None], dhw_circuit: str | None) -> bool | None:
     if not dhw_circuit:
         return None
@@ -342,9 +345,11 @@ def derive_tank_presence(values: Mapping[str, str | None], dhw_circuit: str | No
     temp = _parse_temp(raw)
     if temp is not None:
         return True
-    # _clean normalizes both "(empty ...)" and "no data stored" to "", proving
-    # the register is exposed but reports no tank.
-    return False if _clean(raw) == "" else None
+    if str(raw).strip().lower().startswith("(empty"):
+        # The ebusd NaN/empty decoded as an explicit marker on the registered
+        # storage-temp message: the controller answers but no tank value exists.
+        return False
+    return None
 
 
 CIRCUIT_NAMES: dict[str, str] = {
