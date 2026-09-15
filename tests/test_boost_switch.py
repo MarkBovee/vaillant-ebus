@@ -72,6 +72,11 @@ class _WaterHeaterEntityFeature(enum.IntFlag):
 components_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components", None))
 switch_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components.switch", None))
 switch_pkg.SwitchEntity = _MockBaseEntity
+binary_sensor_pkg = importlib.util.module_from_spec(
+    importlib.machinery.ModuleSpec("homeassistant.components.binary_sensor", None)
+)
+binary_sensor_pkg.BinarySensorDeviceClass = enum.Enum("BinarySensorDeviceClass", "PROBLEM CONNECTIVITY HEAT")
+binary_sensor_pkg.BinarySensorEntity = _MockBaseEntity
 water_heater_pkg = importlib.util.module_from_spec(
     importlib.machinery.ModuleSpec("homeassistant.components.water_heater", None)
 )
@@ -79,6 +84,7 @@ water_heater_pkg.WaterHeaterEntity = _MockBaseEntity
 water_heater_pkg.WaterHeaterEntityFeature = _WaterHeaterEntityFeature
 sys.modules["homeassistant.components"] = components_pkg
 sys.modules["homeassistant.components.switch"] = switch_pkg
+sys.modules["homeassistant.components.binary_sensor"] = binary_sensor_pkg
 sys.modules["homeassistant.components.water_heater"] = water_heater_pkg
 
 ha_const = sys.modules["homeassistant.const"]
@@ -100,13 +106,14 @@ const_module.CONF_AWAY_DURATION = "away_duration"
 const_module.DEFAULT_AWAY_DURATION = 5
 const_module.DOMAIN = "vaillant_ebus"
 
-for _name in ("switch", "water_heater"):
+for _name in ("switch", "water_heater", "binary_sensor"):
     _spec = importlib.util.spec_from_file_location(f"vaillant_ebus.{_name}", COMPONENT_PATH / f"{_name}.py")
     assert _spec and _spec.loader
     _mod = importlib.util.module_from_spec(_spec)
     sys.modules[f"vaillant_ebus.{_name}"] = _mod
     _spec.loader.exec_module(_mod)
 
+from vaillant_ebus.binary_sensor import EbusdTankPresentSensor  # noqa: E402
 from vaillant_ebus.switch import EbusdSwitch, HwcAwayModeSwitch, HwcBoostSwitch, _is_holiday_active  # noqa: E402
 from vaillant_ebus.water_heater import EbusdWaterHeater  # noqa: E402
 
@@ -486,3 +493,34 @@ async def test_switch_reflects_write_immediately_optimistic() -> None:
     # Optimistic update must have flipped the switch without a poll.
     assert sw.is_on is True
     c.async_update_listeners.assert_called_once()
+
+
+# Intent: the DHW tank-present sensor stays available whenever the coordinator
+# updates, even when the storage-temp register carries no value, so a missing
+# tank read surfaces as a genuine "unknown" state rather than "unavailable".
+# Why: a bus without the register must not look like either a connected (on)
+# tank or a confirmed absent (off) tank.
+def test_tank_present_available_when_unknown() -> None:
+    c = _coordinator(dhw_boost_desired=None, sfmode="auto")
+    c.last_update_success = True
+    c.data["ebusd"].pop("basv.HwcSFMode.value", None)
+    sensor = EbusdTankPresentSensor(c, _entry())
+
+    # No storage-temp value -> unknown, but still available (tracked with update).
+    assert sensor.is_on is None
+    assert sensor.available is True
+    c.last_update_success = False
+    assert sensor.available is False
+
+
+# Intent: on/off are driven purely by the storage-temp tri-state; a live temp is
+# on, an empty sentinel is off.
+# Why: the binary sensor value stays a real bool whenever the register reads.
+def test_tank_present_on_off() -> None:
+    c = _coordinator(dhw_boost_desired=None, sfmode="auto")
+    c.data["ebusd"]["basv.HwcStorageTemp.value"] = "46.5"
+    c.last_update_success = True
+    assert EbusdTankPresentSensor(c, _entry()).is_on is True
+
+    c.data["ebusd"]["basv.HwcStorageTemp.value"] = "(empty for 3115b52406020001000500 / 0800010500ffffff7f)"
+    assert EbusdTankPresentSensor(c, _entry()).is_on is False

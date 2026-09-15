@@ -167,7 +167,7 @@ class EbusdTankPresentSensor(CoordinatorEntity[VaillantCoordinator], BinarySenso
     _attr_has_entity_name = True
     _attr_name = "DHW Tank Present"
     _attr_icon = "mdi:water-boiler"
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -184,4 +184,7 @@ class EbusdTankPresentSensor(CoordinatorEntity[VaillantCoordinator], BinarySenso
 
     @property
     def available(self) -> bool:
-        return self.coordinator.last_update_success and self.is_on is not None
+        # Always tracked with the coordinator update so a missing storage-temp
+        # register surfaces as a genuine "unknown" state rather than being
+        # conflated with either a connected (on) or absent (off) tank.
+        return self.coordinator.last_update_success
