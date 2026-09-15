@@ -104,7 +104,7 @@ def test_normalize_dump_preserves_writes_section() -> None:
 # Intent: normalizes a legacy ctlv2 cooling discovery-dump fixture to version 3 while keeping the raw grab lines.
 # Why: verifies old dumps are upgraded in-memory without mutating or losing their raw capture.
 def test_legacy_fixture_normalizes_without_migration() -> None:
-    path = Path(__file__).parent / "fixtures/community/arotherm_plus_ctlv2_cooling_discovery.yaml"
+    path = Path(__file__).parent / "fixtures/community/flexotherm_ctlv2_cooling_discovery.yaml"
     dump = yaml.safe_load(path.read_text())
     normalized = normalize_dump(dump)
 

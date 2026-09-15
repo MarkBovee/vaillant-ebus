@@ -1132,7 +1132,7 @@ def test_arotherm_plus_runs_keep_prenergy_registers() -> None:
 # (status cool_compressor_active). Same heat pump + controller shape as the
 # ctlv3 run dumps, but on a ctlv2 controller without the cooling-program
 # registers (Hc1CoolingEnabled, Z1CoolingOpMode, ... — absent from find).
-AROTHERM_PLUS_CTLV2_COOLING_LINES = load_find_lines("community/arotherm_plus_ctlv2_cooling_discovery.yaml")
+AROTHERM_PLUS_CTLV2_COOLING_LINES = load_find_lines("community/flexotherm_ctlv2_cooling_discovery.yaml")
 
 
 def _arotherm_plus_ctlv2_cooling_graph() -> DeviceGraph:

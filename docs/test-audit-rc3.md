@@ -70,15 +70,16 @@ rather than invented.
 | `arotherm_plus_2zone_discovery.yaml` | discovery dump | community (issue unknown) | yes (552 lines) | two-zone topology | `test_discovery_service` | GOLDEN |
 | `arotherm_plus_basv3_discovery.yaml` | discovery dump | community (issue unknown) | yes (761 lines) | BASV3 topology | `test_discovery_service`, `test_entity_factory` | GOLDEN |
 | `arotherm_plus_cooling_run_discovery.yaml` | discovery dump | community (issue unknown) | yes (553 lines) | cooling run | `test_discovery_service` | GOLDEN |
-| `arotherm_plus_ctlv2_cooling_discovery.yaml` | discovery dump | community (issue unknown) | yes (614 lines) | ctlv2 cooling | `test_discovery_service` | GOLDEN |
+| `flexotherm_ctlv2_cooling_discovery.yaml` | discovery dump | community (issue unknown) | yes (614 lines) | ctlv2 cooling | `test_discovery_service` | GOLDEN |
 | `arotherm_plus_hwc_run_discovery.yaml` | discovery dump | community (issue unknown) | yes (553 lines) | DHW run | `test_discovery_service` | GOLDEN |
-| `arotherm_plus_issue102_cooling_discovery.yaml` | discovery dump | issue #102 | yes (713 lines, v4) | Energy Manager State cooling (releaseCooling=1, RunDataStatuscode=0, Status00/07 absent) | `test_community_issue_fixtures` | GOLDEN |
+| `flexotherm_issue102_cooling_discovery.yaml` | discovery dump | issue #102 | yes (713 lines, v4) | Energy Manager State cooling (releaseCooling=1, RunDataStatuscode=0, Status00/07 absent) | `test_community_issue_fixtures` | GOLDEN |
 | `arotherm_plus_prenergy_discovery.yaml` | discovery dump | community (issue unknown) | yes (553 lines) | PrEnergy registers | `test_discovery_service` | GOLDEN |
 | `arotherm_basv_boost_on_discovery.yaml` | discovery dump | community (issue unknown) | yes (582 lines) | boost behavior | `test_boost_fixture` | GOLDEN |
 | `arotherm_basv_boost_off_discovery.yaml` | discovery dump | community (issue unknown) | yes (582 lines) | boost behavior | `test_boost_fixture` | GOLDEN |
 | `arotherm_ecotec_discovery.yaml` | discovery dump | community (issue unknown) | yes (554 lines) | ecoTEC graph | `test_discovery_service` | GOLDEN |
 | `flexotherm_discovery.yaml` | discovery dump | community (issue unknown) | yes (688 lines) | Flexotherm topology | `test_discovery_service` | GOLDEN |
 | `flexotherm_133_cooling_discovery.yaml` | discovery dump | community (issue unknown) | before set complete (691); `raw_find_lines_after` truncated to 2 lines | Flexotherm cooling entities | `test_fake_ebusd`, `test_entity_factory` | GOLDEN (see 5.3) |
+| `flexotherm_vwf1174_issue134_2026-09-15_162647.yaml` | discovery dump | Discussion #31 (stiffmeister1975) | yes (2433 lines, v4) | VWF 117/4 flexoTHERM (HMU00/0303/0403, VRC700), VR_70/VR_91/VWZ00/OMU00/NETX0 | `test_fake_ebusd` | GOLDEN |
 | `geniaset_bass3_discovery.yaml` | discovery dump | community (issue unknown) | yes (704 lines) | geniaSet/BASS3 | `test_geniaset_bass3` | GOLDEN |
 | `v32_boiler_discovery.yaml` | discovery dump | community (issue unknown) | yes (767 lines) | V32 boiler | `test_v32_boiler` | GOLDEN |
 | `arotherm_pro7_discovery.yaml` | discovery dump | community (issue unknown) | yes (475 lines) | Pro7 topology | `test_community_issue_fixtures` | GOLDEN |

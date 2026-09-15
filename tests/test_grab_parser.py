@@ -85,7 +85,7 @@ class TestParseGrabLines:
     def test_roundtrip_real_fixture(self) -> None:
         import yaml
 
-        fixture = Path(__file__).parents[1] / "tests/fixtures/community/arotherm_plus_ctlv2_cooling_discovery.yaml"
+        fixture = Path(__file__).parents[1] / "tests/fixtures/community/flexotherm_ctlv2_cooling_discovery.yaml"
         data = yaml.safe_load(fixture.read_text())
         grab = data.get("grab", [])
         assert grab, "fixture should contain grab data"

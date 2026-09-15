@@ -352,8 +352,43 @@ def derive_tank_presence(values: Mapping[str, str | None], dhw_circuit: str | No
     return None
 
 
+# VWZ hydraulic-module scan TYPEs split the heat-pump product lines. The
+# flexoTHERM (hybrid) and aroTHERM/Pro (split) families both share the bare
+# ``hmu`` circuit, so the scan identity of the VWZ module and/or the heat-pump
+# hardware distinguish them. A VWZ00 module (hydraulic station) marks the
+# flexoTHERM hybrid; a VWZIO module marks the aroTHERM/Pro split. When no VWZ
+# node got scanned, the heat-pump scan_hw is the fallback (0403 -> flexoTHERM).
+def _heat_pump_scan_vwz(graph: DeviceGraph | None) -> str:
+    """Return the VWZ module scan TYPE (VWZ00/VWZIO) if a node exposes it."""
+    if graph is None:
+        return ""
+    for node in graph.nodes.values():
+        if node.scan_type and node.scan_type.strip().upper().startswith("VWZ"):
+            return node.scan_type.strip().upper()
+    return ""
+
+
+# Product name and manufacturer for the discovered heat pump, derived from scan
+# metadata (VWZ module + heat-pump scan_hw) so a flexoTHERM is never mislabeled
+# as an aroTHERM. GeniaSet is a Saunier Duval rebrand and gets its own name and
+# manufacturer. Falls back to a generic "Vaillant heat pump" when the graph or
+# scan identity is unavailable, never guessing an unsupported product line.
+def heat_pump_product(graph: DeviceGraph | None) -> tuple[str, str]:
+    heat_pump = graph.heat_pump() if graph is not None else None
+    if heat_pump is None:
+        return "", ""
+    scan_hw = (heat_pump.scan_hw or "").strip()
+    vwz = _heat_pump_scan_vwz(graph)
+
+    if scan_hw == "2204":
+        return "Saunier Duval GeniaSet heat pump", "Saunier Duval"
+    if vwz == "VWZ00" or (not vwz and scan_hw == "0403"):
+        return "Vaillant flexoTHERM heat pump", "Vaillant"
+    return "Vaillant aroTHERM heat pump", "Vaillant"
+
+
 CIRCUIT_NAMES: dict[str, str] = {
-    "hmu": "Vaillant aroTHERM heat pump",
+    "hmu": "Vaillant heat pump",
     "basv": "Vaillant BASV2 Heating Control",
     "bai": "Vaillant boiler controller",
     "sc": "Vaillant solar controller",

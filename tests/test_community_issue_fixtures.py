@@ -30,7 +30,7 @@ def test_issue102_cooling_capture_derives_cooling_state() -> None:
     from tests.test_compressor_power import derive_operating_state
 
     graph = DiscoveryService.build_device_graph(
-        load_find_lines("community/arotherm_plus_issue102_cooling_discovery.yaml")
+        load_find_lines("community/flexotherm_issue102_cooling_discovery.yaml")
     )
     values = {f"{key}.value": value for key, value in graph.raw_registers.items()}
 
@@ -367,3 +367,28 @@ def test_ecotec_vrt380_bai_flow_and_fuel_metadata() -> None:
         assert meta.device_class == "energy"
         assert meta.unit == "kWh"
         assert meta.state_class == "total_increasing"
+
+
+# Intent: the heat-pump product name and manufacturer derive from the scan
+# metadata (VWZ module + heat-pump scan_hw), so a flexoTHERM is never labeled
+# as an aroTHERM. Issue #134 (device display name).
+# Why: the shared hmu circuit hosts flexoTHERM, aroTHERM and GeniaSet units;
+# their names must track the discovered hardware, not a hardcoded marketing name.
+def test_heat_pump_product_name_is_scan_aware() -> None:
+    from vaillant_ebus.backend.models import heat_pump_product
+
+    cases = [
+        # (fixture, expected_name, expected_manufacturer)
+        ("community/flexotherm_discovery.yaml", "Vaillant flexoTHERM heat pump", "Vaillant"),
+        ("community/flexotherm_issue102_cooling_discovery.yaml", "Vaillant flexoTHERM heat pump", "Vaillant"),
+        ("community/flexotherm_ctlv2_cooling_discovery.yaml", "Vaillant flexoTHERM heat pump", "Vaillant"),
+        ("community/flexotherm_vwf1174_issue134_2026-09-15_162647.yaml", "Vaillant flexoTHERM heat pump", "Vaillant"),
+        ("community/arotherm_plus_2zone_discovery.yaml", "Vaillant aroTHERM heat pump", "Vaillant"),
+        ("community/arotherm_pro7_discovery.yaml", "Vaillant aroTHERM heat pump", "Vaillant"),
+        ("community/geniaset_bass3_discovery.yaml", "Saunier Duval GeniaSet heat pump", "Saunier Duval"),
+    ]
+    for fixture, expected_name, expected_manufacturer in cases:
+        graph = DiscoveryService.build_device_graph(load_find_lines(fixture))
+        name, manufacturer = heat_pump_product(graph)
+        assert name == expected_name, f"{fixture}: name {name!r} != {expected_name!r}"
+        assert manufacturer == expected_manufacturer, f"{fixture}: manufacturer {manufacturer!r}"
