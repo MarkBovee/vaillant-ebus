@@ -171,7 +171,6 @@ def _graph_coordinator(fixture: str) -> _GraphCoordinator:
     return _GraphCoordinator(graph, _ebusd_data_from_graph(graph))
 
 
-
 # Without a prior toggle, the switch falls back to the raw HwcSFMode register.
 # Intent: With no recorded desired state, the boost switch reports on from raw HwcSFMode "load" and off from "auto".
 # Why: covers the first-load path before any user toggle has set dhw_boost_desired.
