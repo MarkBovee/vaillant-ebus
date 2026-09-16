@@ -12,6 +12,10 @@
   - `ebusd-expert` for register reverse-engineering, `define` strings, and ebusd TCP-level debugging.
   - `home-assistant` for deploy, entity/device registry, HA API, and live HA verification.
   - `intake`, `develop`, `agent-workflows`, `verification`, `code-review`, `debugging`, `improve`, `session-review` for the risk-based lifecycle.
+  - `text-writing` is mandatory before writing user-facing text, including GitHub replies,
+    issue bodies, release notes, documentation, and final responses. Use simple, human
+    language that non-experts can understand. Keep code, identifiers, commands, and
+    technical protocol values exact; do not simplify those.
 - This repository is release-sensitive. Follow the lifecycle in the global AGENTS.md "Skills & Workflow": `intake → plan → plan-check → execute → validate → review → audit → release-gate`, delegate independent research to subagents, and never self-declare release readiness.
 - For protocol research, prefer the upstream search and dump mining sections below over guessing from register names.
 
