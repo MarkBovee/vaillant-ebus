@@ -49,18 +49,20 @@ paths safe and avoid guessing register layouts.
   - Extend coverage only if it adds a new confirmed hardware or firmware path.
   - Do not reopen the resolved read-support issue #103.
 
-- **Issue #109: ecoTEC/VRT380 tank detection**
-  - Revisit only when a capture with a real connected tank becomes available.
-  - The current cylinder enable/disable data is useful context but does not
-    prove physical tank presence.
+- **Issue #109: ecoTEC/VRT380 tank detection follow-up**
+  - The main ecoTEC/VRT380 support is complete: controller mapping, writes,
+    device naming, and stale-device handling are already released and verified.
+  - Keep the issue out of the v1.9.0 implementation scope.
+  - Revisit only when a capture with a real connected tank becomes available;
+    tank detection is an optional follow-up, not a release blocker.
 
 ### Explicitly out
 
 - Do not modify or upload ebusd CSV files.
 - Do not add Quiet-mode entities from discovery dumps without a stable mapping.
 - Do not treat `/next` configuration output as the default supported layout.
-- Do not close #129, #101, #102, #109, or #138 before the remaining user or
-  fixture evidence is checked.
+- Do not close #129, #101, #102, or #138 before the remaining user or fixture
+  evidence is checked.
 
 ## Execution Order
 
