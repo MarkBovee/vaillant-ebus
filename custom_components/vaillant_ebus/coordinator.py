@@ -845,6 +845,20 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             defines.append(
                 f"wi,{circuit},Z1DayTemp,Z1DayTemp,31,15,B524,020103002200,value,m,EXP,,°C,day setpoint for zone 1"
             )
+            # Upstream issue #522 documents the same 0x07 -> 0x22 move for
+            # Z1..Z3 on BASV3. Enable Zone 2 only when its room-temperature
+            # register has a live value; inactive placeholder zones stay out
+            # of active polling. This is a reasonable, fixture-backed
+            # assumption for the BASS3 scope captured in issue #129.
+            if f"{circuit}.Z2RoomTemp" in self._graph.raw_registers:
+                defines.extend(
+                    [
+                        f"r5,{circuit},Z2DayTemp,Z2DayTemp,31,15,B524,020003012200"
+                        ",ign,,IGN:4,,,,value,,EXP,,°C,day setpoint for zone 2",
+                        f"wi,{circuit},Z2DayTemp,Z2DayTemp,31,15,B524,020103012200"
+                        ",value,m,EXP,,°C,day setpoint for zone 2",
+                    ]
+                )
 
         defines = [definition for definition in (_resolve_definition_circuit(item) for item in defines) if definition]
         if is_hmux0_0303_0504:

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.8.6-rc2 - 2026-09-16
+
+### Added
+
+- **BASS3/BASV3 Zone 2 day-temperature path (issue #129).** The runtime now
+  enables the Zone 2 `Z2DayTemp` read/write definitions at `0x22` when the
+  discovered BAS-family controller exposes Zone 2 registers. This uses the
+  upstream BAS-family `Z1..3DayTemp` `0x07` → `0x22` evidence from issue #522,
+  is gated to discovered hardware, and leaves the register unavailable when
+  the controller does not expose it.
+
+### Verification
+
+- Includes the `v1.8.6-rc1` BASS3/BASV3 Zone 1 write fix.
+- Includes the full issue #129 community discovery dump and absent-value tests.
+- Final hardware verification is still required for both BASS3 Zone 1 writes
+  and the Zone 2 assumption.
+
 ## 1.8.6-rc1 - 2026-09-16
 
 ### Fixed

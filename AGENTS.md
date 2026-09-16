@@ -246,6 +246,11 @@ When adding registers, devices, or metadata derived from community data:
 - `Confirmed` and `strong assumption` mappings may enter production when they use those
   existing data-driven paths. Document the evidence and keep inferred entities unavailable
   unless the expected register/value is actually discovered.
+- A reasonable, fixture-backed assumption may also enter production when the exact telegram
+  family, message/sub-address, response shape, field layout, and hardware scope match
+  available community or upstream evidence. Classify it explicitly as a reasonable
+  assumption, keep the implementation hardware-gated, and preserve a safe absent-register
+  path. A register-name match, plausible value, or uncorrelated telegram is not enough.
 - Keep changes additive and opt-in: enabling a community register/device must not change
   behavior for hardware that does not expose it, and must not crash discovery or entity
   generation when the register is absent.
@@ -268,7 +273,7 @@ When adding registers, devices, or metadata derived from community data:
 ## Test Fixtures
 
 - ebusd `find` output and discovery dumps are captured as fixtures in `tests/fixtures/`. There is no `data-dump/` directory anymore; all community and local captures live in `tests/fixtures/`.
-- `tests/fixtures/community/` holds third-party captures: discovery-dump YAML files (`flexotherm_discovery.yaml`, `arotherm_plus_2zone_discovery.yaml`, `arotherm_plus_basv3_discovery.yaml`, `arotherm_pro7_discovery.yaml`, `geniaset_bass3_discovery.yaml`) and plain `find` output (`basv_find.txt`, `v32_find.txt`, `flexocompact_find.txt`, `dumpvalues.yaml`).
+- `tests/fixtures/community/` holds third-party captures: discovery-dump YAML files (`flexotherm_discovery.yaml`, `arotherm_plus_2zone_discovery.yaml`, `arotherm_plus_basv3_discovery.yaml`, `arotherm_pro7_discovery.yaml`, `geniaset_bass3_discovery.yaml`, `saunier_duval_f34_issue129_discovery.yaml`) and plain `find` output (`basv_find.txt`, `v32_find.txt`, `flexocompact_find.txt`, `dumpvalues.yaml`).
 - The fixture trust model and full inventory live in `docs/test-audit-rc3.md`. Classify every fixture as GOLDEN, REDUCED-FAITHFUL, SYNTHETIC, or LEGACY/UNKNOWN; never use a reduced or unknown-provenance fixture as the sole evidence for discovery, circuit ownership, or graph resolution.
 - `tests/test_fixture_integrity.py` guards the golden captures: it fails if the issue #99 dumps lose the spurious `ctlv2` records or a discovery dump loses provenance metadata. Do not weaken it to accommodate a stripped fixture.
 - `dumpvalues.yaml` records multi-field register field names and is the reference for `MULTI_FIELD_MAP` in `tests/fake_ebusd.py`. Keep the two in sync.
