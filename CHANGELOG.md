@@ -46,7 +46,8 @@
   as a `0x07` → `0x22` move (#522), and confirmed in ctlv0/ctlv3 community
   fixtures. The integration now redefines the `Z1DayTemp` read at `0x22` at
   runtime, gated to BAS-family scan types so ctlv2/ctlv3 (where `0x07` works)
-  are unaffected. The write path is unchanged.
+  are unaffected. The write path remained unchanged in v1.8.4; it is corrected
+  for the same BAS-family hardware in the next release.
 
 - **Switch entities now reflect a successful write immediately (issue #133).** After
   toggling a switch the Home Assistant UI bounced back to the previous value for
