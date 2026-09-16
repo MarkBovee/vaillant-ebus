@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.8.6-rc1 - 2026-09-16
+
+### Fixed
+
+- **BASS3/BASV3 Zone 1 day-temperature writes now use sub-address `0x22` (issue #138).**
+  The existing BAS-family read fix already used `0x22`, while writes still used
+  the old `0x07` position. This caused ebusd to acknowledge writes that the
+  controller ignored. The runtime write override now uses `020103002200` for
+  discovered BAS-family controllers; CTLV2 and CTLV3 write paths remain unchanged.
+
+### Verification
+
+- This release candidate is based on v1.8.5 and includes the current #138
+  write-path fix from the v1.8.6 release branch.
+- The full test suite passes: 619 tests.
+- Ruff and Python compilation checks pass.
+- Hardware verification on a BASS3 system is still required before final release.
+
 ## 1.8.5 - 2026-09-15
 
 ### Fixed
