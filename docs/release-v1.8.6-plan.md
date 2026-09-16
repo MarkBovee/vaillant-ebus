@@ -24,7 +24,8 @@ paths safe and avoid guessing register layouts.
 - **Issue #102: automatic DHW operating state**
   - Compare the new automatic-DHW dump with the existing manual-boost dump.
   - Identify the signal that differs during automatic DHW operation.
-  - Add or adjust the state mapping only when the signal is clear and safe.
+  - The current capture ends in idle values and contains no active transition
+    signal; leave mapping unchanged until a capture covers the active interval.
   - Add fixture coverage for manual DHW, automatic DHW, and non-DHW state.
 
 - **Issue #129: Saunier-Duval F34 Zone 2**
@@ -34,7 +35,9 @@ paths safe and avoid guessing register layouts.
     user's dump.
   - Separate missing Zone 2 discovery from invalid-position registers and stale
     Home Assistant entities.
-  - Implement only mappings supported by the dump and add absent-register tests.
+  - The dump proves Zone 2 room temperature and operation mode, but not the
+    `Z2DayTemp` read/write layout; leave it discovery-only until that evidence
+    arrives. Do not add a guessed `0x22` mapping.
 
 ### Could
 
@@ -42,7 +45,8 @@ paths safe and avoid guessing register layouts.
   - Continue only after the raw `ebusctl grab` requested from the user arrives.
   - Compare the loud-to-whisper write and read-back traffic with existing
     HMUX0 HW0504 fixtures.
-  - Keep discovery-only status if no stable register or telegram appears.
+  - The requested raw `ebusctl grab` is still missing; keep discovery-only
+    status if no stable register or telegram appears.
 
 - **Discussion #31 / BazsiDev eloBLOCK VE 28 data**
   - Review the new dump against issue #111 and the existing VE 28 fixture.
