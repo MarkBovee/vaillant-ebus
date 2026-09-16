@@ -29,9 +29,7 @@ def test_cooling_capture_derives_cooling_operating_state() -> None:
 def test_issue102_cooling_capture_derives_cooling_state() -> None:
     from tests.test_compressor_power import derive_operating_state
 
-    graph = DiscoveryService.build_device_graph(
-        load_find_lines("community/arotherm_plus_issue102_cooling_discovery.yaml")
-    )
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/flexotherm_issue102_cooling_discovery.yaml"))
     values = {f"{key}.value": value for key, value in graph.raw_registers.items()}
 
     assert graph.raw_registers["hmu.RunDataStatuscode"] == "0"
@@ -155,9 +153,7 @@ def test_arotherm_pro35_hwcstoragetemp_not_live() -> None:
 # Why: issue #99 - holiday date writes must target the discovered circuit
 # (ctlv3), and the read side carries the real app-set dates.
 def test_hmux0_issue99_holiday_registers_on_ctlv3() -> None:
-    graph = DiscoveryService.build_device_graph(
-        load_find_lines("community/hmux0_issue99_2026-09-13_173740.yaml")
-    )
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/hmux0_issue99_2026-09-13_173740.yaml"))
     assert graph.raw_registers["ctlv3.HwcHolidayStartPeriod"] == "23.09.2026"
     assert graph.raw_registers["ctlv3.HwcHolidayEndPeriod"] == "31.10.2026"
 
@@ -367,3 +363,43 @@ def test_ecotec_vrt380_bai_flow_and_fuel_metadata() -> None:
         assert meta.device_class == "energy"
         assert meta.unit == "kWh"
         assert meta.state_class == "total_increasing"
+
+
+# Intent: the heat-pump product name and manufacturer derive from the scan
+# metadata (VWZ module + heat-pump scan_hw), so a flexoTHERM is never labeled
+# as an aroTHERM. Issue #134 (device display name).
+# Why: the shared hmu circuit hosts flexoTHERM, aroTHERM and GeniaSet units;
+# their names must track the discovered hardware, not a hardcoded marketing name.
+def test_heat_pump_product_name_is_scan_aware() -> None:
+    from vaillant_ebus.backend.models import heat_pump_product
+
+    cases = [
+        # (fixture, expected_name, expected_manufacturer)
+        ("community/flexotherm_discovery.yaml", "Vaillant flexoTHERM heat pump", "Vaillant"),
+        ("community/flexotherm_issue102_cooling_discovery.yaml", "Vaillant flexoTHERM heat pump", "Vaillant"),
+        ("community/flexotherm_ctlv2_cooling_discovery.yaml", "Vaillant flexoTHERM heat pump", "Vaillant"),
+        ("community/flexotherm_vwf1174_issue134_2026-09-15_162647.yaml", "Vaillant flexoTHERM heat pump", "Vaillant"),
+        ("community/arotherm_plus_2zone_discovery.yaml", "Vaillant aroTHERM heat pump", "Vaillant"),
+        ("community/arotherm_pro7_discovery.yaml", "Vaillant aroTHERM heat pump", "Vaillant"),
+        ("community/geniaset_bass3_discovery.yaml", "Saunier Duval GeniaSet heat pump", "Saunier Duval"),
+    ]
+    for fixture, expected_name, expected_manufacturer in cases:
+        graph = DiscoveryService.build_device_graph(load_find_lines(fixture))
+        name, manufacturer = heat_pump_product(graph)
+        assert name == expected_name, f"{fixture}: name {name!r} != {expected_name!r}"
+        assert manufacturer == expected_manufacturer, f"{fixture}: manufacturer {manufacturer!r}"
+
+
+# Intent: issue #137 VRC700 DHW registers become part of the controller graph.
+# Why: the community dump proves ebusd exposes the controller as numeric circuit
+# 700 with scan identity 70000.
+def test_vrc700_fixture_discovers_numeric_controller_and_dhw() -> None:
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/flexotherm_vwf1174_issue134_2026-09-15_162647.yaml")
+    )
+
+    assert graph.nodes["700"].device_type.name == "HEATING_CONTROLLER"
+    assert graph.nodes["700"].scan_type == "70000"
+    assert graph.raw_registers["700.HwcOpMode"] == "auto"
+    assert graph.raw_registers["700.HwcStorageTemp"] == "49.5"
+    assert graph.heating_controller_result().circuit == "700"

@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.8.5 - 2026-09-15
+
+### Fixed
+
+- **VRC700 controllers on numeric circuit `700` are now discovered (issue #137).**
+  When ebusd exposes the VRC700 scan identity as `70000` and its registers under
+  circuit `700`, the numeric circuit is now retained and classified as the heating
+  controller. Unknown numeric/address-like circuits remain filtered out.
+
+- **Heat-pump devices no longer mislabeled as "aroTHERM" (issue #134).** The heat
+  pump was always named `Vaillant aroTHERM heat pump`, even when the scanned
+  hardware is a flexoTHERM or a GeniaSet, because the name was hardcoded per
+  circuit. The device name and manufacturer now derive from the scan metadata:
+  a `VWZ00` module (or a `HMU00` with hardware `0403`) yields
+  `Vaillant flexoTHERM heat pump`, a `VWZIO` module / `HMU00` with hardware
+  `5103` / `HMUX0` keeps `Vaillant aroTHERM heat pump`, and a `HMU00` with
+  hardware `2204` yields `Saunier Duval GeniaSet heat pump` (manufacturer
+  `Saunier Duval`). Buses without a scanned VWZ module fall back to the
+  heat-pump hardware identity, and unknown hardware stays generic. The change
+  is backed by a new flexoTHERM VWF 117/4 discovery-dump fixture and a
+  fixture-driven regression test.
+
 ## 1.8.4 - 2026-09-15
 
 ### Added

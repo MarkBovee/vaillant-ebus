@@ -31,6 +31,7 @@ from .backend.models import (
     DeviceType,
     EbusdRegister,
     ResolutionStatus,
+    heat_pump_product,
     is_no_data_value,
     is_valid_hmux0_return_temperature,
     zero_idle_registers,
@@ -1016,26 +1017,38 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             parent = node.parent
 
         circuit_lower = circuit.lower()
-        if circuit_lower == "dhw":
+        if node is not None and node.device_type == DeviceType.HEAT_PUMP:
+            name, manufacturer = heat_pump_product(self._graph)
+            if not name:
+                name = CIRCUIT_NAMES.get("hmu", "Vaillant heat pump")
+                manufacturer = "Vaillant"
+        elif circuit_lower == "dhw":
             name = self._dhw_device_name()
+            manufacturer = "Vaillant"
         elif circuit_lower in CIRCUIT_NAMES:
             name = CIRCUIT_NAMES[circuit_lower]
+            manufacturer = "Vaillant"
         elif len(circuit_lower) == 5 and circuit_lower.startswith("ctlv") and circuit_lower[-1].isdigit():
             name = "Vaillant sensoCOMFORT Control"
+            manufacturer = "Vaillant"
         elif scan_type:
             name = f"Vaillant {scan_type}"
+            manufacturer = "Vaillant"
         elif circuit_lower.startswith("z"):
             name = f"Zone {circuit[1:]}"
+            manufacturer = "Vaillant"
         elif circuit_lower.startswith("hc"):
             name = f"Heating Circuit {circuit[2:]}"
+            manufacturer = "Vaillant"
         else:
             name = f"Vaillant {circuit}"
+            manufacturer = "Vaillant"
 
         ebusd_version = self.ebus.version if self.ebus else None
         info = DeviceInfo(
             identifiers={(DOMAIN, circuit)},
             name=name,
-            manufacturer="Vaillant",
+            manufacturer=manufacturer,
             model=name,
             sw_version=scan_sw or ebusd_version,
             hw_version=scan_hw,

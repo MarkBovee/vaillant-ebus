@@ -895,7 +895,7 @@ class TestPrEnergySum:
     # Intent: the ctlv2 cooling dump exposes live cooling registers and omits unsupported cooling-program registers.
     # Why: prevents entities for hardware features the unit does not implement.
     def test_ctlv2_cooling_fixture_entities(self) -> None:
-        lines = load_find_lines("community/arotherm_plus_ctlv2_cooling_discovery.yaml")
+        lines = load_find_lines("community/flexotherm_ctlv2_cooling_discovery.yaml")
         graph = DiscoveryService.build_device_graph(lines)
         entities = EntityFactoryService().generate(graph)
         by_key = {e.key: e for e in entities}
