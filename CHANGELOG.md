@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **VRC700 controllers on numeric circuit `700` are now discovered (issue #137).**
+  When ebusd exposes the VRC700 scan identity as `70000` and its registers under
+  circuit `700`, the numeric circuit is now retained and classified as the heating
+  controller. Unknown numeric/address-like circuits remain filtered out.
+
 - **Heat-pump devices no longer mislabeled as "aroTHERM" (issue #134).** The heat
   pump was always named `Vaillant aroTHERM heat pump`, even when the scanned
   hardware is a flexoTHERM or a GeniaSet, because the name was hardcoded per

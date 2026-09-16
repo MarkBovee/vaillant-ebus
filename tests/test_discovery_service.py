@@ -806,6 +806,74 @@ def test_address_and_empty_unknown_circuits_are_suppressed() -> None:
     assert graph.nodes["vwz"].device_type == DeviceType.PASSIVE_COOLING
 
 
+# Intent: VRC700 scan metadata preserves numeric circuit 700 as a controller.
+# Why: ebusd exposes the 70000 scan identity as circuit 700, which is otherwise
+# indistinguishable from a raw hexadecimal address.
+def test_vrc700_numeric_circuit_is_discovered_from_scan_metadata() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = MF=Vaillant;ID=70000;SW=0614;HW=6903",
+            "700 HwcOpMode = auto",
+            "700 HwcStorageTemp = 40.5",
+        ]
+    )
+
+    node = graph.nodes["700"]
+    assert node.device_type == DeviceType.HEATING_CONTROLLER
+    assert node.scan_type == "70000"
+    assert graph.raw_registers["700.HwcStorageTemp"] == "40.5"
+
+
+# Intent: numeric VRC scan matching must not promote raw hexadecimal address circuits.
+# Why: 70000 must match only circuit 700, never prefix-like circuits 70 or 7.
+def test_vrc700_scan_does_not_match_short_numeric_address_circuits() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = MF=Vaillant;ID=70000;SW=0614;HW=6903",
+            "700 HwcOpMode = auto",
+            "70 UnknownRegister = 1",
+            "7 OtherRegister = 2",
+        ]
+    )
+
+    assert graph.nodes["700"].scan_type == "70000"
+    assert "70" not in graph.nodes
+    assert "7" not in graph.nodes
+
+
+# Intent: scan metadata must remain unique when another numeric circuit is present.
+# Why: unrelated address-like circuits must not make VRC700 discovery ambiguous.
+def test_vrc700_scan_keeps_controller_resolution_unique_with_numeric_noise() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = MF=Vaillant;ID=70000;SW=0614;HW=6903",
+            "700 HwcOpMode = auto",
+            "70 Z1DayTemp = 20",
+        ]
+    )
+
+    assert graph.heating_controller_result().circuit == "700"
+
+
+# Intent: a scanned VRC700 remains authoritative over a BAI burner interface.
+# Why: both circuits can expose DHW control registers, but only circuit 700 is
+# the VRC700 heating controller.
+def test_vrc700_controller_wins_over_bai_control_registers() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = MF=Vaillant;ID=70000;SW=0614;HW=6903",
+            "700 HwcOpMode = auto",
+            "700 HwcTempDesired = 45",
+            "bai HwcOpMode = auto",
+            "bai HwcTempDesired = 45",
+        ]
+    )
+
+    result = graph.heating_controller_result()
+    assert result.status.name == "UNIQUE"
+    assert result.circuit == "700"
+
+
 # Intent: TmpB516MonthEven stays in raw registers but not node registers.
 # Why: internal helper registers are hidden from entities.
 def test_internal_b516_helper_register_is_hidden() -> None:

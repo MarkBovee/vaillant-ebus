@@ -476,6 +476,10 @@ class ResolutionResult:
     reason: str = ""
 
 
+def _is_numeric_vrc_controller(node: DeviceNode) -> bool:
+    return node.circuit.isdigit() and node.scan_type == f"{node.circuit}00"
+
+
 @dataclass
 class DeviceGraph:
     nodes: dict[str, DeviceNode]
@@ -514,6 +518,10 @@ class DeviceGraph:
             if node.circuit.casefold() in control_owners
             or any(register.rsplit(".", 1)[-1] in self._CONTROL_REGISTERS for register in node.registers)
         ]
+        numeric_scan_control = [node for node in control_candidates if _is_numeric_vrc_controller(node)]
+        if len(numeric_scan_control) == 1:
+            node = numeric_scan_control[0]
+            return ResolutionResult(ResolutionStatus.UNIQUE, node.circuit, node, "numeric VRC scan control registers")
         # A BAI boiler interface also exposes DHW control registers
         # (HwcTempDesired), but it is a burner, not the heating controller.
         # When a real controller circuit (ctlv*/basv*/bass*) also owns control

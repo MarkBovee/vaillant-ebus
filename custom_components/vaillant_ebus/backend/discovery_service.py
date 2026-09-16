@@ -242,13 +242,13 @@ class DiscoveryService:
                 continue
             if c_lower in ALWAYS_HIDDEN or any(kw in c_lower for kw in HIDDEN_DEVICE_KEYWORDS):
                 continue
-            if _is_address_circuit(circuit):
-                continue
 
             scan_info = scan_by_circuit.get(circuit)
             scan_type = scan_info.scan_type if scan_info else ""
             scan_sw = scan_info.scan_sw if scan_info else ""
             scan_hw = scan_info.scan_hw if scan_info else ""
+            if _is_address_circuit(circuit) and not scan_type:
+                continue
 
             own_regs: list[str] = []
             for rk in reg_keys:
@@ -454,7 +454,7 @@ def _name_family(name: str) -> str:
 # Matching runs from strongest to weakest evidence and a circuit is bound at
 # most once:
 #   1. NETX2 → Broadcast (fixed relationship in the ebusd configuration).
-#   2. Exact normalized TYPE ↔ circuit match (HMUX0 ↔ hmux0, CTLV3 ↔ ctlv3).
+#   2. Exact normalized TYPE ↔ circuit match, including numeric VRC70000 ↔ 700.
 #   3. Family match after stripping variant digits (HMU00 ↔ hmu, BASV3 ↔ basv).
 #   4. Stable family-prefix fallback (circuit starts with the scan family).
 # A scan entry is consumed by at most one circuit. Ambiguous associations are
@@ -511,6 +511,8 @@ def _match_scan_to_circuits(
         if scan_type.lower() == "netx2":
             continue
         exact_candidates = [c for c in circuit_names if _normalize_name(c) == _normalize_name(scan_type)]
+        numeric_candidates = [c for c in circuit_names if _numeric_scan_matches_circuit(scan_type, c)]
+        exact_candidates.extend(c for c in numeric_candidates if c not in exact_candidates)
         if len(exact_candidates) == 1 and exact_candidates[0] not in result:
             result[exact_candidates[0]] = scan
 
@@ -568,6 +570,13 @@ def _match_scan_to_circuits(
             claimed.add(scan_type.lower())
 
     return result
+
+
+def _numeric_scan_matches_circuit(scan_type: str, circuit: str) -> bool:
+    """Match numeric VRC scan IDs to their shortened ebusd circuit names."""
+    if len(scan_type) != 5 or len(circuit) != 3 or not scan_type.isdigit() or not circuit.isdigit():
+        return False
+    return scan_type[:3] == circuit and scan_type[3:] == "00"
 
 
 def _scan_only_circuits(
@@ -679,6 +688,7 @@ _SCAN_TO_DEVICE: dict[str, DeviceType] = {
     "bass": DeviceType.HEATING_CONTROLLER,
     "bass3": DeviceType.HEATING_CONTROLLER,
     "bai": DeviceType.HEATING_CONTROLLER,
+    "70000": DeviceType.HEATING_CONTROLLER,
     "vwz": DeviceType.PASSIVE_COOLING,
     "vwz00": DeviceType.PASSIVE_COOLING,
     "vwzio": DeviceType.PASSIVE_COOLING,
