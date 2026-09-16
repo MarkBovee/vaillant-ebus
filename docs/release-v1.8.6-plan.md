@@ -1,4 +1,4 @@
-# Release v1.9.0 Plan
+# Release v1.8.6 Plan
 
 ## Goal
 
@@ -52,7 +52,7 @@ paths safe and avoid guessing register layouts.
 - **Issue #109: ecoTEC/VRT380 tank detection follow-up**
   - The main ecoTEC/VRT380 support is complete: controller mapping, writes,
     device naming, and stale-device handling are already released and verified.
-  - Keep the issue out of the v1.9.0 implementation scope.
+  - Keep the issue out of the v1.8.6 implementation scope.
   - Revisit only when a capture with a real connected tank becomes available;
     tank detection is an optional follow-up, not a release blocker.
 
