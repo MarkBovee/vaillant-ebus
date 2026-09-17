@@ -90,6 +90,8 @@ class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEn
 
 class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity):
     _attr_has_entity_name = True
+    _attr_has_date = True
+    _attr_has_time = False
 
     # Initialize holiday date entity with register and zone mapping
     def __init__(
@@ -136,6 +138,8 @@ class EbusdManualCoolingEntity(CoordinatorEntity[VaillantCoordinator], DateTimeE
     """Manual cooling start/end date (myVaillant 'cool until [date]')."""
 
     _attr_has_entity_name = True
+    _attr_has_date = True
+    _attr_has_time = False
 
     def __init__(
         self,
