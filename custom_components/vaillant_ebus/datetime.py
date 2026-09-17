@@ -163,7 +163,7 @@ class EbusdManualCoolingEntity(CoordinatorEntity[VaillantCoordinator], DateTimeE
         if circuit is None:
             return None
         raw = self.coordinator.data.get("ebusd", {}).get(f"{circuit}.{self._register}.value")
-        if not raw or str(raw) in ("-", "") or str(raw).startswith(("ERR:", "no data stored")):
+        if not raw or _is_holiday_reset(raw) or str(raw) in ("-", "") or str(raw).startswith(("ERR:", "no data stored")):
             return None
         try:
             naive = datetime.strptime(f"{raw} {DEFAULT_TIME}", f"{DATE_FMT} {TIME_FMT}")
