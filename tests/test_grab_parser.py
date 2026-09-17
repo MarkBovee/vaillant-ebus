@@ -25,6 +25,7 @@ sys.modules["vaillant_ebus.backend.grab_parser"] = module
 spec.loader.exec_module(module)
 
 parse_grab_lines = module.parse_grab_lines
+iter_grab_telegrams = module.iter_grab_telegrams
 unknown_telegrams = module.unknown_telegrams
 GrabTelegram = module.GrabTelegram
 
@@ -78,6 +79,11 @@ class TestParseGrabLines:
         unknown = unknown_telegrams(GRAB_LINES)
         assert all(t["label"] is None for t in unknown)
         assert len(unknown) == 5
+
+    # Intent: the iterable parser yields the same telegram records as the compatibility list API.
+    # Why: callers that inspect large grabs can consume records incrementally without changing existing callers.
+    def test_iterable_parser_matches_list_api(self) -> None:
+        assert list(iter_grab_telegrams(iter(GRAB_LINES))) == parse_grab_lines(GRAB_LINES)
 
     # Intent: a real ctlv2 cooling discovery fixture yields both non-empty unknown
     # and labeled telegram lists through the parser.

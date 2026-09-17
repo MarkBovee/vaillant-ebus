@@ -7,6 +7,8 @@ import subprocess
 import sys
 import tempfile
 
+from dump_projection import _load_normalizer
+
 try:
     import yaml
 except ImportError:
@@ -83,11 +85,7 @@ def main() -> None:
     passwd = env.get("HA_SSH_PASSWORD")
     user = env.get("HA_SSH_USER")
     host = env.get("HA_HOST")
-    missing = [
-        name
-        for name, val in (("HA_SSH_PASSWORD", passwd), ("HA_SSH_USER", user), ("HA_HOST", host))
-        if not val
-    ]
+    missing = [name for name, val in (("HA_SSH_PASSWORD", passwd), ("HA_SSH_USER", user), ("HA_HOST", host)) if not val]
     if missing:
         print(f"Missing {', '.join(missing)} in {args.env}", file=sys.stderr)
         sys.exit(1)
@@ -105,21 +103,23 @@ def main() -> None:
 
     b = fetch_dump(before_path, passwd, user, host)
     a = fetch_dump(after_path, passwd, user, host)
-
-    bm = {}
-    for r in b["registers"]:
-        bm[r["circuit"] + "." + r["name"]] = r
+    normalizer = _load_normalizer()
+    before = normalizer.normalize_dump(b)
+    after = normalizer.normalize_dump(a)
+    register_changes = normalizer._register_changes(before["registers"]["entries"], after["registers"]["entries"])
 
     changes = 0
-    for r in a["registers"]:
-        k = r["circuit"] + "." + r["name"]
-        old = bm.get(k)
-        if old is None:
-            print(f"NEW: {k} = {r.get('value')}")
-            changes += 1
-        elif old.get("value") != r.get("value"):
-            print(f"CHG: {k}: {old.get('value')} -> {r.get('value')}")
-            changes += 1
+    before_by_key = {f"{entry['circuit']}.{entry['name']}": entry for entry in before["registers"]["entries"]}
+    after_by_key = {f"{entry['circuit']}.{entry['name']}": entry for entry in after["registers"]["entries"]}
+    for key in register_changes["new_registers"]:
+        print(f"NEW: {key} = {after_by_key[key].get('values', [])}")
+        changes += 1
+    for change in register_changes["changed_registers"]:
+        print(f"CHG: {change['key']}: {change['before']} -> {change['after']}")
+        changes += 1
+    for key in register_changes["disappeared_registers"]:
+        print(f"GONE: {key} = {before_by_key[key].get('values', [])}")
+        changes += 1
 
     if changes == 0:
         print("No differences found.")

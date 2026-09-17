@@ -40,6 +40,7 @@ spec.loader.exec_module(module)
 
 normalize_dump = module.normalize_dump
 group_telegrams = module.group_telegrams
+parse_grab_lines = parser_module.parse_grab_lines
 parse_info_data = ebus_module._parse_info_data
 parse_address_configs = ebus_module._parse_address_configs
 
@@ -152,6 +153,20 @@ def test_register_categories_and_sentinel_diff() -> None:
     assert normalized["changes"]["changed_registers"][0]["key"] == "hmu.State"
 
 
+# Intent: an explicit empty after snapshot represents a real disappearance of every before register.
+# Why: dump comparisons must distinguish an empty capture from a missing after snapshot.
+def test_empty_after_snapshot_reports_disappeared_registers() -> None:
+    normalized = normalize_dump(
+        {
+            "before_registers": [{"circuit": "hmu", "name": "State", "values": ["on"]}],
+            "after_registers": [],
+        }
+    )
+
+    assert normalized["registers"]["entries"] == []
+    assert normalized["changes"]["disappeared_registers"] == ["hmu.State"]
+
+
 # Intent: group_telegrams merges two identical b510/01 telegrams into one group
 # with occurrence_count 5 and both responses.
 # Why: ensures duplicate unknown telegrams are aggregated by message identity instead of listed separately.
@@ -193,6 +208,23 @@ def test_empty_grab_normalizes_to_empty_traffic() -> None:
     normalized = normalize_dump({"metadata": {"dump_version": 4}, "before_registers": []})
 
     assert normalized["traffic"] == {"summary": [], "unknown": []}
+
+
+# Intent: normalize_dump reuses an already parsed telegram list instead of parsing raw grab lines again.
+# Why: dump export already parsed the grab to create labeled and unknown sections, so a second parse wastes work.
+def test_normalize_dump_reuses_parsed_telegrams() -> None:
+    parsed = parse_grab_lines(["1008b5110100 / aa = 2"])
+    normalized = normalize_dump({"metadata": {"dump_version": 4}, "grab": ["not a telegram"]}, parsed_telegrams=parsed)
+
+    assert normalized["traffic"]["unknown"][0]["unique_responses"] == ["aa"]
+
+
+# Intent: post-snapshot raw find lines remain available in the normalized raw view.
+# Why: projection consumers must not lose the only raw evidence in a post-definition dump.
+def test_normalize_dump_preserves_after_raw_find_lines() -> None:
+    normalized = normalize_dump({"raw_find_lines_after": ["after line"]})
+
+    assert normalized["raw"]["raw_find_lines_after"] == ["after line"]
 
 
 # Intent: preserve legacy labeled telegrams that predate raw request fields.

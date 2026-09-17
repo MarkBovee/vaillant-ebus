@@ -6,6 +6,7 @@ registers that are absent from the installed ebusd CSV files.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from typing import TypedDict
 
 
@@ -24,8 +25,8 @@ class GrabTelegram(TypedDict):
 # Known telegrams carry a register label after the count (`= N: hmu SetMode`);
 # unknown ones do not.
 # Return typed telegram records while preserving the historical dictionary schema.
-def parse_grab_lines(grab_lines: list[str]) -> list[GrabTelegram]:
-    telegrams: list[GrabTelegram] = []
+def iter_grab_telegrams(grab_lines: Iterable[str]) -> Iterator[GrabTelegram]:
+    """Yield parsed telegrams without retaining the input or output lists."""
     for line in grab_lines:
         line = line.strip()
         if not line or not line.startswith(("10", "11", "30", "31", "50", "51", "70", "71", "f0", "f1", "f3", "f5")):
@@ -42,21 +43,27 @@ def parse_grab_lines(grab_lines: list[str]) -> list[GrabTelegram]:
         resp_value: str | None = resp_part.strip() if resp_part else None
         if len(req) < 8:
             continue
-        telegrams.append(
-            {
-                "msgid": req[4:8],
-                "master": req[0:2],
-                "slave": req[2:4],
-                "request": req,
-                "sub": req[8:],
-                "resp": resp_value,
-                "count": count,
-                "label": label_value,
-            }
-        )
-    return telegrams
+        yield {
+            "msgid": req[4:8],
+            "master": req[0:2],
+            "slave": req[2:4],
+            "request": req,
+            "sub": req[8:],
+            "resp": resp_value,
+            "count": count,
+            "label": label_value,
+        }
+
+
+def parse_grab_lines(grab_lines: list[str]) -> list[GrabTelegram]:
+    """Parse grab lines while preserving the historical list-based API."""
+    return list(iter_grab_telegrams(grab_lines))
 
 
 # Return only telegrams ebusd could not map to a known register label.
-def unknown_telegrams(grab_lines: list[str]) -> list[GrabTelegram]:
-    return [t for t in parse_grab_lines(grab_lines) if t["label"] is None]
+def unknown_telegrams(telegrams: Iterable[GrabTelegram] | list[str]) -> list[GrabTelegram]:
+    """Return parsed telegrams without an ebusd register label."""
+    values = list(telegrams)
+    if values and isinstance(values[0], str):
+        values = parse_grab_lines(values)
+    return [telegram for telegram in values if telegram["label"] is None]

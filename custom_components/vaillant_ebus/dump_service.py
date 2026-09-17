@@ -204,7 +204,8 @@ async def async_export_discovery_dump(
 
     after_registers: list[dict] = []
     after_raw_lines: list[str] = []
-    if grab_duration > 0:
+    has_after_snapshot = grab_duration > 0
+    if has_after_snapshot:
         after_registers, _, after_raw_lines = await _dump_registers(ebus, circuit_aliases=aliases)
 
     output_dir = hass.config.path(DOMAIN)
@@ -218,7 +219,7 @@ async def async_export_discovery_dump(
         "metadata": {
             "timestamp": datetime.now().isoformat(),
             "ebusd_version": ebus.version,
-            "register_count": len(after_registers or before_registers),
+            "register_count": len(after_registers if has_after_snapshot else before_registers),
             "grab_duration": grab_duration,
             "dump_version": CURRENT_DUMP_VERSION,
             "integration_version": INTEGRATION_VERSION,
@@ -232,12 +233,13 @@ async def async_export_discovery_dump(
         "raw_find_lines": raw_find_lines,
         "before_registers": before_registers,
     }
+    parsed_telegrams = None
     if grab_lines:
         dump_data["grab"] = grab_lines
         try:
-            telegrams = parse_grab_lines(grab_lines)
-            dump_data["labeled_telegrams"] = [t for t in telegrams if t["label"]]
-            dump_data["unknown_telegrams"] = unknown_telegrams(grab_lines)
+            parsed_telegrams = parse_grab_lines(grab_lines)
+            dump_data["labeled_telegrams"] = [t for t in parsed_telegrams if t["label"]]
+            dump_data["unknown_telegrams"] = unknown_telegrams(parsed_telegrams)
         except Exception as exc:  # pragma: no cover - defensive
             _LOGGER.warning("Failed to parse grab telegrams: %s", exc)
     # Recent writes the integration itself sent (register, value, resolved
@@ -246,15 +248,15 @@ async def async_export_discovery_dump(
     write_log = list(getattr(coordinator, "_write_log", []) or [])
     if write_log:
         dump_data["writes"] = write_log
-    if after_registers:
+    if has_after_snapshot:
         dump_data["after_registers"] = after_registers
         dump_data["raw_find_lines_after"] = after_raw_lines
 
-    normalized = normalize_dump(dump_data)
+    normalized = normalize_dump(dump_data, parsed_telegrams=parsed_telegrams)
     if grab_lines:
         dump_data["traffic"] = normalized["traffic"]
     dump_data["registers"] = normalized["registers"]
-    if after_registers:
+    if has_after_snapshot:
         dump_data["changes"] = normalized["changes"]
 
     await _persist_dump(hass, filepath, dump_data)
