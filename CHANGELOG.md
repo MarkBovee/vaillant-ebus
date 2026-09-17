@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.7 - 2026-09-17
+
+### Fixed
+
+- **Climate entities now report per-zone activity correctly.** Zone status is
+  used before the shared compressor status, with pump status as a fallback;
+  this fixes BASS3/gas-boiler zones that otherwise stayed at `Idle (heat)`.
+
 ## 1.8.6 - 2026-09-17
 
 ### Added
