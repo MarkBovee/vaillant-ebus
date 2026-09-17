@@ -81,6 +81,7 @@ rather than invented.
 | `flexotherm_133_cooling_discovery.yaml` | discovery dump | community (issue unknown) | before set complete (691); `raw_find_lines_after` truncated to 2 lines | Flexotherm cooling entities | `test_fake_ebusd`, `test_entity_factory` | GOLDEN (see 5.3) |
 | `flexotherm_vwf1174_issue134_2026-09-15_162647.yaml` | discovery dump | Discussion #31 (stiffmeister1975) | yes (2433 lines, v4) | VWF 117/4 flexoTHERM (HMU00/0303/0403, VRC700), VR_70/VR_91/VWZ00/OMU00/NETX0 | `test_fake_ebusd` | GOLDEN |
 | `geniaset_bass3_discovery.yaml` | discovery dump | community (issue unknown) | yes (704 lines) | geniaSet/BASS3 | `test_geniaset_bass3` | GOLDEN |
+| `saunier_duval_f34_issue129_discovery.yaml` | discovery dump | issue #129 | yes (22061 lines, v3) | Saunier-Duval F34 BASS3 two-zone ownership and absent Z2DayTemp path; reasonable `0x22` assumption cross-checked with upstream [#522](https://github.com/john30/ebusd-configuration/issues/522) | `test_coordinator`, `test_fixture_integrity` | GOLDEN |
 | `v32_boiler_discovery.yaml` | discovery dump | community (issue unknown) | yes (767 lines) | V32 boiler | `test_v32_boiler` | GOLDEN |
 | `arotherm_pro7_discovery.yaml` | discovery dump | community (issue unknown) | yes (475 lines) | Pro7 topology | `test_community_issue_fixtures` | GOLDEN |
 | `eloblock_ve28_discovery.yaml` | discovery dump | issue #103 (`source` metadata) | reduced (15 lines, opt-in) | BAI register metadata | `test_community_issue_fixtures` | REDUCED-FAITHFUL |

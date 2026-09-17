@@ -23,6 +23,8 @@ ISSUE99_DUMPS = (
     "community/hmux0_issue99_2026-09-10_173229.yaml",
 )
 
+ISSUE129_DUMP = "community/saunier_duval_f34_issue129_discovery.yaml"
+
 
 # Intent: the real issue #99 captures keep the spurious ctlv2 records that reproduce the DHW routing bug.
 # Why: a fixture stripped of the ctlv2 pollution silently loses the regression condition, so
@@ -76,6 +78,17 @@ def test_issue99_dumps_keep_hmux0_topology(fixture: str) -> None:
     assert graph.nodes["hmux0"].scan_type.upper() == "HMUX0"
     assert "hmux0.RunDataReturnTemp" in graph.placeholder_registers
     assert "hmux0.RunDataReturnTemp" not in graph.raw_registers
+
+
+# Intent: the issue #129 capture keeps the BASS3 Zone 2 ownership and unavailable day setpoint evidence.
+# Why: the reasonable Zone 2 0x22 assumption must not survive if the source capture is reduced.
+def test_issue129_dump_keeps_zone2_evidence() -> None:
+    dump = load_discovery_dump(ISSUE129_DUMP)
+    lines = dump.get("raw_find_lines") or []
+    assert any("scan.15" in line and "BASS3;0708;4304" in line for line in lines)
+    assert any(line.startswith("bass Z2OpMode =") for line in lines)
+    assert any(line.startswith("bass Z2RoomTemp = 24.6875") for line in lines)
+    assert any(line.startswith("bass Z2DayTemp = no data stored") for line in lines)
 
 
 # Intent: every discovery-dump fixture carries provenance metadata and at least one find-line set.

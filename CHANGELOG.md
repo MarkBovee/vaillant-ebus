@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.8.6 - 2026-09-17
+
+### Added
+
+- **Compact agent research views.** Discovery dumps can now be reduced to
+  evidence-preserving projections with `tools/dump_projection.py`, and upstream
+  issue/PR searches support `--compact` output without changing the default
+  human-readable format.
+
+- **BASS3/BASV3 Zone 2 day-temperature path (issue #129).** The runtime now
+  enables the Zone 2 `Z2DayTemp` read/write definitions at `0x22` when the
+  discovered BAS-family controller exposes Zone 2 registers. This uses the
+  upstream BAS-family `Z1..3DayTemp` `0x07` → `0x22` evidence from issue #522,
+  is gated to discovered hardware, and leaves the register unavailable when
+  the controller does not expose it.
+
+### Verification
+
+- Includes the `v1.8.6-rc1` BASS3/BASV3 Zone 1 write fix.
+- Includes the full issue #129 community discovery dump and absent-value tests.
+- Hardware verification in issues #129 and #138 confirms BASS3 Zone 1 and Zone 2 read/write behavior in v1.8.6-rc2.
+
+## 1.8.6-rc1 - 2026-09-16
+
+### Fixed
+
+- **BASS3/BASV3 Zone 1 day-temperature writes now use sub-address `0x22` (issue #138).**
+  The existing BAS-family read fix already used `0x22`, while writes still used
+  the old `0x07` position. This caused ebusd to acknowledge writes that the
+  controller ignored. The runtime write override now uses `020103002200` for
+  discovered BAS-family controllers; CTLV2 and CTLV3 write paths remain unchanged.
+
+### Verification
+
+- This release candidate is based on v1.8.5 and includes the current #138
+  write-path fix from the v1.8.6 release branch.
+- The full test suite passes: 619 tests.
+- Ruff and Python compilation checks pass.
+- Hardware verification on a BASS3 system is still required before final release.
+
 ## 1.8.5 - 2026-09-15
 
 ### Fixed
@@ -46,7 +86,8 @@
   as a `0x07` → `0x22` move (#522), and confirmed in ctlv0/ctlv3 community
   fixtures. The integration now redefines the `Z1DayTemp` read at `0x22` at
   runtime, gated to BAS-family scan types so ctlv2/ctlv3 (where `0x07` works)
-  are unaffected. The write path is unchanged.
+  are unaffected. The write path remained unchanged in v1.8.4; it is corrected
+  for the same BAS-family hardware in the next release.
 
 - **Switch entities now reflect a successful write immediately (issue #133).** After
   toggling a switch the Home Assistant UI bounced back to the previous value for

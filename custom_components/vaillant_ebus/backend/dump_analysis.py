@@ -143,17 +143,20 @@ def group_telegrams(telegrams: list[GrabTelegram]) -> list[TelegramGroup]:
     )
 
 
-def normalize_dump(dump: dict[str, Any]) -> dict[str, Any]:
+def normalize_dump(dump: dict[str, Any], parsed_telegrams: list[GrabTelegram] | None = None) -> dict[str, Any]:
     """Normalize legacy/current/future dump data without mutating input."""
     metadata = dict(dump.get("metadata") or {})
     version = metadata.get("dump_version", 1)
     known_version = isinstance(version, int) and version <= CURRENT_DUMP_VERSION
     before = list(dump.get("before_registers") or [])
-    after = list(dump.get("after_registers") or [])
-    current = after or before
+    has_after = "after_registers" in dump
+    after = list(dump.get("after_registers") or []) if has_after else []
+    current = after if has_after else before
     raw_grab = list(dump.get("grab") or [])
     parsed = (
-        parse_grab_lines(raw_grab)
+        parsed_telegrams
+        if parsed_telegrams is not None
+        else parse_grab_lines(raw_grab)
         if raw_grab
         else [
             _coerce_telegram(item)
@@ -171,7 +174,7 @@ def normalize_dump(dump: dict[str, Any]) -> dict[str, Any]:
         },
         "changes": (
             _register_changes(before, after)
-            if after
+            if has_after
             else {"new_registers": [], "changed_registers": [], "disappeared_registers": []}
         ),
         "traffic": {
@@ -182,6 +185,7 @@ def normalize_dump(dump: dict[str, Any]) -> dict[str, Any]:
             "raw_find_lines": list(dump.get("raw_find_lines") or []),
             "before_registers": before,
             "after_registers": after,
+            "raw_find_lines_after": list(dump.get("raw_find_lines_after") or []),
             "grab": raw_grab,
         },
     }

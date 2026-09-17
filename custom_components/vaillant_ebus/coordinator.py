@@ -831,9 +831,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # the shipped `15.700`-lineage CSV poll uses. On this family the 0x07
         # read returns `ERR: invalid position` while 0x22 decodes a live value
         # (upstream issue #646 BASS0 live read, #522 "0700 -> 2200", #1063 root
-        # cause; community fixtures for ctlv0/ctlv3 confirm 0x22). Only the
-        # READ is redefined writable-path is untouched; hardware-gated so
-        # ctlv2/ctlv3 (where 0x07 works) are unaffected.
+        # cause; community fixtures for ctlv0/ctlv3 confirm 0x22). Both read and
+        # write definitions are overridden because the shipped write path still
+        # targets 0x07. Hardware-gated so ctlv2/ctlv3 (where 0x07 works) remain
+        # unaffected.
         controller_node = self._graph.heating_controller_result().node if self._graph is not None else None
         if controller_node and controller_node.scan_type.upper().startswith("BAS"):
             circuit = controller_node.circuit
@@ -841,6 +842,23 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 f"r5,{circuit},Z1DayTemp,Z1DayTemp,31,15,B524,020003002200"
                 ",ign,,IGN:4,,,,value,,EXP,,°C,day setpoint for zone 1"
             )
+            defines.append(
+                f"wi,{circuit},Z1DayTemp,Z1DayTemp,31,15,B524,020103002200,value,m,EXP,,°C,day setpoint for zone 1"
+            )
+            # Upstream issue #522 documents the same 0x07 -> 0x22 move for
+            # Z1..Z3 on BASV3. Enable Zone 2 only when its room-temperature
+            # register has a live value; inactive placeholder zones stay out
+            # of active polling. This is a reasonable, fixture-backed
+            # assumption for the BASS3 scope captured in issue #129.
+            if f"{circuit}.Z2RoomTemp" in self._graph.raw_registers:
+                defines.extend(
+                    [
+                        f"r5,{circuit},Z2DayTemp,Z2DayTemp,31,15,B524,020003012200"
+                        ",ign,,IGN:4,,,,value,,EXP,,°C,day setpoint for zone 2",
+                        f"wi,{circuit},Z2DayTemp,Z2DayTemp,31,15,B524,020103012200"
+                        ",value,m,EXP,,°C,day setpoint for zone 2",
+                    ]
+                )
 
         defines = [definition for definition in (_resolve_definition_circuit(item) for item in defines) if definition]
         if is_hmux0_0303_0504:

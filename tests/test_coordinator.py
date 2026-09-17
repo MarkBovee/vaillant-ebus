@@ -1067,10 +1067,81 @@ async def test_bass3_defines_z1daytemp_read_at_0x22() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         z1day = [definition for definition in definitions if ",Z1DayTemp," in definition]
-        # The BAS-family read override polls the 0x22 sub-address.
-        assert len(z1day) == 1
-        assert ",020003002200," in z1day[0]
+        # The BAS-family read and write overrides use the 0x22 sub-address.
+        assert len(z1day) == 2
+        assert any(definition.startswith("r5,") and ",020003002200," in definition for definition in z1day)
+        assert any(definition.startswith("wi,") and ",020103002200," in definition for definition in z1day)
         assert not any(",020003000700," in definition for definition in definitions)
+        assert not any(",020103000700," in definition for definition in definitions)
+
+# Intent: the issue #129 BASS3 capture enables the evidence-gated Zone 2 setpoint path.
+# Why: upstream #522 documents the BAS-family Z1..Z3 0x07 to 0x22 move, while the capture proves Zone 2 ownership.
+async def test_issue129_bass3_defines_zone2_daytemp_at_0x22() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/saunier_duval_f34_issue129_discovery.yaml")
+        )
+        controller = graph.heating_controller_result().node
+        assert controller is not None
+        assert controller.scan_type == "BASS3"
+        assert "bass.Z2OpMode" in graph.raw_registers
+
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = graph
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        z2day = [definition for definition in definitions if ",Z2DayTemp," in definition]
+        assert len(z2day) == 2
+        assert any(definition.startswith("r5,") and ",020003012200," in definition for definition in z2day)
+        assert any(definition.startswith("wi,") and ",020103012200," in definition for definition in z2day)
+
+
+# Intent: a discovered but unavailable Zone 2 day setpoint remains a safe sentinel value.
+# Why: the reasonable-assumption path must not fabricate a normal temperature value.
+def test_issue129_zone2_daytemp_absent_value_stays_unavailable() -> None:
+    graph = DISCOVERY.DiscoveryService.build_device_graph(
+        ["scan.15 = Vaillant;BASS3;0708;4304", "bass Z2OpMode = day", "bass Z2DayTemp = no data stored"]
+    )
+    entities = FACTORY.EntityFactoryService().generate(graph)
+    z2_entities = [entity for entity in entities if entity.circuit == "bass" and entity.name == "Z2DayTemp"]
+    assert z2_entities
+    assert "bass.Z2DayTemp" in graph.placeholder_registers
+    assert all(entity.meta.writable for entity in z2_entities)
+
+
+# Intent: BASV3 uses the same 0x22 day-setpoint read and write positions as BASS3.
+# Why: covers the shared BAS-family gate with a second community-supported scan type.
+async def test_basv3_defines_z1daytemp_read_and_write_at_0x22() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/arotherm_plus_basv3_discovery.yaml")
+        )
+        controller = graph.heating_controller_result().node
+        assert controller is not None
+        assert controller.scan_type == "BASV3"
+
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = graph
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        z1day = [definition for definition in definitions if ",Z1DayTemp," in definition]
+        assert len(z1day) == 2
+        assert any(definition.startswith("r5,") and ",020003002200," in definition for definition in z1day)
+        assert any(definition.startswith("wi,") and ",020103002200," in definition for definition in z1day)
+        assert not any(",020003000700," in definition for definition in definitions)
+        assert not any(",020103000700," in definition for definition in definitions)
+
+        assert not any(",Z2DayTemp," in definition for definition in definitions)
 
 
 # Intent: a ctlv3/ctlv2 controller keeps the shipped day-setpoint definition; the
@@ -1095,7 +1166,7 @@ async def test_ctlv3_does_not_override_z1daytemp_read() -> None:
         await c._define_custom_registers()
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
-        # No 0x22 read override for the day setpoint on a non-BAS controller.
+        # No 0x22 read or write override on a non-BAS controller.
         assert not any(",Z1DayTemp," in definition for definition in definitions)
 
 

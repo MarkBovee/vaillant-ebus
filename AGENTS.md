@@ -12,6 +12,10 @@
   - `ebusd-expert` for register reverse-engineering, `define` strings, and ebusd TCP-level debugging.
   - `home-assistant` for deploy, entity/device registry, HA API, and live HA verification.
   - `intake`, `develop`, `agent-workflows`, `verification`, `code-review`, `debugging`, `improve`, `session-review` for the risk-based lifecycle.
+  - `text-writing` is mandatory before writing user-facing text, including GitHub replies,
+    issue bodies, release notes, documentation, and final responses. Use simple, human
+    language that non-experts can understand. Keep code, identifiers, commands, and
+    technical protocol values exact; do not simplify those.
 - This repository is release-sensitive. Follow the lifecycle in the global AGENTS.md "Skills & Workflow": `intake → plan → plan-check → execute → validate → review → audit → release-gate`, delegate independent research to subagents, and never self-declare release readiness.
 - For protocol research, prefer the upstream search and dump mining sections below over guessing from register names.
 
@@ -212,6 +216,8 @@ CSV snippets, `define` strings, `find` output, and per-hardware field layouts th
     (most CSV snippets and layouts are pasted in comments).
   - `tools/search_upstream.sh --all "SourceTempInput"` — issues and PRs.
   - `tools/search_upstream.sh "query" "john30/ebusd"` — search another repo.
+  - Add `--compact` when passing search output into agent context; it keeps
+    issue/PR markers while omitting decorative headings and blank separators.
 - The ebusd-configuration repo has discussions **disabled**; search issues and PRs only.
 - When a promising thread is found, open it (`gh issue view <n> --comments`) and read
   the full conversation before trusting a snippet. Prefer definitions that the reporter
@@ -242,6 +248,11 @@ When adding registers, devices, or metadata derived from community data:
 - `Confirmed` and `strong assumption` mappings may enter production when they use those
   existing data-driven paths. Document the evidence and keep inferred entities unavailable
   unless the expected register/value is actually discovered.
+- A reasonable, fixture-backed assumption may also enter production when the exact telegram
+  family, message/sub-address, response shape, field layout, and hardware scope match
+  available community or upstream evidence. Classify it explicitly as a reasonable
+  assumption, keep the implementation hardware-gated, and preserve a safe absent-register
+  path. A register-name match, plausible value, or uncorrelated telegram is not enough.
 - Keep changes additive and opt-in: enabling a community register/device must not change
   behavior for hardware that does not expose it, and must not crash discovery or entity
   generation when the register is absent.
@@ -264,7 +275,7 @@ When adding registers, devices, or metadata derived from community data:
 ## Test Fixtures
 
 - ebusd `find` output and discovery dumps are captured as fixtures in `tests/fixtures/`. There is no `data-dump/` directory anymore; all community and local captures live in `tests/fixtures/`.
-- `tests/fixtures/community/` holds third-party captures: discovery-dump YAML files (`flexotherm_discovery.yaml`, `arotherm_plus_2zone_discovery.yaml`, `arotherm_plus_basv3_discovery.yaml`, `arotherm_pro7_discovery.yaml`, `geniaset_bass3_discovery.yaml`) and plain `find` output (`basv_find.txt`, `v32_find.txt`, `flexocompact_find.txt`, `dumpvalues.yaml`).
+- `tests/fixtures/community/` holds third-party captures: discovery-dump YAML files (`flexotherm_discovery.yaml`, `arotherm_plus_2zone_discovery.yaml`, `arotherm_plus_basv3_discovery.yaml`, `arotherm_pro7_discovery.yaml`, `geniaset_bass3_discovery.yaml`, `saunier_duval_f34_issue129_discovery.yaml`) and plain `find` output (`basv_find.txt`, `v32_find.txt`, `flexocompact_find.txt`, `dumpvalues.yaml`).
 - The fixture trust model and full inventory live in `docs/test-audit-rc3.md`. Classify every fixture as GOLDEN, REDUCED-FAITHFUL, SYNTHETIC, or LEGACY/UNKNOWN; never use a reduced or unknown-provenance fixture as the sole evidence for discovery, circuit ownership, or graph resolution.
 - `tests/test_fixture_integrity.py` guards the golden captures: it fails if the issue #99 dumps lose the spurious `ctlv2` records or a discovery dump loses provenance metadata. Do not weaken it to accommodate a stripped fixture.
 - `dumpvalues.yaml` records multi-field register field names and is the reference for `MULTI_FIELD_MAP` in `tests/fake_ebusd.py`. Keep the two in sync.

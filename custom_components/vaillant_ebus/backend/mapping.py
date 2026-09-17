@@ -994,6 +994,17 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         entity_type="number",
         entity_category="config",
     ),
+    "ctlv2.Z2DayTemp": RegisterMeta(
+        friendly_name="Day Temperature (Z2)",
+        device_class="temperature",
+        unit="°C",
+        writable=True,
+        min_value=5,
+        max_value=30,
+        step=0.5,
+        entity_type="number",
+        entity_category="config",
+    ),
     "ctlv2.Z1NightTemp": RegisterMeta(
         friendly_name="Night Temperature (Z1)",
         device_class="temperature",
