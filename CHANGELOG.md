@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Compact agent research views.** Discovery dumps can now be reduced to
+  evidence-preserving projections with `tools/dump_projection.py`, and upstream
+  issue/PR searches support `--compact` output without changing the default
+  human-readable format.
+
 - **BASS3/BASV3 Zone 2 day-temperature path (issue #129).** The runtime now
   enables the Zone 2 `Z2DayTemp` read/write definitions at `0x22` when the
   discovered BAS-family controller exposes Zone 2 registers. This uses the

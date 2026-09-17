@@ -216,6 +216,8 @@ CSV snippets, `define` strings, `find` output, and per-hardware field layouts th
     (most CSV snippets and layouts are pasted in comments).
   - `tools/search_upstream.sh --all "SourceTempInput"` — issues and PRs.
   - `tools/search_upstream.sh "query" "john30/ebusd"` — search another repo.
+  - Add `--compact` when passing search output into agent context; it keeps
+    issue/PR markers while omitting decorative headings and blank separators.
 - The ebusd-configuration repo has discussions **disabled**; search issues and PRs only.
 - When a promising thread is found, open it (`gh issue view <n> --comments`) and read
   the full conversation before trusting a snippet. Prefer definitions that the reporter

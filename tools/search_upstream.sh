@@ -10,6 +10,7 @@
 #   tools/search_upstream.sh --comments "<query>"       # match in comments too
 #   tools/search_upstream.sh --all "<query>"            # issues + PRs
 #   tools/search_upstream.sh --limit 20 "<query>"
+#   tools/search_upstream.sh --compact "<query>"         # omit headings and blank lines
 #   tools/search_upstream.sh "<query>" "owner/repo"     # other repo (e.g. john30/ebusd)
 set -euo pipefail
 
@@ -19,31 +20,61 @@ MATCH="title,body"
 LIMIT=10
 DO_ISSUES=1
 DO_PRS=0
+COMPACT=0
+POSITIONAL=()
+
+usage() {
+    echo "usage: $0 [--prs|--all] [--comments] [--compact] [--limit N] [--repo owner/repo] \"<query>\"" >&2
+}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --prs) DO_ISSUES=0; DO_PRS=1; shift ;;
         --all) DO_ISSUES=1; DO_PRS=1; shift ;;
         --comments) MATCH="title,body,comments"; shift ;;
-        --limit) LIMIT="$2"; shift 2 ;;
-        --repo) REPO="$2"; shift 2 ;;
+        --compact) COMPACT=1; shift ;;
+        --limit)
+            if [[ $# -lt 2 || "$2" == -* ]]; then usage; exit 2; fi
+            LIMIT="$2"
+            shift 2
+            ;;
+        --repo)
+            if [[ $# -lt 2 || "$2" == -* ]]; then usage; exit 2; fi
+            REPO="$2"
+            shift 2
+            ;;
         -*) echo "unknown option: $1" >&2; exit 2 ;;
-        *) QUERY="$1"; shift ;;
+        *) POSITIONAL+=("$1"); shift ;;
     esac
 done
 
-if [[ -z "$QUERY" ]]; then
-    echo "usage: $0 [--prs|--all] [--comments] [--limit N] [--repo owner/repo] \"<query>\"" >&2
+if [[ ${#POSITIONAL[@]} -eq 1 ]]; then
+    QUERY="${POSITIONAL[0]}"
+elif [[ ${#POSITIONAL[@]} -eq 2 ]]; then
+    QUERY="${POSITIONAL[0]}"
+    REPO="${POSITIONAL[1]}"
+else
+    usage
     exit 2
 fi
 
 run() {
     local kind="$1"
-    echo "── $kind in $REPO (match: $MATCH, limit: $LIMIT) ──"
-    gh search "$kind" --repo "$REPO" "$QUERY" --match "$MATCH" --limit "$LIMIT" \
-        --json number,title,state,updatedAt,url \
-        --jq '.[] | "#\(.number) [\(.state)] \(.title)  (\(.updatedAt))\n    \(.url)"'
-    echo
+    if [[ "$COMPACT" -eq 0 ]]; then
+        echo "── $kind in $REPO (match: $MATCH, limit: $LIMIT) ──"
+    fi
+    if [[ "$COMPACT" -eq 1 ]]; then
+        gh search "$kind" --repo "$REPO" "$QUERY" --match "$MATCH" --limit "$LIMIT" \
+            --json number,title,state,updatedAt,url \
+            --jq ".[] | \"$kind\\t#\\(.number) [\\(.state)] \\(.title) (\\(.updatedAt))\\n    \\(.url)\""
+    else
+        gh search "$kind" --repo "$REPO" "$QUERY" --match "$MATCH" --limit "$LIMIT" \
+            --json number,title,state,updatedAt,url \
+            --jq '.[] | "#\(.number) [\(.state)] \(.title)  (\(.updatedAt))\n    \(.url)"'
+    fi
+    if [[ "$COMPACT" -eq 0 ]]; then
+        echo
+    fi
 }
 
 if [[ "$DO_ISSUES" -eq 1 ]]; then run issues; fi
