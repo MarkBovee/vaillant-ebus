@@ -7,7 +7,7 @@ registers that are absent from the installed ebusd CSV files.
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
-from typing import TypedDict
+from typing import TypedDict, cast
 
 
 class GrabTelegram(TypedDict):
@@ -64,6 +64,10 @@ def parse_grab_lines(grab_lines: list[str]) -> list[GrabTelegram]:
 def unknown_telegrams(telegrams: Iterable[GrabTelegram] | list[str]) -> list[GrabTelegram]:
     """Return parsed telegrams without an ebusd register label."""
     values = list(telegrams)
+    parsed: list[GrabTelegram]
     if values and isinstance(values[0], str):
-        values = parse_grab_lines(values)
-    return [telegram for telegram in values if telegram["label"] is None]
+        raw_lines = [value for value in values if isinstance(value, str)]
+        parsed = parse_grab_lines(raw_lines)
+    else:
+        parsed = cast(list[GrabTelegram], values)
+    return [telegram for telegram in parsed if telegram["label"] is None]

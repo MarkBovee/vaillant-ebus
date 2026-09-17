@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.8.6-rc2 - 2026-09-16
+## 1.8.6 - 2026-09-17
 
 ### Added
 
@@ -20,8 +20,7 @@
 
 - Includes the `v1.8.6-rc1` BASS3/BASV3 Zone 1 write fix.
 - Includes the full issue #129 community discovery dump and absent-value tests.
-- Final hardware verification is still required for both BASS3 Zone 1 writes
-  and the Zone 2 assumption.
+- Hardware verification in issues #129 and #138 confirms BASS3 Zone 1 and Zone 2 read/write behavior in v1.8.6-rc2.
 
 ## 1.8.6-rc1 - 2026-09-16
 
