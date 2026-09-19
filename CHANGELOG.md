@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.9.0 - 2026-09-19
+
+### Fixed
+
+- **Quick Veto is unavailable rather than partially written on controllers
+  without `ZxQuickVetoDuration` (issue #142).** Boost, AUTO target updates,
+  stale-veto updates, and cancellation now wait for authoritative discovery of
+  the duration register on the resolved controller circuit. This prevents the
+  BASS3 HTTP 500 and never writes `QuickVetoTemp` by itself.
+
+- **Date-only holiday and manual-cooling controls now use the Home Assistant
+  `date` platform (issue #143).** Existing date-only `datetime` entities are
+  retired during config-entry migration, supported controls follow the
+  discovery graph, and controller reset dates remain unavailable rather than
+  appearing as armed cooling windows.
+
+### Changed
+
+- **Includes the v1.8.7 BASS3 climate-status fix.** Zone activity now takes
+  precedence over shared compressor activity, with pump status as a fallback.
+
+## 1.8.7 - 2026-09-17
+
+### Fixed
+
+- **Climate entities now report per-zone activity correctly.** Zone status is
+  used before the shared compressor status, with pump status as a fallback;
+  this fixes BASS3/gas-boiler zones that otherwise stayed at `Idle (heat)`.
+
 ## 1.8.6 - 2026-09-17
 
 ### Added

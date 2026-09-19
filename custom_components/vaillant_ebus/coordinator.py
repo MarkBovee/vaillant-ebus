@@ -306,15 +306,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 return True
         return False
 
-    # Whether `circuit.<ZN><name>` was discovered on the bus. Both live values
-    # and no-data placeholders count as present: ebusd returns `no data stored`
-    # for registers the hardware supports while they are idle. Until a real
-    # discovery has populated the find set, absence is not proof of hardware
-    # absence (cache-seeded graphs only carry live values), so the register is
-    # assumed present to preserve the pre-per-zone behavior.
-    def has_zone_register(self, circuit: str, zone: str, name: str) -> bool:
+    # Return whether a zone register is supported, unsupported, or not discovered yet.
+    def zone_register_discovery_status(self, circuit: str, zone: str, name: str) -> bool | None:
         if self._graph is None or not self._last_find_keys:
-            return True
+            return None
         key = f"{circuit}.{zone.upper()}{name}"
         if key in self._graph.raw_registers or key in self._graph.placeholder_registers:
             return True
@@ -322,6 +317,11 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         return any(rk.lower() == lower for rk in self._graph.raw_registers) or any(
             rk.lower() == lower for rk in self._graph.placeholder_registers
         )
+
+    # Preserve optimistic pre-discovery UI feature visibility for non-write capabilities.
+    def has_zone_register(self, circuit: str, zone: str, name: str) -> bool:
+        status = self.zone_register_discovery_status(circuit, zone, name)
+        return status is not False
 
     # Whether a controller-owned register exists on the discovered controller circuit.
     def has_controller_register(self, name: str) -> bool:
@@ -337,6 +337,13 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         return any(rk.lower() == lower for rk in self._graph.raw_registers) or any(
             rk.lower() == lower for rk in self._graph.placeholder_registers
         )
+
+    # Retain no-data discovery keys while polling so capability gates stay authoritative.
+    def _refresh_find_keys(self) -> None:
+        self._last_find_keys = set(self.registers)
+        if self._graph is not None:
+            self._last_find_keys.update(self._graph.raw_registers)
+            self._last_find_keys.update(self._graph.placeholder_registers)
 
     async def _async_seed_entities_from_cache(self) -> None:
         cache = await self._async_load_cache()
@@ -444,7 +451,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 self.registers[rk].value.update(_register_values(rk, raw))
                 self.registers[rk].has_data = True
 
-        self._last_find_keys.update(graph.raw_registers)
+        self._refresh_find_keys()
 
         # A cache-seeded rebuild at startup can carry registers the real bus no
         # longer exposes (e.g. a stale test register from an old CSV or session).
@@ -1370,7 +1377,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         self.registers[key].value.update(_register_values(key, val))
                         self.registers[key].has_data = True
                         updated += 1
-                self._last_find_keys = {k for k in self.registers}
+                self._refresh_find_keys()
                 poll_placeholders = now - self._last_placeholder_poll >= PLACEHOLDER_POLL_INTERVAL
                 if poll_placeholders:
                     self._last_placeholder_poll = now

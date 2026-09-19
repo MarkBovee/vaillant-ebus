@@ -188,8 +188,10 @@ telegrams; capture them with `grab` and mine the unknown ones for new registers.
   `discovery-only`. Never summarize this as merely “no unknown registers found” when the
   dump contains unknown telegrams.
 - Treat upstream matches as evidence, not local live verification. Upstream/community
-  evidence may be sufficient for production when classified `confirmed` or `strong
-  assumption`, hardware scope is explicit, and absent-register behavior is safe. Open
+  evidence is sufficient for production when classified `confirmed` or `strong
+  assumption`, hardware scope is explicit, and absent-register behavior is safe. Do not
+  require owner-hardware live verification or wait for 100% certainty once those gates
+  are met; treat the mapping as an in-scope production candidate. Open
   promising issues or PRs
   with `gh issue view <number> --comments` and read the complete conversation before using
   a snippet. Record the upstream URL, hardware context, and whether the mapping is
@@ -232,6 +234,16 @@ evidence from captures may still justify a conservative production assumption wh
 that assumption is isolated, fixture-covered, and safe when the register is absent
 or returns no data.
 
+### Strong-assumption production rule
+
+`Strong assumption` is a production-evidence class, not a reason to defer work until
+someone supplies perfect or owner-hardware proof. Implement a strong-assumption mapping
+when the available community/upstream evidence consistently establishes the message
+family, layout or value semantics, hardware scope, and safe absent path. Hardware-gate
+it, preserve complete source fixtures, add positive and absent-path regressions, and
+record the uncertainty. Defer only when evidence conflicts, cannot be scoped to
+hardware/firmware, lacks a safe failure mode, or remains merely `speculative`.
+
 When adding registers, devices, or metadata derived from community data:
 
 - Add the capture as a fixture under `tests/fixtures/community/` and drive the new code
@@ -245,9 +257,10 @@ When adding registers, devices, or metadata derived from community data:
   `MULTI_FIELD_FIELDS`, `_define_custom_registers()`, device-type tables) so it is
   covered by the same discovery/entity-factory logic as everything else. Do not bolt on
   one-off register-specific code paths.
-- `Confirmed` and `strong assumption` mappings may enter production when they use those
-  existing data-driven paths. Document the evidence and keep inferred entities unavailable
-  unless the expected register/value is actually discovered.
+- `Confirmed` and `strong assumption` mappings must be considered for production through
+  those existing data-driven paths; do not silently defer them for missing live proof.
+  Document the evidence and keep inferred entities unavailable unless the expected
+  register/value is actually discovered.
 - A reasonable, fixture-backed assumption may also enter production when the exact telegram
   family, message/sub-address, response shape, field layout, and hardware scope match
   available community or upstream evidence. Classify it explicitly as a reasonable

@@ -2774,6 +2774,31 @@ async def test_has_zone_register_assumes_present_until_discovery() -> None:
         assert c.has_zone_register("ctlv2", "z1", "CoolingTemp") is False
 
 
+# Intent: write paths can distinguish unknown startup capability from an absent discovered register.
+# Why: safety-critical writes must wait for discovery instead of treating pre-discovery UI optimism as support.
+async def test_zone_register_discovery_status_distinguishes_unknown_and_absent() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        assert c.zone_register_discovery_status("ctlv2", "z1", "QuickVetoDuration") is None
+        c._graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+        assert c.zone_register_discovery_status("ctlv2", "z1", "QuickVetoDuration") is None
+        c._last_find_keys = {"ctlv2.Z1RoomTemp"}
+        assert c.zone_register_discovery_status("ctlv2", "z1", "QuickVetoDuration") is False
+
+
+# Intent: an all-placeholder find response still proves supported register presence.
+# Why: no data stored means idle-but-supported hardware, not an incomplete discovery or absent feature.
+async def test_zone_register_discovery_status_accepts_placeholder_only_find() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._graph = DeviceGraph(
+            nodes={}, raw_registers={}, placeholder_registers={"ctlv2.Z1QuickVetoDuration"}
+        )
+        c._refresh_find_keys()
+
+        assert c.zone_register_discovery_status("ctlv2", "z1", "QuickVetoDuration") is True
+
+
 # Intent: platforms can add entities once a discovery graph has been applied.
 # Why: protects the platform re-add hook used to add entities after discovery.
 async def test_post_discovery_callbacks_fire_on_apply() -> None:

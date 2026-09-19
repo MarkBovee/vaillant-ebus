@@ -18,6 +18,7 @@ from homeassistant.components.climate.const import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -68,7 +69,7 @@ QUICK_VETO_DURATION_REGISTER = "QuickVetoDuration"
 
 # Look up a string value from coordinator ebusd data by register name
 def _value(coordinator: VaillantCoordinator, register: str, circuit: str | None = None) -> str | None:
-    ckt = circuit if circuit is not None else coordinator.heating_circuit
+    ckt = coordinator.resolve_register_circuit(circuit) if circuit is not None else coordinator.heating_circuit
     if ckt is None:
         return None
     key = f"{ckt}.{register}.value"
@@ -80,7 +81,7 @@ def _value(coordinator: VaillantCoordinator, register: str, circuit: str | None 
 def _float(value: str | None) -> float | None:
     try:
         return float(value) if value is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -173,10 +174,23 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     @property
     def preset_modes(self) -> list[str]:
         presets = [PRESET_NONE]
-        if self.coordinator.has_zone_register(self._circuit, self._zone, QUICK_VETO_DURATION_REGISTER):
+        if self._quick_veto_capability() is True:
             presets.append(PRESET_BOOST)
         presets.append(PRESET_AWAY)
         return presets
+
+    # Return the authoritative quick-veto capability once the zone discovery is complete.
+    def _quick_veto_capability(self) -> bool | None:
+        circuit = self.coordinator.resolve_register_circuit(self._circuit)
+        if circuit is None:
+            return None
+        return self.coordinator.zone_register_discovery_status(circuit, self._zone, QUICK_VETO_DURATION_REGISTER)
+
+    # Explain whether discovery is pending or the controller lacks the required duration register.
+    def _quick_veto_error(self, capability: bool | None) -> str:
+        if capability is None:
+            return f"Quick veto capability is unavailable until discovery completes for {self._zn}"
+        return f"Quick veto is unavailable for {self._zn}"
 
     # Current room temperature from the zone's room temp register
     @property
@@ -228,23 +242,23 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     @property
     def hvac_action(self) -> HVACAction | None:
         hc = _float(_value(self.coordinator, f"Hc{self._zone[1:]}Status", self._circuit))
-        zone_active = hc is not None and hc > 0
-        if hc is None:
-            pump = _value(self.coordinator, f"Hc{self._zone[1:]}PumpStatus", self._circuit)
-            zone_active = (pump or "").lower() in ("on", "1", "true", "yes", "running")
+        pump = _value(self.coordinator, f"Hc{self._zone[1:]}PumpStatus", self._circuit)
+        pump_state = (pump or "").lower()
         comp = (_value(self.coordinator, "RunDataStatuscode", self.coordinator.heat_pump_circuit) or "").lower()
         global_heat = comp in HEATING_STATES
         global_cool = comp in COOLING_STATES
-        if zone_active:
-            if global_heat:
-                return HVACAction.HEATING
-            if global_cool:
-                return HVACAction.COOLING
-            if global_heat or global_cool:
-                return HVACAction.IDLE
         mode = self.hvac_mode
         if mode == HVACMode.OFF:
             return HVACAction.OFF
+
+        if hc is not None or pump_state in ("on", "1", "true", "yes", "running", "off", "0", "false", "no"):
+            zone_active = hc > 0 if hc is not None else pump_state in ("on", "1", "true", "yes", "running")
+            if not zone_active:
+                return HVACAction.IDLE
+            if global_cool or mode == HVACMode.COOL:
+                return HVACAction.COOLING
+            return HVACAction.HEATING
+
         if global_heat:
             return HVACAction.HEATING
         if global_cool:
@@ -315,10 +329,10 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # Set HVAC mode: cancel boost first, then write ebusd op mode
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         previous_hvac_mode = self.hvac_mode
-        self._optimistic_hvac_mode = hvac_mode
-        self.async_write_ha_state()
         if self.preset_mode == PRESET_BOOST:
             await self._cancel_quick_veto()
+        self._optimistic_hvac_mode = hvac_mode
+        self.async_write_ha_state()
         if hvac_mode == HVACMode.COOL:
             ok = await self._start_manual_cooling()
         elif hvac_mode == HVACMode.HEAT:
@@ -327,9 +341,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             # cooling window when the controller still reports cooling or the
             # window is still set.
             cooling_active = (
-                previous_hvac_mode == HVACMode.COOL
-                or self._global_cooling_active()
-                or self._manual_cooling_armed()
+                previous_hvac_mode == HVACMode.COOL or self._global_cooling_active() or self._manual_cooling_armed()
             )
             if cooling_active:
                 ok = await self._cancel_manual_cooling()
@@ -381,9 +393,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             heating_circuit = self.coordinator.heating_circuit
             if heating_circuit is None:
                 return False
-            return await self.coordinator.async_write_register(
-                heating_circuit, "ManualCoolingEndDate", HOLIDAY_RESET
-            )
+            return await self.coordinator.async_write_register(heating_circuit, "ManualCoolingEndDate", HOLIDAY_RESET)
         except Exception as exc:
             _LOGGER.exception("cancel manual cooling failed: %s", exc)
             return False
@@ -410,12 +420,18 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if temp is None:
             return
         if self.preset_mode == PRESET_BOOST:
+            capability = self._quick_veto_capability()
+            if capability is not True:
+                raise HomeAssistantError(self._quick_veto_error(capability))
             ok = await self._write(f"{self._zn}QuickVetoTemp", str(temp))
             if ok:
                 self._apply_optimistic_target(float(temp))
                 self._schedule_confirm_refresh()
             return
         if self.hvac_mode == HVACMode.AUTO and not self._global_cooling_active():
+            capability = self._quick_veto_capability()
+            if capability is not True:
+                raise HomeAssistantError(self._quick_veto_error(capability))
             await self._start_quick_veto(float(temp))
             return
         ok = await self._write(f"{self._zn}DayTemp", str(temp))
@@ -495,6 +511,9 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # is read-only ("ERR: element not found"), so overwriting the veto temp
     # with DayTemp is the effective soft-cancel and the veto expires on its own.
     async def _cancel_quick_veto(self) -> None:
+        capability = self._quick_veto_capability()
+        if capability is not True:
+            raise HomeAssistantError(self._quick_veto_error(capability))
         self._quick_veto_until = None
         end = self._device_boost_end()
         if end is not None:
@@ -507,8 +526,12 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
                 self._apply_optimistic_target(day_temp)
                 self._schedule_confirm_refresh()
 
-    # Start quick veto with specified temp or config-based default for N hours
-    async def _start_quick_veto(self, temp_override: float | None = None) -> None:
+    # Start quick veto with specified temp or config-based default for N hours.
+    async def _start_quick_veto(self, temp_override: float | None = None) -> bool:
+        capability = self._quick_veto_capability()
+        if capability is not True:
+            _LOGGER.warning("%s", self._quick_veto_error(capability))
+            return False
         if temp_override is not None:
             veto_temp = temp_override
         else:
@@ -518,7 +541,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             if veto_temp is None and temp is not None:
                 veto_temp = round(temp, 1)
         if veto_temp is None:
-            return
+            return False
         options = self.coordinator._entry.options
         veto_duration = options.get("quick_veto_duration", 3)
         # A deliberate new veto ends any cancellation suppression.
@@ -533,13 +556,14 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
                 ok_temp,
                 ok_duration,
             )
-            return
+            return False
         self._quick_veto_until = datetime.now() + timedelta(hours=veto_duration)
         # Bridge the controller's apply latency: show the requested setpoint
         # immediately and pull confirming data after the settle window.
         self._apply_optimistic_target(float(veto_temp))
         self._schedule_confirm_refresh()
         self.async_write_ha_state()
+        return True
 
     # Start holiday period: set zone holiday start/end periods from today
     async def _start_holiday(self) -> None:

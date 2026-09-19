@@ -65,6 +65,8 @@ rather than invented.
 | `arotherm_pro7_quiet_off_idle_discovery.yaml` | discovery dump | issue #101 | yes (504 lines) | quiet registers absent | `test_community_issue_fixtures` | GOLDEN |
 | `arotherm_pro7_quiet_off_heating_discovery.yaml` | discovery dump | issue #101 | yes | quiet registers absent | `test_community_issue_fixtures` | GOLDEN |
 | `arotherm_pro7_quiet_on_heating_discovery.yaml` | discovery dump | issue #101 | yes | quiet registers absent | `test_community_issue_fixtures` | GOLDEN |
+| `arotherm_pro7_issue101_2026-09-15_203102_discovery.yaml` | discovery dump | issue #101 | yes (476 raw lines, v4) | quiet-switch state; no exposed Quiet register | `test_fake_ebusd`, fixture integrity | GOLDEN |
+| `arotherm_pro7_issue101_2026-09-16_quiet_to_loud.ebusctl.txt`, `arotherm_pro7_issue101_2026-09-16_loud_to_quiet.ebusctl.txt`, `arotherm_pro7_issue101_2026-09-17_quiet_loud_quiet_loud.ebusctl.txt` | raw grab results | issue #101 | complete attachment content; no v4 metadata and deduplicated ordering | B508/0209 Quiet correlation research only | release plan evidence only | LEGACY/UNKNOWN |
 | `ecotec_vrt380_15700_discovery.yaml` | discovery dump | discussion #33 | yes (818 lines) | ecoTEC/VRT380 BAI + controller graph | `test_community_issue_fixtures` | GOLDEN |
 | `ecotec_vrt380_ctlv2_discovery.yaml` | discovery dump | discussion #33 | before set complete (795); `raw_find_lines_after` empty | ecoTEC/VRT380 ctlv2 variant | `test_community_issue_fixtures` | GOLDEN (before set) |
 | `arotherm_plus_2zone_discovery.yaml` | discovery dump | community (issue unknown) | yes (552 lines) | two-zone topology | `test_discovery_service` | GOLDEN |
@@ -73,6 +75,9 @@ rather than invented.
 | `flexotherm_ctlv2_cooling_discovery.yaml` | discovery dump | community (issue unknown) | yes (614 lines) | ctlv2 cooling | `test_discovery_service` | GOLDEN |
 | `arotherm_plus_hwc_run_discovery.yaml` | discovery dump | community (issue unknown) | yes (553 lines) | DHW run | `test_discovery_service` | GOLDEN |
 | `flexotherm_issue102_cooling_discovery.yaml` | discovery dump | issue #102 | yes (713 lines, v4) | Energy Manager State cooling (releaseCooling=1, RunDataStatuscode=0, Status00/07 absent) | `test_community_issue_fixtures` | GOLDEN |
+| `flexotherm_issue102_2026-09-12_161841_discovery.yaml` | discovery dump | issue #102 | yes (713 raw lines, v4) | Energy Manager State comparison capture | `test_fake_ebusd`, fixture integrity | GOLDEN |
+| `flexotherm_issue102_2026-09-16_103411_discovery.yaml` | discovery dump | issue #102 | yes (714 raw lines, v4) | automatic-DHW investigation; active interval absent | `test_fake_ebusd`, fixture integrity | GOLDEN |
+| `flexotherm_issue102_2026-09-17_090525_discovery.yaml` | discovery dump | issue #102 | yes (714 raw lines, v4) | five-minute automatic-DHW capture; only three grab lines | `test_fake_ebusd`, fixture integrity | GOLDEN (absence evidence only) |
 | `arotherm_plus_prenergy_discovery.yaml` | discovery dump | community (issue unknown) | yes (553 lines) | PrEnergy registers | `test_discovery_service` | GOLDEN |
 | `arotherm_basv_boost_on_discovery.yaml` | discovery dump | community (issue unknown) | yes (582 lines) | boost behavior | `test_boost_fixture` | GOLDEN |
 | `arotherm_basv_boost_off_discovery.yaml` | discovery dump | community (issue unknown) | yes (582 lines) | boost behavior | `test_boost_fixture` | GOLDEN |
@@ -104,9 +109,11 @@ resolution tests are valid for the resolution logic but are not real-world
 compatibility evidence; the real-dump regression is the golden fixture test in
 `test_boost_switch.py`.
 
-New authoritative fixtures: none added in RC3. RC2 added the two issue #99
-captures. RC3 adds no new captures because none were required, and adds a guard
-so future reductions of the existing golden fixtures are caught.
+New authoritative fixtures added after RC3: one full issue #101 v4 discovery
+dump and three full issue #102 v4 discovery dumps. The raw issue #101 grabs are
+preserved as research-only evidence because their deduplicated order cannot prove
+the transition sequence. Fixture integrity now checks the four new YAML captures
+for provenance and raw find lines.
 
 Removed in RC3 as unused (no test, script, or production reference):
 `tests/fixtures/arotherm_registers.json`,
