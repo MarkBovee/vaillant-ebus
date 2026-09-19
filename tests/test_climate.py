@@ -16,6 +16,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from tests import test_coordinator as tc  # noqa: F401 — installs shared HA mocks
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -110,6 +112,15 @@ sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
 mock_homeassistant.helpers.update_coordinator.CoordinatorEntity = _MockCoordinatorEntity
 mock_homeassistant.config_entries.ConfigEntry = object
 mock_homeassistant.core.HomeAssistant = object
+
+
+class _MockHomeAssistantError(Exception):
+    """Home Assistant service exception used by the climate write-contract tests."""
+
+
+exceptions_module = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.exceptions", None))
+exceptions_module.HomeAssistantError = _MockHomeAssistantError
+sys.modules["homeassistant.exceptions"] = exceptions_module
 
 const_module = sys.modules["vaillant_ebus.const"]
 const_module.CONF_COOLING_DURATION = "cooling_duration"
@@ -447,6 +458,43 @@ async def test_cool_and_boost_omitted_without_registers() -> None:
         assert "boost" not in z2.preset_modes
         assert HVACMode.COOL not in z1.hvac_modes
         assert "boost" not in z1.preset_modes
+
+
+# Auto temperature control must reject an unavailable veto capability before it writes either veto register.
+# Intent: BASS3 without Z1QuickVetoDuration raises a normal service error and leaves controller state untouched.
+# Why: writing only QuickVetoTemp neither starts a veto nor gives the caller a safe result;
+#      the duration write returns ERR.
+async def test_auto_temperature_rejects_missing_quick_veto_duration() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(full_parity=False),
+            data={"ebusd": {"ctlv2.Z1OpMode.value": "auto"}},
+        )
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        with pytest.raises(_MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
+            await z1.async_set_temperature(temperature=22.0)
+
+        coordinator.async_write_register.assert_not_awaited()
+        assert z1._quick_veto_until is None
+        assert z1._optimistic_target is None
+
+
+# Direct boost requests must use the same discovery capability gate as auto temperature writes.
+# Intent: missing QuickVetoDuration rejects BOOST and never emits a partial QuickVetoTemp write.
+# Why: hiding the preset alone does not protect callers that invoke the climate service directly.
+async def test_boost_rejects_missing_quick_veto_duration_without_writes() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, _graph_two_zone(full_parity=False))
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        with pytest.raises(ValueError, match="Unsupported preset: boost"):
+            await z1.async_set_preset_mode("boost")
+
+        coordinator.async_write_register.assert_not_awaited()
 
 
 # Intent: a zone with full parity offers COOL, HEAT, AUTO and all presets.

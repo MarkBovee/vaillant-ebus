@@ -18,6 +18,7 @@ from homeassistant.components.climate.const import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -173,10 +174,14 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     @property
     def preset_modes(self) -> list[str]:
         presets = [PRESET_NONE]
-        if self.coordinator.has_zone_register(self._circuit, self._zone, QUICK_VETO_DURATION_REGISTER):
+        if self._quick_veto_supported():
             presets.append(PRESET_BOOST)
         presets.append(PRESET_AWAY)
         return presets
+
+    # Require the duration register because temperature alone does not start a quick veto.
+    def _quick_veto_supported(self) -> bool:
+        return self.coordinator.has_zone_register(self._circuit, self._zone, QUICK_VETO_DURATION_REGISTER)
 
     # Current room temperature from the zone's room temp register
     @property
@@ -412,6 +417,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
                 self._schedule_confirm_refresh()
             return
         if self.hvac_mode == HVACMode.AUTO and not self._global_cooling_active():
+            if not self._quick_veto_supported():
+                raise HomeAssistantError(f"Quick veto is unavailable for {self._zn}")
             await self._start_quick_veto(float(temp))
             return
         ok = await self._write(f"{self._zn}DayTemp", str(temp))
@@ -503,8 +510,11 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
                 self._apply_optimistic_target(day_temp)
                 self._schedule_confirm_refresh()
 
-    # Start quick veto with specified temp or config-based default for N hours
-    async def _start_quick_veto(self, temp_override: float | None = None) -> None:
+    # Start quick veto with specified temp or config-based default for N hours.
+    async def _start_quick_veto(self, temp_override: float | None = None) -> bool:
+        if not self._quick_veto_supported():
+            _LOGGER.warning("Quick veto is unavailable for %s: duration register is absent", self._zn)
+            return False
         if temp_override is not None:
             veto_temp = temp_override
         else:
@@ -514,7 +524,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             if veto_temp is None and temp is not None:
                 veto_temp = round(temp, 1)
         if veto_temp is None:
-            return
+            return False
         options = self.coordinator._entry.options
         veto_duration = options.get("quick_veto_duration", 3)
         # A deliberate new veto ends any cancellation suppression.
@@ -529,13 +539,14 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
                 ok_temp,
                 ok_duration,
             )
-            return
+            return False
         self._quick_veto_until = datetime.now() + timedelta(hours=veto_duration)
         # Bridge the controller's apply latency: show the requested setpoint
         # immediately and pull confirming data after the settle window.
         self._apply_optimistic_target(float(veto_temp))
         self._schedule_confirm_refresh()
         self.async_write_ha_state()
+        return True
 
     # Start holiday period: set zone holiday start/end periods from today
     async def _start_holiday(self) -> None:
