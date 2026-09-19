@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.9.0 - 2026-09-19
+
+### Fixed
+
+- **Date-only holiday and manual-cooling controls now use the Home Assistant
+  `date` platform (issue #143).** Existing date-only `datetime` entities are
+  retired during config-entry migration, supported controls follow the
+  discovery graph, and controller reset dates remain unavailable rather than
+  appearing as armed cooling windows.
+
+### Changed
+
+- **Includes the v1.8.7 BASS3 climate-status fix.** Zone activity now takes
+  precedence over shared compressor activity, with pump status as a fallback.
+
 ## 1.8.7 - 2026-09-17
 
 ### Fixed
