@@ -9,12 +9,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry
 from homeassistant.helpers.device_registry import DeviceEntry
 
 from . import repairs  # noqa: F401 — registers issue translation keys
 from .const import DOMAIN, PLATFORMS
 from .coordinator import VaillantCoordinator
 from .dump_service import async_export_discovery_dump
+from .migration import remove_legacy_datetime_date_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -208,6 +210,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.config_entries.async_reload(entry.entry_id)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    return True
+
+
+# Remove obsolete datetime entities before the new date platform registers replacements.
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    if entry.version > 2:
+        return False
+    if entry.version < 2:
+        registry = entity_registry.async_get(hass)
+        remove_legacy_datetime_date_entities(registry, entry.entry_id, DOMAIN)
+        hass.config_entries.async_update_entry(entry, version=2)
     return True
 
 

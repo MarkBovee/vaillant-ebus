@@ -58,6 +58,7 @@ PLATFORMS = [
     Platform.CLIMATE,
     Platform.WATER_HEATER,
     Platform.CALENDAR,
+    Platform.DATE,
     Platform.DATETIME,
 ]
 
