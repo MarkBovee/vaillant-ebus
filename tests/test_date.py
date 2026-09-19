@@ -1,6 +1,6 @@
-"""Tests for the datetime platform write contract.
+"""Tests for the date platform write contract.
 
-The holiday datetime entities are hand-built (not generated from the discovery
+The holiday date entities are hand-built (not generated from the discovery
 graph), so nothing else pins that they address the resolved controller circuit
 with the right register and date serialization. These tests do exactly that,
 using a real discovery graph so the circuit resolution is exercised too.
@@ -13,7 +13,7 @@ from __future__ import annotations
 import importlib.machinery
 import importlib.util
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -26,8 +26,6 @@ PROJECT_ROOT = Path(__file__).parents[1]
 COMPONENT_PATH = PROJECT_ROOT / "custom_components/vaillant_ebus"
 
 mock_homeassistant = sys.modules["homeassistant"]
-
-_TZ = timezone(timedelta(hours=2))
 
 
 class _MockBaseEntity:
@@ -49,18 +47,11 @@ class _MockCoordinatorEntity(_MockBaseEntity):
         self.coordinator = coordinator
 
 
-datetime_pkg = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("homeassistant.components.datetime", None)
-)
-datetime_pkg.DateTimeEntity = _MockBaseEntity
-sys.modules["homeassistant.components.datetime"] = datetime_pkg
-mock_homeassistant.helpers.update_coordinator.CoordinatorEntity = _MockCoordinatorEntity
+date_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components.date", None))
+date_pkg.DateEntity = _MockBaseEntity
+sys.modules["homeassistant.components.date"] = date_pkg
 
-ha_util = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.util", None))
-ha_util.dt = MagicMock()
-ha_util.dt.DEFAULT_TIME_ZONE = _TZ
-sys.modules["homeassistant.util"] = ha_util
-mock_homeassistant.util = ha_util
+mock_homeassistant.helpers.update_coordinator.CoordinatorEntity = _MockCoordinatorEntity
 
 entity_platform = importlib.util.module_from_spec(
     importlib.machinery.ModuleSpec("homeassistant.helpers.entity_platform", None)
@@ -68,14 +59,14 @@ entity_platform = importlib.util.module_from_spec(
 entity_platform.AddEntitiesCallback = object
 sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
 
-DATETIME_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.datetime", COMPONENT_PATH / "datetime.py")
-assert DATETIME_SPEC and DATETIME_SPEC.loader
-DATETIME = importlib.util.module_from_spec(DATETIME_SPEC)
-sys.modules["vaillant_ebus.datetime"] = DATETIME
-DATETIME_SPEC.loader.exec_module(DATETIME)
+DATE_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.date", COMPONENT_PATH / "date.py")
+assert DATE_SPEC and DATE_SPEC.loader
+DATE = importlib.util.module_from_spec(DATE_SPEC)
+sys.modules["vaillant_ebus.date"] = DATE
+DATE_SPEC.loader.exec_module(DATE)
 
-EbusdHolidayEntity = DATETIME.EbusdHolidayEntity
-EbusdManualCoolingEntity = DATETIME.EbusdManualCoolingEntity
+EbusdHolidayEntity = DATE.EbusdHolidayEntity
+EbusdManualCoolingEntity = DATE.EbusdManualCoolingEntity
 
 
 def _ebusd_data_from_graph(graph) -> dict[str, str]:
@@ -128,20 +119,18 @@ def _manual_cooling_entity(coordinator) -> object:
     )
 
 
-# Date-only entities must declare their supported component for HA's datetime service schema.
-# Intent: writable holiday and manual-cooling entities expose dates, never times.
-# Why: without these attributes HA rejects datetime.set_value before the ebusd write path runs.
-def test_writable_datetime_entities_are_date_only() -> None:
-    assert EbusdHolidayEntity._attr_has_date is True
-    assert EbusdHolidayEntity._attr_has_time is False
-    assert EbusdManualCoolingEntity._attr_has_date is True
-    assert EbusdManualCoolingEntity._attr_has_time is False
+# Date-only controls use HA's date platform.
+# Intent: holiday/manual-cooling dates expose the date.set_value contract without a fake time component.
+# Why: DateTimeEntity only accepts timestamp values; date-only registers cannot implement that service correctly.
+def test_date_only_entities_use_date_platform() -> None:
+    assert issubclass(EbusdHolidayEntity, date_pkg.DateEntity)
+    assert issubclass(EbusdManualCoolingEntity, date_pkg.DateEntity)
 
 
 # The reporter's HMUX0/CTLV3 bus carries a stray runtime ctlv2 probe node, but
 # HwcHolidayStartPeriod is owned by ctlv3. The entity must resolve to ctlv3.
 # Intent: the DHW holiday entity reads and writes the resolved ctlv3 controller, not the stray ctlv2 node.
-# Why: guards the issue #99 controller-resolution fix on the hand-built datetime entities.
+# Why: guards the issue #99 controller-resolution fix on the hand-built date entities.
 def test_holiday_entity_targets_resolved_controller_circuit() -> None:
     coordinator = _graph_coordinator()
     assert coordinator.heating_circuit == "ctlv3"
@@ -149,24 +138,24 @@ def test_holiday_entity_targets_resolved_controller_circuit() -> None:
     assert entity.native_value is None  # 01.01.2015 is the unset sentinel
 
 
-# A real controller holiday date must surface as a timezone-aware datetime.
-# Intent: a valid ctlv3.HwcHolidayStartPeriod value decodes to a datetime at local midnight.
-# Why: pins the read contract so a future change cannot quietly return unknown for a set date.
+# A real controller holiday date must surface without a fabricated local time.
+# Intent: a valid ctlv3.HwcHolidayStartPeriod value decodes to a date.
+# Why: pins the date-platform contract so a future change cannot quietly return unknown for a set date.
 def test_holiday_entity_decodes_configured_date() -> None:
     coordinator = _graph_coordinator()
     coordinator.data["ebusd"]["ctlv3.HwcHolidayStartPeriod.value"] = "24.09.2026"
     entity = _dhw_holiday_entity(coordinator)
-    assert entity.native_value == datetime(2026, 9, 24, tzinfo=_TZ)
+    assert entity.native_value == date(2026, 9, 24)
 
 
 # The write contract: resolved circuit + register + DD.MM.YYYY serialization.
 # Intent: async_set_value writes ctlv3.HwcHolidayStartPeriod with a zero-padded DD.MM.YYYY date.
-# Why: the DateTimeEntity write path is untested; a wrong circuit, register, or format is the issue #99 failure mode.
+# Why: the date-platform write path is untested; a wrong circuit, register, or format is the issue #99 failure mode.
 async def test_holiday_entity_write_contract() -> None:
     coordinator = _graph_coordinator()
     entity = _dhw_holiday_entity(coordinator)
 
-    await entity.async_set_value(datetime(2026, 9, 24))
+    await entity.async_set_value(date(2026, 9, 24))
 
     coordinator.async_write_register.assert_awaited_once_with("ctlv3", "HwcHolidayStartPeriod", "24.09.2026")
 
@@ -178,7 +167,7 @@ async def test_holiday_entity_write_zero_pads_day() -> None:
     coordinator = _graph_coordinator()
     entity = _dhw_holiday_entity(coordinator)
 
-    await entity.async_set_value(datetime(2026, 9, 4))
+    await entity.async_set_value(date(2026, 9, 4))
 
     coordinator.async_write_register.assert_awaited_once_with("ctlv3", "HwcHolidayStartPeriod", "04.09.2026")
 
@@ -194,11 +183,11 @@ def test_manual_cooling_reset_dates_are_unset(value: str) -> None:
     assert _manual_cooling_entity(coordinator).native_value is None
 
 
-# A configured cooling date must remain a local midnight datetime after sentinel filtering.
+# A configured cooling date must remain a date after sentinel filtering.
 # Intent: manual cooling preserves valid controller dates.
 # Why: filtering reset dates must not turn a real cooling schedule into an unavailable entity.
 def test_manual_cooling_decodes_configured_date() -> None:
     coordinator = _graph_coordinator()
     coordinator.data["ebusd"]["ctlv3.ManualCoolingStartDate.value"] = "24.09.2026"
 
-    assert _manual_cooling_entity(coordinator).native_value == datetime(2026, 9, 24, tzinfo=_TZ)
+    assert _manual_cooling_entity(coordinator).native_value == date(2026, 9, 24)

@@ -1,4 +1,4 @@
-"""Datetime platform for quick veto end and holiday periods."""
+"""Datetime platform for the quick-veto end timestamp."""
 
 from __future__ import annotations
 
@@ -16,42 +16,14 @@ from .coordinator import VaillantCoordinator
 
 DATE_FMT = "%d.%m.%Y"
 TIME_FMT = "%H:%M:%S"
-HOLIDAY_RESET_VALUES = frozenset(("01.01.2015", "01.01.2019"))
-
-DEFAULT_TIME = "00:00:00"
-
-
-def _is_holiday_reset(value: object) -> bool:
-    """Return whether controller value represents an unset holiday period."""
-    return str(value) in HOLIDAY_RESET_VALUES
-
-HOLIDAY_ENTITIES = [
-    ("Z1 Holiday Start", "Z1HolidayStartPeriod", "mdi:calendar-start", "z1"),
-    ("Z1 Holiday End", "Z1HolidayEndPeriod", "mdi:calendar-end", "z1"),
-    ("DHW Holiday Start", "HwcHolidayStartPeriod", "mdi:calendar-start", "dhw"),
-    ("DHW Holiday End", "HwcHolidayEndPeriod", "mdi:calendar-end", "dhw"),
-]
-
-# Manual cooling period (myVaillant "cool until [date]"), read/write on ctlv2.
-MANUAL_COOLING_ENTITIES = [
-    ("Manual Cooling Start Date", "ManualCoolingStartDate", "mdi:snowflake", "ctlv2"),
-    ("Manual Cooling End Date", "ManualCoolingEndDate", "mdi:snowflake", "ctlv2"),
-]
-
-
-# Create datetime entities for quick veto end and holiday periods
+# Create the quick-veto timestamp entity.
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[DateTimeEntity] = [EbusdQuickVetoEndEntity(coordinator, entry)]
-    for name, register, icon, zone in HOLIDAY_ENTITIES:
-        entities.append(EbusdHolidayEntity(coordinator, entry, name, register, icon, zone))
-    for name, register, icon, zone in MANUAL_COOLING_ENTITIES:
-        entities.append(EbusdManualCoolingEntity(coordinator, entry, name, register, icon, zone))
-    async_add_entities(entities)
+    async_add_entities([EbusdQuickVetoEndEntity(coordinator, entry)])
 
 
 class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity):
@@ -79,105 +51,10 @@ class EbusdQuickVetoEndEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEn
             return None
         end_date = data.get(f"{c}.Z1QuickVetoEndDate.value")
         end_time = data.get(f"{c}.Z1QuickVetoEndTime.value")
-        if not end_date or not end_time or _is_holiday_reset(end_date):
+        if not end_date or not end_time or end_date in {"01.01.2015", "01.01.2019"}:
             return None
         try:
             naive = datetime.strptime(f"{end_date} {end_time}", f"{DATE_FMT} {TIME_FMT}")
             return naive.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
         except (ValueError, TypeError):
             return None
-
-
-class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity):
-    _attr_has_entity_name = True
-    _attr_has_date = True
-    _attr_has_time = False
-
-    # Initialize holiday date entity with register and zone mapping
-    def __init__(
-        self,
-        coordinator: VaillantCoordinator,
-        entry: ConfigEntry,
-        name: str,
-        register: str,
-        icon: str,
-        zone: str,
-    ) -> None:
-        super().__init__(coordinator)
-        self._register = register
-        self._attr_name = name
-        self._attr_icon = icon
-        self._attr_unique_id = f"{entry.entry_id}_{register.lower()}"
-        self._attr_device_info = coordinator.get_device_info(zone)
-
-    # Return holiday start/end date as datetime (time set to midnight)
-    @property
-    def native_value(self) -> datetime | None:
-        circuit = self.coordinator.heating_circuit
-        if circuit is None:
-            return None
-        raw = self.coordinator.data.get("ebusd", {}).get(f"{circuit}.{self._register}.value")
-        if not raw or _is_holiday_reset(raw):
-            return None
-        try:
-            naive = datetime.strptime(f"{raw} {DEFAULT_TIME}", f"{DATE_FMT} {TIME_FMT}")
-            return naive.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
-        except (ValueError, TypeError):
-            return None
-
-    # Write holiday date to ebusd register through the central write path
-    async def async_set_value(self, value: datetime) -> None:
-        circuit = self.coordinator.heating_circuit
-        if self.coordinator.ebus and circuit is not None:
-            await self.coordinator.async_write_register(
-                circuit, self._register, value.strftime(DATE_FMT)
-            )
-
-
-class EbusdManualCoolingEntity(CoordinatorEntity[VaillantCoordinator], DateTimeEntity):
-    """Manual cooling start/end date (myVaillant 'cool until [date]')."""
-
-    _attr_has_entity_name = True
-    _attr_has_date = True
-    _attr_has_time = False
-
-    def __init__(
-        self,
-        coordinator: VaillantCoordinator,
-        entry: ConfigEntry,
-        name: str,
-        register: str,
-        icon: str,
-        zone: str,
-    ) -> None:
-        super().__init__(coordinator)
-        self._register = register
-        self._attr_name = name
-        self._attr_icon = icon
-        self._attr_unique_id = f"{entry.entry_id}_{register.lower()}"
-        self._attr_device_info = coordinator.get_device_info(zone)
-
-    # Treat controller reset dates as an unset manual-cooling window.
-    @property
-    def native_value(self) -> datetime | None:
-        circuit = self.coordinator.heating_circuit
-        if circuit is None:
-            return None
-        raw = self.coordinator.data.get("ebusd", {}).get(f"{circuit}.{self._register}.value")
-        if (
-            not raw
-            or _is_holiday_reset(raw)
-            or str(raw) in ("-", "")
-            or str(raw).startswith(("ERR:", "no data stored"))
-        ):
-            return None
-        try:
-            naive = datetime.strptime(f"{raw} {DEFAULT_TIME}", f"{DATE_FMT} {TIME_FMT}")
-            return naive.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
-        except ValueError:
-            return None
-
-    async def async_set_value(self, value: datetime) -> None:
-        circuit = self.coordinator.heating_circuit
-        if self.coordinator.ebus and circuit is not None:
-            await self.coordinator.async_write_register(circuit, self._register, value.strftime(DATE_FMT))
