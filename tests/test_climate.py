@@ -162,7 +162,7 @@ def _coordinator(
     c._graph = graph
     if graph is not None:
         # Mirrors _apply_discovery_graph: the find set marks discovery complete.
-        c._last_find_keys = set(graph.raw_registers)
+        c._last_find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
     c.ebus = MagicMock()
     c.ebus.version = "23.2"
     c.data = data or {"ebusd": {}}
@@ -539,6 +539,76 @@ async def test_active_veto_rejects_missing_quick_veto_duration() -> None:
             await z1.async_set_temperature(temperature=22.0)
 
         coordinator.async_write_register.assert_not_awaited()
+
+
+# Clearing a stale boost must suppress its UI state without writing QuickVetoTemp on unsupported hardware.
+# Intent: preset cancellation follows the same duration capability gate as quick-veto starts and updates.
+# Why: BASS3 end-date cache data must not turn a normal clear action into the original unsupported write.
+async def test_boost_cancellation_rejects_missing_quick_veto_duration() -> None:
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%d.%m.%Y")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(full_parity=False),
+            data={
+                "ebusd": {
+                    "ctlv2.Z1OpMode.value": "auto",
+                    "ctlv2.Z1QuickVetoEndDate.value": tomorrow,
+                    "ctlv2.Z1QuickVetoEndTime.value": "23:59:00",
+                    "ctlv2.Z1DayTemp.value": "20.0",
+                }
+            },
+        )
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        await z1.async_set_preset_mode("none")
+
+        coordinator.async_write_register.assert_not_awaited()
+
+
+# Changing HVAC mode must also avoid the soft-cancel write when a stale boost is unsupported.
+# Intent: HEAT mode clears local boost state and writes only Z1OpMode on no-duration hardware.
+# Why: HVAC mode changes previously reached _cancel_quick_veto() independently of the preset service.
+async def test_hvac_mode_change_rejects_stale_boost_quick_veto_write() -> None:
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%d.%m.%Y")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(full_parity=False),
+            data={
+                "ebusd": {
+                    "ctlv2.Z1OpMode.value": "auto",
+                    "ctlv2.Z1QuickVetoEndDate.value": tomorrow,
+                    "ctlv2.Z1QuickVetoEndTime.value": "23:59:00",
+                    "ctlv2.Z1DayTemp.value": "20.0",
+                }
+            },
+        )
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        await z1.async_set_hvac_mode(HVACMode.HEAT)
+
+        calls = [(call.args[1], call.args[2]) for call in coordinator.async_write_register.await_args_list]
+        assert ("Z1QuickVetoTemp", "20.0") not in calls
+        assert ("Z1OpMode", "day") in calls
+
+
+# A provisional ctlv2 entity must resolve its capability against the discovered controller circuit.
+# Intent: post-discovery CTLV3 duration support remains available without recreating the climate entity.
+# Why: startup fallback entities keep their logical circuit while writes and capability checks
+#      must follow graph ownership.
+def test_quick_veto_capability_resolves_discovered_controller_circuit() -> None:
+    graph = tc.DISCOVERY.DiscoveryService.build_device_graph(
+        load_find_lines("community/arotherm_plus_2zone_discovery.yaml")
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, graph)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        assert coordinator.resolve_register_circuit("ctlv2") == "ctlv3"
+        assert z1._quick_veto_capability() is True
 
 
 # Direct boost requests must use the same discovery capability gate as auto temperature writes.

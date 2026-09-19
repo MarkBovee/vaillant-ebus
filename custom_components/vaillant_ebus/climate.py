@@ -181,7 +181,10 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Return the authoritative quick-veto capability once the zone discovery is complete.
     def _quick_veto_capability(self) -> bool | None:
-        return self.coordinator.zone_register_discovery_status(self._circuit, self._zone, QUICK_VETO_DURATION_REGISTER)
+        circuit = self.coordinator.resolve_register_circuit(self._circuit)
+        if circuit is None:
+            return None
+        return self.coordinator.zone_register_discovery_status(circuit, self._zone, QUICK_VETO_DURATION_REGISTER)
 
     # Explain whether discovery is pending or the controller lacks the required duration register.
     def _quick_veto_error(self, capability: bool | None) -> str:
@@ -513,6 +516,10 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if end is not None:
             self._boost_suppressed_end = end
         self.async_write_ha_state()
+        capability = self._quick_veto_capability()
+        if capability is not True:
+            _LOGGER.warning("%s", self._quick_veto_error(capability))
+            return
         day_temp = _float(_value(self.coordinator, f"{self._zn}DayTemp", self._circuit))
         if day_temp is not None:
             ok = await self._write(f"{self._zn}QuickVetoTemp", str(day_temp))

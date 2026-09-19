@@ -445,6 +445,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 self.registers[rk].has_data = True
 
         self._last_find_keys.update(graph.raw_registers)
+        self._last_find_keys.update(graph.placeholder_registers)
 
         # A cache-seeded rebuild at startup can carry registers the real bus no
         # longer exposes (e.g. a stale test register from an old CSV or session).
