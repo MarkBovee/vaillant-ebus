@@ -306,15 +306,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 return True
         return False
 
-    # Whether `circuit.<ZN><name>` was discovered on the bus. Both live values
-    # and no-data placeholders count as present: ebusd returns `no data stored`
-    # for registers the hardware supports while they are idle. Until a real
-    # discovery has populated the find set, absence is not proof of hardware
-    # absence (cache-seeded graphs only carry live values), so the register is
-    # assumed present to preserve the pre-per-zone behavior.
-    def has_zone_register(self, circuit: str, zone: str, name: str) -> bool:
+    # Return whether a zone register is supported, unsupported, or not discovered yet.
+    def zone_register_discovery_status(self, circuit: str, zone: str, name: str) -> bool | None:
         if self._graph is None or not self._last_find_keys:
-            return True
+            return None
         key = f"{circuit}.{zone.upper()}{name}"
         if key in self._graph.raw_registers or key in self._graph.placeholder_registers:
             return True
@@ -322,6 +317,11 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         return any(rk.lower() == lower for rk in self._graph.raw_registers) or any(
             rk.lower() == lower for rk in self._graph.placeholder_registers
         )
+
+    # Preserve optimistic pre-discovery UI feature visibility for non-write capabilities.
+    def has_zone_register(self, circuit: str, zone: str, name: str) -> bool:
+        status = self.zone_register_discovery_status(circuit, zone, name)
+        return status is not False
 
     # Whether a controller-owned register exists on the discovered controller circuit.
     def has_controller_register(self, name: str) -> bool:

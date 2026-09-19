@@ -174,14 +174,20 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     @property
     def preset_modes(self) -> list[str]:
         presets = [PRESET_NONE]
-        if self._quick_veto_supported():
+        if self._quick_veto_capability() is True:
             presets.append(PRESET_BOOST)
         presets.append(PRESET_AWAY)
         return presets
 
-    # Require the duration register because temperature alone does not start a quick veto.
-    def _quick_veto_supported(self) -> bool:
-        return self.coordinator.has_zone_register(self._circuit, self._zone, QUICK_VETO_DURATION_REGISTER)
+    # Return the authoritative quick-veto capability once the zone discovery is complete.
+    def _quick_veto_capability(self) -> bool | None:
+        return self.coordinator.zone_register_discovery_status(self._circuit, self._zone, QUICK_VETO_DURATION_REGISTER)
+
+    # Explain whether discovery is pending or the controller lacks the required duration register.
+    def _quick_veto_error(self, capability: bool | None) -> str:
+        if capability is None:
+            return f"Quick veto capability is unavailable until discovery completes for {self._zn}"
+        return f"Quick veto is unavailable for {self._zn}"
 
     # Current room temperature from the zone's room temp register
     @property
@@ -411,14 +417,18 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if temp is None:
             return
         if self.preset_mode == PRESET_BOOST:
+            capability = self._quick_veto_capability()
+            if capability is not True:
+                raise HomeAssistantError(self._quick_veto_error(capability))
             ok = await self._write(f"{self._zn}QuickVetoTemp", str(temp))
             if ok:
                 self._apply_optimistic_target(float(temp))
                 self._schedule_confirm_refresh()
             return
         if self.hvac_mode == HVACMode.AUTO and not self._global_cooling_active():
-            if not self._quick_veto_supported():
-                raise HomeAssistantError(f"Quick veto is unavailable for {self._zn}")
+            capability = self._quick_veto_capability()
+            if capability is not True:
+                raise HomeAssistantError(self._quick_veto_error(capability))
             await self._start_quick_veto(float(temp))
             return
         ok = await self._write(f"{self._zn}DayTemp", str(temp))
@@ -512,8 +522,9 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Start quick veto with specified temp or config-based default for N hours.
     async def _start_quick_veto(self, temp_override: float | None = None) -> bool:
-        if not self._quick_veto_supported():
-            _LOGGER.warning("Quick veto is unavailable for %s: duration register is absent", self._zn)
+        capability = self._quick_veto_capability()
+        if capability is not True:
+            _LOGGER.warning("%s", self._quick_veto_error(capability))
             return False
         if temp_override is not None:
             veto_temp = temp_override

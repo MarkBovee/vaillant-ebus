@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from tests import test_coordinator as tc  # noqa: F401 — installs shared HA mocks
+from tests.fake_ebusd import load_find_lines
 
 PROJECT_ROOT = Path(__file__).parents[1]
 COMPONENT_PATH = PROJECT_ROOT / "custom_components/vaillant_ebus"
@@ -482,6 +483,64 @@ async def test_auto_temperature_rejects_missing_quick_veto_duration() -> None:
         assert z1._optimistic_target is None
 
 
+# The reported BASS3 capture must retain the no-duration path that caused the original HTTP 500.
+# Intent: the real GeniaSet BASS3 discovery graph rejects an AUTO setpoint without a QuickVeto write.
+# Why: synthetic absence alone could miss the controller circuit and placeholder behavior in the community evidence.
+async def test_bass3_fixture_rejects_quick_veto_without_duration() -> None:
+    graph = tc.DISCOVERY.DiscoveryService.build_device_graph(load_find_lines("community/geniaset_bass3_discovery.yaml"))
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, graph, data={"ebusd": {"bass.Z1OpMode.value": "auto"}})
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "bass")
+
+        assert coordinator.zone_register_discovery_status("bass", "z1", "QuickVetoDuration") is False
+        with pytest.raises(_MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
+            await z1.async_set_temperature(temperature=22.0)
+
+        coordinator.async_write_register.assert_not_awaited()
+
+
+# Startup cache data must not authorize a bus write before a real find response proves duration support.
+# Intent: an unknown quick-veto capability returns a discovery error without any partial register write.
+# Why: BASS3 can load its climate entity from cache before authoritative discovery exposes the absent duration register.
+async def test_auto_temperature_rejects_quick_veto_before_discovery() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, None, data={"ebusd": {"ctlv2.Z1OpMode.value": "auto"}})
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        with pytest.raises(_MockHomeAssistantError, match="until discovery completes"):
+            await z1.async_set_temperature(temperature=22.0)
+
+        coordinator.async_write_register.assert_not_awaited()
+
+
+# A stale device-side veto must not bypass the duration capability gate during a target update.
+# Intent: a reported future veto without discovered duration support rejects QuickVetoTemp writes.
+# Why: the BASS3 failure path must remain safe even when cached end-date data resembles an active boost.
+async def test_active_veto_rejects_missing_quick_veto_duration() -> None:
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%d.%m.%Y")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(full_parity=False),
+            data={
+                "ebusd": {
+                    "ctlv2.Z1OpMode.value": "auto",
+                    "ctlv2.Z1QuickVetoEndDate.value": tomorrow,
+                    "ctlv2.Z1QuickVetoEndTime.value": "23:59:00",
+                }
+            },
+        )
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        with pytest.raises(_MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
+            await z1.async_set_temperature(temperature=22.0)
+
+        coordinator.async_write_register.assert_not_awaited()
+
+
 # Direct boost requests must use the same discovery capability gate as auto temperature writes.
 # Intent: missing QuickVetoDuration rejects BOOST and never emits a partial QuickVetoTemp write.
 # Why: hiding the preset alone does not protect callers that invoke the climate service directly.
@@ -540,10 +599,10 @@ async def test_ghost_zone_gets_no_climate_entity() -> None:
         }
 
 
-# Intent: with no discovery graph yet, setup falls back to z1 with full
-# features (COOL/BOOST assumed present), preserving pre-per-zone behavior.
-# Why: prevents a cold start before discovery from stripping COOL/BOOST off the legacy z1 entity.
-async def test_setup_with_empty_graph_keeps_z1_full_features() -> None:
+# Intent: with no discovery graph yet, setup keeps the z1 climate entity and cooling UI,
+# while withholding BOOST until the duration register is confirmed.
+# Why: a quick-veto write is unsafe before discovery, but the non-writing cooling UI retains legacy startup behavior.
+async def test_setup_with_empty_graph_defers_boost_until_discovery() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, None, _setup_data())
         hass = MagicMock()
@@ -555,7 +614,7 @@ async def test_setup_with_empty_graph_keeps_z1_full_features() -> None:
         z1 = added[0]
         assert z1._attr_unique_id == "entry-1_climate_z1"
         assert HVACMode.COOL in z1.hvac_modes
-        assert "boost" in z1.preset_modes
+        assert "boost" not in z1.preset_modes
 
 
 # Intent: zones discovered after setup still get their climate entities via the
