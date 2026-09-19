@@ -83,7 +83,7 @@ async def _probe_candidate(host: str, port: int = DISCOVERY_PORT) -> tuple[str, 
 
 
 class VaillantConfigFlow(ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+    VERSION = 2
 
     # User-facing config step: probe host or auto-discover, then confirm
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:

@@ -323,6 +323,21 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             rk.lower() == lower for rk in self._graph.placeholder_registers
         )
 
+    # Whether a controller-owned register exists on the discovered controller circuit.
+    def has_controller_register(self, name: str) -> bool:
+        if self._graph is None or not self._last_find_keys:
+            return False
+        circuit = self.heating_circuit
+        if circuit is None:
+            return False
+        key = f"{circuit}.{name}"
+        if key in self._graph.raw_registers or key in self._graph.placeholder_registers:
+            return True
+        lower = key.lower()
+        return any(rk.lower() == lower for rk in self._graph.raw_registers) or any(
+            rk.lower() == lower for rk in self._graph.placeholder_registers
+        )
+
     async def _async_seed_entities_from_cache(self) -> None:
         cache = await self._async_load_cache()
         find_lines: list[str] = []

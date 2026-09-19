@@ -96,13 +96,19 @@ class _GraphCoordinator:
     def get_device_info(self, *_args):
         return {"identifiers": {("vaillant_ebus", "dhw")}}
 
+    # Mirror the production discovery gate against this test graph.
+    def has_controller_register(self, name: str) -> bool:
+        circuit = self.heating_circuit
+        return circuit is not None and f"{circuit}.{name}" in self._graph.raw_registers
+
 
 def _graph_coordinator(fixture: str = "community/hmux0_issue99_2026-09-10_173229.yaml") -> _GraphCoordinator:
     graph = tc.DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
     return _GraphCoordinator(graph, _ebusd_data_from_graph(graph))
 
 
-def _dhw_holiday_entity(coordinator) -> object:
+# Build the controller-owned DHW holiday entity used by the write-contract tests.
+def _dhw_holiday_entity(coordinator: _GraphCoordinator) -> EbusdHolidayEntity:
     entry = MagicMock()
     entry.entry_id = "entry-1"
     return EbusdHolidayEntity(
@@ -111,7 +117,7 @@ def _dhw_holiday_entity(coordinator) -> object:
 
 
 # Build a manual-cooling entity with the same resolved-controller test harness as holiday entities.
-def _manual_cooling_entity(coordinator) -> object:
+def _manual_cooling_entity(coordinator: _GraphCoordinator) -> EbusdManualCoolingEntity:
     entry = MagicMock()
     entry.entry_id = "entry-1"
     return EbusdManualCoolingEntity(
@@ -125,6 +131,25 @@ def _manual_cooling_entity(coordinator) -> object:
 def test_date_only_entities_use_date_platform() -> None:
     assert issubclass(EbusdHolidayEntity, date_pkg.DateEntity)
     assert issubclass(EbusdManualCoolingEntity, date_pkg.DateEntity)
+
+
+# Date entities follow the discovery graph rather than creating virtual calendar controls.
+# Intent: only registers present on the resolved controller produce a date entity.
+# Why: an unavailable register is not proof that the hardware supports a writable date control.
+async def test_date_platform_creates_only_discovered_registers() -> None:
+    coordinator = MagicMock()
+    coordinator.has_controller_register.side_effect = lambda register: register == "HwcHolidayStartPeriod"
+    entry = MagicMock()
+    entry.entry_id = "entry-1"
+    hass = MagicMock()
+    hass.data = {DATE.DOMAIN: {entry.entry_id: coordinator}}
+    entities: list[object] = []
+
+    await DATE.async_setup_entry(hass, entry, entities.extend)
+
+    assert len(entities) == 1
+    assert isinstance(entities[0], EbusdHolidayEntity)
+    assert entities[0]._register == "HwcHolidayStartPeriod"
 
 
 # The reporter's HMUX0/CTLV3 bus carries a stray runtime ctlv2 probe node, but

@@ -38,9 +38,11 @@ async def async_setup_entry(
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities: list[DateEntity] = []
     for name, register, icon, zone in HOLIDAY_ENTITIES:
-        entities.append(EbusdHolidayEntity(coordinator, entry, name, register, icon, zone))
+        if coordinator.has_controller_register(register):
+            entities.append(EbusdHolidayEntity(coordinator, entry, name, register, icon, zone))
     for name, register, icon, zone in MANUAL_COOLING_ENTITIES:
-        entities.append(EbusdManualCoolingEntity(coordinator, entry, name, register, icon, zone))
+        if coordinator.has_controller_register(register):
+            entities.append(EbusdManualCoolingEntity(coordinator, entry, name, register, icon, zone))
     async_add_entities(entities)
 
 
