@@ -16,7 +16,7 @@ gate opens, because those change cross-cutting unit or state semantics.
 | Class | Item | Evidence and intended outcome |
 | --- | --- | --- |
 | Must | #143 date-only entities | Completed in #145: the supported `DateEntity` contract replaces the unsupported capability-attribute approach, with an approved config-entry migration that retires the six replaced `datetime.*` entries. |
-| Must | #142 BASS3 Quick Veto capability | Prevent Boost and Auto-mode quick-veto writes when the discovered controller lacks a writable `ZxQuickVetoDuration`. Never silently fall back to a permanent DayTemp write or report a partial veto as successful. |
+| Must | #142 BASS3 Quick Veto capability | Completed: Boost, AUTO target writes, stale-veto updates, and cancellation require authoritative duration-register discovery on the resolved controller circuit. Unknown or absent capability yields a normal HA error without any `QuickVeto*` write. |
 | Must | Release hygiene | Start from current `origin/main`, retain only active local branches, create `release/v1.9.0`, and keep the version sources consistent when the scope is implemented. |
 | Must | Inbox and capture intake | Refresh `.gh-inbox-state.json` without duplicate replies, download complete new issue captures with provenance, and add fixture-load coverage before using any community data in production. |
 | Should | #141 electrical-energy units | Evidence gate first. Determine B516 day/total units and scaling per scan identity from complete captures, upstream layouts, and two readings on one day. Implement only a scan-gated mapping that preserves Home Assistant statistics semantics. |
@@ -28,7 +28,7 @@ gate opens, because those change cross-cutting unit or state semantics.
 
 1. Sync and cleanup (light): fetch/prune, resolve the duplicate local `main` merge safely, preserve branches that back an open PR or a release, and create work from `origin/main`.
 2. #143 date-platform migration (standard): completed in #145 and included in this branch. Keep its date-service, registry-retirement, discovery-gating, and delayed-discovery regressions green.
-3. Quick Veto (#142, deep): make one discovery-driven capability check feed both exposed presets and all quick-veto write paths. Add BASS3/no-duration and supported-controller regression cases.
+3. Quick Veto (#142, deep): completed with a tri-state discovery gate across every quick-veto write path. Regression coverage includes BASS3/no-duration, startup unknown state, placeholder-only support, CTLV3 resolution, stale boost updates, cancellation, and supported controllers.
 4. Capture evidence (standard): download every issue attachment that is newer than the checked-in fixture inventory. Preserve raw data and provenance under `tests/fixtures/community/`; load-test each fixture and record candidate evidence before proposing a register/state change.
 5. Evidence gates (#141 and #102, deep if opened): implement only confirmed or strong-assumption mappings with hardware scope, a safe absent path, and fixture-backed regressions. Otherwise record the specific missing evidence and keep the item deferred.
 6. Release preparation (standard): version is now reserved as `1.9.0`; keep release notes current, run the complete test matrix, then request separate review, audit, and release-gate decisions before tagging.

@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- **Quick Veto is unavailable rather than partially written on controllers
+  without `ZxQuickVetoDuration` (issue #142).** Boost, AUTO target updates,
+  stale-veto updates, and cancellation now wait for authoritative discovery of
+  the duration register on the resolved controller circuit. This prevents the
+  BASS3 HTTP 500 and never writes `QuickVetoTemp` by itself.
+
 - **Date-only holiday and manual-cooling controls now use the Home Assistant
   `date` platform (issue #143).** Existing date-only `datetime` entities are
   retired during config-entry migration, supported controls follow the
