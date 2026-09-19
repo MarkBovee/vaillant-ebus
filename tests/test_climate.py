@@ -82,9 +82,7 @@ class _UnitOfTemperature:
 
 
 components_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components", None))
-climate_pkg = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("homeassistant.components.climate", None)
-)
+climate_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components.climate", None))
 climate_const = importlib.util.module_from_spec(
     importlib.machinery.ModuleSpec("homeassistant.components.climate.const", None)
 )
@@ -413,12 +411,8 @@ def test_future_holiday_period_is_not_away_and_active_period_is_away() -> None:
         "ctlv2.Z1HolidayEndPeriod.value": (today + timedelta(days=1)).strftime("%d.%m.%Y"),
     }
     with tempfile.TemporaryDirectory() as tmpdir:
-        future_zone = EbusdClimate(
-            _coordinator(tmpdir, _graph_two_zone(), {"ebusd": future}), _entry(), "z1", "ctlv2"
-        )
-        active_zone = EbusdClimate(
-            _coordinator(tmpdir, _graph_two_zone(), {"ebusd": active}), _entry(), "z1", "ctlv2"
-        )
+        future_zone = EbusdClimate(_coordinator(tmpdir, _graph_two_zone(), {"ebusd": future}), _entry(), "z1", "ctlv2")
+        active_zone = EbusdClimate(_coordinator(tmpdir, _graph_two_zone(), {"ebusd": active}), _entry(), "z1", "ctlv2")
 
         assert future_zone.preset_mode == "none"
         assert active_zone.preset_mode == "away"
@@ -589,6 +583,51 @@ async def test_hvac_action_uses_shared_compressor_state() -> None:
                     "ctlv2.Z2OpMode.value": "day",
                 }
             },
+        )
+        z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
+        assert z2.hvac_action == HVACAction.HEATING
+
+
+# Intent: an active heating circuit reports heating without a global compressor status.
+# Why: BASS3/gas-boiler systems expose the circuit status but no usable heat-pump status.
+async def test_hvac_action_uses_active_zone_status_without_global_compressor() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(),
+            data={"ebusd": {"ctlv2.Hc2Status.value": "1", "ctlv2.Z2OpMode.value": "day"}},
+        )
+        z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
+        assert z2.hvac_action == HVACAction.HEATING
+
+
+# Intent: an explicitly inactive zone stays idle while another circuit is active.
+# Why: the zone status must override the shared compressor state for per-zone climate actions.
+async def test_hvac_action_uses_inactive_zone_status_over_global_compressor() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(),
+            data={
+                "ebusd": {
+                    "hmu.RunDataStatuscode.value": "heat_compressor_active",
+                    "ctlv2.Hc2Status.value": "0",
+                    "ctlv2.Z2OpMode.value": "day",
+                }
+            },
+        )
+        z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
+        assert z2.hvac_action == HVACAction.IDLE
+
+
+# Intent: pump activity supplies the zone action when the circuit status is unavailable.
+# Why: some controllers expose a readable pump register but no usable HcNStatus value.
+async def test_hvac_action_falls_back_to_zone_pump_status() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(),
+            data={"ebusd": {"ctlv2.Hc2PumpStatus.value": "running", "ctlv2.Z2OpMode.value": "day"}},
         )
         z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
         assert z2.hvac_action == HVACAction.HEATING
