@@ -59,6 +59,12 @@ The duplicate #102 upload with attachment IDs `32323735` and `32324072` has the
 same SHA-256 (`f24a5d76854b6c019a72548bf44ed75a467b9931d031d2de788a9a51a881c7ea`)
 and is stored once.
 
+## Upstream research, 2026-09-19
+
+- **#141:** upstream [`_templates.tsp`](https://github.com/john30/ebusd-configuration/blob/9c3ed3a0d487dc5898c611ab18f8313792659020/src/vaillant/_templates.tsp#L406-L409), [issue #490](https://github.com/john30/ebusd-configuration/issues/490#issuecomment-2817275259), and [PR #670](https://github.com/john30/ebusd-configuration/pull/670) support one B516 `EXP / 1000 → kWh` representation for both day and total counters. This conflicts with #141's locally scaled ebusd output, so the item is unresolved rather than a strong assumption. The reporter was asked for `scan.08`, verbose definitions, and forced reads to identify the local scaling layer.
+- **#102:** [PR #598](https://github.com/john30/ebusd-configuration/pull/598) confirms a `Status07` DHW signal only for HW5103. The issue #102 HMU00 SW0308/HW0403 captures expose neither that message nor an active automatic-DHW transition. No state mapping is safe until a before/active/after automatic-DHW capture contains a distinct passive signal.
+- **#101:** [issue #641](https://github.com/john30/ebusd-configuration/issues/641) contains the B508 broadcast family but no `B508/0209` decode, while the confirmed `Status07` Quiet layouts in [PR #614](https://github.com/john30/ebusd-configuration/pull/614) and [PR #660](https://github.com/john30/ebusd-configuration/pull/660) are HW5103-specific. HMUX0 SW0406/HW0504 Quiet mode remains discovery-only until ordered transition and startup-cache evidence exists.
+
 ## Required validation
 
 Run the focused tests after each stage, then before merge/release run:
