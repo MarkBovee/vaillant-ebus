@@ -44,8 +44,10 @@ gate opens, because those change cross-cutting unit or state semantics.
 
 ## New capture inventory
 
-All captures below were downloaded unchanged from their public issue attachments.
-They are community evidence, never local live verification.
+All capture content below was preserved from public issue attachments. Git
+normalizes the three raw #101 grab files from CRLF to LF line endings; telegram
+content, line order, and counts are unchanged. They are community evidence,
+never local live verification.
 
 | Issue | Fixture or raw capture | Evidence and classification |
 | --- | --- | --- |
