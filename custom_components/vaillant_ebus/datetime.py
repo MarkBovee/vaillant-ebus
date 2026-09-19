@@ -157,13 +157,19 @@ class EbusdManualCoolingEntity(CoordinatorEntity[VaillantCoordinator], DateTimeE
         self._attr_unique_id = f"{entry.entry_id}_{register.lower()}"
         self._attr_device_info = coordinator.get_device_info(zone)
 
+    # Treat controller reset dates as an unset manual-cooling window.
     @property
     def native_value(self) -> datetime | None:
         circuit = self.coordinator.heating_circuit
         if circuit is None:
             return None
         raw = self.coordinator.data.get("ebusd", {}).get(f"{circuit}.{self._register}.value")
-        if not raw or _is_holiday_reset(raw) or str(raw) in ("-", "") or str(raw).startswith(("ERR:", "no data stored")):
+        if (
+            not raw
+            or _is_holiday_reset(raw)
+            or str(raw) in ("-", "")
+            or str(raw).startswith(("ERR:", "no data stored"))
+        ):
             return None
         try:
             naive = datetime.strptime(f"{raw} {DEFAULT_TIME}", f"{DATE_FMT} {TIME_FMT}")

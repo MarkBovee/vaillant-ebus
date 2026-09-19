@@ -17,6 +17,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from tests import test_coordinator as tc  # noqa: F401 — installs shared HA mocks
 from tests.fake_ebusd import load_find_lines
 
@@ -73,6 +75,7 @@ sys.modules["vaillant_ebus.datetime"] = DATETIME
 DATETIME_SPEC.loader.exec_module(DATETIME)
 
 EbusdHolidayEntity = DATETIME.EbusdHolidayEntity
+EbusdManualCoolingEntity = DATETIME.EbusdManualCoolingEntity
 
 
 def _ebusd_data_from_graph(graph) -> dict[str, str]:
@@ -114,6 +117,25 @@ def _dhw_holiday_entity(coordinator) -> object:
     return EbusdHolidayEntity(
         coordinator, entry, "DHW Holiday Start", "HwcHolidayStartPeriod", "mdi:calendar-start", "dhw"
     )
+
+
+# Build a manual-cooling entity with the same resolved-controller test harness as holiday entities.
+def _manual_cooling_entity(coordinator) -> object:
+    entry = MagicMock()
+    entry.entry_id = "entry-1"
+    return EbusdManualCoolingEntity(
+        coordinator, entry, "Manual Cooling Start Date", "ManualCoolingStartDate", "mdi:snowflake", "ctlv2"
+    )
+
+
+# Date-only entities must declare their supported component for HA's datetime service schema.
+# Intent: writable holiday and manual-cooling entities expose dates, never times.
+# Why: without these attributes HA rejects datetime.set_value before the ebusd write path runs.
+def test_writable_datetime_entities_are_date_only() -> None:
+    assert EbusdHolidayEntity._attr_has_date is True
+    assert EbusdHolidayEntity._attr_has_time is False
+    assert EbusdManualCoolingEntity._attr_has_date is True
+    assert EbusdManualCoolingEntity._attr_has_time is False
 
 
 # The reporter's HMUX0/CTLV3 bus carries a stray runtime ctlv2 probe node, but
@@ -159,3 +181,24 @@ async def test_holiday_entity_write_zero_pads_day() -> None:
     await entity.async_set_value(datetime(2026, 9, 4))
 
     coordinator.async_write_register.assert_awaited_once_with("ctlv3", "HwcHolidayStartPeriod", "04.09.2026")
+
+
+# Controller reset dates do not describe an armed manual-cooling period.
+# Intent: manual cooling treats both known reset sentinels as unavailable.
+# Why: the controller emits either sentinel after clearing a cooling window, not a real 2015/2019 schedule.
+@pytest.mark.parametrize("value", ("01.01.2015", "01.01.2019"))
+def test_manual_cooling_reset_dates_are_unset(value: str) -> None:
+    coordinator = _graph_coordinator()
+    coordinator.data["ebusd"]["ctlv3.ManualCoolingStartDate.value"] = value
+
+    assert _manual_cooling_entity(coordinator).native_value is None
+
+
+# A configured cooling date must remain a local midnight datetime after sentinel filtering.
+# Intent: manual cooling preserves valid controller dates.
+# Why: filtering reset dates must not turn a real cooling schedule into an unavailable entity.
+def test_manual_cooling_decodes_configured_date() -> None:
+    coordinator = _graph_coordinator()
+    coordinator.data["ebusd"]["ctlv3.ManualCoolingStartDate.value"] = "24.09.2026"
+
+    assert _manual_cooling_entity(coordinator).native_value == datetime(2026, 9, 24, tzinfo=_TZ)
