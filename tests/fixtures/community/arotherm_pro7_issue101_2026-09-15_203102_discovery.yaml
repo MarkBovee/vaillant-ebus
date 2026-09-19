@@ -7,6 +7,8 @@ metadata:
   grab_duration: 60
   dump_version: 4
   integration_version: 1.8.2
+  source: https://github.com/user-attachments/files/32255148/discovery_dump_2026-09-15_203102Whisper.switch.no.heat.yaml
+  source_sha256: 5a1d38d2827be6c7ae64bf10579225462b24f688b6f966aa2503678ad78092fe
   ebusd_info:
     version: ebusd 26.1.26.1
   ebusd_configuration:

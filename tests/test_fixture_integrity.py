@@ -24,6 +24,24 @@ ISSUE99_DUMPS = (
 )
 
 ISSUE129_DUMP = "community/saunier_duval_f34_issue129_discovery.yaml"
+NEW_CAPTURE_PROVENANCE = {
+    "community/arotherm_pro7_issue101_2026-09-15_203102_discovery.yaml": (
+        "https://github.com/user-attachments/files/32255148/discovery_dump_2026-09-15_203102Whisper.switch.no.heat.yaml",
+        "5a1d38d2827be6c7ae64bf10579225462b24f688b6f966aa2503678ad78092fe",
+    ),
+    "community/flexotherm_issue102_2026-09-12_161841_discovery.yaml": (
+        "https://github.com/user-attachments/files/32144671/discovery_dump_2026-09-12_161841.yaml",
+        "f9066c18ac4dd667b70742c61f3fb28703c8057bf1b97571e8fe07a7909648a2",
+    ),
+    "community/flexotherm_issue102_2026-09-16_103411_discovery.yaml": (
+        "https://github.com/user-attachments/files/32278895/discovery_dump_2026-09-16_103411.yaml",
+        "52f02d20da8af282cea92a1c346a04880b511c0340821b1a7bacefa353a18e9c",
+    ),
+    "community/flexotherm_issue102_2026-09-17_090525_discovery.yaml": (
+        "https://github.com/user-attachments/files/32323735/discovery_dump_2026-09-17_090525.yaml",
+        "f24a5d76854b6c019a72548bf44ed75a467b9931d031d2de788a9a51a881c7ea",
+    ),
+}
 
 
 # Intent: the real issue #99 captures keep the spurious ctlv2 records that reproduce the DHW routing bug.
@@ -105,3 +123,14 @@ def test_discovery_dump_fixtures_carry_provenance_and_lines() -> None:
         assert metadata.get("dump_version") or metadata.get("source"), (
             f"{path.name} lacks provenance metadata (dump_version/source)"
         )
+
+
+# Intent: new issue captures retain their immutable attachment reference and original content digest.
+# Why: dump_version describes the format, while source metadata proves which community capture justified the evidence.
+@pytest.mark.parametrize(("fixture", "expected"), NEW_CAPTURE_PROVENANCE.items())
+def test_new_capture_provenance_matches_downloaded_attachment(fixture: str, expected: tuple[str, str]) -> None:
+    source, source_sha256 = expected
+    metadata = load_discovery_dump(fixture)["metadata"]
+
+    assert metadata["source"] == source
+    assert metadata["source_sha256"] == source_sha256

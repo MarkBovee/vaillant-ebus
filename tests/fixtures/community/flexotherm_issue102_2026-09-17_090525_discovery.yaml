@@ -7,6 +7,8 @@ metadata:
   grab_duration: 300
   dump_version: 4
   integration_version: 1.8.3
+  source: https://github.com/user-attachments/files/32323735/discovery_dump_2026-09-17_090525.yaml
+  source_sha256: f24a5d76854b6c019a72548bf44ed75a467b9931d031d2de788a9a51a881c7ea
   ebusd_info:
     version: ebusd 26.1.26.1
     update check: OK
