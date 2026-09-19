@@ -13,6 +13,7 @@ from __future__ import annotations
 import importlib.machinery
 import importlib.util
 import sys
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -146,6 +147,33 @@ async def test_date_platform_creates_only_discovered_registers() -> None:
     entities: list[object] = []
 
     await DATE.async_setup_entry(hass, entry, entities.extend)
+
+    assert len(entities) == 1
+    assert isinstance(entities[0], EbusdHolidayEntity)
+    assert entities[0]._register == "HwcHolidayStartPeriod"
+
+
+# Delayed discovery must still add date entities exactly once after the platform has loaded.
+# Intent: post-discovery registration creates a supported entity when cold-start setup sees no registers yet.
+# Why: discovery runs asynchronously, so a one-time platform setup check would otherwise lose all date controls.
+async def test_date_platform_adds_entities_after_delayed_discovery() -> None:
+    callbacks: list[Callable[[], None]] = []
+    coordinator = MagicMock()
+    coordinator.has_controller_register.return_value = False
+    coordinator.register_post_discovery_callback.side_effect = callbacks.append
+    entry = MagicMock()
+    entry.entry_id = "entry-1"
+    hass = MagicMock()
+    hass.data = {DATE.DOMAIN: {entry.entry_id: coordinator}}
+    entities: list[object] = []
+
+    await DATE.async_setup_entry(hass, entry, entities.extend)
+
+    assert entities == []
+    assert len(callbacks) == 1
+    coordinator.has_controller_register.side_effect = lambda register: register == "HwcHolidayStartPeriod"
+    callbacks[0]()
+    callbacks[0]()
 
     assert len(entities) == 1
     assert isinstance(entities[0], EbusdHolidayEntity)

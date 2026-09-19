@@ -36,14 +36,24 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[DateEntity] = []
-    for name, register, icon, zone in HOLIDAY_ENTITIES:
-        if coordinator.has_controller_register(register):
-            entities.append(EbusdHolidayEntity(coordinator, entry, name, register, icon, zone))
-    for name, register, icon, zone in MANUAL_COOLING_ENTITIES:
-        if coordinator.has_controller_register(register):
-            entities.append(EbusdManualCoolingEntity(coordinator, entry, name, register, icon, zone))
-    async_add_entities(entities)
+    added_registers: set[str] = set()
+
+    # Add each date control once its backing register appears in the discovery graph.
+    def ensure_date_entities() -> None:
+        entities: list[DateEntity] = []
+        for name, register, icon, zone in HOLIDAY_ENTITIES:
+            if register not in added_registers and coordinator.has_controller_register(register):
+                entities.append(EbusdHolidayEntity(coordinator, entry, name, register, icon, zone))
+                added_registers.add(register)
+        for name, register, icon, zone in MANUAL_COOLING_ENTITIES:
+            if register not in added_registers and coordinator.has_controller_register(register):
+                entities.append(EbusdManualCoolingEntity(coordinator, entry, name, register, icon, zone))
+                added_registers.add(register)
+        if entities:
+            async_add_entities(entities)
+
+    ensure_date_entities()
+    coordinator.register_post_discovery_callback(ensure_date_entities)
 
 
 class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateEntity):
