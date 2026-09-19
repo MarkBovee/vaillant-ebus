@@ -329,10 +329,10 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # Set HVAC mode: cancel boost first, then write ebusd op mode
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         previous_hvac_mode = self.hvac_mode
-        self._optimistic_hvac_mode = hvac_mode
-        self.async_write_ha_state()
         if self.preset_mode == PRESET_BOOST:
             await self._cancel_quick_veto()
+        self._optimistic_hvac_mode = hvac_mode
+        self.async_write_ha_state()
         if hvac_mode == HVACMode.COOL:
             ok = await self._start_manual_cooling()
         elif hvac_mode == HVACMode.HEAT:
@@ -511,15 +511,14 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # is read-only ("ERR: element not found"), so overwriting the veto temp
     # with DayTemp is the effective soft-cancel and the veto expires on its own.
     async def _cancel_quick_veto(self) -> None:
+        capability = self._quick_veto_capability()
+        if capability is not True:
+            raise HomeAssistantError(self._quick_veto_error(capability))
         self._quick_veto_until = None
         end = self._device_boost_end()
         if end is not None:
             self._boost_suppressed_end = end
         self.async_write_ha_state()
-        capability = self._quick_veto_capability()
-        if capability is not True:
-            _LOGGER.warning("%s", self._quick_veto_error(capability))
-            return
         day_temp = _float(_value(self.coordinator, f"{self._zn}DayTemp", self._circuit))
         if day_temp is not None:
             ok = await self._write(f"{self._zn}QuickVetoTemp", str(day_temp))

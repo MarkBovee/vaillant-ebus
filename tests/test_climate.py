@@ -542,7 +542,7 @@ async def test_active_veto_rejects_missing_quick_veto_duration() -> None:
         coordinator.async_write_register.assert_not_awaited()
 
 
-# Clearing a stale boost must suppress its UI state without writing QuickVetoTemp on unsupported hardware.
+# Clearing a stale boost must fail cleanly without hiding the device-side veto or writing QuickVetoTemp.
 # Intent: preset cancellation follows the same duration capability gate as quick-veto starts and updates.
 # Why: BASS3 end-date cache data must not turn a normal clear action into the original unsupported write.
 async def test_boost_cancellation_rejects_missing_quick_veto_duration() -> None:
@@ -563,10 +563,11 @@ async def test_boost_cancellation_rejects_missing_quick_veto_duration() -> None:
         coordinator.async_write_register = AsyncMock(return_value=True)
         z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
 
-        await z1.async_set_preset_mode("none")
+        with pytest.raises(_MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
+            await z1.async_set_preset_mode("none")
 
         coordinator.async_write_register.assert_not_awaited()
-        assert z1.preset_mode == "none"
+        assert z1.preset_mode == "boost"
 
 
 # Supported controllers retain the soft-cancel write that holds the day setpoint for the existing veto.
@@ -595,8 +596,8 @@ async def test_boost_cancellation_writes_day_temp_with_discovered_duration() -> 
         coordinator.async_write_register.assert_awaited_once_with("ctlv2", "Z1QuickVetoTemp", "20.0")
 
 
-# Changing HVAC mode must also avoid the soft-cancel write when a stale boost is unsupported.
-# Intent: HEAT mode clears local boost state and writes only Z1OpMode on no-duration hardware.
+# Changing HVAC mode must fail before the soft-cancel write when a stale boost is unsupported.
+# Intent: HEAT mode preserves the device-reported boost and does not write Z1OpMode on no-duration hardware.
 # Why: HVAC mode changes previously reached _cancel_quick_veto() independently of the preset service.
 async def test_hvac_mode_change_rejects_stale_boost_quick_veto_write() -> None:
     tomorrow = (datetime.now() + timedelta(days=1)).strftime("%d.%m.%Y")
@@ -616,11 +617,14 @@ async def test_hvac_mode_change_rejects_stale_boost_quick_veto_write() -> None:
         coordinator.async_write_register = AsyncMock(return_value=True)
         z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
 
-        await z1.async_set_hvac_mode(HVACMode.HEAT)
+        with pytest.raises(_MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
+            await z1.async_set_hvac_mode(HVACMode.HEAT)
 
         calls = [(call.args[1], call.args[2]) for call in coordinator.async_write_register.await_args_list]
         assert ("Z1QuickVetoTemp", "20.0") not in calls
-        assert ("Z1OpMode", "day") in calls
+        assert ("Z1OpMode", "day") not in calls
+        assert z1.hvac_mode == HVACMode.AUTO
+        assert z1.preset_mode == "boost"
 
 
 # A provisional ctlv2 entity must resolve its capability against the discovered controller circuit.
