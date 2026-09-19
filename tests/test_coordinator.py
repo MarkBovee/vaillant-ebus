@@ -2794,7 +2794,7 @@ async def test_zone_register_discovery_status_accepts_placeholder_only_find() ->
         c._graph = DeviceGraph(
             nodes={}, raw_registers={}, placeholder_registers={"ctlv2.Z1QuickVetoDuration"}
         )
-        c._last_find_keys = {"ctlv2.Z1QuickVetoDuration"}
+        c._refresh_find_keys()
 
         assert c.zone_register_discovery_status("ctlv2", "z1", "QuickVetoDuration") is True
 

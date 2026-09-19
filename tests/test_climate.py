@@ -155,6 +155,7 @@ def _entry(entry_id: str = "entry-1", options: dict | None = None) -> MagicMock:
     return e
 
 
+# Build a coordinator whose find-set contains raw and placeholder discovery keys.
 def _coordinator(
     tmpdir: str, graph: DeviceGraph | None, data: dict | None = None, options: dict | None = None
 ) -> VaillantCoordinator:
@@ -565,6 +566,33 @@ async def test_boost_cancellation_rejects_missing_quick_veto_duration() -> None:
         await z1.async_set_preset_mode("none")
 
         coordinator.async_write_register.assert_not_awaited()
+        assert z1.preset_mode == "none"
+
+
+# Supported controllers retain the soft-cancel write that holds the day setpoint for the existing veto.
+# Intent: a confirmed duration register allows cancellation to write QuickVetoTemp with the current DayTemp.
+# Why: guarding unsupported hardware must not remove the established cancellation path from working controllers.
+async def test_boost_cancellation_writes_day_temp_with_discovered_duration() -> None:
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%d.%m.%Y")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(full_parity=True),
+            data={
+                "ebusd": {
+                    "ctlv2.Z1OpMode.value": "auto",
+                    "ctlv2.Z1QuickVetoEndDate.value": tomorrow,
+                    "ctlv2.Z1QuickVetoEndTime.value": "23:59:00",
+                    "ctlv2.Z1DayTemp.value": "20.0",
+                }
+            },
+        )
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        await z1.async_set_preset_mode("none")
+
+        coordinator.async_write_register.assert_awaited_once_with("ctlv2", "Z1QuickVetoTemp", "20.0")
 
 
 # Changing HVAC mode must also avoid the soft-cancel write when a stale boost is unsupported.
@@ -609,6 +637,32 @@ def test_quick_veto_capability_resolves_discovered_controller_circuit() -> None:
 
         assert coordinator.resolve_register_circuit("ctlv2") == "ctlv3"
         assert z1._quick_veto_capability() is True
+
+
+# Logical ctlv2 climate entities must read mode and veto values from their discovered controller owner.
+# Intent: CTLV3 data drives the pre-existing z1 entity after a startup fallback created it with ctlv2.
+# Why: circuit resolution must apply to reads as well as writes or working quick-veto support becomes unreachable.
+def test_climate_reads_quick_veto_state_from_discovered_controller_circuit() -> None:
+    graph = tc.DISCOVERY.DiscoveryService.build_device_graph(
+        load_find_lines("community/arotherm_plus_2zone_discovery.yaml")
+    )
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%d.%m.%Y")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            graph,
+            data={
+                "ebusd": {
+                    "ctlv3.Z1OpMode.value": "auto",
+                    "ctlv3.Z1QuickVetoEndDate.value": tomorrow,
+                    "ctlv3.Z1QuickVetoEndTime.value": "23:59:00",
+                }
+            },
+        )
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        assert z1.hvac_mode == HVACMode.AUTO
+        assert z1.preset_mode == "boost"
 
 
 # Direct boost requests must use the same discovery capability gate as auto temperature writes.

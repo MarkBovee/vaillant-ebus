@@ -338,6 +338,13 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             rk.lower() == lower for rk in self._graph.placeholder_registers
         )
 
+    # Retain no-data discovery keys while polling so capability gates stay authoritative.
+    def _refresh_find_keys(self) -> None:
+        self._last_find_keys = set(self.registers)
+        if self._graph is not None:
+            self._last_find_keys.update(self._graph.raw_registers)
+            self._last_find_keys.update(self._graph.placeholder_registers)
+
     async def _async_seed_entities_from_cache(self) -> None:
         cache = await self._async_load_cache()
         find_lines: list[str] = []
@@ -444,8 +451,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 self.registers[rk].value.update(_register_values(rk, raw))
                 self.registers[rk].has_data = True
 
-        self._last_find_keys.update(graph.raw_registers)
-        self._last_find_keys.update(graph.placeholder_registers)
+        self._refresh_find_keys()
 
         # A cache-seeded rebuild at startup can carry registers the real bus no
         # longer exposes (e.g. a stale test register from an old CSV or session).
@@ -1371,7 +1377,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         self.registers[key].value.update(_register_values(key, val))
                         self.registers[key].has_data = True
                         updated += 1
-                self._last_find_keys = {k for k in self.registers}
+                self._refresh_find_keys()
                 poll_placeholders = now - self._last_placeholder_poll >= PLACEHOLDER_POLL_INTERVAL
                 if poll_placeholders:
                     self._last_placeholder_poll = now

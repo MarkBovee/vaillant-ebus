@@ -69,7 +69,7 @@ QUICK_VETO_DURATION_REGISTER = "QuickVetoDuration"
 
 # Look up a string value from coordinator ebusd data by register name
 def _value(coordinator: VaillantCoordinator, register: str, circuit: str | None = None) -> str | None:
-    ckt = circuit if circuit is not None else coordinator.heating_circuit
+    ckt = coordinator.resolve_register_circuit(circuit) if circuit is not None else coordinator.heating_circuit
     if ckt is None:
         return None
     key = f"{ckt}.{register}.value"
