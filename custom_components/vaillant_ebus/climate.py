@@ -80,7 +80,7 @@ def _value(coordinator: VaillantCoordinator, register: str, circuit: str | None 
 def _float(value: str | None) -> float | None:
     try:
         return float(value) if value is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -228,23 +228,23 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     @property
     def hvac_action(self) -> HVACAction | None:
         hc = _float(_value(self.coordinator, f"Hc{self._zone[1:]}Status", self._circuit))
-        zone_active = hc is not None and hc > 0
-        if hc is None:
-            pump = _value(self.coordinator, f"Hc{self._zone[1:]}PumpStatus", self._circuit)
-            zone_active = (pump or "").lower() in ("on", "1", "true", "yes", "running")
+        pump = _value(self.coordinator, f"Hc{self._zone[1:]}PumpStatus", self._circuit)
+        pump_state = (pump or "").lower()
         comp = (_value(self.coordinator, "RunDataStatuscode", self.coordinator.heat_pump_circuit) or "").lower()
         global_heat = comp in HEATING_STATES
         global_cool = comp in COOLING_STATES
-        if zone_active:
-            if global_heat:
-                return HVACAction.HEATING
-            if global_cool:
-                return HVACAction.COOLING
-            if global_heat or global_cool:
-                return HVACAction.IDLE
         mode = self.hvac_mode
         if mode == HVACMode.OFF:
             return HVACAction.OFF
+
+        if hc is not None or pump_state in ("on", "1", "true", "yes", "running", "off", "0", "false", "no"):
+            zone_active = hc > 0 if hc is not None else pump_state in ("on", "1", "true", "yes", "running")
+            if not zone_active:
+                return HVACAction.IDLE
+            if global_cool or mode == HVACMode.COOL:
+                return HVACAction.COOLING
+            return HVACAction.HEATING
+
         if global_heat:
             return HVACAction.HEATING
         if global_cool:
@@ -327,9 +327,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             # cooling window when the controller still reports cooling or the
             # window is still set.
             cooling_active = (
-                previous_hvac_mode == HVACMode.COOL
-                or self._global_cooling_active()
-                or self._manual_cooling_armed()
+                previous_hvac_mode == HVACMode.COOL or self._global_cooling_active() or self._manual_cooling_armed()
             )
             if cooling_active:
                 ok = await self._cancel_manual_cooling()
@@ -381,9 +379,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             heating_circuit = self.coordinator.heating_circuit
             if heating_circuit is None:
                 return False
-            return await self.coordinator.async_write_register(
-                heating_circuit, "ManualCoolingEndDate", HOLIDAY_RESET
-            )
+            return await self.coordinator.async_write_register(heating_circuit, "ManualCoolingEndDate", HOLIDAY_RESET)
         except Exception as exc:
             _LOGGER.exception("cancel manual cooling failed: %s", exc)
             return False
