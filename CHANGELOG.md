@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.1 - 2026-09-20
+
+### Changed
+
+- Added official HACS and Hassfest validation workflows.
+- Added the canonical Apache 2.0 license text for repository validation.
+
 ## 1.9.0 - 2026-09-19
 
 ### Fixed
