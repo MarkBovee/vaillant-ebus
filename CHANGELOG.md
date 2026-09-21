@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.2 - 2026-09-21
+
+### Added
+
+### Changed
+
+### Fixed
+
 ## 1.9.1 - 2026-09-20
 
 ### Changed
