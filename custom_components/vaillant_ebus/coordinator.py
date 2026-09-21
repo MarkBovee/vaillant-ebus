@@ -40,8 +40,10 @@ from .backend.models import (
 from .const import (
     CONF_EBUSD_HOST,
     CONF_EBUSD_PORT,
+    CONF_ENERGY_DIVISOR,
     CONF_SCAN_INTERVAL,
     DEFAULT_EBUSD_POLL_INTERVAL,
+    DEFAULT_ENERGY_DIVISOR,
     DOMAIN,
 )
 
@@ -1012,6 +1014,26 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         """Path of the optional user-facing entity metadata override file."""
         return self.hass.config.path(DOMAIN, "entities.yaml")
 
+    @property
+    def _energy_counter_divisor(self) -> float:
+        """Global energy-counter scale (divisor) from the Options Flow.
+
+        Defaults to 1.0 (identity), so existing installations see no change.
+        The reported value is divided by this factor for the Wh-declared b516
+        energy counters; a local ebusd definition that already scales a counter
+        (e.g. reports kWh on a Wh register) can be corrected once for the whole
+        installation by setting the divisor below/above 1.0 (issue #141).
+        """
+        options = self._entry.options if hasattr(self._entry, "options") else {}
+        raw = options.get(CONF_ENERGY_DIVISOR, DEFAULT_ENERGY_DIVISOR)
+        try:
+            value = float(raw)
+        except TypeError:
+            return DEFAULT_ENERGY_DIVISOR
+        except ValueError:
+            return DEFAULT_ENERGY_DIVISOR
+        return value if value > 0 else DEFAULT_ENERGY_DIVISOR
+
     async def _async_load_yaml_overrides(self) -> dict[str, dict[str, object]]:
         """Load ``config/vaillant_ebus/entities.yaml`` metadata overrides.
 
@@ -1043,7 +1065,38 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         for key, value in raw.items():
             if isinstance(key, str) and isinstance(value, dict):
                 overrides[key] = dict(value)
+        self._apply_global_energy_divisor(overrides)
         return overrides
+
+    # Wh-declared energy counters that carry a scalar accumulation and may be
+    # scaled differently by local ebusd definitions (issue #141). When the
+    # global energy-counter divisor differs from 1.0, the reported value is
+    # divided by it here unless the user's entities.yaml already sets an
+    # explicit per-register divisor.
+    _ENERGY_DIVISOR_REGISTERS = (
+        "CoolEnvYieldTotal",
+        "CoolEnvYieldDay",
+        "CoolEnvYieldMonth",
+        "CoolElecConsTotal",
+        "CoolElecConsDay",
+        "HcElecConsTotal",
+        "HcElecConsDay",
+        "HwcElecConsTotal",
+        "HwcElecConsDay",
+    )
+
+    def _apply_global_energy_divisor(self, overrides: dict[str, dict[str, object]]) -> None:
+        divisor = self._energy_counter_divisor
+        if divisor == 1.0:
+            return
+        # The b516/runtime energy counters live on the heat-pump (hmu) circuit,
+        # resolved to the discovered heat-pump circuit when available.
+        circuit = self.heat_pump_circuit or "hmu"
+        for name in self._ENERGY_DIVISOR_REGISTERS:
+            key = f"{circuit}.{name}"
+            entry = overrides.setdefault(key, {})
+            if "divisor" not in entry:
+                entry["divisor"] = divisor
 
     async def _async_save_cache(self, values: dict[str, str]) -> None:
         cache_dir = os.path.dirname(self._cache_path)

@@ -46,7 +46,8 @@
           "away_duration": "Default away duration (days)",
           "quick_veto_duration": "Default quick veto duration (hours)",
           "quick_veto_temp": "Default quick veto temperature",
-          "cooling_duration": "Manual cooling duration (days)"
+          "cooling_duration": "Manual cooling duration (days)",
+          "energy_counter_divisor": "Energy counter scale (divisor)"
         }
       },
       "export_dump": {

@@ -419,6 +419,7 @@ class RegisterMeta:
     enabled: bool = True
     entity_type: str = ""
     device_circuit: str | None = None
+    divisor: float | None = None
 
 
 @dataclass

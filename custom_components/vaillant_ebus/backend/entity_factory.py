@@ -126,6 +126,7 @@ def _merge_overrides(meta: RegisterMeta, override: dict[str, Any]) -> RegisterMe
         enabled=override.get("enabled", meta.enabled),
         entity_type=override.get("entity_type", meta.entity_type),
         device_circuit=override.get("device_circuit", meta.device_circuit),
+        divisor=override.get("divisor", meta.divisor),
     )
     return merged
 

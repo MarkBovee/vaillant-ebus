@@ -410,6 +410,20 @@ class TestYamlOverrides:
         entity = [e for e in result if e.key == "hmu.FlowTemp.value"][0]
         assert entity.meta.device_class == "temperature_new"
 
+    # Intent: a YAML divisor override flows from the override dict through
+    # _merge_overrides into the generated entity's RegisterMeta.divisor.
+    # Why: this pins the end-to-end wiring that the Options Flow uses to scale
+    # energy counters (issue #141): coordinator → overrides → generate() → meta,
+    # so a hand-built sensor also reads the corrected value.
+    def test_yaml_override_divisor_reaches_generated_meta(self) -> None:
+        graph = _build_graph()
+        graph.nodes["hmu"].registers.append("hmu.HcElecConsDay")
+        graph.raw_registers["hmu.HcElecConsDay"] = "1124"
+        svc = EntityFactoryService()
+        result = svc.generate(graph, yaml_overrides={"hmu.HcElecConsDay": {"divisor": 1000}})
+        entity = [e for e in result if e.key == "hmu.HcElecConsDay.value"][0]
+        assert entity.meta.divisor == 1000
+
 
 class TestRegisterMapFallback:
     """No REGISTER_MAP fallback — entity existence from graph only."""

@@ -133,7 +133,9 @@ for attr, value in {
     "CONF_EBUSD_HOST": "ebusd_host",
     "CONF_EBUSD_PORT": "ebusd_port",
     "CONF_SCAN_INTERVAL": "scan_interval",
+    "CONF_ENERGY_DIVISOR": "energy_counter_divisor",
     "DEFAULT_EBUSD_POLL_INTERVAL": 60,
+    "DEFAULT_ENERGY_DIVISOR": 1.0,
     "DOMAIN": "vaillant_ebus",
 }.items():
     setattr(const_module, attr, value)
@@ -258,6 +260,30 @@ async def test_load_yaml_overrides_invalid_yaml_is_empty(tmp_path: Path) -> None
     (override_dir / "entities.yaml").write_text("hmu: [unclosed\n", encoding="utf-8")
     c = VaillantCoordinator(_hass(str(tmp_path)), _entry())
     assert await c._async_load_yaml_overrides() == {}
+
+
+# Intent: the global Options Flow energy-counter divisor is applied to the
+# Wh-declared b516 energy counters in the generated overrides.
+# Why: local ebusd scaling of energy counters varies per install (issue #141);
+# the divisor corrects it without a blanket unit change, and per-register
+# entities.yaml divisor values win over the global setting.
+async def test_global_energy_divisor_applied_unless_overridden(tmp_path: Path) -> None:
+    override_dir = tmp_path / "vaillant_ebus"
+    override_dir.mkdir()
+    # User sets an explicit divisor for one register; the other is defaulted.
+    (override_dir / "entities.yaml").write_text(
+        "hmu.HcElecConsDay:\n  divisor: 2\n",
+        encoding="utf-8",
+    )
+    entry = _entry()
+    entry.options = {"energy_counter_divisor": 1000.0}
+    c = VaillantCoordinator(_hass(str(tmp_path)), entry)
+    overrides = await c._async_load_yaml_overrides()
+    # Explicit per-register divisor wins over the global setting.
+    assert overrides["hmu.HcElecConsDay"]["divisor"] == 2
+    # Global divisor applied to the other energy counters.
+    assert overrides["hmu.HcElecConsTotal"]["divisor"] == 1000
+    assert overrides["hmu.CoolEnvYieldDay"]["divisor"] == 1000
 
 
 # Intent: boiler (bai) and solar (sc) circuits get descriptive device names.

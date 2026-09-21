@@ -40,6 +40,17 @@ hmu.CurrentConsumedPower:
   entity_category: "diagnostic"
 ```
 
-Available keys: `friendly_name`, `icon`, `unit`, `device_class`, `entity_category`, `entity_type`, `enabled`, `writable`, `min`, `max`, `step`, `options`.
+Available keys: `friendly_name`, `icon`, `unit`, `device_class`, `entity_category`, `entity_type`, `enabled`, `writable`, `min`, `max`, `step`, `options`, `divisor`.
+
+`divisor` divides the reported numeric value before it reaches Home Assistant
+(`reported / divisor`). It corrects a register whose local ebusd definition already
+scales the raw bus value. The unit stays as declared; for example a b516
+`*ElecCons*` day counter documented in Wh but whose ebusd definition reports in
+kWh — a 1.1 kWh reading that should display as 1100 Wh — use a divisor of `0.001`:
+
+```yaml
+hmu.HcElecConsDay:
+  divisor: 0.001
+```
 
 Reload after changes: **Settings → Devices & Services → Vaillant eBUS → Reload**.
