@@ -613,19 +613,30 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 _LOGGER.warning("Entity adder failed for %s: %s", entity_type, exc)
 
     # Disable existing no-data entities after rediscovery; analysis re-enables
-    # them when the register later returns a real value.
+    # them when the register later returns a real value. An enabled registry
+    # entry (disabled_by is None) whose description carries no live value is
+    # disabled unless it is a non-default entity — Home Assistant never
+    # auto-enables such an entity, so an enabled entry there is an explicit
+    # user choice that a temporary no-data result must not undo (issue #152).
     def _disable_no_data_registry_entities(self, descriptions: list[EntityDescription]) -> None:
         registry = entity_registry.async_get(self.hass)
         disabled = 0
         for description in descriptions:
-            if description.enabled_by_default or description.raw_value:
+            if description.raw_value:
                 continue
+            # Only the integration may manage (re-disable) entries it already
+            # disabled; a user-disabled entry is never touched.
             for entity_id, entry in registry.entities.items():
                 if entry.config_entry_id != self._entry.entry_id or not _registry_matches_description(
                     entry.unique_id, description.unique_id
                 ):
                     continue
                 if entry.disabled_by is None:
+                    # Default-enabled entities lose their enabled state when
+                    # no data is present; non-default entities stay as the user
+                    # left them.
+                    if not description.enabled_by_default:
+                        continue
                     registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
                     disabled += 1
         if disabled:

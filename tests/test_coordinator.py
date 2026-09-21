@@ -2617,6 +2617,60 @@ async def test_enable_registry_entities_expands_multi_field_uids() -> None:
         assert sorted(result) == ["sensor.base", "sensor.cycles", "sensor.runtime"]
 
 
+# Intent: the no-data disable pass must not undo an entity the user enabled
+# manually (issue #152). A registry entry with disabled_by is None for a
+# non-default (enabled_by_default=False) description can only be enabled
+# because the user switched it on, so it must survive a temporary no-data
+# registration. Default-enabled and user-disabled entries keep their behavior.
+# Why: a periodic no-data pass used to re-disable optional entities (e.g.
+# SourceTempInput, cooling/DHW counters) the user had explicitly enabled,
+# flipping them back to disabled on the next rediscovery.
+async def test_disable_no_data_preserves_user_enabled_optional_entities() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+
+        class _Description:
+            def __init__(self, uid: str, enabled_by_default: bool, raw_value: str | None = None) -> None:
+                self.unique_id = uid
+                self.enabled_by_default = enabled_by_default
+                self.raw_value = raw_value
+
+        class _Entry:
+            def __init__(self, uid: str, config_entry_id: str, disabled_by: str | None) -> None:
+                self.unique_id = uid
+                self.config_entry_id = config_entry_id
+                self.disabled_by = disabled_by
+
+        updated: list[str] = []
+        registry = MagicMock()
+        registry.entities = {
+            # Non-default description, enabled by the user -> must survive.
+            "sensor.user_enabled_optional": _Entry("ebusd_hmu_sourcetempinput", "entry-1", None),
+            # Default-enabled description with no data -> integration disables it.
+            "sensor.default_no_data": _Entry("ebusd_hmu_outside_temp", "entry-1", None),
+            # User disabled -> never touched.
+            "sensor.user_disabled": _Entry("ebusd_ctl_v2_z1roomhumidity", "entry-1", "user"),
+            # Another config entry -> never touched.
+            "sensor.other_entry": _Entry("ebusd_hmu_sourcetempinput", "entry-2", None),
+        }
+        registry.async_update_entity = MagicMock(side_effect=lambda entity_id, **kwargs: updated.append(entity_id))
+        from homeassistant.helpers import entity_registry
+
+        entity_registry.async_get = MagicMock(return_value=registry)
+
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        c._disable_no_data_registry_entities(
+            [
+                _Description("ebusd_hmu_sourcetempinput", enabled_by_default=False),
+                _Description("ebusd_hmu_outside_temp", enabled_by_default=True),
+            ]
+        )
+        # Only the default-enabled no-data entity is disabled.
+        assert updated == ["sensor.default_no_data"]
+
+
 # Intent: the shared find-line parser must keep no-data sentinels out of the
 # polled register set — including unknown/unavailable/bare-empty values that
 # the old hand-rolled poll filter let through.
