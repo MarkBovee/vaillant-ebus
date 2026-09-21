@@ -152,7 +152,11 @@ from vaillant_ebus.coordinator import VaillantCoordinator, _register_values, _us
 
 def _hass(cache_dir: str) -> MagicMock:
     h = MagicMock()
-    h.config.path.return_value = str(Path(cache_dir) / "vaillant_ebus" / "register_cache.json")
+
+    def _path(*parts: str) -> str:
+        return str(Path(cache_dir) / "vaillant_ebus" / parts[-1])
+
+    h.config.path.side_effect = _path
     h.async_create_task = MagicMock()
 
     async def _executor(func, *args):
@@ -214,6 +218,46 @@ async def test_coordinator_creates_entity_factory() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
         assert isinstance(c.entity_factory, EntityFactoryService)
+
+
+# Intent: an optional config/vaillant_ebus/entities.yaml metadata override file
+# is loaded into the yaml_overrides mapping used by entity generation.
+# Why: the docs advertise the file, but the coordinator never read it, so
+# overrides for names/icons/units/device_circuit were silently ignored (issue
+# surfaced in discussion #31).
+async def test_load_yaml_overrides_reads_entities_file(tmp_path: Path) -> None:
+    override_dir = tmp_path / "vaillant_ebus"
+    override_dir.mkdir()
+    (override_dir / "entities.yaml").write_text(
+        'hmu.CurrentConsumedPower:\n  friendly_name: "Power Right Now"\n  unit: "W"\n  entity_category: "diagnostic"\n',
+        encoding="utf-8",
+    )
+    c = VaillantCoordinator(_hass(str(tmp_path)), _entry())
+    overrides = await c._async_load_yaml_overrides()
+    assert overrides == {
+        "hmu.CurrentConsumedPower": {
+            "friendly_name": "Power Right Now",
+            "unit": "W",
+            "entity_category": "diagnostic",
+        }
+    }
+
+
+# Intent: a missing entities.yaml is not an error — an empty override mapping.
+# Why: the file is optional; discovery and entity generation must always proceed.
+async def test_load_yaml_overrides_missing_file_is_empty(tmp_path: Path) -> None:
+    c = VaillantCoordinator(_hass(str(tmp_path)), _entry())
+    assert await c._async_load_yaml_overrides() == {}
+
+
+# Intent: malformed YAML in entities.yaml yields an empty mapping, not a crash.
+# Why: a user typo must not take down discovery; a warning is enough.
+async def test_load_yaml_overrides_invalid_yaml_is_empty(tmp_path: Path) -> None:
+    override_dir = tmp_path / "vaillant_ebus"
+    override_dir.mkdir()
+    (override_dir / "entities.yaml").write_text("hmu: [unclosed\n", encoding="utf-8")
+    c = VaillantCoordinator(_hass(str(tmp_path)), _entry())
+    assert await c._async_load_yaml_overrides() == {}
 
 
 # Intent: boiler (bai) and solar (sc) circuits get descriptive device names.
@@ -1073,6 +1117,7 @@ async def test_bass3_defines_z1daytemp_read_at_0x22() -> None:
         assert any(definition.startswith("wi,") and ",020103002200," in definition for definition in z1day)
         assert not any(",020003000700," in definition for definition in definitions)
         assert not any(",020103000700," in definition for definition in definitions)
+
 
 # Intent: the issue #129 BASS3 capture enables the evidence-gated Zone 2 setpoint path.
 # Why: upstream #522 documents the BAS-family Z1..Z3 0x07 to 0x22 move, while the capture proves Zone 2 ownership.
@@ -2791,9 +2836,7 @@ async def test_zone_register_discovery_status_distinguishes_unknown_and_absent()
 async def test_zone_register_discovery_status_accepts_placeholder_only_find() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
-        c._graph = DeviceGraph(
-            nodes={}, raw_registers={}, placeholder_registers={"ctlv2.Z1QuickVetoDuration"}
-        )
+        c._graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers={"ctlv2.Z1QuickVetoDuration"})
         c._refresh_find_keys()
 
         assert c.zone_register_discovery_status("ctlv2", "z1", "QuickVetoDuration") is True

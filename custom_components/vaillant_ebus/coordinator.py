@@ -9,6 +9,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import TypedDict
 
+import yaml
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
@@ -377,7 +378,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         graph = DiscoveryService.build_device_graph(find_lines)
         if graph.nodes:
             self._graph = graph
-        self.entities = self.entity_factory.generate(graph)
+        self.entities = self.entity_factory.generate(graph, yaml_overrides=await self._async_load_yaml_overrides())
         _LOGGER.info(
             "Seeded %d entities from %d cache entries (%d circuits)", len(self.entities), len(cache), len(graph.nodes)
         )
@@ -477,7 +478,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         except Exception as exc:
             _LOGGER.warning("%s fallback read failed: %s", source.capitalize(), exc)
 
-        generated_entities = self.entity_factory.generate(graph)
+        generated_entities = self.entity_factory.generate(graph, yaml_overrides=await self._async_load_yaml_overrides())
         existing_entity_keys = {(entity.entity_type, entity.unique_id) for entity in self.entities}
         additions = [
             entity
@@ -996,6 +997,43 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     def _cache_path(self) -> str:
         return self.hass.config.path(DOMAIN, "register_cache.json")
 
+    def _yaml_overrides_path(self) -> str:
+        """Path of the optional user-facing entity metadata override file."""
+        return self.hass.config.path(DOMAIN, "entities.yaml")
+
+    async def _async_load_yaml_overrides(self) -> dict[str, dict[str, object]]:
+        """Load ``config/vaillant_ebus/entities.yaml`` metadata overrides.
+
+        The file is optional; a missing or invalid file yields an empty mapping
+        (with a warning for invalid YAML) so discovery and entity generation
+        always proceed. Keys are ``<circuit>.<name>`` register keys, values are
+        the metadata keys documented in ``docs/setup.md``.
+        """
+        overrides: dict[str, dict[str, object]] = {}
+        path = self._yaml_overrides_path()
+        if not await self.hass.async_add_executor_job(os.path.isfile, path):
+            return overrides
+
+        def _read() -> object:
+            with open(path, encoding="utf-8") as handle:
+                return yaml.safe_load(handle)
+
+        try:
+            raw = await self.hass.async_add_executor_job(_read)
+        except Exception as exc:  # noqa: BLE001 - surface invalid YAML safely
+            _LOGGER.warning("Unable to load %s: %s", path, exc)
+            return overrides
+
+        if raw is None:
+            return overrides
+        if not isinstance(raw, dict):
+            _LOGGER.warning("%s must be a mapping; ignoring invalid overrides", path)
+            return overrides
+        for key, value in raw.items():
+            if isinstance(key, str) and isinstance(value, dict):
+                overrides[key] = dict(value)
+        return overrides
+
     async def _async_save_cache(self, values: dict[str, str]) -> None:
         cache_dir = os.path.dirname(self._cache_path)
         try:
@@ -1276,7 +1314,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 graph_added += 1
             if graph_added:
                 _LOGGER.info("Fallback read added %d register(s) to discovery", graph_added)
-                generated = self.entity_factory.generate(self._graph)
+                generated = self.entity_factory.generate(
+                    self._graph, yaml_overrides=await self._async_load_yaml_overrides()
+                )
                 known = {(entity.entity_type, entity.unique_id) for entity in self.entities}
                 additions = [entity for entity in generated if (entity.entity_type, entity.unique_id) not in known]
                 self.entities = _merge_entities(self.entities, generated)
