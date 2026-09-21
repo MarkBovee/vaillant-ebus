@@ -133,7 +133,9 @@ for attr, value in {
     "CONF_EBUSD_HOST": "ebusd_host",
     "CONF_EBUSD_PORT": "ebusd_port",
     "CONF_SCAN_INTERVAL": "scan_interval",
+    "CONF_ENERGY_DIVISOR": "energy_counter_divisor",
     "DEFAULT_EBUSD_POLL_INTERVAL": 60,
+    "DEFAULT_ENERGY_DIVISOR": 1.0,
     "DOMAIN": "vaillant_ebus",
 }.items():
     setattr(const_module, attr, value)
@@ -152,7 +154,11 @@ from vaillant_ebus.coordinator import VaillantCoordinator, _register_values, _us
 
 def _hass(cache_dir: str) -> MagicMock:
     h = MagicMock()
-    h.config.path.return_value = str(Path(cache_dir) / "vaillant_ebus" / "register_cache.json")
+
+    def _path(*parts: str) -> str:
+        return str(Path(cache_dir) / "vaillant_ebus" / parts[-1])
+
+    h.config.path.side_effect = _path
     h.async_create_task = MagicMock()
 
     async def _executor(func, *args):
@@ -214,6 +220,70 @@ async def test_coordinator_creates_entity_factory() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
         assert isinstance(c.entity_factory, EntityFactoryService)
+
+
+# Intent: an optional config/vaillant_ebus/entities.yaml metadata override file
+# is loaded into the yaml_overrides mapping used by entity generation.
+# Why: the docs advertise the file, but the coordinator never read it, so
+# overrides for names/icons/units/device_circuit were silently ignored (issue
+# surfaced in discussion #31).
+async def test_load_yaml_overrides_reads_entities_file(tmp_path: Path) -> None:
+    override_dir = tmp_path / "vaillant_ebus"
+    override_dir.mkdir()
+    (override_dir / "entities.yaml").write_text(
+        'hmu.CurrentConsumedPower:\n  friendly_name: "Power Right Now"\n  unit: "W"\n  entity_category: "diagnostic"\n',
+        encoding="utf-8",
+    )
+    c = VaillantCoordinator(_hass(str(tmp_path)), _entry())
+    overrides = await c._async_load_yaml_overrides()
+    assert overrides == {
+        "hmu.CurrentConsumedPower": {
+            "friendly_name": "Power Right Now",
+            "unit": "W",
+            "entity_category": "diagnostic",
+        }
+    }
+
+
+# Intent: a missing entities.yaml is not an error — an empty override mapping.
+# Why: the file is optional; discovery and entity generation must always proceed.
+async def test_load_yaml_overrides_missing_file_is_empty(tmp_path: Path) -> None:
+    c = VaillantCoordinator(_hass(str(tmp_path)), _entry())
+    assert await c._async_load_yaml_overrides() == {}
+
+
+# Intent: malformed YAML in entities.yaml yields an empty mapping, not a crash.
+# Why: a user typo must not take down discovery; a warning is enough.
+async def test_load_yaml_overrides_invalid_yaml_is_empty(tmp_path: Path) -> None:
+    override_dir = tmp_path / "vaillant_ebus"
+    override_dir.mkdir()
+    (override_dir / "entities.yaml").write_text("hmu: [unclosed\n", encoding="utf-8")
+    c = VaillantCoordinator(_hass(str(tmp_path)), _entry())
+    assert await c._async_load_yaml_overrides() == {}
+
+
+# Intent: the global Options Flow energy-counter divisor is applied to the
+# Wh-declared b516 energy counters in the generated overrides.
+# Why: local ebusd scaling of energy counters varies per install (issue #141);
+# the divisor corrects it without a blanket unit change, and per-register
+# entities.yaml divisor values win over the global setting.
+async def test_global_energy_divisor_applied_unless_overridden(tmp_path: Path) -> None:
+    override_dir = tmp_path / "vaillant_ebus"
+    override_dir.mkdir()
+    # User sets an explicit divisor for one register; the other is defaulted.
+    (override_dir / "entities.yaml").write_text(
+        "hmu.HcElecConsDay:\n  divisor: 2\n",
+        encoding="utf-8",
+    )
+    entry = _entry()
+    entry.options = {"energy_counter_divisor": 1000.0}
+    c = VaillantCoordinator(_hass(str(tmp_path)), entry)
+    overrides = await c._async_load_yaml_overrides()
+    # Explicit per-register divisor wins over the global setting.
+    assert overrides["hmu.HcElecConsDay"]["divisor"] == 2
+    # Global divisor applied to the other energy counters.
+    assert overrides["hmu.HcElecConsTotal"]["divisor"] == 1000
+    assert overrides["hmu.CoolEnvYieldDay"]["divisor"] == 1000
 
 
 # Intent: boiler (bai) and solar (sc) circuits get descriptive device names.
@@ -1073,6 +1143,7 @@ async def test_bass3_defines_z1daytemp_read_at_0x22() -> None:
         assert any(definition.startswith("wi,") and ",020103002200," in definition for definition in z1day)
         assert not any(",020003000700," in definition for definition in definitions)
         assert not any(",020103000700," in definition for definition in definitions)
+
 
 # Intent: the issue #129 BASS3 capture enables the evidence-gated Zone 2 setpoint path.
 # Why: upstream #522 documents the BAS-family Z1..Z3 0x07 to 0x22 move, while the capture proves Zone 2 ownership.
@@ -2572,6 +2643,60 @@ async def test_enable_registry_entities_expands_multi_field_uids() -> None:
         assert sorted(result) == ["sensor.base", "sensor.cycles", "sensor.runtime"]
 
 
+# Intent: the no-data disable pass must not undo an entity the user enabled
+# manually (issue #152). A registry entry with disabled_by is None for a
+# non-default (enabled_by_default=False) description can only be enabled
+# because the user switched it on, so it must survive a temporary no-data
+# registration. Default-enabled and user-disabled entries keep their behavior.
+# Why: a periodic no-data pass used to re-disable optional entities (e.g.
+# SourceTempInput, cooling/DHW counters) the user had explicitly enabled,
+# flipping them back to disabled on the next rediscovery.
+async def test_disable_no_data_preserves_user_enabled_optional_entities() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+
+        class _Description:
+            def __init__(self, uid: str, enabled_by_default: bool, raw_value: str | None = None) -> None:
+                self.unique_id = uid
+                self.enabled_by_default = enabled_by_default
+                self.raw_value = raw_value
+
+        class _Entry:
+            def __init__(self, uid: str, config_entry_id: str, disabled_by: str | None) -> None:
+                self.unique_id = uid
+                self.config_entry_id = config_entry_id
+                self.disabled_by = disabled_by
+
+        updated: list[str] = []
+        registry = MagicMock()
+        registry.entities = {
+            # Non-default description, enabled by the user -> must survive.
+            "sensor.user_enabled_optional": _Entry("ebusd_hmu_sourcetempinput", "entry-1", None),
+            # Default-enabled description with no data -> integration disables it.
+            "sensor.default_no_data": _Entry("ebusd_hmu_outside_temp", "entry-1", None),
+            # User disabled -> never touched.
+            "sensor.user_disabled": _Entry("ebusd_ctl_v2_z1roomhumidity", "entry-1", "user"),
+            # Another config entry -> never touched.
+            "sensor.other_entry": _Entry("ebusd_hmu_sourcetempinput", "entry-2", None),
+        }
+        registry.async_update_entity = MagicMock(side_effect=lambda entity_id, **kwargs: updated.append(entity_id))
+        from homeassistant.helpers import entity_registry
+
+        entity_registry.async_get = MagicMock(return_value=registry)
+
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        c._disable_no_data_registry_entities(
+            [
+                _Description("ebusd_hmu_sourcetempinput", enabled_by_default=False),
+                _Description("ebusd_hmu_outside_temp", enabled_by_default=True),
+            ]
+        )
+        # Only the default-enabled no-data entity is disabled.
+        assert updated == ["sensor.default_no_data"]
+
+
 # Intent: the shared find-line parser must keep no-data sentinels out of the
 # polled register set — including unknown/unavailable/bare-empty values that
 # the old hand-rolled poll filter let through.
@@ -2791,9 +2916,7 @@ async def test_zone_register_discovery_status_distinguishes_unknown_and_absent()
 async def test_zone_register_discovery_status_accepts_placeholder_only_find() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = VaillantCoordinator(_hass(tmpdir), _entry())
-        c._graph = DeviceGraph(
-            nodes={}, raw_registers={}, placeholder_registers={"ctlv2.Z1QuickVetoDuration"}
-        )
+        c._graph = DeviceGraph(nodes={}, raw_registers={}, placeholder_registers={"ctlv2.Z1QuickVetoDuration"})
         c._refresh_find_keys()
 
         assert c.zone_register_discovery_status("ctlv2", "z1", "QuickVetoDuration") is True

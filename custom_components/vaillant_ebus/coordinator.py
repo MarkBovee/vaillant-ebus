@@ -9,6 +9,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import TypedDict
 
+import yaml
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
@@ -39,8 +40,10 @@ from .backend.models import (
 from .const import (
     CONF_EBUSD_HOST,
     CONF_EBUSD_PORT,
+    CONF_ENERGY_DIVISOR,
     CONF_SCAN_INTERVAL,
     DEFAULT_EBUSD_POLL_INTERVAL,
+    DEFAULT_ENERGY_DIVISOR,
     DOMAIN,
 )
 
@@ -377,7 +380,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         graph = DiscoveryService.build_device_graph(find_lines)
         if graph.nodes:
             self._graph = graph
-        self.entities = self.entity_factory.generate(graph)
+        self.entities = self.entity_factory.generate(graph, yaml_overrides=await self._async_load_yaml_overrides())
         _LOGGER.info(
             "Seeded %d entities from %d cache entries (%d circuits)", len(self.entities), len(cache), len(graph.nodes)
         )
@@ -477,7 +480,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         except Exception as exc:
             _LOGGER.warning("%s fallback read failed: %s", source.capitalize(), exc)
 
-        generated_entities = self.entity_factory.generate(graph)
+        generated_entities = self.entity_factory.generate(graph, yaml_overrides=await self._async_load_yaml_overrides())
         existing_entity_keys = {(entity.entity_type, entity.unique_id) for entity in self.entities}
         additions = [
             entity
@@ -612,19 +615,30 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 _LOGGER.warning("Entity adder failed for %s: %s", entity_type, exc)
 
     # Disable existing no-data entities after rediscovery; analysis re-enables
-    # them when the register later returns a real value.
+    # them when the register later returns a real value. An enabled registry
+    # entry (disabled_by is None) whose description carries no live value is
+    # disabled unless it is a non-default entity — Home Assistant never
+    # auto-enables such an entity, so an enabled entry there is an explicit
+    # user choice that a temporary no-data result must not undo (issue #152).
     def _disable_no_data_registry_entities(self, descriptions: list[EntityDescription]) -> None:
         registry = entity_registry.async_get(self.hass)
         disabled = 0
         for description in descriptions:
-            if description.enabled_by_default or description.raw_value:
+            if description.raw_value:
                 continue
+            # Only the integration may manage (re-disable) entries it already
+            # disabled; a user-disabled entry is never touched.
             for entity_id, entry in registry.entities.items():
                 if entry.config_entry_id != self._entry.entry_id or not _registry_matches_description(
                     entry.unique_id, description.unique_id
                 ):
                     continue
                 if entry.disabled_by is None:
+                    # Default-enabled entities lose their enabled state when
+                    # no data is present; non-default entities stay as the user
+                    # left them.
+                    if not description.enabled_by_default:
+                        continue
                     registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
                     disabled += 1
         if disabled:
@@ -996,6 +1010,94 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     def _cache_path(self) -> str:
         return self.hass.config.path(DOMAIN, "register_cache.json")
 
+    def _yaml_overrides_path(self) -> str:
+        """Path of the optional user-facing entity metadata override file."""
+        return self.hass.config.path(DOMAIN, "entities.yaml")
+
+    @property
+    def _energy_counter_divisor(self) -> float:
+        """Global energy-counter scale (divisor) from the Options Flow.
+
+        Defaults to 1.0 (identity), so existing installations see no change.
+        The reported value is divided by this factor for the Wh-declared b516
+        energy counters; a local ebusd definition that already scales a counter
+        (e.g. reports kWh on a Wh register) can be corrected once for the whole
+        installation by setting the divisor below/above 1.0 (issue #141).
+        """
+        options = self._entry.options if hasattr(self._entry, "options") else {}
+        raw = options.get(CONF_ENERGY_DIVISOR, DEFAULT_ENERGY_DIVISOR)
+        try:
+            value = float(raw)
+        except TypeError:
+            return DEFAULT_ENERGY_DIVISOR
+        except ValueError:
+            return DEFAULT_ENERGY_DIVISOR
+        return value if value > 0 else DEFAULT_ENERGY_DIVISOR
+
+    async def _async_load_yaml_overrides(self) -> dict[str, dict[str, object]]:
+        """Load ``config/vaillant_ebus/entities.yaml`` metadata overrides.
+
+        The file is optional; a missing or invalid file yields an empty mapping
+        (with a warning for invalid YAML) so discovery and entity generation
+        always proceed. Keys are ``<circuit>.<name>`` register keys, values are
+        the metadata keys documented in ``docs/setup.md``.
+        """
+        overrides: dict[str, dict[str, object]] = {}
+        path = self._yaml_overrides_path()
+        if not await self.hass.async_add_executor_job(os.path.isfile, path):
+            return overrides
+
+        def _read() -> object:
+            with open(path, encoding="utf-8") as handle:
+                return yaml.safe_load(handle)
+
+        try:
+            raw = await self.hass.async_add_executor_job(_read)
+        except Exception as exc:  # noqa: BLE001 - surface invalid YAML safely
+            _LOGGER.warning("Unable to load %s: %s", path, exc)
+            return overrides
+
+        if raw is None:
+            return overrides
+        if not isinstance(raw, dict):
+            _LOGGER.warning("%s must be a mapping; ignoring invalid overrides", path)
+            return overrides
+        for key, value in raw.items():
+            if isinstance(key, str) and isinstance(value, dict):
+                overrides[key] = dict(value)
+        self._apply_global_energy_divisor(overrides)
+        return overrides
+
+    # Wh-declared energy counters that carry a scalar accumulation and may be
+    # scaled differently by local ebusd definitions (issue #141). When the
+    # global energy-counter divisor differs from 1.0, the reported value is
+    # divided by it here unless the user's entities.yaml already sets an
+    # explicit per-register divisor.
+    _ENERGY_DIVISOR_REGISTERS = (
+        "CoolEnvYieldTotal",
+        "CoolEnvYieldDay",
+        "CoolEnvYieldMonth",
+        "CoolElecConsTotal",
+        "CoolElecConsDay",
+        "HcElecConsTotal",
+        "HcElecConsDay",
+        "HwcElecConsTotal",
+        "HwcElecConsDay",
+    )
+
+    def _apply_global_energy_divisor(self, overrides: dict[str, dict[str, object]]) -> None:
+        divisor = self._energy_counter_divisor
+        if divisor == 1.0:
+            return
+        # The b516/runtime energy counters live on the heat-pump (hmu) circuit,
+        # resolved to the discovered heat-pump circuit when available.
+        circuit = self.heat_pump_circuit or "hmu"
+        for name in self._ENERGY_DIVISOR_REGISTERS:
+            key = f"{circuit}.{name}"
+            entry = overrides.setdefault(key, {})
+            if "divisor" not in entry:
+                entry["divisor"] = divisor
+
     async def _async_save_cache(self, values: dict[str, str]) -> None:
         cache_dir = os.path.dirname(self._cache_path)
         try:
@@ -1276,7 +1378,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 graph_added += 1
             if graph_added:
                 _LOGGER.info("Fallback read added %d register(s) to discovery", graph_added)
-                generated = self.entity_factory.generate(self._graph)
+                generated = self.entity_factory.generate(
+                    self._graph, yaml_overrides=await self._async_load_yaml_overrides()
+                )
                 known = {(entity.entity_type, entity.unique_id) for entity in self.entities}
                 additions = [entity for entity in generated if (entity.entity_type, entity.unique_id) not in known]
                 self.entities = _merge_entities(self.entities, generated)

@@ -39,9 +39,7 @@ sensor_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("hom
 sensor_pkg.SensorEntity = _MockSensorEntity
 sys.modules["homeassistant.components.sensor"] = sensor_pkg
 
-restore = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("homeassistant.helpers.restore_state", None)
-)
+restore = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.helpers.restore_state", None))
 restore.RestoreEntity = _MockRestoreEntity
 sys.modules["homeassistant.helpers.restore_state"] = restore
 
@@ -103,6 +101,18 @@ def test_sensor_no_data_stored_is_unknown() -> None:
 def test_sensor_present_value_decodes() -> None:
     s = _sensor(_coordinator({"hmu.OutsideTemp.value": "21.5"}))
     assert s.native_value == 21.5
+
+
+# Intent: a RegisterMeta divisor scales the reported numeric value, so a
+# counter that ebusd already scales (e.g. kWh on a Wh register) reads correctly.
+# Why: the local ebusd scaling of b516 energy counters varies per install
+# (issue #141); a config divisor corrects it without a blanket unit change.
+def test_sensor_meta_divisor_scales_value() -> None:
+    meta = RegisterMeta(friendly_name="Heat Elect Today", unit="Wh", divisor=1000)
+    reg = EbusdRegister(circuit="hmu", name="HcElecConsDay", fields=["value"])
+    desc = EntityDescription(circuit="hmu", name="HcElecConsDay", field="value", meta=meta, register=reg)
+    s = _sensor(_coordinator({"hmu.HcElecConsDay.value": "1124"}), desc)
+    assert s.native_value == 1.124
 
 
 # Intent: availability follows the coordinator, independent of per-register data.

@@ -130,6 +130,10 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
                 val = None
             else:
                 val = str(raw) if raw else None
+        if isinstance(val, float):
+            divisor = self._desc.meta.divisor
+            if divisor:
+                val = val / divisor
         return val
 
     @property

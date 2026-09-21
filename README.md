@@ -203,7 +203,12 @@ ctlv2.HwcTempDesired:
   device_class: "temperature"
 ```
 
-Available override keys: `friendly_name`, `icon`, `unit`, `device_class`, `entity_category`, `entity_type`, `enabled`, `writable`, `min`, `max`, `step`, `options`.
+Available override keys: `friendly_name`, `icon`, `unit`, `device_class`, `entity_category`, `entity_type`, `enabled`, `writable`, `min`, `max`, `step`, `options`, `divisor`.
+
+`divisor` divides the reported numeric value (a report of `1.1` becomes `1.1 / divisor`).
+It corrects a register whose local ebusd definition already scales a counter, e.g.
+a `*ElecConsDay` counter documented in Wh but reported in kWh — use `divisor: 0.001`
+so a `1.1` reading displays as `1100`. The unit stays as declared.
 
 ## Services
 

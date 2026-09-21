@@ -188,7 +188,7 @@ async def test_write_registers_refresh_once_after_full_success() -> None:
 async def test_load_cache_logs_corrupt_but_not_missing(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = _coordinator(tmpdir)
-        cache_file = Path(c.hass.config.path.return_value)
+        cache_file = Path(c._cache_path)
         cache_file.parent.mkdir(parents=True)
         cache_file.write_text("{not json", encoding="utf-8")
         with caplog.at_level("WARNING"):
@@ -371,9 +371,7 @@ async def test_read_parameter_uses_discovered_circuit_resolution() -> None:
         coordinator.ebus.read_register = AsyncMock(return_value="21.5")
         hass.data = {"vaillant_ebus": {"entry-a": coordinator}}
 
-        await INIT._svc_read_parameter(
-            hass, _call({"circuit": "hmu", "name": "OutsideTemp", "entry_id": "entry-a"})
-        )
+        await INIT._svc_read_parameter(hass, _call({"circuit": "hmu", "name": "OutsideTemp", "entry_id": "entry-a"}))
 
         coordinator.ebus.read_register.assert_awaited_once_with("hmux0", "OutsideTemp", "")
 
@@ -390,9 +388,7 @@ async def test_read_parameter_does_not_read_when_circuit_owner_is_missing() -> N
         coordinator.ebus.read_register = AsyncMock(return_value="21.5")
         hass.data = {"vaillant_ebus": {"entry-a": coordinator}}
 
-        await INIT._svc_read_parameter(
-            hass, _call({"circuit": "hmu", "name": "OutsideTemp", "entry_id": "entry-a"})
-        )
+        await INIT._svc_read_parameter(hass, _call({"circuit": "hmu", "name": "OutsideTemp", "entry_id": "entry-a"}))
 
         coordinator.ebus.read_register.assert_not_awaited()
 

@@ -18,6 +18,7 @@ from .const import (
     CONF_COOLING_DURATION,
     CONF_EBUSD_HOST,
     CONF_EBUSD_PORT,
+    CONF_ENERGY_DIVISOR,
     CONF_QUICK_VETO_DURATION,
     CONF_QUICK_VETO_TEMP,
     CONF_SCAN_INTERVAL,
@@ -25,6 +26,7 @@ from .const import (
     DEFAULT_COOLING_DURATION,
     DEFAULT_EBUSD_POLL_INTERVAL,
     DEFAULT_EBUSD_PORT,
+    DEFAULT_ENERGY_DIVISOR,
     DEFAULT_QUICK_VETO_DURATION,
     DEFAULT_QUICK_VETO_TEMP,
     DISCOVERY_CANDIDATES,
@@ -316,7 +318,13 @@ class VaillantOptionsFlow(OptionsFlow):
     # entry data — where the coordinator reads them — while behavior options
     # stay in entry.options. Both are written in one async_update_entry so the
     # update listener reloads the entry exactly once.
-    _OPTION_KEYS = (CONF_AWAY_DURATION, CONF_QUICK_VETO_DURATION, CONF_QUICK_VETO_TEMP, CONF_COOLING_DURATION)
+    _OPTION_KEYS = (
+        CONF_AWAY_DURATION,
+        CONF_QUICK_VETO_DURATION,
+        CONF_QUICK_VETO_TEMP,
+        CONF_COOLING_DURATION,
+        CONF_ENERGY_DIVISOR,
+    )
 
     async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
@@ -372,6 +380,10 @@ class VaillantOptionsFlow(OptionsFlow):
                         CONF_COOLING_DURATION,
                         default=options.get(CONF_COOLING_DURATION, DEFAULT_COOLING_DURATION),
                     ): vol.Coerce(int),
+                    vol.Optional(
+                        CONF_ENERGY_DIVISOR,
+                        default=options.get(CONF_ENERGY_DIVISOR, DEFAULT_ENERGY_DIVISOR),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.000001, max=1000000)),
                 }
             ),
         )
