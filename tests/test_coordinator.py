@@ -252,6 +252,17 @@ async def test_load_yaml_overrides_missing_file_is_empty(tmp_path: Path) -> None
     assert await c._async_load_yaml_overrides() == {}
 
 
+# Intent: the global Options Flow divisor works without an entities.yaml file.
+# Why: the YAML file is optional; the setting must not silently become a no-op
+# for users who configure the scale only through Home Assistant settings.
+async def test_global_energy_divisor_applies_without_yaml_file(tmp_path: Path) -> None:
+    entry = _entry()
+    entry.options = {"energy_counter_divisor": 0.001}
+    c = VaillantCoordinator(_hass(str(tmp_path)), entry)
+    overrides = await c._async_load_yaml_overrides()
+    assert overrides["hmu.HcElecConsDay"]["divisor"] == 0.001
+
+
 # Intent: malformed YAML in entities.yaml yields an empty mapping, not a crash.
 # Why: a user typo must not take down discovery; a warning is enough.
 async def test_load_yaml_overrides_invalid_yaml_is_empty(tmp_path: Path) -> None:

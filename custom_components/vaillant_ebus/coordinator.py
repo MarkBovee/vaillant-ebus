@@ -1044,27 +1044,28 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         """
         overrides: dict[str, dict[str, object]] = {}
         path = self._yaml_overrides_path()
-        if not await self.hass.async_add_executor_job(os.path.isfile, path):
-            return overrides
+        if await self.hass.async_add_executor_job(os.path.isfile, path):
 
-        def _read() -> object:
-            with open(path, encoding="utf-8") as handle:
-                return yaml.safe_load(handle)
+            def _read() -> object:
+                with open(path, encoding="utf-8") as handle:
+                    return yaml.safe_load(handle)
 
-        try:
-            raw = await self.hass.async_add_executor_job(_read)
-        except Exception as exc:  # noqa: BLE001 - surface invalid YAML safely
-            _LOGGER.warning("Unable to load %s: %s", path, exc)
-            return overrides
+            try:
+                raw = await self.hass.async_add_executor_job(_read)
+            except Exception as exc:  # noqa: BLE001 - surface invalid YAML safely
+                _LOGGER.warning("Unable to load %s: %s", path, exc)
+                raw = None
 
-        if raw is None:
-            return overrides
-        if not isinstance(raw, dict):
-            _LOGGER.warning("%s must be a mapping; ignoring invalid overrides", path)
-            return overrides
-        for key, value in raw.items():
-            if isinstance(key, str) and isinstance(value, dict):
-                overrides[key] = dict(value)
+            if raw is not None and not isinstance(raw, dict):
+                _LOGGER.warning("%s must be a mapping; ignoring invalid overrides", path)
+                raw = None
+            if isinstance(raw, dict):
+                for key, value in raw.items():
+                    if isinstance(key, str) and isinstance(value, dict):
+                        overrides[key] = dict(value)
+
+        # Apply Options Flow settings even when the optional YAML file is absent
+        # or invalid; the global setting must not depend on a second config file.
         self._apply_global_energy_divisor(overrides)
         return overrides
 
