@@ -4,9 +4,38 @@
 
 ### Added
 
-### Changed
+- **Configurable energy-counter scale (divisor, issue #141).** The b516
+  electricity/energy counters (`HcElecConsTotal/Day`, `HwcElecConsTotal/Day`,
+  `CoolElecConsTotal/Day`, `CoolEnvYield*`) are documented in Wh, but a local
+  ebusd CSV definition can scale the same register differently per install. A
+  new generic `divisor` metadata key divides the reported numeric value before
+  it reaches Home Assistant. It can be set per register in
+  `config/vaillant_ebus/entities.yaml`, or once for the whole installation via
+  a new **Energy counter scale** option in **Settings → Vaillant eBUS**
+  (default `1`, no change to existing installs). The global setting is applied
+  to the Wh-declared b516 energy counters on the heat-pump circuit unless an
+  explicit per-register divisor is set.
 
 ### Fixed
+
+- **`config/vaillant_ebus/entities.yaml` metadata overrides were never
+  loaded (discussion #31).** The docs advertise an optional YAML override file
+  for entity metadata (friendly name, icon, unit, device class, enabled, etc.),
+  and `EntityFactoryService` accepted `yaml_overrides`, but the coordinator
+  never read the file nor passed overrides to any of the three `generate()`
+  calls, so every override was silently ignored. The file is now loaded safely
+  (a missing or malformed file yields an empty mapping, never a crash) and the
+  overrides are threaded into entity generation.
+
+- **The no-data disable pass no longer undoes entities the user enabled
+  manually (issue #152).** A discovery pass that found no live value used to
+  disable every matching registry entry with `disabled_by is None` — including
+  optional entities such as `SourceTempInput` or cooling/DHW counters that the
+  user had explicitly switched on (Home Assistant never auto-enables a
+  non-default entity, so an enabled non-default entry is a user choice). Those
+  choices were repeatedly reverted on the next no-data poll. The pass now
+  disables only default-enabled entities without data, and leaves
+  user-enabled and user-disabled entries untouched.
 
 ## 1.9.1 - 2026-09-20
 
