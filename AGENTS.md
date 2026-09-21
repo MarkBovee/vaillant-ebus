@@ -16,7 +16,7 @@
     issue bodies, release notes, documentation, and final responses. Use simple, human
     language that non-experts can understand. Keep code, identifiers, commands, and
     technical protocol values exact; do not simplify those.
-- This repository is release-sensitive. Follow the lifecycle in the global AGENTS.md "Skills & Workflow": `intake → plan → plan-check → execute → validate → review → audit → release-gate`, delegate independent research to subagents, and never self-declare release readiness.
+- This repository is release-sensitive. Follow the lifecycle in the global AGENTS.md "Skills & Workflow": `intake → plan → plan-check → execute → validate → review & audit → release-gate`, delegate independent research to subagents, and never self-declare release readiness.
 - For protocol research, prefer the upstream search and dump mining sections below over guessing from register names.
 
 ## Home Assistant Inspection
