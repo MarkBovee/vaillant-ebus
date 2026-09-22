@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.9.4 - 2026-09-22
+
+### Fixed
+
+- **Stale cache entities on BAI00/BASS3 systems are no longer exposed as
+  current values (issue #152, PR #156).** Complete F34 community captures
+  showed old `ctlv2` pump counters and `hmu` energy/source values surviving in
+  the register cache even though the current bus had BAI00/BASS3/VR_70
+  topology and no `ctlv2` or `hmu` discovery records. Initial discovery now
+  removes cache aliases without a discovered owner, disables matching stale
+  registry entries without deleting user data, clears stale values from
+  explicit placeholders, and prevents failed fallback reads from promoting old
+  cache values into the discovery graph.
+
 ## 1.9.3 - 2026-09-22
 
 ### Fixed
