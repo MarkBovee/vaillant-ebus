@@ -273,6 +273,21 @@ async def test_load_yaml_overrides_invalid_yaml_is_empty(tmp_path: Path) -> None
     assert await c._async_load_yaml_overrides() == {}
 
 
+# Intent: the global Options Flow divisor still applies when entities.yaml is
+# malformed and therefore cannot provide per-register overrides.
+# Why: invalid optional YAML must not suppress a separately configured global
+# setting or break discovery (issue #141).
+async def test_global_energy_divisor_applies_with_invalid_yaml(tmp_path: Path) -> None:
+    override_dir = tmp_path / "vaillant_ebus"
+    override_dir.mkdir()
+    (override_dir / "entities.yaml").write_text("hmu: [unclosed\n", encoding="utf-8")
+    entry = _entry()
+    entry.options = {"energy_counter_divisor": 0.001}
+    c = VaillantCoordinator(_hass(str(tmp_path)), entry)
+    overrides = await c._async_load_yaml_overrides()
+    assert overrides["hmu.HcElecConsDay"]["divisor"] == 0.001
+
+
 # Intent: the global Options Flow energy-counter divisor is applied to the
 # Wh-declared b516 energy counters in the generated overrides.
 # Why: local ebusd scaling of energy counters varies per install (issue #141);
