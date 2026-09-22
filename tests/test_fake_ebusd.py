@@ -72,6 +72,10 @@ async def test_arotherm_fixture_loads() -> None:
         ("community/eloblock_ve28_issue111_2026-09-11_193100.yaml", 20),
         ("community/ecotec_vrt380_issue109_2026-09-11_230710.yaml", 50),
         ("community/ecotec_vrt380_issue109_2026-09-13_033552.yaml", 50),
+        ("community/f34_issue152_v190_before_cleanup_discovery.yaml", 100),
+        ("community/f34_issue152_v190_after_cleanup_discovery.yaml", 100),
+        ("community/f34_issue152_v192_before_cleanup_discovery.yaml", 100),
+        ("community/f34_issue152_v192_after_cleanup_discovery.yaml", 100),
     ],
 )
 async def test_all_fixtures_load(fixture: str, min_registers: int) -> None:
@@ -87,6 +91,18 @@ def test_load_discovery_dump_metadata() -> None:
     assert dump
     assert any("ctlv3" in line for line in dump)
     assert any("scan.15" in line for line in dump)
+
+
+# Intent: the F34 issue #152 fixture preserves the BAI/BASS3 topology and the
+# absence of ctlv2/hmu discovery records that exposed stale cache aliases.
+# Why: the cache-pruning regression must use the complete community capture,
+# not a hand-trimmed synthetic register list.
+def test_f34_issue152_fixture_preserves_real_topology() -> None:
+    lines = load_find_lines("community/f34_issue152_v192_before_cleanup_discovery.yaml")
+    assert any(line.startswith("scan.08") and "BAI00;0503;9602" in line for line in lines)
+    assert any(line.startswith("scan.15") and "BASS3;0708;4304" in line for line in lines)
+    assert not any(line.lower().startswith("ctlv2 ") for line in lines)
+    assert not any(line.lower().startswith("hmu ") for line in lines)
 
 
 # dumpvalues.yaml records field names for multi-field registers

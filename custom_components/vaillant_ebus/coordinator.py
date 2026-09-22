@@ -131,6 +131,40 @@ def _register_has_enabled_map_entry(register_key: str) -> bool:
     return False
 
 
+# Intent: determine whether a cache-only mapped register still belongs to the
+# discovered circuit rather than a legacy logical alias.
+# Why: a BASS3/BAI bus can retain ctlv2 or hmu cache values from an older
+# installation; preserving those aliases creates stale entities and ghost
+# devices even though initial discovery has authoritative circuit metadata.
+def _cache_register_is_supported(register_key: str, live_keys: set[str], graph: DeviceGraph) -> bool:
+    if register_key in graph.placeholder_registers:
+        return False
+    if register_key in live_keys:
+        return True
+    if not _register_has_enabled_map_entry(register_key):
+        return False
+    circuit = register_key.split(".", 1)[0]
+    resolved = graph.resolve_circuit_result(circuit)
+    return resolved.status == ResolutionStatus.UNIQUE and resolved.circuit == circuit
+
+
+# Intent: disable registry entries whose cached source circuit disappeared from
+# the current discovery graph.
+# Why: cache-seeded platform entities may already be registered before the first
+# real discovery completes; leaving them enabled would keep stale alias devices
+# visible after the coordinator prunes their descriptions.
+def _disable_stale_registry_entities(hass: HomeAssistant, entry_id: str, entities: list[EntityDescription]) -> None:
+    registry = entity_registry.async_get(hass)
+    stale_uids = {entity.unique_id for entity in entities}
+    for entity_id, entry in registry.entities.items():
+        if (
+            entry.config_entry_id == entry_id
+            and any(_registry_matches_description(entry.unique_id, uid) for uid in stale_uids)
+            and entry.disabled_by != "user"
+        ):
+            registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
+
+
 # Merge a delayed graph without removing devices that initial discovery found.
 def _merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> DeviceGraph:
     nodes = dict(existing.nodes)
@@ -343,10 +377,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
 
     # Retain no-data discovery keys while polling so capability gates stay authoritative.
     def _refresh_find_keys(self) -> None:
-        self._last_find_keys = set(self.registers)
-        if self._graph is not None:
-            self._last_find_keys.update(self._graph.raw_registers)
-            self._last_find_keys.update(self._graph.placeholder_registers)
+        if self._graph is None:
+            self._last_find_keys = set(self.registers)
+            return
+        self._last_find_keys = set(self._graph.raw_registers) | set(self._graph.placeholder_registers)
 
     async def _async_seed_entities_from_cache(self) -> None:
         cache = await self._async_load_cache()
@@ -465,7 +499,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # to appear.
         if source == "initial":
             live_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
-            stale = [rk for rk in self.registers if rk not in live_keys and not _register_has_enabled_map_entry(rk)]
+            stale = [rk for rk in self.registers if not _cache_register_is_supported(rk, live_keys, graph)]
             for rk in stale:
                 del self.registers[rk]
             if stale:
@@ -474,6 +508,23 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     len(stale),
                     ", ".join(sorted(stale)),
                 )
+            stale_keys = set(stale)
+            placeholder_keys = set(graph.placeholder_registers)
+            for entity in self.entities:
+                entity_key = f"{entity.circuit}.{entity.name}"
+                if entity_key in placeholder_keys:
+                    entity.raw_value = ""
+                    entity.enabled_by_default = False
+            stale_entity_keys = stale_keys - placeholder_keys
+            stale_entities = [
+                entity for entity in self.entities if f"{entity.circuit}.{entity.name}" in stale_entity_keys
+            ]
+            if stale_entities:
+                self.entities = [
+                    entity for entity in self.entities if f"{entity.circuit}.{entity.name}" not in stale_entity_keys
+                ]
+                _disable_stale_registry_entities(self.hass, self._entry.entry_id, stale_entities)
+                _LOGGER.info("Pruned %d stale cache entit(y/ies) after discovery", len(stale_entities))
 
         try:
             await self._fallback_read()
@@ -1340,12 +1391,26 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     # a register the discovery graph still configures (currently
                     # idle) or before a graph exists (startup/cache seeding).
                     graph = self._graph
-                    if graph is None or key in graph.raw_registers or key in graph.placeholder_registers:
+                    if graph is None or key in graph.raw_registers:
                         cache = await self._async_load_cache()
                         cached = cache.get(f"{circuit}.{name}.value")
                         cached = _usable_register_value(key, cached)
                         if cached is not None and key not in (skip_cache or set()):
                             value = cached
+                if value is None:
+                    register = self.registers.get(key)
+                    current_value = register.value.get("value") if register is not None else None
+                    is_empty_marker = isinstance(current_value, str) and current_value.strip().lower().startswith(
+                        "(empty"
+                    )
+                    if (
+                        register is not None
+                        and (graph is None or key not in graph.raw_registers)
+                        and not is_empty_marker
+                    ):
+                        register.value = _register_values(key, None)
+                        register.has_data = False
+                    continue
                 if value is not None:
                     read_with_data += 1
                     if was_new:
