@@ -856,6 +856,166 @@ async def test_initial_discovery_prunes_stale_cache_registers() -> None:
         assert "hmu.SourceTempInput" in c.registers
 
 
+# Intent: initial discovery removes cached entities whose logical circuit is a
+# stale alias of a different discovered owner, or has no discovered owner.
+# Why: the F34 BAI/BASS3 dump retained ctlv2 pump counters and hmu energy
+# entities from an older heat-pump setup, causing implausible values and ghost
+# devices even after the register cache was pruned (issue #152).
+async def test_initial_discovery_prunes_stale_cache_entities_for_old_aliases() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        stale_graph = DISCOVERY.DiscoveryService.build_device_graph(
+            [
+                "ctlv2 Hc1PumpHours = 24384",
+                "hmu HcElecConsDay = 300.48",
+                "bai StatFuelSum = 134.274",
+            ]
+        )
+        c._graph = stale_graph
+        c.entities = c.entity_factory.generate(stale_graph)
+        c.registers["ctlv2.Hc1PumpHours"] = EbusdRegister(
+            circuit="ctlv2", name="Hc1PumpHours", fields=["value"], value={"value": "24384"}, has_data=True
+        )
+        c.registers["hmu.HcElecConsDay"] = EbusdRegister(
+            circuit="hmu", name="HcElecConsDay", fields=["value"], value={"value": "300.48"}, has_data=True
+        )
+        c.registers["bai.StatFuelSum"] = EbusdRegister(
+            circuit="bai", name="StatFuelSum", fields=["value"], value={"value": "134.274"}, has_data=True
+        )
+        fresh_graph = DeviceGraph(
+            nodes={
+                "bai": DeviceNode(
+                    circuit="bai",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=["bai.StatFuelSum"],
+                    has_data=False,
+                    scan_type="BAI00",
+                ),
+                "bass": DeviceNode(
+                    circuit="bass",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=["bass.Hc1PumpHours"],
+                    has_data=True,
+                    scan_type="BASS3",
+                ),
+            },
+            raw_registers={},
+            placeholder_registers={"bass.Hc1PumpHours", "bai.StatFuelSum"},
+        )
+
+        await c._apply_discovery_graph(fresh_graph, "initial")
+
+        assert "ctlv2.Hc1PumpHours" not in c.registers
+        assert "hmu.HcElecConsDay" not in c.registers
+        assert "bai.StatFuelSum" not in c.registers
+        assert not any(entity.circuit == "ctlv2" and entity.name == "Hc1PumpHours" for entity in c.entities)
+        assert not any(entity.circuit == "hmu" and entity.name == "HcElecConsDay" for entity in c.entities)
+        bai_entities = [entity for entity in c.entities if entity.circuit == "bai" and entity.name == "StatFuelSum"]
+        assert bai_entities
+        assert all(entity.raw_value != "134.274" for entity in bai_entities)
+
+
+# Intent: a user-enabled placeholder keeps its registry choice after stale cache
+# data is cleared and remains available as an unavailable entity.
+# Why: cache cleanup must not turn temporary no-data into an integration disable
+# for an entity the user explicitly enabled (issue #152).
+async def test_placeholder_cache_cleanup_preserves_user_enabled_registry_entry() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        desc = COORDINATOR.EntityDescription(
+            circuit="bai",
+            name="StatFuelSum",
+            field="value",
+            meta=MAPPING.RegisterMeta(friendly_name="Fuel Energy"),
+            register=EbusdRegister(circuit="bai", name="StatFuelSum", fields=["value"]),
+            raw_value="134.274",
+            enabled_by_default=True,
+        )
+        c.entities = [desc]
+        registry = MagicMock()
+        registry.entities = {
+            "sensor.fuel": MagicMock(
+                unique_id=desc.unique_id,
+                config_entry_id="entry-1",
+                disabled_by=None,
+            )
+        }
+        registry.async_update_entity = MagicMock()
+        from homeassistant.helpers import entity_registry
+
+        entity_registry.async_get = MagicMock(return_value=registry)
+        graph = DeviceGraph(
+            nodes={
+                "bai": DeviceNode(
+                    circuit="bai",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=["bai.StatFuelSum"],
+                    has_data=False,
+                    scan_type="BAI00",
+                )
+            },
+            raw_registers={},
+            placeholder_registers={"bai.StatFuelSum"},
+        )
+
+        await c._apply_discovery_graph(graph, "initial")
+        c.disable_no_data_entities()
+
+        assert desc.raw_value == ""
+        assert desc.enabled_by_default is False
+        registry.async_update_entity.assert_not_called()
+
+
+# Intent: stale alias entities already present in the registry become
+# integration-disabled when discovery proves that their source circuit vanished.
+# Why: cache seeding can register an alias before discovery finishes; disabling
+# the registry entry removes it from active HA entities without deleting user data.
+async def test_initial_discovery_disables_stale_alias_registry_entity() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        stale_graph = DISCOVERY.DiscoveryService.build_device_graph(["ctlv2 Hc1PumpHours = 24384"])
+        desc = next(entity for entity in c.entity_factory.generate(stale_graph) if entity.name == "Hc1PumpHours")
+        c.entities = [desc]
+        c.registers["ctlv2.Hc1PumpHours"] = EbusdRegister(
+            circuit="ctlv2", name="Hc1PumpHours", fields=["value"], value={"value": "24384"}, has_data=True
+        )
+        registry = MagicMock()
+        registry.entities = {
+            "sensor.stale_pump_hours": MagicMock(
+                unique_id=desc.unique_id,
+                config_entry_id="entry-1",
+                disabled_by=None,
+            )
+        }
+        registry.async_update_entity = MagicMock()
+        from homeassistant.helpers import entity_registry
+
+        entity_registry.async_get = MagicMock(return_value=registry)
+        fresh_graph = DeviceGraph(
+            nodes={
+                "bass": DeviceNode(
+                    circuit="bass",
+                    device_type=DeviceType.HEATING_CONTROLLER,
+                    registers=["bass.Hc1PumpHours"],
+                    has_data=False,
+                    scan_type="BASS3",
+                )
+            },
+            raw_registers={},
+            placeholder_registers={"bass.Hc1PumpHours"},
+        )
+
+        await c._apply_discovery_graph(fresh_graph, "initial")
+
+        registry.async_update_entity.assert_called_once_with("sensor.stale_pump_hours", disabled_by="integration")
+
+
 # Intent: the DHW storage-temp register's explicit empty/NaN sentinel
 # ("(empty ...7fffffff)") must survive the coordinator pipeline into the data
 # dict so the tank-presence sensor can report "off" (no tank). A generic
@@ -910,6 +1070,84 @@ async def test_fallback_read_does_not_refill_absent_register_from_cache() -> Non
         await c._async_save_cache({"ctlv2.HwcStorageTemp.value": "45.2"})
         await c._fallback_read()
         assert c.registers["ctlv2.HwcStorageTemp"].value["value"] is None
+
+
+# Intent: a discovered no-data placeholder never receives an old cached value
+# during its retry read.
+# Why: issue #152's F34 dump contains fuel/energy registers that return ERR or
+# no data while the cache still contains values from an earlier topology.
+async def test_fallback_read_does_not_refill_placeholder_from_cache() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value=None)
+        c.ebus = mock_ebus
+        c._graph = DeviceGraph(
+            nodes={
+                "hmu": DeviceNode(
+                    circuit="hmu",
+                    device_type=DeviceType.HEAT_PUMP,
+                    registers=["hmu.YieldHc"],
+                    has_data=False,
+                )
+            },
+            raw_registers={},
+            placeholder_registers={"hmu.YieldHc"},
+        )
+        await c._async_save_cache({"hmu.YieldHc.value": "123.4"})
+
+        await c._fallback_read(include_placeholders=True)
+
+        mock_ebus.read_register.assert_any_await("hmu", "YieldHc")
+        assert "hmu.YieldHc" not in c.registers
+
+
+# Intent: a mapped cache-only register on a real discovered owner remains a
+# fallback-read candidate instead of being mistaken for a find result.
+# Why: optional registers such as SourceTempInput may be absent from find at
+# startup but must still be re-read on hardware that owns the circuit.
+async def test_fallback_read_keeps_cache_only_mapped_owner_candidate() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value="9.25")
+        c.ebus = mock_ebus
+        c._graph = _make_graph()
+        c.registers["hmu.SourceTempInput"] = EbusdRegister(
+            circuit="hmu", name="SourceTempInput", fields=["value"], value={"value": "8.0"}, has_data=True
+        )
+        c._refresh_find_keys()
+
+        await c._fallback_read()
+
+        mock_ebus.read_register.assert_any_await("hmu", "SourceTempInput")
+        assert c.registers["hmu.SourceTempInput"].value["value"] == "9.25"
+
+
+# Intent: a failed read of a cache-only mapped register clears the old cache
+# value and never promotes it into the discovery graph.
+# Why: a failed SourceTempInput read must not turn a stale cache value into a
+# new raw register that remains visible on later polls.
+async def test_fallback_read_clears_failed_cache_only_owner_candidate() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        mock_ebus = MagicMock(spec=EbusService)
+        mock_ebus.is_connected = True
+        mock_ebus.read_register = AsyncMock(return_value=None)
+        c.ebus = mock_ebus
+        c._graph = _make_graph()
+        c.registers["hmu.SourceTempInput"] = EbusdRegister(
+            circuit="hmu", name="SourceTempInput", fields=["value"], value={"value": "8.0"}, has_data=True
+        )
+        c._refresh_find_keys()
+
+        await c._fallback_read()
+
+        assert c.registers["hmu.SourceTempInput"].value["value"] is None
+        assert c.registers["hmu.SourceTempInput"].has_data is False
+        assert "hmu.SourceTempInput" not in c._graph.raw_registers
 
 
 # Intent: energy registers read from ebusd cache between polls and force a read only after the interval.
