@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.9.3 - 2026-09-22
+
+### Fixed
+
+- **Energy counter scale now works without `entities.yaml` (PR #154).** The
+  global Options Flow divisor was applied only after a successful load of the
+  optional `config/vaillant_ebus/entities.yaml` file. Installations that used
+  the setting without that file therefore saw no change. The setting now
+  applies when the file is absent or invalid, with regression coverage for the
+  normal no-file path.
+
 ## 1.9.2 - 2026-09-21
 
 ### Added
