@@ -29,6 +29,9 @@ The per-register implementation boundary is in
 matrix is authoritative when a broad research classification and a release
 safety gate differ.
 
+Deferred candidates and revisit triggers are tracked in
+[`plan-1.9.5-follow-ups.md`](plan-1.9.5-follow-ups.md).
+
 ## Must
 
 ### Release foundation
