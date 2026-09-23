@@ -254,7 +254,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "hmu.RunDataCompressorSpeed": RegisterMeta(
         friendly_name="Compressor Speed",
         icon="mdi:speedometer",
-        unit="rpm",
+        unit="rps",
     ),
     "hmu.RunDataHighPressure": RegisterMeta(
         friendly_name="High Pressure",

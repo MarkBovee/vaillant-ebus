@@ -24,6 +24,7 @@ ISSUE99_DUMPS = (
 )
 
 ISSUE129_DUMP = "community/saunier_duval_f34_issue129_discovery.yaml"
+ISSUE32_DUMP = "community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml"
 NEW_CAPTURE_PROVENANCE = {
     "community/arotherm_pro7_issue101_2026-09-15_203102_discovery.yaml": (
         "https://github.com/user-attachments/files/32255148/discovery_dump_2026-09-15_203102Whisper.switch.no.heat.yaml",
@@ -107,6 +108,33 @@ def test_issue129_dump_keeps_zone2_evidence() -> None:
     assert any(line.startswith("bass Z2OpMode =") for line in lines)
     assert any(line.startswith("bass Z2RoomTemp = 24.6875") for line in lines)
     assert any(line.startswith("bass Z2DayTemp = no data stored") for line in lines)
+
+
+# Intent: the complete discussion #32 capture retains every section and candidate row used by the release plan.
+# Why: a trimmed dump could hide missing B509/B516/B524 evidence or make the
+#      HMUX0 SW0302 gate pass for the wrong reason.
+def test_issue32_dump_keeps_complete_candidate_evidence() -> None:
+    dump = load_discovery_dump(ISSUE32_DUMP)
+    metadata = dump["metadata"]
+    configs = metadata["ebusd_info"]["loaded_configs"]
+
+    assert metadata["dump_version"] == 4
+    assert metadata["source"].endswith("/32515826/Discovery.dump.for.vaillant_ebus.txt")
+    assert metadata["source_sha256"] == "c891b30640b4c7ba0c8eefc6dc144efd6791e1bd3ba6673cbf9e5fca091a1c24"
+    assert configs["08"]["scanned"] == "MF=Vaillant;ID=HMUX0;SW=0302;HW=0504"
+    assert configs["15"]["scanned"] == "MF=Vaillant;ID=CTLV3;SW=0808;HW=8004"
+    assert configs["76"]["scanned"] == "MF=Vaillant;ID=VWZIO;SW=0302;HW=0504"
+
+    assert len(dump["raw_find_lines"]) == 578
+    assert len(dump["raw_find_lines_after"]) == 578
+    assert len(dump["before_registers"]) == 706
+    assert len(dump["after_registers"]) == 706
+    assert len(dump["grab"]) == 202
+    assert len(dump["unknown_telegrams"]) == 68
+    assert len(dump["labeled_telegrams"]) == 131
+    assert any(item["request"] == "f108b509055402005b0d" for item in dump["unknown_telegrams"])
+    assert any(item["request"] == "f108b509055402000d0a" for item in dump["unknown_telegrams"])
+    assert any(item["request"] == "f108b50905540200c509" for item in dump["unknown_telegrams"])
 
 
 # Intent: every discovery-dump fixture carries provenance metadata and at least one find-line set.

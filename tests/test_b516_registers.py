@@ -121,6 +121,7 @@ def test_b516_cooling_register_entities() -> None:
         "hmu ConsumptionTotal = 12345",
         "hmu RunDataElectricPowerConsumption = 1500",
         "hmu LiveMonitorCurrentConsumedPower = 15",
+        "hmu RunDataCompressorSpeed = 4500",
         "hmu StatSolarEnergySum = 0",
         "hmu StatSolarEnergySumHc = 0",
         "hmu StatSolarEnergySumHwc = 0",
@@ -177,3 +178,4 @@ def test_b516_cooling_register_entities() -> None:
     assert by_key["hmu.RunDataElectricPowerConsumption.value"].meta.unit == "W"
     assert by_key["hmu.LiveMonitorCurrentConsumedPower.value"].meta.device_class == "power"
     assert by_key["hmu.LiveMonitorCurrentConsumedPower.value"].meta.unit == "kW"
+    assert by_key["hmu.RunDataCompressorSpeed.value"].meta.unit == "rps"

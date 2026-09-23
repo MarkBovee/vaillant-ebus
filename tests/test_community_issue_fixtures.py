@@ -70,6 +70,17 @@ def test_eloblock_ve28_exposes_observed_bai_registers() -> None:
     assert entities["bai.Flame.value"].enabled_by_default is False
 
 
+# Intent: the existing HMUX0 fixture keeps the B509 compressor-speed unit stable on the legacy gate.
+# Why: extending the SW0302/SW0303 B509 definitions must not silently change the value contract for SW0303.
+def test_hmux0_fixture_keeps_b509_compressor_speed_unit() -> None:
+    lines = load_find_lines("community/hmux0_issue99_2026-09-10_173229.yaml", after=True)
+    lines.append("hmux0 RunDataCompressorSpeed = 0")
+    graph = DiscoveryService.build_device_graph(lines)
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    assert entities["hmux0.RunDataCompressorSpeed.value"].meta.unit == "rps"
+
+
 # Intent: VWZIO/VWZ Status01 is parsed into the six shared status fields.
 # Why: upstream PR #598 - the Hydraulikstation reuses the HMU Status01 layout,
 # so its flow/storage/outside/pump values must reach HA as typed sensors.

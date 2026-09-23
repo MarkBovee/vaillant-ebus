@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.fake_ebusd import FakeEbusdServer
+from tests.fake_ebusd import FakeEbusdServer, load_find_lines
 
 SERVICE_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend/ebus_service.py"
 
@@ -590,6 +590,27 @@ async def test_integration_read_register() -> None:
         await s.connect()
         val = await s.read_register("ctlv2", "AdaptHeatCurve")
         assert val == "yes"
+        await s.disconnect()
+
+
+# Integration: the three #32 B509 registers can be read from the resolved hmux0 circuit.
+# Why: validates positive values and the absent-register response through the real fake-ebusd socket path.
+async def test_issue32_b509_registers_read_through_fake_ebusd() -> None:
+    lines = load_find_lines("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml", after=True)
+    lines.extend(
+        [
+            "hmux0 RunDataElPowerConsumption = 9.0",
+            "hmux0 RunDataCompressorSpeed = 0.0",
+            "hmux0 RunDataBuildingCPumpPower = 0.0",
+        ]
+    )
+    async with FakeEbusdServer(lines) as fake:
+        s = EbusService(host=fake.host, port=fake.port)
+        await s.connect()
+        assert await s.read_register("hmux0", "RunDataElPowerConsumption") == "9.0"
+        assert await s.read_register("hmux0", "RunDataCompressorSpeed") == "0.0"
+        assert await s.read_register("hmux0", "RunDataBuildingCPumpPower") == "0.0"
+        assert await s.read_register("hmux0", "RunStatsFan1Hours") in (None, "")
         await s.disconnect()
 
 

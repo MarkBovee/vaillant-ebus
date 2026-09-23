@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.9.5 - 2026-09-23
+
+### Added
+
+- **Hardware-gated HMUX0 B509 telemetry from discussion #32.** HMUX0 systems
+  with `SW0302` or `SW0303` and `HW0504` now expose electrical power
+  consumption (`RunDataElPowerConsumption`), compressor speed
+  (`RunDataCompressorSpeed`), and building circulation pump power
+  (`RunDataBuildingCPumpPower`) when the registers are available on the bus.
+- Added the complete CTLV3/HMUX0/VWZIO discovery capture from discussion #32
+  as a community regression fixture, including the unknown and labeled
+  telegram inventory.
+
+### Changed
+
+- `RunDataCompressorSpeed` now reports the upstream B509 unit `rps`.
+
+### Deferred
+
+- B51A yield/current values, runtime counters requiring `hoursum2` or
+  `cntstarts2`, VWZIO HW0504 immersion-heater metrics, CTLV3 modulation and
+  legionella writes, and BAI00 `FlowTempDesired` writes remain hardware- or
+  write-safety gated until matching evidence is available.
+- The remaining Electrical, Environment, and Solar Energy entities from issue
+  #152 are not part of this release; they still need post-purge registry and
+  source-circuit evidence.
+
 ## 1.9.4 - 2026-09-22
 
 ### Fixed

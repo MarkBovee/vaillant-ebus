@@ -735,6 +735,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             _LOGGER.info("Auto-enabled entities with live data: %s", ", ".join(enabled))
         return enabled
 
+    # Intent: inject only evidence-backed runtime register definitions after the bus owner is known.
+    # Why: definitions must follow discovered circuit identity and preserve safe absent-register behavior.
     async def _define_custom_registers(self) -> None:
         if not self.ebus or not self.ebus.is_connected:
             return
@@ -876,16 +878,23 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             and heat_pump.scan_sw == "0303"
             and heat_pump.scan_hw == "0504"
         )
+        is_hmux0_b509_0504 = bool(
+            heat_pump
+            and heat_pump.scan_type.upper() == "HMUX0"
+            and heat_pump.scan_sw in {"0302", "0303"}
+            and heat_pump.scan_hw == "0504"
+        )
         # HMU-only layouts on HMUX0: the brine source-temperature probe is
-        # always incompatible with the air/water HMUX0. The compressor status
-        # block and electrical-power decode are kept only on the confirmed
-        # 0303/0504 variant (upstream issue #249 / #522, community fixtures);
-        # other HMUX0 variants drop them. The shared b516 energy statistics
-        # family is kept for every HMUX0.
+        # always incompatible with air/water HMUX0. Status00 remains gated to
+        # the confirmed 0303/0504 variant, while the B509 monitoring block is
+        # evidence-gated for 0302/0504 and 0303/0504. Shared B516 statistics
+        # remain available for every discovered HMUX0.
         if heat_pump and heat_pump.scan_type.upper() == "HMUX0":
             hmu_only_layouts = {"SourceTempInput"}
             if not is_hmux0_0303_0504:
-                hmu_only_layouts |= {"Status00", "RunDataElPowerConsumption"}
+                hmu_only_layouts.add("Status00")
+            if not is_hmux0_b509_0504:
+                hmu_only_layouts.add("RunDataElPowerConsumption")
             defines = [
                 definition
                 for definition in defines
@@ -975,12 +984,21 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     ",value,,IGN:3,,,,value,,UIN,10,,HMUX0 DHW COP this month",
                 ]
             )
+        if is_hmux0_b509_0504:
+            assert heat_pump is not None
+            circuit = heat_pump.circuit
+            defines.extend(
+                [
+                    f"r,{circuit},RunDataCompressorSpeed,RunDataCompressorSpeed,31,08,B509,055402000d0a"
+                    ",value,,IGN:4,,,,value,,EXP,,rps,HMUX0 compressor speed",
+                    f"r,{circuit},RunDataBuildingCPumpPower,RunDataBuildingCPumpPower,31,08,B509,05540200c509"
+                    ",value,,IGN:4,,,,value,,EXP,,%,HMUX0 building circuit pump power",
+                ]
+            )
         if not is_hmux0_0303_0504:
-            defines = [
-                definition
-                for definition in defines
-                if ",Status00," not in definition and ",RunDataElPowerConsumption," not in definition
-            ]
+            defines = [definition for definition in defines if ",Status00," not in definition]
+        if not is_hmux0_b509_0504:
+            defines = [definition for definition in defines if ",RunDataElPowerConsumption," not in definition]
         if heat_pump and heat_pump.scan_type.upper() == "HMU00" and heat_pump.scan_hw == "5103":
             # Upstream ebusd-configuration PR #614, confirmed for HW5103.
             # Status07 is active-read because this HW5103 variant polls b511/07;

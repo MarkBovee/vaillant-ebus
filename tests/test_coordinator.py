@@ -6,6 +6,7 @@ import asyncio
 import importlib.machinery
 import importlib.util
 import json
+import struct
 import sys
 import tempfile
 from datetime import datetime, timedelta
@@ -14,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.fake_ebusd import FakeEbusdServer, load_find_lines
+from tests.fake_ebusd import FakeEbusdServer, load_discovery_dump, load_find_lines
 
 PROJECT_ROOT = Path(__file__).parents[1]
 COMPONENT_PATH = PROJECT_ROOT / "custom_components/vaillant_ebus"
@@ -546,7 +547,7 @@ async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0 = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0) == 22
+        assert len(hmux0) == 24
         assert all(",hmu," not in definition for definition in hmux0)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0)
@@ -556,6 +557,87 @@ async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
         # Confirmed 0303/0504 telemetry (upstream #249 / #522).
         assert any(",hmux0,Status00," in definition for definition in definitions)
         assert any(",hmux0,RunDataElPowerConsumption," in definition for definition in definitions)
+
+
+# Intent: the discussion #32 HMUX0 SW0302/HW0504 fixture receives only the safe B509 telemetry definitions.
+# Why: the target variant must gain its byte-correlated B509 values without
+#      inheriting SW0303-only B511/B51A layouts.
+async def test_issue32_hmux0_runtime_definitions_use_discovered_circuit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml", after=True)
+        )
+        hmux0 = graph.nodes["hmux0"]
+        assert hmux0.scan_type == "HMUX0"
+        assert hmux0.scan_sw == "0302"
+        assert hmux0.scan_hw == "0504"
+
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.define_register = AsyncMock(return_value="done")
+        c._graph = graph
+
+        await c._define_custom_registers()
+
+        definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
+        assert any(",hmux0,RunDataElPowerConsumption," in definition for definition in definitions)
+        assert any(",hmux0,RunDataCompressorSpeed," in definition for definition in definitions)
+        assert any(",hmux0,RunDataBuildingCPumpPower," in definition for definition in definitions)
+        assert any(",B509,055402005b0d," in definition for definition in definitions)
+        assert any(",B509,055402000d0a," in definition for definition in definitions)
+        assert any(",B509,05540200c509," in definition for definition in definitions)
+        assert not any(",hmu," in definition for definition in definitions)
+        assert not any(",Status00," in definition for definition in definitions)
+
+
+# Intent: the complete #32 capture decodes the three B509 EXP responses at their documented offsets.
+# Why: definition-string tests alone cannot detect a shifted field or wrong datatype in a real telegram.
+def test_issue32_b509_exp_responses_decode_at_expected_offsets() -> None:
+    dump = load_discovery_dump("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml")
+    rows = {item["request"]: item for item in dump["unknown_telegrams"]}
+
+    expected = {
+        "f108b509055402005b0d": 9.0,
+        "f108b509055402000d0a": 0.0,
+        "f108b50905540200c509": 0.0,
+    }
+    for request, value in expected.items():
+        response = rows[request]["resp"]
+        assert response is not None
+        assert struct.unpack("<f", bytes.fromhex(response[-8:]))[0] == value
+
+
+# Intent: failed B509 fallback reads use the discovered hmux0 owner and clear stale values.
+# Why: a new logical hmu mapping must not poll an alias or resurrect an old cached power value.
+async def test_issue32_b509_fallback_reads_resolved_hmux0_and_clears_stale_values() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml", after=True)
+        )
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c._graph = graph
+        c._last_find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
+        for name in ("RunDataElPowerConsumption", "RunDataCompressorSpeed", "RunDataBuildingCPumpPower"):
+            c.registers[f"hmux0.{name}"] = EbusdRegister(
+                circuit="hmux0",
+                name=name,
+                fields=["value"],
+                value={"value": "123"},
+                has_data=True,
+            )
+
+        await c._fallback_read()
+
+        calls = c.ebus.read_register.await_args_list
+        for name in ("RunDataElPowerConsumption", "RunDataCompressorSpeed", "RunDataBuildingCPumpPower"):
+            assert any(call.args == ("hmux0", name) for call in calls)
+            assert c.registers[f"hmux0.{name}"].has_data is False
+            assert c.registers[f"hmux0.{name}"].value["value"] is None
+        assert not any(call.args[0] == "hmu" for call in calls)
 
 
 # Intent: the bespoke HMUX0 Status00 definition uses complete 6-column fields.
@@ -1325,7 +1407,7 @@ async def test_hmux0_runtime_definitions_use_issue99_fixture_metadata() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_defs = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_defs) == 22
+        assert len(hmux0_defs) == 24
         assert all(",hmu," not in definition for definition in hmux0_defs)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0_defs)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0_defs)
@@ -1521,7 +1603,7 @@ async def test_hmux0_scan_bootstrap_defines_only_confirmed_registers() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_definitions = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_definitions) == 22
+        assert len(hmux0_definitions) == 24
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 
@@ -1560,7 +1642,7 @@ async def test_hmux0_scan_bootstrap_rediscovers_defined_registers() -> None:
 
         assert discovery.discover.await_count == 2
         definitions = [call.args[0] for call in mock_ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 22
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 24
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
         assert c.heat_pump_circuit == "hmux0"
         assert c.heating_circuit == "ctlv3"
@@ -1587,7 +1669,7 @@ async def test_hmux0_scan_bootstrap_ignores_generic_hmu_alias_definitions() -> N
         await c._define_custom_registers()
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 22
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 24
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 
