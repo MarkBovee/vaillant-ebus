@@ -24,13 +24,8 @@ assumption` **where the implementation can preserve safe bus behavior and
 absent-register handling**. It does not mean implementing every name in the
 MQTT comparison.
 
-The per-register implementation boundary is in
-[`plan-1.9.5-candidate-matrix.md`](plan-1.9.5-candidate-matrix.md). The
-matrix is authoritative when a broad research classification and a release
-safety gate differ.
-
-Deferred candidates and revisit triggers are tracked in
-[`plan-1.9.5-follow-ups.md`](plan-1.9.5-follow-ups.md).
+The deferred candidates and their implementation boundaries moved to the
+consolidated [`plan-1.10.md`](plan-1.10.md).
 
 ## Must
 
