@@ -16,6 +16,13 @@ test path before implementation.
 Community data remains valid evidence only when the complete capture is
 preserved and the mapping stays scoped to the hardware that produced it.
 
+## Release decision
+
+Issue #158 is in the mandatory 1.10.0 scope. The BASS3 `0708/4304` invalid
+position polling regression must be fixed and regression-tested before optional
+telemetry or control additions are considered. It is a scheduler and bus-load
+bug, not a cosmetic unavailable-state issue.
+
 ## Candidate matrix
 
 | Priority | Candidate or area | Evidence and scope | Polling/write boundary | Minimum trigger |
