@@ -23,6 +23,13 @@ position polling regression must be fixed and regression-tested before optional
 telemetry or control additions are considered. It is a scheduler and bus-load
 bug, not a cosmetic unavailable-state issue.
 
+Implementation decision for #158: keep graph-based circuit resolution
+unchanged, but emit the twelve Hc1/Hc2 B524 state definitions only when the
+resolved controller scan type is a CTLV family. BASS/BASS3 controllers skip
+those unproven `r5` definitions; their existing BAS-specific setpoint
+overrides remain active. This avoids a circuit-name workaround and preserves
+the proven CTLV path.
+
 ## Candidate matrix
 
 | Priority | Candidate or area | Evidence and scope | Polling/write boundary | Minimum trigger |
@@ -37,6 +44,23 @@ bug, not a cosmetic unavailable-state issue.
 | 6 | BAI00 `FlowTempDesired` | Read path works; SW0107 `0e3900` write has strong negative evidence and SW0108 is unknown | Do not route through `SetModeOverride` or treat `done` as acceptance | Byte-for-byte write capture, forced read-back, and boiler state transition |
 | 7 | #152 remaining energy entities | v1.9.4 removed stale pump/fuel values, but F34 still shows Electrical, Environment, and Solar entities after purge | Do not delete entities or change defaults from symptoms alone | Entity IDs, source circuits, raw names, values, and `disabled_by` state |
 | 8 | #111 `SetModeOverride` | Closed; read-side VE28 support works, but target BAI00 SW0107/SW0108 hardware effect remains unproven | Keep the compatibility definition unchanged | Reopen only with target write, read-back, and observable mode-transition evidence |
+
+## Prepared execution tracks
+
+These tracks are independent until implementation and validation:
+
+1. **#158 runtime-definition gate:** update coordinator tests first, then gate
+   the Hc1/Hc2 definitions by resolved CTLV scan identity and verify the BASS3
+   absent path.
+2. **CTLV3 room-temperature select:** update mapping/entity tests and write
+   resolution tests; do not touch `Hc1RoomTempModulation`.
+3. **#152 evidence intake:** classify the remaining F34 entities from registry
+   and source-circuit data; no production edit until that evidence exists.
+4. **BAI00 write boundary:** preserve current compatibility behavior and add
+   no write support without target hardware proof.
+5. **HMUX0 B509 investigation:** keep the three active definitions unchanged
+   until ebusd-level request/response evidence proves a safe active or
+   update-only mode.
 
 ## Evidence incorporated
 
