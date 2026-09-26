@@ -830,6 +830,26 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             "r5,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524,02000000db00,value,,IGN:4,,,,value,,HDA:3",
             "w,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524,02010000da00,value,m,HDA:3",
             "w,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524,02010000db00,value,m,HDA:3",
+            # HMUX0 HW0504 environmental yield for heating and DHW.
+            # Verified on HMUX0 SW0407 / HW0504 via direct ebusd reads.
+            "r,hmu,HcEnvYieldTotal,HcEnvYieldTotal,31,08,B516"
+            ",1000ffff02030000,value,,IGN:7,,,,value,,EXP,,Wh"
+            ",hmu Heating Env Yield Total",
+            f"r,hmu,HcEnvYieldDay,HcEnvYieldDay,31,08,B516"
+            f",1001ffff0203{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
+            f",hmu Heating Env Yield Today",
+            f"r,hmu,HcEnvYieldMonth,HcEnvYieldMonth,31,08,B516"
+            f",1002ffff0203{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
+            f",hmu Heating Env Yield This Month",
+            "r,hmu,HwcEnvYieldTotal,HwcEnvYieldTotal,31,08,B516"
+            ",1000ffff02040000,value,,IGN:7,,,,value,,EXP,,Wh"
+            ",hmu DHW Env Yield Total",
+            f"r,hmu,HwcEnvYieldDay,HwcEnvYieldDay,31,08,B516"
+            f",1001ffff0204{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
+            f",hmu DHW Env Yield Today",
+            f"r,hmu,HwcEnvYieldMonth,HwcEnvYieldMonth,31,08,B516"
+            f",1002ffff0204{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
+            f",hmu DHW Env Yield This Month",
             "r,hmu,CoolEnvYieldTotal,CoolEnvYieldTotal,31,08,B516"
             ",1000ffff02050000,value,,IGN:7,,,,value,,EXP,,Wh"
             ",hmu Cooling Env Yield Total",
