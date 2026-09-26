@@ -517,6 +517,46 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         writable=True,
         icon="mdi:water-boiler",
     ),
+    # Runtime-defined B516 heating/DHW environmental-yield registers.
+    # Verified on HMUX0 SW0407 / HW0504.
+    "hmu.HcEnvYieldTotal": RegisterMeta(
+        friendly_name="Heating Environmental Energy Total",
+        device_class="energy",
+        unit="Wh",
+        state_class="total_increasing",
+        icon="mdi:radiator",
+    ),
+    "hmu.HcEnvYieldDay": RegisterMeta(
+        friendly_name="Heating Environmental Energy Today",
+        device_class="energy",
+        unit="Wh",
+        icon="mdi:radiator",
+    ),
+    "hmu.HcEnvYieldMonth": RegisterMeta(
+        friendly_name="Heating Environmental Energy Month",
+        device_class="energy",
+        unit="Wh",
+        icon="mdi:radiator",
+    ),
+    "hmu.HwcEnvYieldTotal": RegisterMeta(
+        friendly_name="DHW Environmental Energy Total",
+        device_class="energy",
+        unit="Wh",
+        state_class="total_increasing",
+        icon="mdi:water-boiler",
+    ),
+    "hmu.HwcEnvYieldDay": RegisterMeta(
+        friendly_name="DHW Environmental Energy Today",
+        device_class="energy",
+        unit="Wh",
+        icon="mdi:water-boiler",
+    ),
+    "hmu.HwcEnvYieldMonth": RegisterMeta(
+        friendly_name="DHW Environmental Energy Month",
+        device_class="energy",
+        unit="Wh",
+        icon="mdi:water-boiler",
+    ),
     # Runtime-defined b516 cooling-energy registers (issue #50). The bus
     # reports Wh; the unit stays Wh because ebusd returns the raw EXP value.
     "hmu.CoolEnvYieldTotal": RegisterMeta(
