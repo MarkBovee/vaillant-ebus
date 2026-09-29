@@ -161,6 +161,7 @@ def _coordinator(
 ) -> VaillantCoordinator:
     c = VaillantCoordinator(tc._hass(tmpdir), _entry(options=options))
     c._graph = graph
+    c._ebusd_connected = graph is not None
     if graph is not None:
         # Mirrors _apply_discovery_graph: the find set marks discovery complete.
         c._last_find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
@@ -192,8 +193,28 @@ def _graph_two_zone(full_parity: bool = True) -> DeviceGraph:
             {
                 "ctlv2.Z1CoolingTemp",
                 "ctlv2.Z1QuickVetoDuration",
+                "ctlv2.Z1QuickVetoTemp",
+                "ctlv2.Z1QuickVetoEndDate",
+                "ctlv2.Z1QuickVetoEndTime",
+                "ctlv2.Z1HolidayStartPeriod",
+                "ctlv2.Z1HolidayEndPeriod",
+                "ctlv2.Z1HolidayTemp",
+                "ctlv2.Hc1MinFlowTempDesired",
+                "ctlv2.Hc1MaxFlowTempDesired",
                 "ctlv2.Z2CoolingTemp",
                 "ctlv2.Z2QuickVetoDuration",
+                "ctlv2.Z2QuickVetoTemp",
+                "ctlv2.Z2QuickVetoEndDate",
+                "ctlv2.Z2QuickVetoEndTime",
+                "ctlv2.Z2HolidayStartPeriod",
+                "ctlv2.Z2HolidayEndPeriod",
+                "ctlv2.Z2HolidayTemp",
+                "ctlv2.Hc2MinFlowTempDesired",
+                "ctlv2.Hc2MaxFlowTempDesired",
+                "ctlv2.ManualCoolingStartDate",
+                "ctlv2.ManualCoolingEndDate",
+                "ctlv2.HwcHolidayStartPeriod",
+                "ctlv2.HwcHolidayEndPeriod",
             }
         )
     nodes = {
@@ -229,6 +250,18 @@ def _graph_two_zone(full_parity: bool = True) -> DeviceGraph:
         ),
     }
     return DeviceGraph(nodes=nodes, raw_registers=raw_registers, placeholder_registers=placeholders)
+
+
+# Intent: climate reads tolerate lower-case register spellings from a find dump.
+# Why: casing must not turn a valid discovered zone value into an unavailable state.
+def test_lowercase_zone_register_lookup() -> None:
+    coordinator = _coordinator(
+        "/tmp",
+        _graph_two_zone(),
+        {"ebusd": {"ctlv2.z2roomtemp.value": "20.5"}},
+    )
+
+    assert EbusdClimate(coordinator, _entry(), "z2", "ctlv2").current_temperature == 20.5
 
 
 # Single-zone graph: only z1 carries live data; z2 registers are placeholders.
@@ -502,18 +535,19 @@ async def test_bass3_fixture_rejects_quick_veto_without_duration() -> None:
 
 
 # Startup cache data must not authorize a bus write before a real find response proves duration support.
-# Intent: an unknown quick-veto capability returns a discovery error without any partial register write.
+# Intent: an unknown quick-veto capability blocks the operation without any partial register write.
 # Why: BASS3 can load its climate entity from cache before authoritative discovery exposes the absent duration register.
 async def test_auto_temperature_rejects_quick_veto_before_discovery() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, None, data={"ebusd": {"ctlv2.Z1OpMode.value": "auto"}})
-        coordinator.async_write_register = AsyncMock(return_value=True)
+        coordinator.ebus = MagicMock()
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.write_register = AsyncMock()
         z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
 
-        with pytest.raises(_MockHomeAssistantError, match="until discovery completes"):
-            await z1.async_set_temperature(temperature=22.0)
+        await z1.async_set_temperature(temperature=22.0)
 
-        coordinator.async_write_register.assert_not_awaited()
+        coordinator.ebus.write_register.assert_not_awaited()
 
 
 # A stale device-side veto must not bypass the duration capability gate during a target update.
@@ -727,9 +761,8 @@ async def test_ghost_zone_gets_no_climate_entity() -> None:
         }
 
 
-# Intent: with no discovery graph yet, setup keeps the z1 climate entity and cooling UI,
-# while withholding BOOST until the duration register is confirmed.
-# Why: a quick-veto write is unsafe before discovery, but the non-writing cooling UI retains legacy startup behavior.
+# Intent: with no discovery graph yet, setup creates no climate entities.
+# Why: a physical zone owner is unknown before discovery, so a synthetic z1 entity is unsafe.
 async def test_setup_with_empty_graph_defers_boost_until_discovery() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, None, _setup_data())
@@ -738,11 +771,7 @@ async def test_setup_with_empty_graph_defers_boost_until_discovery() -> None:
         added: list = []
         await CLIMATE.async_setup_entry(hass, _entry(), lambda entities: added.extend(entities))
 
-        assert len(added) == 2
-        z1 = added[0]
-        assert z1._attr_unique_id == "entry-1_climate_z1"
-        assert HVACMode.COOL in z1.hvac_modes
-        assert "boost" not in z1.preset_modes
+        assert added == []
 
 
 # Intent: zones discovered after setup still get their climate entities via the
@@ -755,11 +784,12 @@ async def test_post_discovery_adds_missing_zone_entities() -> None:
         hass.data = {"vaillant_ebus": {"entry-1": coordinator}}
         added: list = []
         await CLIMATE.async_setup_entry(hass, _entry(), lambda entities: added.extend(entities))
-        assert len(added) == 2
+        assert added == []
 
         graph = _graph_two_zone()
         coordinator._graph = graph
-        coordinator._last_find_keys = set(graph.raw_registers)
+        coordinator._ebusd_connected = True
+        coordinator._last_find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
         for callback in coordinator._post_discovery_callbacks:
             callback()
 

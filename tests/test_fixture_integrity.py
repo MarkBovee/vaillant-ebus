@@ -42,6 +42,10 @@ NEW_CAPTURE_PROVENANCE = {
         "https://github.com/user-attachments/files/32323735/discovery_dump_2026-09-17_090525.yaml",
         "f24a5d76854b6c019a72548bf44ed75a467b9931d031d2de788a9a51a881c7ea",
     ),
+    "community/basv3_issue31_2026-09-17_203723_discovery.yaml": (
+        "https://github.com/user-attachments/files/32352593/discovery_dump_2026-09-17_203723.txt",
+        "ae16159d3d49d1b912a1fcfff27928477000df8c6643700dc57e8d3db82c260c",
+    ),
 }
 
 
@@ -135,6 +139,21 @@ def test_issue32_dump_keeps_complete_candidate_evidence() -> None:
     assert any(item["request"] == "f108b509055402005b0d" for item in dump["unknown_telegrams"])
     assert any(item["request"] == "f108b509055402000d0a" for item in dump["unknown_telegrams"])
     assert any(item["request"] == "f108b50905540200c509" for item in dump["unknown_telegrams"])
+
+
+# Intent: the discussion #31 BASV3 capture retains the invalid B524 response evidence.
+# Why: these short replies are the exact condition that made runtime r5 definitions poll forever.
+def test_issue31_basv3_dump_keeps_b524_invalid_position_evidence() -> None:
+    fixture = "community/basv3_issue31_2026-09-17_203723_discovery.yaml"
+    dump = load_discovery_dump(fixture)
+    configs = dump["metadata"]["ebusd_info"]["loaded_configs"]
+
+    assert configs["15"]["scanned"] == "MF=Vaillant;ID=BASV3;SW=0708;HW=4304"
+    for raw_lines in (dump["raw_find_lines"], dump["raw_find_lines_after"]):
+        invalid_state_registers = [
+            line for line in raw_lines if line.startswith("basv3 Hc") and "ERR: invalid position" in line
+        ]
+        assert len(invalid_state_registers) == 12
 
 
 # Intent: every discovery-dump fixture carries provenance metadata and at least one find-line set.

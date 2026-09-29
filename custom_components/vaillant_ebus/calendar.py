@@ -12,16 +12,13 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
-from .coordinator import VaillantCoordinator
+from .coordinator import VaillantCoordinator, get_register_value
 
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 SCHEDULES = {
     "Heating Program": "CcTimer",
     "Zone Program": "Z1Timer",
     "Domestic Hot Water Program": "HwcTimer",
-    # Additive: empty on hardware without cooling-timer registers. The bus
-    # carries separate per-day cooling schedules (Z1/Z2CoolingTimer_*), which
-    # the Vaillant app uses for heating/cooling intervals independently.
     "Cooling Program": "Z1CoolingTimer",
     "Cooling Program 2": "Z2CoolingTimer",
 }
@@ -34,14 +31,46 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    added = False
+    added_prefixes: set[str] = set()
 
+    # Intent: add each discovered schedule once, including schedules found later.
+    # Why: a fixed added flag would lose capabilities arriving during rediscovery.
     def _ensure_calendars() -> None:
-        nonlocal added
-        if added or coordinator.heating_circuit is None:
+        if not coordinator.discovery_ready or coordinator.heating_circuit is None:
             return
-        async_add_entities(EbusdCalendar(coordinator, entry, name, prefix) for name, prefix in SCHEDULES.items())
-        added = True
+        schedules = {
+            "Heating Program": ("CcTimer", coordinator.heating_circuit, coordinator.heating_circuit),
+            "Domestic Hot Water Program": ("HwcTimer", coordinator.heating_circuit, "dhw"),
+        }
+        for zone in coordinator.zone_circuits():
+            number = zone[1:]
+            circuit = coordinator.zone_circuits()[zone]
+            schedules.setdefault(
+                "Zone Program" if number == "1" else f"Zone {number} Program",
+                (f"Z{number}Timer", circuit, zone),
+            )
+            schedules.setdefault(
+                "Cooling Program" if number == "1" else f"Cooling Program {number}",
+                (f"Z{number}CoolingTimer", circuit, zone),
+            )
+        available = [
+            (name, prefix, circuit, device_circuit)
+            for name, (prefix, circuit, device_circuit) in schedules.items()
+            if prefix not in added_prefixes
+            and circuit is not None
+            and (
+                coordinator.has_zone_register(circuit, device_circuit, f"{prefix[2:]}_Monday0")
+                if device_circuit.startswith("z")
+                else coordinator.has_controller_register(f"{prefix}_Monday0")
+            )
+        ]
+        if not available:
+            return
+        async_add_entities(
+            EbusdCalendar(coordinator, entry, name, prefix, circuit, device_circuit)
+            for name, prefix, circuit, device_circuit in available
+        )
+        added_prefixes.update(prefix for _, prefix, _, _ in available)
 
     _ensure_calendars()
     coordinator.register_post_discovery_callback(_ensure_calendars)
@@ -59,12 +88,15 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         entry: ConfigEntry,
         name: str,
         prefix: str,
+        circuit: str | None = None,
+        device_circuit: str | None = None,
     ) -> None:
         super().__init__(coordinator)
         self._prefix = prefix
+        self._circuit = circuit or coordinator.heating_circuit
         self._attr_name = name
         self._attr_unique_id = f"{entry.entry_id}_calendar_{prefix.lower()}"
-        self._attr_device_info = coordinator.get_device_info(coordinator.heating_circuit)
+        self._attr_device_info = coordinator.get_device_info(device_circuit or self._circuit)
 
     @property
     def event(self) -> CalendarEvent | None:
@@ -103,14 +135,17 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
 
     # Get timer register value from coordinator data or register cache
     def _value(self, name: str) -> str | None:
-        c = self.coordinator.heating_circuit
+        c = self._circuit
         if c is None:
             return None
-        key = f"{c}.{name}.value"
-        value = self.coordinator.data.get("ebusd", {}).get(key)
+        value = get_register_value(self.coordinator, c, name)
         if value is not None:
-            return str(value)
-        register = self.coordinator.registers.get(f"{c}.{name}")
+            return value
+        expected = f"{c}.{name}".casefold()
+        register = next(
+            (value for key, value in self.coordinator.registers.items() if key.casefold() == expected),
+            None,
+        )
         return register.value.get("value") if register else None
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .models import RegisterMeta
+from .models import RegisterMeta, is_controller_circuit, is_heat_pump_circuit
 
 # BAI registers that are gas/combustion-specific and do not apply to the
 # electric eloBLOCK. They remain discoverable, but are disabled by default
@@ -108,9 +108,33 @@ MULTI_FIELD_FIELDS: dict[str, list[str]] = {
 }
 
 
+# Intent: resolve multi-field metadata without depending on register-name casing.
+# Why: lower-case Status registers must still expose their parsed fields.
+def _multi_field_lookup(register_key: str) -> list[str] | None:
+    fields = MULTI_FIELD_FIELDS.get(register_key)
+    if fields is not None:
+        return fields
+    expected = register_key.casefold()
+    fields = next((fields for key, fields in MULTI_FIELD_FIELDS.items() if key.casefold() == expected), None)
+    if fields is not None:
+        return fields
+    if "." not in register_key:
+        return None
+    circuit, name = register_key.split(".", 1)
+    for alias in metadata_circuits(circuit)[1:]:
+        alias_key = f"{alias}.{name}".casefold()
+        fields = next(
+            (value for key, value in MULTI_FIELD_FIELDS.items() if key.casefold() == alias_key),
+            None,
+        )
+        if fields is not None:
+            return fields
+    return None
+
+
 def multi_field_fields(register_key: str) -> list[str] | None:
     """Return the field names for a multi-field register, or None."""
-    return MULTI_FIELD_FIELDS.get(register_key)
+    return _multi_field_lookup(register_key)
 
 
 # Identify parsed field keys so callers never poll them as ebusd registers.
@@ -125,7 +149,7 @@ def parent_register_name(register_key: str) -> str:
 
 def split_multi_field(register_key: str, raw: str | None) -> dict[str, str | None]:
     """Split a raw register value into named fields; keep the raw value under "value"."""
-    fields = MULTI_FIELD_FIELDS.get(register_key)
+    fields = _multi_field_lookup(register_key)
     values: dict[str, str | None] = {"value": raw}
     if not fields or raw is None:
         return values
@@ -898,31 +922,33 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Pump Status (HC1)",
         entity_type="binary_sensor",
     ),
-    # Runtime-defined B524 heating-circuit state registers (Helianthus B524
-    # register map, community capture via discussion #60). Absent from the
-    # shipped CSVs; wire types EXP (f32) / ULG (u32) and message layout
-    # verified against ebusd datatype.cpp and the compiled eBUS CSVs.
+    # B524 Hc1/Hc2 state metadata retained from the Helianthus map (#60).
+    # Do not poll these by fallback until a hardware-scoped read proves safe.
     "ctlv2.Hc1FlowTempCalc": RegisterMeta(
         friendly_name="Calculated Flow Temperature (HC1)",
         device_class="temperature",
         unit="°C",
+        fallback_read=False,
     ),
     "ctlv2.Hc1MixerPosition": RegisterMeta(
         friendly_name="Mixer Position (HC1)",
         unit="%",
         icon="mdi:valve",
+        fallback_read=False,
     ),
     "ctlv2.Hc1Humidity": RegisterMeta(
         friendly_name="Humidity (HC1)",
         device_class="humidity",
         unit="%",
         icon="mdi:water-percent",
+        fallback_read=False,
     ),
     "ctlv2.Hc1DewPointTemp": RegisterMeta(
         friendly_name="Dew Point Temperature (HC1)",
         device_class="temperature",
         unit="°C",
         icon="mdi:thermometer-water",
+        fallback_read=False,
     ),
     "ctlv2.Hc1PumpHours": RegisterMeta(
         friendly_name="Pump Hours (HC1)",
@@ -930,34 +956,40 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         state_class="total_increasing",
         icon="mdi:clock-outline",
         entity_category="diagnostic",
+        fallback_read=False,
     ),
     "ctlv2.Hc1PumpStarts": RegisterMeta(
         friendly_name="Pump Starts (HC1)",
         state_class="total_increasing",
         icon="mdi:counter",
         entity_category="diagnostic",
+        fallback_read=False,
     ),
     "ctlv2.Hc2FlowTempCalc": RegisterMeta(
         friendly_name="Calculated Flow Temperature (HC2)",
         device_class="temperature",
         unit="°C",
+        fallback_read=False,
     ),
     "ctlv2.Hc2MixerPosition": RegisterMeta(
         friendly_name="Mixer Position (HC2)",
         unit="%",
         icon="mdi:valve",
+        fallback_read=False,
     ),
     "ctlv2.Hc2Humidity": RegisterMeta(
         friendly_name="Humidity (HC2)",
         device_class="humidity",
         unit="%",
         icon="mdi:water-percent",
+        fallback_read=False,
     ),
     "ctlv2.Hc2DewPointTemp": RegisterMeta(
         friendly_name="Dew Point Temperature (HC2)",
         device_class="temperature",
         unit="°C",
         icon="mdi:thermometer-water",
+        fallback_read=False,
     ),
     "ctlv2.Hc2PumpHours": RegisterMeta(
         friendly_name="Pump Hours (HC2)",
@@ -965,12 +997,14 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         state_class="total_increasing",
         icon="mdi:clock-outline",
         entity_category="diagnostic",
+        fallback_read=False,
     ),
     "ctlv2.Hc2PumpStarts": RegisterMeta(
         friendly_name="Pump Starts (HC2)",
         state_class="total_increasing",
         icon="mdi:counter",
         entity_category="diagnostic",
+        fallback_read=False,
     ),
     "ctlv2.Z1ActualRoomTempDesired": RegisterMeta(
         friendly_name="Room Temperature Target (Z1)",
@@ -2143,24 +2177,50 @@ def b516_date_bytes(now: datetime) -> str:
     return f"{(w << 4) | v:02x}{qq:02x}"
 
 
+# Intent: return metadata namespaces applicable to a discovered circuit.
+# Why: physical controller numbers map to the shared controller metadata without becoming targets.
+def metadata_circuits(circuit: str) -> tuple[str, ...]:
+    if is_controller_circuit(circuit):
+        return (circuit, "ctlv2", "hmu")
+    if is_heat_pump_circuit(circuit):
+        return (circuit, "hmu", "ctlv2")
+    if circuit.casefold() in {"vwz", "vwzio"}:
+        return (circuit, "vwz", "vwzio")
+    if circuit.casefold() in {"bai", "v32"}:
+        return (circuit, "hmu", "ctlv2")
+    if circuit.isdigit():
+        return (circuit, "ctlv2", "hmu")
+    return (circuit,)
+
+
+# Intent: look up register metadata without depending on ebusd name casing.
+# Why: lower-case discovery keys must retain their canonical metadata and entity type.
+def _map_get(key: str) -> RegisterMeta | None:
+    meta = REGISTER_MAP.get(key)
+    if meta is not None:
+        return meta
+    key_lower = key.casefold()
+    return next((value for map_key, value in REGISTER_MAP.items() if map_key.casefold() == key_lower), None)
+
+
 # Look up RegisterMeta by circuit.name, return empty meta if unknown
 def get_meta(circuit: str, name: str, field: str = "value") -> RegisterMeta:
     key = f"{circuit}.{name}"
     if field != "value":
         key += f".{field}"
-    meta = REGISTER_MAP.get(key)
+    meta = _map_get(key)
     # Fallbacks for hardware variants that expose the same register under a
     # different circuit. The ctlv2 variant can appear as its own circuit (do not
     # self-alias), and heat-pump statistics (Stat* energy, etc.) map onto the hmu
     # keys across controller circuits.
     if meta is None:
-        for alt_circuit in ("ctlv2", "hmu"):
+        for alt_circuit in metadata_circuits(circuit)[1:]:
             if alt_circuit == circuit:
                 continue
             alt = f"{alt_circuit}.{name}"
             if field != "value":
                 alt += f".{field}"
-            meta = REGISTER_MAP.get(alt)
+            meta = _map_get(alt)
             if meta is not None:
                 break
     return meta or RegisterMeta()

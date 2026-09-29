@@ -40,9 +40,7 @@ def _resolve_coordinator(hass: HomeAssistant, call: ServiceCall) -> VaillantCoor
         return next(iter(coordinators.values()))
     if not coordinators:
         raise HomeAssistantError("no loaded vaillant_ebus config entries")
-    raise HomeAssistantError(
-        "multiple vaillant_ebus config entries are loaded; pass entry_id to select one"
-    )
+    raise HomeAssistantError("multiple vaillant_ebus config entries are loaded; pass entry_id to select one")
 
 
 def _service_handler(hass: HomeAssistant, handler):
@@ -68,7 +66,7 @@ async def _svc_write_parameter(hass: HomeAssistant, call: ServiceCall) -> None:
     circuit = call.data["circuit"]
     name = call.data["name"]
     value = call.data["value"]
-    ok = await coordinator.async_write_register(circuit, name, value)
+    ok = await coordinator.async_write_register(circuit, name, value, require_discovered=False)
     _LOGGER.info("write_parameter %s.%s=%s: success=%s", circuit, name, value, ok)
 
 
@@ -227,11 +225,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 # Tear down the coordinator; integration-scope services stay available and
 # resolve against whatever entries remain loaded.
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coordinator is not None:
+        coordinator.request_unload()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        coordinator = hass.data[DOMAIN].pop(entry.entry_id)
-        await coordinator.async_stop()
-    return True
+        if coordinator is not None:
+            await coordinator.async_stop()
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+    elif coordinator is not None:
+        coordinator.cancel_unload_request()
+    return unload_ok
 
 
 # Allow Home Assistant to delete a device only when it is no longer provided by

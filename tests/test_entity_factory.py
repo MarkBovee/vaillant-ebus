@@ -7,6 +7,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 from tests.fake_ebusd import load_find_lines
 
 BACKEND_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend"
@@ -188,7 +190,7 @@ class TestEntityGeneration:
             assert e.key.count(".") == 2, f"Key should have 2 dots: {e.key}"
 
     # Helianthus B524 register map fixture (community capture via discussion
-    # #60): the runtime-defined heating-circuit state registers must generate
+    # #60): discovered heating-circuit state registers must generate
     # entities with the documented metadata (units, device classes, counters
     # as diagnostic total-increasing sensors).
     # Intent: B524 runtime-defined heating-circuit registers generate entities
@@ -215,6 +217,165 @@ class TestEntityGeneration:
         assert by_name["Hc2Humidity"].meta.device_class == "humidity"
         assert by_name["Hc2PumpHours"].meta.unit == "h"
         assert by_name["Hc2PumpStarts"].meta.entity_category == "diagnostic"
+        assert by_name["Hc1FlowTempCalc"].meta.enabled is True
+        assert by_name["Hc1FlowTempCalc"].meta.fallback_read is False
+
+    # Intent: issue #32 exposes room-temperature influence as a CTLV3 select.
+    # Why: the register has discrete operating modes and must not be shown as a temperature sensor.
+    def test_issue32_room_temperature_switch_is_ctlv3_select(self) -> None:
+        graph = DiscoveryService.build_device_graph(
+            load_find_lines("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml", after=True)
+        )
+        entity = next(item for item in EntityFactoryService().generate(graph) if item.name == "Hc1RoomTempSwitchOn")
+
+        assert entity.entity_type == "select"
+        assert entity.meta.writable is True
+        assert entity.meta.options == ["off", "modulating", "thermostat"]
+        assert entity.circuit == "ctlv3"
+        assert entity.device_circuit == "z1"
+
+    # Intent: other CTLV3 firmware retains its original sensor metadata until separately verified.
+    # Why: issue #32 confirms the select write behavior only for SW0808/HW8004.
+    @pytest.mark.parametrize(("scan_field", "variant"), [("scan_sw", "0708"), ("scan_hw", "5103")])
+    def test_other_ctlv3_firmware_keeps_room_temperature_sensor(self, scan_field: str, variant: str) -> None:
+        graph = DiscoveryService.build_device_graph(
+            load_find_lines("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml", after=True)
+        )
+        controller = graph.heating_controller_result().node
+        assert controller is not None
+        setattr(controller, scan_field, variant)
+
+        entity = next(item for item in EntityFactoryService().generate(graph) if item.name == "Hc1RoomTempSwitchOn")
+
+        assert entity.entity_type == "sensor"
+        assert entity.meta.writable is False
+        assert entity.meta.options is None
+
+    # Intent: a stale ctlv2 room-temperature row is not retained beside the CTLV3 select.
+    # Why: the discovered controller owner must determine both entity type and legacy migration.
+    def test_stale_ctlv2_room_temperature_row_does_not_survive_ctlv3_owner(self) -> None:
+        graph = DiscoveryService.build_device_graph(
+            [
+                "scan.15 = Vaillant;CTLV3;0808;8004",
+                "ctlv3 Hc1RoomTempSwitchOn = thermostat",
+                "ctlv3 HwcOpMode = auto",
+                "ctlv2 Hc1RoomTempSwitchOn = 18",
+            ]
+        )
+        entities = EntityFactoryService().generate(graph)
+
+        actual = [(entity.circuit, entity.entity_type) for entity in entities if entity.name == "Hc1RoomTempSwitchOn"]
+        assert actual == [("ctlv3", "select")]
+
+    # Intent: non-CTLV equipment keeps the existing room-temperature threshold sensor.
+    # Why: #32 proves discrete select semantics only for the CTLV target hardware.
+    def test_bass_room_temperature_switch_keeps_sensor_metadata(self) -> None:
+        graph = DiscoveryService.build_device_graph(
+            load_find_lines("community/saunier_duval_f34_issue129_discovery.yaml")
+        )
+        entity = next(item for item in EntityFactoryService().generate(graph) if item.name == "Hc1RoomTempSwitchOn")
+
+        assert entity.entity_type == "sensor"
+        assert entity.meta.writable is False
+        assert entity.meta.options is None
+
+    # Intent: BASV3 invalid-position B524 replies do not create enabled entities.
+    # Why: an error placeholder is not evidence that the register is supported on the controller.
+    def test_basv3_invalid_position_b524_rows_create_no_entities(self) -> None:
+        graph = DiscoveryService.build_device_graph(
+            load_find_lines("community/basv3_issue31_2026-09-17_203723_discovery.yaml", after=True)
+        )
+        entities = EntityFactoryService().generate(graph)
+        names = {entity.name for entity in entities}
+        unsupported = {
+            f"Hc{zone}{register}"
+            for zone in (1, 2)
+            for register in ("FlowTempCalc", "MixerPosition", "Humidity", "DewPointTemp", "PumpHours", "PumpStarts")
+        }
+
+        assert not names & unsupported
+
+    # Intent: a live-discovered B524 value still receives its mapped entity.
+    # Why: metadata-only placeholders are suppressed without blocking real bus data.
+    def test_live_discovered_b524_register_keeps_mapped_entity(self) -> None:
+        key = "ctlv2.Hc1FlowTempCalc"
+        graph = DeviceGraph(
+            nodes={
+                "ctlv2": DeviceNode(
+                    "ctlv2",
+                    DeviceType.HEATING_CONTROLLER,
+                    registers=[key],
+                    has_data=True,
+                    scan_type="CTLV2",
+                )
+            },
+            raw_registers={key: "35.5"},
+            placeholder_registers=set(),
+        )
+
+        entity = next(item for item in EntityFactoryService().generate(graph) if item.name == "Hc1FlowTempCalc")
+
+        assert entity.entity_type == "sensor"
+        assert entity.enabled_by_default is True
+
+    # Intent: a live HC9 register remains visible when no matching Z9 zone node exists.
+    # Why: high-numbered heating circuits can be discovered independently of a room-zone mapping.
+    def test_standalone_hc9_register_stays_on_source_device(self) -> None:
+        key = "ctlv7.Hc9FlowTemp"
+        graph = DeviceGraph(
+            nodes={
+                "ctlv7": DeviceNode(
+                    "ctlv7", DeviceType.HEATING_CONTROLLER, registers=[key], has_data=True, scan_type="CTLV7"
+                ),
+            },
+            raw_registers={key: "30.0"},
+            placeholder_registers=set(),
+        )
+
+        entity = next(item for item in EntityFactoryService().generate(graph) if item.name == "Hc9FlowTemp")
+
+        assert entity.device_circuit == "ctlv7"
+
+    # Intent: CTLV2 retains the existing temperature-sensor metadata for the same register name.
+    # Why: the select semantics and write behavior are confirmed only for CTLV3 hardware.
+    def test_ctlv2_room_temperature_switch_keeps_sensor_metadata(self) -> None:
+        graph = DiscoveryService.build_device_graph(
+            load_find_lines("community/flexotherm_ctlv2_cooling_discovery.yaml", after=True)
+        )
+        entity = next(item for item in EntityFactoryService().generate(graph) if item.name == "Hc1RoomTempSwitchOn")
+
+        assert graph.heating_controller_result().node.scan_type == "CTLV2"
+        assert entity.entity_type == "sensor"
+        assert entity.meta.writable is False
+        assert entity.meta.unit == "°C"
+        assert entity.meta.options is None
+
+    # Intent: a no-data CTLV2 value retains the established sensor entity in HA.
+    # Why: temporary unavailability must not turn the supported CTLV2 sensor into a missing entity.
+    def test_ctlv2_room_temperature_switch_placeholder_remains_enabled(self) -> None:
+        circuit = "ctlv2"
+        register = f"{circuit}.Hc1RoomTempSwitchOn"
+        graph = DeviceGraph(
+            nodes={
+                circuit: DeviceNode(
+                    circuit,
+                    DeviceType.HEATING_CONTROLLER,
+                    registers=[register],
+                    has_data=True,
+                    scan_type="CTLV2",
+                    scan_sw="0514",
+                    scan_hw="1104",
+                )
+            },
+            raw_registers={},
+            placeholder_registers={register},
+        )
+
+        entity = next(item for item in EntityFactoryService().generate(graph) if item.name == "Hc1RoomTempSwitchOn")
+
+        assert entity.entity_type == "sensor"
+        assert entity.raw_value == ""
+        assert entity.enabled_by_default is True
 
 
 class TestDeviceCircuitResolution:
@@ -237,8 +398,7 @@ class TestDeviceCircuitResolution:
         svc = EntityFactoryService()
         result = svc.generate(graph)
         z1_entities = [e for e in result if e.name == "Z1DayTemp"]
-        assert z1_entities, "Expected Z1DayTemp entity"
-        assert z1_entities[0].device_circuit == "ctlv2", f"Expected ctlv2, got {z1_entities[0].device_circuit}"
+        assert not z1_entities, "Inactive zones must not create default entities"
 
     # Intent: exclude an inactive secondary zone instead of folding it into ctlv2.
     # Why: an inactive secondary zone would otherwise create phantom entities for hardware that is not installed.

@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_AWAY_DURATION, DEFAULT_AWAY_DURATION, DOMAIN
-from .coordinator import VaillantCoordinator
+from .coordinator import VaillantCoordinator, get_register_value
 
 ZONE = "dhw"
 
@@ -37,9 +37,7 @@ def _value(coordinator: VaillantCoordinator, register: str) -> str | None:
     circuit = coordinator.heating_circuit
     if circuit is None:
         return None
-    key = f"{circuit}.{register}.value"
-    value = coordinator.data.get("ebusd", {}).get(key)
-    return str(value) if value is not None else None
+    return get_register_value(coordinator, circuit, register)
 
 
 # Parse string value to float, return None on failure
@@ -57,7 +55,31 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([EbusdWaterHeater(coordinator, entry)])
+    added = False
+
+    # Intent: add the water heater only after every register used by its features exists.
+    # Why: operation, boost, target, and away writes must not be partially supported.
+    def _ensure_entity() -> None:
+        nonlocal added
+        if added or not coordinator.discovery_ready:
+            return
+        if not all(
+            coordinator.has_controller_register(register)
+            for register in (
+                "HwcOpMode",
+                "HwcStorageTemp",
+                "HwcTempDesired",
+                "HwcSFMode",
+                "HwcHolidayStartPeriod",
+                "HwcHolidayEndPeriod",
+            )
+        ):
+            return
+        async_add_entities([EbusdWaterHeater(coordinator, entry)])
+        added = True
+
+    _ensure_entity()
+    coordinator.register_post_discovery_callback(_ensure_entity)
 
 
 class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity):

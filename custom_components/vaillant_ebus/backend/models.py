@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
@@ -141,11 +142,21 @@ COMPRESSOR_STATUS_LABELS: dict[str, str] = {
 }
 
 
+# Intent: find a register regardless of casing used by a discovery response.
+# Why: compressor and tank derivation must not depend on canonical register spelling.
+def _register_lookup(registers: Mapping[str, EbusdRegister], key: str) -> EbusdRegister | None:
+    register = registers.get(key)
+    if register is not None:
+        return register
+    expected = key.casefold()
+    return next((value for name, value in registers.items() if name.casefold() == expected), None)
+
+
 # Return whether current compressor state explicitly indicates idle.
 # hp_circuit lets callers whose heat pump answers on a non-"hmu" circuit
 # resolve the status/speed registers correctly.
 def compressor_is_idle(registers: Mapping[str, EbusdRegister], hp_circuit: str = "hmu") -> bool:
-    status = registers.get(f"{hp_circuit}.RunDataStatuscode")
+    status = _register_lookup(registers, f"{hp_circuit}.RunDataStatuscode")
     raw_status = status.value.get("value") if status else None
     if raw_status is not None:
         try:
@@ -165,7 +176,7 @@ def compressor_is_idle(registers: Mapping[str, EbusdRegister], hp_circuit: str =
 
     signals: list[float] = []
     for key in (f"{hp_circuit}.RunDataCompressorSpeed", f"{hp_circuit}.CurrentCompressorUtil"):
-        register = registers.get(key)
+        register = _register_lookup(registers, key)
         raw_value = register.value.get("value") if register else None
         if raw_value is None:
             continue
@@ -196,7 +207,7 @@ def zero_idle_registers(registers: Mapping[str, EbusdRegister], hp_circuit: str 
     if not compressor_is_idle(registers, hp_circuit):
         return
     for name in COMPRESSOR_ZERO_REGISTER_NAMES:
-        reg = registers.get(f"{hp_circuit}.{name}")
+        reg = _register_lookup(registers, f"{hp_circuit}.{name}")
         if reg:
             reg.value["value"] = "0"
             reg.has_data = True
@@ -228,9 +239,19 @@ def _clean(value: str | None) -> str:
 SETMODE_RELEASE_COOLING_INDEX = 9
 
 
+# Intent: retrieve derived-state fields independently of register-name casing.
+# Why: energy-state decoding consumes the raw coordinator data map directly.
+def _value_lookup(values: Mapping[str, str | None], key: str) -> str | None:
+    value = values.get(key)
+    if value is not None:
+        return value
+    expected = key.casefold()
+    return next((value for name, value in values.items() if name.casefold() == expected), None)
+
+
 def _setmode_release_cooling(values: Mapping[str, str | None], hp_circuit: str) -> bool:
     """Return whether the heat pump requests cooling via SetMode.releaseCooling."""
-    raw = values.get(f"{hp_circuit}.SetMode.value")
+    raw = _value_lookup(values, f"{hp_circuit}.SetMode.value")
     if not raw:
         return False
     parts = str(raw).split(";")
@@ -254,19 +275,19 @@ def _setmode_release_cooling(values: Mapping[str, str | None], hp_circuit: str) 
 def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | None) -> str | None:
     if not hp_circuit:
         return None
-    status = _clean(values.get(f"{hp_circuit}.RunDataStatuscode.value"))
-    compressor = _clean(values.get(f"{hp_circuit}.Status00.compressorstate"))
-    heating_state = _clean(values.get(f"{hp_circuit}.Status00.heatingstate"))
-    defrost_bit = values.get(f"{hp_circuit}.Status00.defrost")
-    heating_bit = values.get(f"{hp_circuit}.Status07.heatermain_b3_heating")
-    cooling_bit = values.get(f"{hp_circuit}.Status07.heatermain_b4_cooling")
-    warmwater_bit = values.get(f"{hp_circuit}.Status07.heatermain_b7_warmwater")
+    status = _clean(_value_lookup(values, f"{hp_circuit}.RunDataStatuscode.value"))
+    compressor = _clean(_value_lookup(values, f"{hp_circuit}.Status00.compressorstate"))
+    heating_state = _clean(_value_lookup(values, f"{hp_circuit}.Status00.heatingstate"))
+    defrost_bit = _value_lookup(values, f"{hp_circuit}.Status00.defrost")
+    heating_bit = _value_lookup(values, f"{hp_circuit}.Status07.heatermain_b3_heating")
+    cooling_bit = _value_lookup(values, f"{hp_circuit}.Status07.heatermain_b4_cooling")
+    warmwater_bit = _value_lookup(values, f"{hp_circuit}.Status07.heatermain_b7_warmwater")
     release_cooling = _setmode_release_cooling(values, hp_circuit)
     # Status01.pumpstate reports the 3-way valve / pump position (0=off,
     # 1=on, 2=overrun, 4=hwc). On units without Status00/Status07 and with
     # RunDataStatuscode stuck at 0 during DHW demand (e.g. HMU00/CTLV3), the
     # DHW position is the only reliable DHW-active signal.
-    pumpstate_hwc = _clean(values.get(f"{hp_circuit}.Status01.pumpstate")) == "hwc"
+    pumpstate_hwc = _clean(_value_lookup(values, f"{hp_circuit}.Status01.pumpstate")) == "hwc"
 
     blob = " ".join(part for part in (status, compressor, heating_state) if part)
     if (
@@ -339,7 +360,8 @@ def _parse_temp(raw: str | None) -> float | None:
 def derive_tank_presence(values: Mapping[str, str | None], dhw_circuit: str | None) -> bool | None:
     if not dhw_circuit:
         return None
-    raw = values.get(f"{dhw_circuit}.HwcStorageTemp.value")
+    expected = f"{dhw_circuit}.HwcStorageTemp.value".casefold()
+    raw = next((value for key, value in values.items() if key.casefold() == expected), None)
     if raw is None:
         return None
     temp = _parse_temp(raw)
@@ -420,6 +442,7 @@ class RegisterMeta:
     entity_type: str = ""
     device_circuit: str | None = None
     divisor: float | None = None
+    fallback_read: bool = True
 
 
 @dataclass
@@ -481,6 +504,28 @@ def _is_numeric_vrc_controller(node: DeviceNode) -> bool:
     return node.circuit.isdigit() and node.scan_type == f"{node.circuit}00"
 
 
+# Intent: identify numbered and family-level controller circuit aliases.
+# Why: owner resolution must support ctlv1 through ctlv9 without a ctlv2 default.
+def is_controller_circuit(circuit: str) -> bool:
+    """Return whether a circuit name identifies a numbered controller family."""
+    lower = circuit.casefold()
+    return lower in {"ctlv", "basv", "bass"} or any(
+        lower.startswith(prefix) and lower[len(prefix) :].isdigit() for prefix in ("ctlv", "basv", "bass")
+    )
+
+
+# Intent: identify heat-pump circuit aliases without choosing a physical default.
+# Why: HMU and HMUX variants need the same role-based resolver.
+def is_heat_pump_circuit(circuit: str) -> bool:
+    """Return whether a circuit name identifies a heat-pump family."""
+    lower = circuit.casefold()
+    return (
+        lower in {"hmu", "hmux"}
+        or (lower.startswith("hmux") and lower[4:].isdigit())
+        or (lower.startswith("hmu") and lower[3:].isdigit())
+    )
+
+
 @dataclass
 class DeviceGraph:
     nodes: dict[str, DeviceNode]
@@ -492,8 +537,37 @@ class DeviceGraph:
     # sub-device: the DHW node owns ``ctlv3.HwcOpMode`` while the controller
     # node itself lists no Hwc registers.
     _CONTROL_REGISTERS: frozenset[str] = frozenset(
-        {"HwcTempDesired", "HwcStorageTemp", "HwcOpMode", "Z1DayTemp", "Z1OpMode"}
+        {
+            "HwcTempDesired",
+            "HwcStorageTemp",
+            "HwcOpMode",
+            "HwcSFMode",
+            "HwcHolidayStartPeriod",
+            "HwcHolidayEndPeriod",
+            "Z1DayTemp",
+            "Z1OpMode",
+            "Z1RoomZoneMapping",
+        }
     )
+
+    # Intent: classify controller/DHW register names, including numbered zones.
+    # Why: a placeholder Z9/Hc9 control register still proves its source owner.
+    @classmethod
+    def _is_control_register(cls, name: str) -> bool:
+        lower = name.casefold()
+        if lower in {item.casefold() for item in cls._CONTROL_REGISTERS}:
+            return True
+        return bool(
+            re.match(
+                r"^(?:z\d+(?:daytemp|opmode|roomzonemapping|holidaystartperiod|holidayendperiod|holidaytemp|"
+                r"quickvetoduration|quickvetotemp|quickvetoenddate|quickvetoendtime|actualroomtempdesired|"
+                r"nighttemp|coolingtemp|coolingopmode|coolingmanualtemp|coolingsetbacktemp)|"
+                r"hc\d+(?:actualflowtempdesired|flowtemp|pumpstatus|minflowtempdesired|maxflowtempdesired|"
+                r"roomtempswitchon|heatcurve|summertemplimit|mincoolingtempdesired|coolingenabled|"
+                r"coolingflowtempmin|dewpointmonitoring|dewpointoffset|autooffmode))$",
+                lower,
+            )
+        )
 
     # Source circuits that own a discovered controller/DHW control register.
     # Runtime-defined registers can create a bare ``ctlv2`` node on a bus whose
@@ -501,8 +575,8 @@ class DeviceGraph:
     # the logical device that happens to list it, identifies the controller.
     def _control_owner_circuits(self) -> set[str]:
         owners: set[str] = set()
-        for key in self.raw_registers:
-            if key.rsplit(".", 1)[-1] in self._CONTROL_REGISTERS:
+        for key in (*self.raw_registers, *self.placeholder_registers):
+            if self._is_control_register(key.rsplit(".", 1)[-1]):
                 owners.add(key.split(".", 1)[0].casefold())
         return owners
 
@@ -517,8 +591,12 @@ class DeviceGraph:
             node
             for node in controllers
             if node.circuit.casefold() in control_owners
-            or any(register.rsplit(".", 1)[-1] in self._CONTROL_REGISTERS for register in node.registers)
+            or any(self._is_control_register(register.rsplit(".", 1)[-1]) for register in node.registers)
         ]
+        identified_control = [node for node in control_candidates if node.scan_type]
+        if len(identified_control) == 1:
+            node = identified_control[0]
+            return ResolutionResult(ResolutionStatus.UNIQUE, node.circuit, node, "scanned control owner")
         numeric_scan_control = [node for node in control_candidates if _is_numeric_vrc_controller(node)]
         if len(numeric_scan_control) == 1:
             node = numeric_scan_control[0]
@@ -588,12 +666,21 @@ class DeviceGraph:
     # Resolve logical metadata circuits and expose ambiguity to safety-sensitive callers.
     def resolve_circuit_result(self, circuit: str) -> ResolutionResult:
         exact_node = self.nodes.get(circuit)
-        expected_type = {
-            "ctlv2": DeviceType.HEATING_CONTROLLER,
-            "hmu": DeviceType.HEAT_PUMP,
-            "bai": DeviceType.HEATING_CONTROLLER,
-        }.get(circuit)
-        if circuit == "ctlv2":
+        if exact_node is None:
+            exact_node = next(
+                (node for key, node in self.nodes.items() if key.casefold() == circuit.casefold()),
+                None,
+            )
+        expected_type = (
+            DeviceType.HEATING_CONTROLLER
+            if is_controller_circuit(circuit)
+            else DeviceType.HEAT_PUMP
+            if is_heat_pump_circuit(circuit)
+            else DeviceType.HEATING_CONTROLLER
+            if circuit.casefold() == "bai"
+            else None
+        )
+        if is_controller_circuit(circuit):
             # Runtime-defined registers can leave a bare ctlv2 node behind even
             # when the real controller answering DHW/heating is ctlv3. Prefer
             # the controller that owns the control registers; fall back to the
@@ -601,20 +688,33 @@ class DeviceGraph:
             result = self.heating_controller_result()
             if result.status == ResolutionStatus.UNIQUE:
                 return result
-            if exact_node is not None and exact_node.device_type == DeviceType.HEATING_CONTROLLER:
-                return ResolutionResult(
-                    ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
-                )
             if result.status == ResolutionStatus.AMBIGUOUS:
+                exact_controls = self._control_owner_circuits()
+                if circuit.casefold() in exact_controls:
+                    return ResolutionResult(
+                        ResolutionStatus.UNIQUE, circuit, exact_node, "exact controller owns control registers"
+                    )
                 return ResolutionResult(result.status, circuit, reason=result.reason)
             return ResolutionResult(ResolutionStatus.MISSING, circuit, reason=result.reason)
+        if exact_node is not None and circuit.casefold() in {"vwz", "vwzio"}:
+            passive = sorted(
+                (node for node in self.nodes.values() if node.device_type == DeviceType.PASSIVE_COOLING),
+                key=lambda node: node.circuit.casefold(),
+            )
+            identified = [node for node in passive if node.scan_type]
+            if len(identified) == 1:
+                return ResolutionResult(
+                    ResolutionStatus.UNIQUE, identified[0].circuit, identified[0], "scanned passive module owner"
+                )
+            if len(passive) == 1:
+                return ResolutionResult(ResolutionStatus.UNIQUE, passive[0].circuit, passive[0], "passive module owner")
         if exact_node is not None and (expected_type is None or exact_node.device_type == expected_type):
             return ResolutionResult(ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit")
         if exact_node is not None and expected_type is not None:
             return ResolutionResult(
                 ResolutionStatus.AMBIGUOUS, circuit=circuit, reason="exact circuit has wrong device role"
             )
-        if circuit == "bai":
+        if circuit.casefold() == "bai":
             bai_controllers = sorted(
                 (
                     node
@@ -629,18 +729,24 @@ class DeviceGraph:
             if bai_controllers:
                 return ResolutionResult(ResolutionStatus.AMBIGUOUS, circuit=circuit, reason="multiple BAI controllers")
             return ResolutionResult(ResolutionStatus.MISSING, circuit, reason="no BAI controller discovered")
-        if circuit == "hmu":
+        if is_heat_pump_circuit(circuit):
             result = self.heat_pump_result()
             if result.status == ResolutionStatus.UNIQUE:
                 return result
             if result.status == ResolutionStatus.AMBIGUOUS:
-                exact_node = self.nodes.get(circuit)
-                if exact_node is not None:
-                    return ResolutionResult(
-                        ResolutionStatus.UNIQUE, exact_node.circuit, exact_node, "exact discovered circuit"
-                    )
                 return ResolutionResult(result.status, circuit, reason=result.reason)
             return ResolutionResult(ResolutionStatus.MISSING, circuit, reason=result.reason)
+        if circuit.casefold() in {"vwz", "vwzio"}:
+            passive = sorted(
+                (node for node in self.nodes.values() if node.device_type == DeviceType.PASSIVE_COOLING),
+                key=lambda node: node.circuit.casefold(),
+            )
+            if len(passive) == 1:
+                node = passive[0]
+                return ResolutionResult(ResolutionStatus.UNIQUE, node.circuit, node, "only passive cooling module")
+            if len(passive) > 1:
+                return ResolutionResult(ResolutionStatus.AMBIGUOUS, circuit, reason="multiple passive cooling modules")
+            return ResolutionResult(ResolutionStatus.MISSING, circuit, reason="no passive cooling module discovered")
         return ResolutionResult(ResolutionStatus.FALLBACK, circuit, reason="literal circuit")
 
     # Deprecated compatibility wrapper. Ownership-sensitive callers must use

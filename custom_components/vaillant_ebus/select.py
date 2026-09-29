@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .backend.entity_factory import EntityDescription
 from .backend.models import is_no_data_value
 from .const import DOMAIN
-from .coordinator import VaillantCoordinator
+from .coordinator import VaillantCoordinator, get_register_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,9 +40,7 @@ async def async_setup_entry(
         return entities
 
     async_add_entities(_build(coordinator.entities))
-    coordinator.register_entity_adder(
-        "select", lambda descriptions: async_add_entities(_build(descriptions))
-    )
+    coordinator.register_entity_adder("select", lambda descriptions: async_add_entities(_build(descriptions)))
 
 
 class EbusdSelect(CoordinatorEntity[VaillantCoordinator], SelectEntity):
@@ -69,8 +67,7 @@ class EbusdSelect(CoordinatorEntity[VaillantCoordinator], SelectEntity):
     def current_option(self) -> str | None:
         # Return current selected option; ebusd sentinels mean "unknown", not
         # a selectable option.
-        data = self.coordinator.data.get("ebusd", {})
-        raw = data.get(self._desc.key)
+        raw = get_register_value(self.coordinator, self._desc.circuit, self._desc.name, self._desc.field)
         if raw is None or is_no_data_value(str(raw)):
             return None
         return str(raw)

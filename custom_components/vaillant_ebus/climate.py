@@ -30,7 +30,7 @@ from .const import (
     EBUSD_TO_HA_HVAC,
     HA_TO_EBUSD_HVAC,
 )
-from .coordinator import VaillantCoordinator
+from .coordinator import VaillantCoordinator, get_register_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,9 +72,7 @@ def _value(coordinator: VaillantCoordinator, register: str, circuit: str | None 
     ckt = coordinator.resolve_register_circuit(circuit) if circuit is not None else coordinator.heating_circuit
     if ckt is None:
         return None
-    key = f"{ckt}.{register}.value"
-    value = coordinator.data.get("ebusd", {}).get(key)
-    return str(value) if value is not None else None
+    return get_register_value(coordinator, ckt, register)
 
 
 # Parse string value to float, return None on failure
@@ -99,26 +97,31 @@ async def async_setup_entry(
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
     created_zones: set[str] = set()
+    created_flow_ranges: set[str] = set()
 
-    # Create thermostat + flow-temp-range for every zone not yet added. Runs at
-    # setup (falling back to z1 before discovery) and again after each applied
-    # discovery graph so zones that appear later still get their entities.
+    # Intent: create thermostat and flow-range entities only for discovered zones.
+    # Why: a synthetic z1 fallback can target the wrong controller or create a ghost climate entity.
     def _ensure_zone_entities() -> None:
         zone_circuits = coordinator.zone_circuits()
-        if not zone_circuits:
-            circuit = coordinator.heating_circuit
-            if circuit is None:
-                return
-            zone_circuits = {"z1": circuit}
-        missing = [zone for zone in zone_circuits if zone not in created_zones]
-        if not missing:
+        if not coordinator.discovery_ready or not zone_circuits:
             return
+        missing = [zone for zone in zone_circuits if zone not in created_zones]
         entities: list[ClimateEntity] = []
         for zone in missing:
             created_zones.add(zone)
             circuit = zone_circuits[zone]
             entities.append(EbusdClimate(coordinator, entry, zone, circuit))
-            entities.append(EbusdFlowTempRange(coordinator, entry, zone, circuit))
+        for zone, circuit in zone_circuits.items():
+            if zone in created_flow_ranges:
+                continue
+            if all(
+                coordinator.has_heating_circuit_register(circuit, zone.replace("z", "hc"), register)
+                for register in ("MinFlowTempDesired", "MaxFlowTempDesired")
+            ):
+                entities.append(EbusdFlowTempRange(coordinator, entry, zone, circuit))
+                created_flow_ranges.add(zone)
+        if not entities:
+            return
         async_add_entities(entities)
 
     _ensure_zone_entities()
@@ -165,7 +168,10 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     @property
     def hvac_modes(self) -> list[HVACMode]:
         modes = [HVACMode.OFF, HVACMode.HEAT]
-        if self.coordinator.has_zone_register(self._circuit, self._zone, COOLING_REGISTER):
+        if (
+            self.coordinator.has_zone_register(self._circuit, self._zone, COOLING_REGISTER)
+            and self._manual_cooling_capability()
+        ):
             modes.append(HVACMode.COOL)
         modes.append(HVACMode.AUTO)
         return modes
@@ -176,15 +182,65 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         presets = [PRESET_NONE]
         if self._quick_veto_capability() is True:
             presets.append(PRESET_BOOST)
-        presets.append(PRESET_AWAY)
+        if self._away_capability() is True:
+            presets.append(PRESET_AWAY)
         return presets
+
+    # Intent: verify every register needed to arm manual cooling.
+    # Why: date support without the zone operation-mode register would permit a partial write.
+    def _manual_cooling_capability(self) -> bool:
+        circuit = self.coordinator.heating_circuit
+        return (
+            circuit is not None
+            and all(
+                self.coordinator.has_controller_register(register)
+                for register in ("ManualCoolingStartDate", "ManualCoolingEndDate")
+            )
+            and self.coordinator.zone_register_discovery_status(circuit, self._zone, "OpMode") is True
+        )
+
+    # Intent: verify that a single-zone climate write has a discovered target.
+    # Why: base climate entities can outlive a partial reconnect graph.
+    def _zone_register_capability(self, name: str) -> bool | None:
+        circuit = self.coordinator.resolve_register_circuit(self._circuit)
+        if circuit is None:
+            return None
+        return self.coordinator.zone_register_discovery_status(circuit, self._zone, name)
 
     # Return the authoritative quick-veto capability once the zone discovery is complete.
     def _quick_veto_capability(self) -> bool | None:
         circuit = self.coordinator.resolve_register_circuit(self._circuit)
         if circuit is None:
             return None
-        return self.coordinator.zone_register_discovery_status(circuit, self._zone, QUICK_VETO_DURATION_REGISTER)
+        statuses = [
+            self.coordinator.zone_register_discovery_status(circuit, self._zone, register)
+            for register in ("QuickVetoDuration", "QuickVetoTemp", "QuickVetoEndDate", "QuickVetoEndTime")
+        ]
+        if any(status is False for status in statuses):
+            return False
+        if any(status is None for status in statuses):
+            return None
+        return True
+
+    # Intent: report whether this zone can write its complete holiday register set.
+    # Why: away mode must not expose a partial write capability.
+    def _away_capability(self) -> bool | None:
+        circuit = self.coordinator.resolve_register_circuit(self._circuit)
+        if circuit is None:
+            return None
+        statuses = [
+            self.coordinator.zone_register_discovery_status(circuit, self._zone, register)
+            for register in ("HolidayStartPeriod", "HolidayEndPeriod", "HolidayTemp")
+        ]
+        statuses.extend(
+            True if self.coordinator.has_controller_register(register) else False
+            for register in ("HwcHolidayStartPeriod", "HwcHolidayEndPeriod")
+        )
+        if any(status is False for status in statuses):
+            return False
+        if any(status is None for status in statuses):
+            return None
+        return True
 
     # Explain whether discovery is pending or the controller lacks the required duration register.
     def _quick_veto_error(self, capability: bool | None) -> str:
@@ -328,6 +384,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Set HVAC mode: cancel boost first, then write ebusd op mode
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
+        if self._zone_register_capability("OpMode") is not True:
+            return
         previous_hvac_mode = self.hvac_mode
         if self.preset_mode == PRESET_BOOST:
             await self._cancel_quick_veto()
@@ -370,6 +428,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # date itself, so only the end date is written.
     async def _start_manual_cooling(self) -> bool:
         try:
+            if not self._manual_cooling_capability():
+                return False
             heating_circuit = self.coordinator.heating_circuit
             if heating_circuit is None:
                 return False
@@ -390,6 +450,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # The controller manages the start date itself.
     async def _cancel_manual_cooling(self) -> bool:
         try:
+            if not self._manual_cooling_capability():
+                return False
             heating_circuit = self.coordinator.heating_circuit
             if heating_circuit is None:
                 return False
@@ -434,6 +496,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
                 raise HomeAssistantError(self._quick_veto_error(capability))
             await self._start_quick_veto(float(temp))
             return
+        if self._zone_register_capability("DayTemp") is not True:
+            return
         ok = await self._write(f"{self._zn}DayTemp", str(temp))
         if ok:
             self._apply_optimistic_target(float(temp))
@@ -461,11 +525,13 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Turn on by setting operation mode to auto
     async def async_turn_on(self) -> None:
-        await self._write(f"{self._zn}OpMode", "auto")
+        if self._zone_register_capability("OpMode") is True:
+            await self._write(f"{self._zn}OpMode", "auto")
 
     # Turn off
     async def async_turn_off(self) -> None:
-        await self._write(f"{self._zn}OpMode", "off")
+        if self._zone_register_capability("OpMode") is True:
+            await self._write(f"{self._zn}OpMode", "off")
 
     # Clear optimistic mode/target when ebusd confirms, expire quick veto timer
     def _handle_coordinator_update(self) -> None:
@@ -505,6 +571,14 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
         self._cancel_confirm_refresh = async_call_later(self.coordinator.hass, QUICK_VETO_CONFIRM_DELAY, _fire)
 
+    # Intent: cancel pending quick-veto confirmation when the climate entity unloads.
+    # Why: an orphaned timer must not refresh or reconnect an unloaded config entry.
+    async def async_will_remove_from_hass(self) -> None:
+        if self._cancel_confirm_refresh is not None:
+            self._cancel_confirm_refresh()
+            self._cancel_confirm_refresh = None
+        await super().async_will_remove_from_hass()
+
     # Cancel quick veto: hold the current day temperature as the veto setpoint
     # until expiry. Verified against live ctlv2 hardware (2026-08-24): writing
     # QuickVetoDuration 0 does not cancel an active veto and QuickVetoEndDate
@@ -514,17 +588,17 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         capability = self._quick_veto_capability()
         if capability is not True:
             raise HomeAssistantError(self._quick_veto_error(capability))
-        self._quick_veto_until = None
         end = self._device_boost_end()
-        if end is not None:
-            self._boost_suppressed_end = end
-        self.async_write_ha_state()
         day_temp = _float(_value(self.coordinator, f"{self._zn}DayTemp", self._circuit))
         if day_temp is not None:
             ok = await self._write(f"{self._zn}QuickVetoTemp", str(day_temp))
             if ok:
+                self._quick_veto_until = None
+                if end is not None:
+                    self._boost_suppressed_end = end
                 self._apply_optimistic_target(day_temp)
                 self._schedule_confirm_refresh()
+                self.async_write_ha_state()
 
     # Start quick veto with specified temp or config-based default for N hours.
     async def _start_quick_veto(self, temp_override: float | None = None) -> bool:
@@ -544,11 +618,15 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             return False
         options = self.coordinator._entry.options
         veto_duration = options.get("quick_veto_duration", 3)
-        # A deliberate new veto ends any cancellation suppression.
-        self._boost_suppressed_end = None
+        previous_temp = _value(self.coordinator, f"{self._zn}QuickVetoTemp", self._circuit)
         ok_temp = await self._write(f"{self._zn}QuickVetoTemp", str(veto_temp))
+        if not ok_temp:
+            _LOGGER.warning("Quick veto temperature write failed for %s", self._zn)
+            return False
         ok_duration = await self._write(f"{self._zn}QuickVetoDuration", str(veto_duration))
         if not (ok_temp and ok_duration):
+            if ok_temp and previous_temp is not None:
+                await self._write(f"{self._zn}QuickVetoTemp", previous_temp)
             # Do not claim state the controller never received.
             _LOGGER.warning(
                 "Quick veto start incomplete for %s (temp_ok=%s duration_ok=%s)",
@@ -557,6 +635,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
                 ok_duration,
             )
             return False
+        # A deliberate new veto ends any cancellation suppression.
+        self._boost_suppressed_end = None
         self._quick_veto_until = datetime.now() + timedelta(hours=veto_duration)
         # Bridge the controller's apply latency: show the requested setpoint
         # immediately and pull confirming data after the settle window.
@@ -569,16 +649,31 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     async def _start_holiday(self) -> None:
         today = datetime.now().date()
         away_duration = self.coordinator._entry.options.get("away_duration", 7)
-        await self._write(f"{self._zn}HolidayStartPeriod", today.strftime(DATE_FMT))
-        await self._write(f"{self._zn}HolidayEndPeriod", (today + timedelta(days=away_duration)).strftime(DATE_FMT))
+        writes = [
+            (self._circuit, f"{self._zn}HolidayStartPeriod", today.strftime(DATE_FMT)),
+            (self._circuit, f"{self._zn}HolidayEndPeriod", (today + timedelta(days=away_duration)).strftime(DATE_FMT)),
+            (self.coordinator.heating_circuit or self._circuit, "HwcHolidayStartPeriod", today.strftime(DATE_FMT)),
+            (
+                self.coordinator.heating_circuit or self._circuit,
+                "HwcHolidayEndPeriod",
+                (today + timedelta(days=away_duration)).strftime(DATE_FMT),
+            ),
+        ]
         ht = _float(_value(self.coordinator, f"{self._zn}HolidayTemp", self._circuit))
         if ht is None:
-            await self._write(f"{self._zn}HolidayTemp", "15.0")
+            writes.append((self._circuit, f"{self._zn}HolidayTemp", "15.0"))
+        await self.coordinator.async_write_registers(writes)
 
     # Cancel holiday: reset dates to unset value
     async def _cancel_holiday(self) -> None:
-        await self._write(f"{self._zn}HolidayStartPeriod", HOLIDAY_RESET)
-        await self._write(f"{self._zn}HolidayEndPeriod", HOLIDAY_RESET)
+        await self.coordinator.async_write_registers(
+            [
+                (self._circuit, f"{self._zn}HolidayStartPeriod", HOLIDAY_RESET),
+                (self._circuit, f"{self._zn}HolidayEndPeriod", HOLIDAY_RESET),
+                (self.coordinator.heating_circuit or self._circuit, "HwcHolidayStartPeriod", HOLIDAY_RESET),
+                (self.coordinator.heating_circuit or self._circuit, "HwcHolidayEndPeriod", HOLIDAY_RESET),
+            ]
+        )
 
     # Write register to the zone's owning circuit through the central write path
     async def _write(self, name: str, value: str) -> bool:
@@ -662,6 +757,11 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     async def async_set_temperature(self, **kwargs: Any) -> None:
         low = kwargs.get("target_temp_low")
         high = kwargs.get("target_temp_high")
+        if not all(
+            self.coordinator.has_heating_circuit_register(self._circuit, self._hc, register)
+            for register in ("MinFlowTempDesired", "MaxFlowTempDesired")
+        ):
+            return
         if low is not None:
             await self._write(f"{self._hc}MinFlowTempDesired", str(int(low)))
         if high is not None:

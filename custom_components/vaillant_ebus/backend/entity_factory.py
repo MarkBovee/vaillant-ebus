@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import logging
+import re
 from copy import copy
 from typing import Any
 
 from .mapping import ELOBLOCK_GAS_REGISTERS, REGISTER_MAP, get_meta, is_field_key, multi_field_fields, split_multi_field
-from .models import DeviceGraph, DeviceNode, DeviceType, EbusdRegister, RegisterMeta, is_no_data_value
+from .models import (
+    DeviceGraph,
+    DeviceNode,
+    DeviceType,
+    EbusdRegister,
+    RegisterMeta,
+    is_no_data_value,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -107,6 +115,8 @@ def _classify_register(
     return "sensor"
 
 
+# Intent: merge user-facing overrides without changing the register's polling policy.
+# Why: YAML entity overrides can adjust presentation, but cannot make unsafe fallback reads safe.
 def _merge_overrides(meta: RegisterMeta, override: dict[str, Any]) -> RegisterMeta:
     """Merge YAML overrides into a RegisterMeta, returning new instance."""
     if not override:
@@ -127,6 +137,7 @@ def _merge_overrides(meta: RegisterMeta, override: dict[str, Any]) -> RegisterMe
         entity_type=override.get("entity_type", meta.entity_type),
         device_circuit=override.get("device_circuit", meta.device_circuit),
         divisor=override.get("divisor", meta.divisor),
+        fallback_read=meta.fallback_read,
     )
     return merged
 
@@ -141,9 +152,7 @@ def _determine_enabled_by_default(
     if not meta.enabled:
         return False
     known_in_map = register_key in REGISTER_MAP
-    mapped_variant = not known_in_map and any(
-        f"{circuit}.{register_key.split('.', 1)[1]}" in REGISTER_MAP for circuit in ("ctlv2", "hmu")
-    )
+    mapped_variant = not known_in_map and bool(meta.friendly_name)
     if raw_value is not None:
         rv = raw_value.strip().lower()
         if is_no_data_value(rv) or "no data" in rv:
@@ -186,6 +195,10 @@ def _resolve_device_circuit(
         return node.circuit
     if parent:
         return parent
+    if "." in register_key and register_key in graph.raw_registers:
+        raw = graph.raw_registers[register_key]
+        if raw is not None and not is_no_data_value(raw):
+            return register_key.split(".", 1)[0]
     return None
 
 
@@ -226,7 +239,7 @@ def _redistribute_device_assignments(
             if target_zone in active_zones:
                 entity._device_circuit = target_zone
             elif target_zone != "z1":
-                continue
+                entity._device_circuit = entity.circuit
         elif name_lower.startswith(_DHW_PREFIXES) and "dhw" in graph.nodes:
             entity._device_circuit = "dhw"
         elif name_lower == "hydraulicscheme" and entity.circuit.lower() == "sc":
@@ -242,6 +255,8 @@ def _redistribute_device_assignments(
 class EntityFactoryService:
     """Pure mapper: device graph + REGISTER_MAP → EntityDescription list."""
 
+    # Intent: map each discovered register using its owning hardware metadata.
+    # Why: writable controls must not leak across controller variants.
     def generate(
         self,
         graph: DeviceGraph,
@@ -252,14 +267,17 @@ class EntityFactoryService:
         eloblock = _is_eloblock(graph)
         seen: set[str] = set()
         entities: list[EntityDescription] = []
+        controller = graph.heating_controller_result().node
 
         reg_to_node: dict[str, DeviceNode] = {}
         for node in graph.nodes.values():
             for rk in node.registers:
-                reg_to_node[rk] = node
+                reg_to_node.setdefault(rk, node)
 
         for node in graph.nodes.values():
             for rk in node.registers:
+                if reg_to_node.get(rk) is not node:
+                    continue
                 if rk.lower() in seen:
                     continue
                 if "." not in rk:
@@ -267,12 +285,28 @@ class EntityFactoryService:
                 seen.add(rk.lower())
 
                 circuit, name = rk.split(".", 1)
+                name_lower = name.casefold()
                 raw = graph.raw_registers.get(rk)
                 # Keys containing a second dot are parsed fields of a parent
                 # register, not standalone ebusd registers.
                 if is_field_key(rk):
                     continue
-                base_meta = get_meta(circuit, name)
+                base_meta = copy(get_meta(circuit, name))
+                if (
+                    name_lower == "hc1roomtempswitchon"
+                    and controller is not None
+                    and controller.circuit.casefold() == circuit.casefold()
+                    and controller.scan_type.upper() == "CTLV3"
+                    and controller.scan_sw.upper() == "0808"
+                    and controller.scan_hw.upper() == "8004"
+                ):
+                    base_meta.friendly_name = "Room Temperature Influence (HC1)"
+                    base_meta.icon = "mdi:thermostat"
+                    base_meta.unit = ""
+                    base_meta.writable = True
+                    base_meta.options = ["off", "modulating", "thermostat"]
+                    base_meta.entity_type = "select"
+                    base_meta.entity_category = "config"
 
                 # Date-like empty sentinel is not a supported entity value;
                 # unlike normal no-data placeholders it cannot become useful
@@ -287,7 +321,49 @@ class EntityFactoryService:
                     continue
 
                 override = overrides.get(rk) or {}
+                keep_ctlv2_sensor = (
+                    name_lower == "hc1roomtempswitchon"
+                    and controller is not None
+                    and controller.circuit.casefold() == circuit.casefold()
+                )
+                if name_lower == "hc1roomtempswitchon" and not keep_ctlv2_sensor:
+                    continue
+                live_zone_register = bool(
+                    re.match(
+                        r"^(?:Z\d+(?:RoomTemp|ActualRoomTempDesired)|Hc\d+(?:FlowTemp|ActualFlowTempDesired|PumpStatus))$",
+                        name,
+                        re.IGNORECASE,
+                    )
+                )
+                if (
+                    node.device_type == DeviceType.ZONE
+                    and not node.has_data
+                    and override.get("enabled") is not True
+                    and not keep_ctlv2_sensor
+                    and not (raw is not None and live_zone_register)
+                ):
+                    continue
+                zone_match = re.match(r"^(?:Z|Hc)(\d+)", name, re.IGNORECASE)
+                if (
+                    zone_match
+                    and override.get("enabled") is not True
+                    and (zone_node := graph.nodes.get(f"z{zone_match.group(1)}")) is not None
+                    and not zone_node.has_data
+                    and name_lower != "hc1roomtempswitchon"
+                ):
+                    continue
+                if (
+                    node.device_type == DeviceType.ZONE
+                    and not node.has_data
+                    and node.circuit.startswith("hc")
+                    and node.circuit[2:].isdigit()
+                    and f"z{node.circuit[2:]}" in graph.nodes
+                ):
+                    continue
                 meta = _merge_overrides(base_meta, override)
+                # A metadata-only register is exposed only after ebusd returns a live value.
+                if raw is None and not meta.fallback_read:
+                    continue
 
                 dc = _resolve_device_circuit(rk, node, graph)
                 if dc is None:
@@ -299,6 +375,14 @@ class EntityFactoryService:
                     "enabled",
                     _determine_enabled_by_default(rk, raw, node.has_data, meta),
                 )
+                if (
+                    name_lower == "hc1roomtempswitchon"
+                    and override.get("entity_type", base_meta.entity_type) != "select"
+                    and controller is not None
+                    and controller.circuit.casefold() == circuit.casefold()
+                    and controller.scan_type.upper() == "CTLV2"
+                ):
+                    entity_enabled = True
                 if eloblock and circuit.lower() == "bai" and name in ELOBLOCK_GAS_REGISTERS:
                     entity_enabled = False
 

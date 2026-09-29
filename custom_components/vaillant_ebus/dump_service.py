@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import tempfile
+from collections.abc import Callable
 from datetime import datetime
 
 import yaml
@@ -20,6 +22,7 @@ from .const import DOMAIN, INTEGRATION_VERSION, SENSITIVE_FIELDS
 from .coordinator import VaillantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+GRAB_CONNECT_TIMEOUT = 5
 
 
 # Redact sensitive fields (serial, keycode, etc.) before writing dump
@@ -63,13 +66,19 @@ def _parse_find_lines(raw_lines: list[str]) -> list[dict]:
     return result
 
 
-# Collect discovered + REGISTER_MAP registers into serializable dicts
+# Intent: export discovered and mapped registers without polling unsafe fallback entries.
+# Why: a diagnostic dump must not restart the active reads suppressed by coordinator metadata.
 async def _dump_registers(
     ebus,
     seen_keys: set[str] | None = None,
     circuit_aliases: dict[str, str | None] | None = None,
+    ensure_active: Callable[[], None] | None = None,
 ) -> tuple[list[dict], set[str], list[str]]:
+    if ensure_active is not None:
+        ensure_active()
     raw_lines = await ebus.find_registers()
+    if ensure_active is not None:
+        ensure_active()
     discovered = _parse_find_lines(raw_lines)
     if seen_keys is None:
         seen_keys = set()
@@ -90,6 +99,8 @@ async def _dump_registers(
 
     aliases = circuit_aliases or {}
     for key, meta in REGISTER_MAP.items():
+        if ensure_active is not None:
+            ensure_active()
         parts = key.split(".", 1)
         if len(parts) != 2:
             continue
@@ -100,7 +111,8 @@ async def _dump_registers(
         if target_circuit is None:
             continue
         target_key = f"{target_circuit}.{name}"
-        if key in seen_keys or target_key in seen_keys:
+        seen_key_folds = {seen_key.casefold() for seen_key in seen_keys}
+        if key.casefold() in seen_key_folds or target_key.casefold() in seen_key_folds:
             continue
         map_entry: dict = {
             "circuit": target_circuit,
@@ -113,70 +125,223 @@ async def _dump_registers(
         }
         if not meta.enabled:
             map_entry["disabled"] = True
-        try:
-            val = await ebus.read_register(target_circuit, name)
-            if val:
-                map_entry["values"] = [_redact(val, name)]
-                map_entry["has_data"] = not is_no_data_value(val)
-        except Exception:
-            pass
+        if meta.fallback_read:
+            try:
+                if ensure_active is not None:
+                    ensure_active()
+                val = await ebus.read_register(target_circuit, name, raise_transport_errors=True)
+                if ensure_active is not None:
+                    ensure_active()
+                if val:
+                    map_entry["values"] = [_redact(val, name)]
+                    map_entry["has_data"] = not is_no_data_value(val)
+            except HomeAssistantError:
+                raise
+            except ConnectionError, TimeoutError, OSError:
+                raise
+            except Exception:
+                pass
         register_list.append(map_entry)
 
     register_list.sort(key=lambda r: (r["circuit"], r["name"]))
     return register_list, seen_keys, raw_lines
 
 
-# Send a raw grab command to ebusd and collect response lines
-async def _grab_cmd(host: str, port: int, command: str) -> list[str]:
-    r, w = await asyncio.open_connection(host, port)
+# Send a raw grab command to ebusd and collect response lines.
+# Intent: close the raw command socket as soon as lifecycle teardown is observed.
+# Why: a read may be suspended while HA unloads the config entry.
+async def _grab_cmd(
+    host: str,
+    port: int,
+    command: str,
+    ensure_active: Callable[[], None] | None = None,
+) -> list[str]:
+    if ensure_active is not None:
+        ensure_active()
+    reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=GRAB_CONNECT_TIMEOUT)
     try:
-        w.write(f"{command}\n".encode())
-        await w.drain()
-        resp = []
+        if ensure_active is not None:
+            ensure_active()
+        writer.write(f"{command}\n".encode())
+        await writer.drain()
+        if ensure_active is not None:
+            ensure_active()
+        response = []
         for _ in range(200):
+            if ensure_active is not None:
+                ensure_active()
             try:
-                line = await asyncio.wait_for(r.readline(), timeout=2)
+                line = await asyncio.wait_for(reader.readline(), timeout=2)
                 if not line:
                     break
                 decoded = line.decode().strip()
                 if decoded:
-                    resp.append(decoded)
+                    response.append(decoded)
             except TimeoutError:
                 break
-        return resp
+        if ensure_active is not None:
+            ensure_active()
+        return response
     finally:
-        w.close()
-        await w.wait_closed()
+        writer.close()
+        await writer.wait_closed()
 
 
-# Capture raw eBUS traffic for N seconds via ebusd grab command
-async def async_grab(host: str, port: int, duration: int) -> list[str]:
+# Intent: finish the grab-stop command even if the caller is cancelled again.
+# Why: ebusd must not keep capturing after HA has unloaded the integration.
+async def _stop_grab_uninterruptibly(host: str, port: int) -> list[str]:
+    stop_task = asyncio.create_task(_grab_cmd(host, port, "grab stop"))
+    interrupted = False
+    try:
+        while True:
+            try:
+                stop_response = await asyncio.shield(stop_task)
+                break
+            except asyncio.CancelledError:
+                interrupted = True
+                if stop_task.done():
+                    stop_response = stop_task.result()
+                    break
+                current_task = asyncio.current_task()
+                if current_task is not None:
+                    current_task.uncancel()
+    except Exception as exc:
+        if interrupted:
+            _LOGGER.warning("Failed to stop ebusd grab during cancellation: %s", exc)
+            raise asyncio.CancelledError from exc
+        raise
+    try:
+        _validate_grab_stop_response(stop_response)
+    except HomeAssistantError as exc:
+        _LOGGER.error("ebusd grab stop response was not successful: %s", exc)
+        if interrupted:
+            raise asyncio.CancelledError from exc
+        raise
+    if interrupted:
+        raise asyncio.CancelledError
+    return stop_response
+
+
+# Intent: reject ebusd grab errors that arrive as response text.
+# Why: `_grab_cmd` treats protocol replies as data rather than exceptions.
+def _validate_grab_response(command: str, response: list[str]) -> None:
+    error = next((line for line in response if line.strip().upper().startswith("ERR:")), None)
+    if error is not None:
+        raise HomeAssistantError(f"ebusd {command} failed: {error}")
+
+
+# Intent: require an acknowledgement that ebusd stopped raw traffic capture.
+# Why: an empty or error reply can leave the bus capture active after export.
+def _validate_grab_stop_response(response: list[str]) -> None:
+    _validate_grab_response("grab stop", response)
+    if not response:
+        raise HomeAssistantError("ebusd did not confirm that the grab stopped")
+
+
+# Intent: capture raw traffic for a bounded duration and always stop the ebusd grab.
+# Why: unload can interrupt a user-requested capture before its configured duration.
+async def async_grab(
+    host: str,
+    port: int,
+    duration: int,
+    ensure_active: Callable[[], None] | None = None,
+) -> list[str]:
     lines: list[str] = []
+    grab_attempted = False
+    cancelled = False
+    try:
+        if ensure_active is not None:
+            ensure_active()
+        grab_attempted = True
+        enable_resp = await _grab_cmd(host, port, "grab", ensure_active=ensure_active)
+        _validate_grab_response("grab", enable_resp)
+        if not enable_resp:
+            raise HomeAssistantError("ebusd did not confirm that the grab started")
+        lines.append(f"[grab] {enable_resp[0]}")
 
-    enable_resp = await _grab_cmd(host, port, "grab")
-    lines.append(f"[grab] {enable_resp[0] if enable_resp else 'no response'}")
+        deadline = asyncio.get_running_loop().time() + duration
+        while True:
+            if ensure_active is not None:
+                ensure_active()
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(0.25, remaining))
 
-    await asyncio.sleep(duration)
-
-    result_resp = await _grab_cmd(host, port, "grab result all")
-    for line in result_resp:
-        lines.append(line)
-
-    stop_resp = await _grab_cmd(host, port, "grab stop")
-    lines.append(f"[grab stop] {stop_resp[0] if stop_resp else 'no response'}")
+        if ensure_active is not None:
+            ensure_active()
+        result_resp = await _grab_cmd(host, port, "grab result all", ensure_active=ensure_active)
+        _validate_grab_response("grab result all", result_resp)
+        lines.extend(result_resp)
+    except asyncio.CancelledError:
+        cancelled = True
+        raise
+    finally:
+        if grab_attempted:
+            try:
+                stop_resp = await _stop_grab_uninterruptibly(host, port)
+                lines.append(f"[grab stop] {stop_resp[0]}")
+            except HomeAssistantError as exc:
+                if cancelled:
+                    raise asyncio.CancelledError from exc
+                raise
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                _LOGGER.error("Failed to stop ebusd grab after capture: %s", exc)
+                if cancelled:
+                    raise asyncio.CancelledError from exc
+                raise HomeAssistantError("Could not stop ebusd traffic capture.") from exc
 
     return lines
 
 
-# Main entry point: dump registers + optional grab to YAML, notify user
+# Intent: track dump exports so config-entry unload can cancel them.
+# Why: raw capture and file persistence may outlive platform teardown.
 async def async_export_discovery_dump(
     hass: HomeAssistant,
     coordinator: VaillantCoordinator,
     grab_duration: int = 0,
 ) -> None:
+    task = asyncio.current_task()
+    active_tasks = getattr(coordinator, "_active_dump_tasks", None)
+    if task is not None and isinstance(active_tasks, set):
+        active_tasks.add(task)
+    try:
+        await _async_export_discovery_dump_impl(hass, coordinator, grab_duration)
+    finally:
+        if task is not None and isinstance(active_tasks, set):
+            active_tasks.discard(task)
+
+
+# Intent: export a discovery dump only from an authoritative ebusd graph.
+# Why: map probes before ownership discovery can poll an assumed circuit.
+async def _async_export_discovery_dump_impl(
+    hass: HomeAssistant,
+    coordinator: VaillantCoordinator,
+    grab_duration: int = 0,
+) -> None:
+    # Intent: stop diagnostic reads when platform teardown starts.
+    # Why: dump export can outlive the config-entry unload request.
+    def ensure_active() -> None:
+        if getattr(coordinator, "_stopped", False) is True or getattr(coordinator, "_unload_requested", False) is True:
+            raise HomeAssistantError("Cannot export discovery dump while the integration is unloading.")
+
+    ensure_active()
     ebus = coordinator.ebus
     if not ebus or not ebus.is_connected:
         message = "Cannot export discovery dump because ebusd is not connected."
+        _LOGGER.error(message)
+        persistent_notification.create(
+            hass,
+            message,
+            title="Vaillant eBUS Discovery Dump Failed",
+            notification_id="vaillant_ebus_discovery_dump_error",
+        )
+        raise HomeAssistantError(message)
+    ensure_active()
+    if not coordinator.discovery_ready:
+        message = "Cannot export discovery dump before ebusd discovery is complete."
         _LOGGER.error(message)
         persistent_notification.create(
             hass,
@@ -189,24 +354,36 @@ async def async_export_discovery_dump(
     # Skip ambiguous logical aliases rather than polling a legacy circuit.
     aliases = {
         logical_circuit: coordinator.resolve_register_circuit(logical_circuit)
-        for logical_circuit in ("ctlv2", "hmu", "bai")
+        for logical_circuit in ("ctlv2", "hmu", "bai", "vwz", "vwzio")
     }
-    before_registers, seen, raw_find_lines = await _dump_registers(ebus, circuit_aliases=aliases)
+    before_registers, seen, raw_find_lines = await _dump_registers(
+        ebus, circuit_aliases=aliases, ensure_active=ensure_active
+    )
+    ensure_active()
 
     grab_lines = []
     if grab_duration > 0:
         _LOGGER.info("Capturing raw eBUS traffic for %d seconds...", grab_duration)
         try:
-            grab_lines = await async_grab(coordinator.ebusd_host, coordinator.ebusd_port, grab_duration)
+            grab_lines = await async_grab(
+                coordinator.ebusd_host, coordinator.ebusd_port, grab_duration, ensure_active=ensure_active
+            )
             _LOGGER.info("Captured %d raw lines", len(grab_lines))
+        except HomeAssistantError:
+            raise
         except Exception as exc:
             _LOGGER.warning("Grab failed: %s", exc)
+            raise HomeAssistantError("Failed to capture raw eBUS traffic.") from exc
+        ensure_active()
 
     after_registers: list[dict] = []
     after_raw_lines: list[str] = []
     has_after_snapshot = grab_duration > 0
     if has_after_snapshot:
-        after_registers, _, after_raw_lines = await _dump_registers(ebus, circuit_aliases=aliases)
+        ensure_active()
+        after_registers, _, after_raw_lines = await _dump_registers(
+            ebus, circuit_aliases=aliases, ensure_active=ensure_active
+        )
 
     output_dir = hass.config.path(DOMAIN)
     # Directory creation and the YAML write are ordered inside _persist_dump;
@@ -214,6 +391,7 @@ async def async_export_discovery_dump(
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     filepath = f"{output_dir}/discovery_dump_{timestamp}.yaml"
     ebusd_info = await ebus.get_info()
+    ensure_active()
 
     dump_data: dict = {
         "metadata": {
@@ -259,7 +437,9 @@ async def async_export_discovery_dump(
     if has_after_snapshot:
         dump_data["changes"] = normalized["changes"]
 
-    await _persist_dump(hass, filepath, dump_data)
+    ensure_active()
+    await _persist_dump(hass, filepath, dump_data, ensure_active=ensure_active)
+    ensure_active()
     _LOGGER.info("Discovery dump written to %s", filepath)
 
     persistent_notification.create(
@@ -277,11 +457,56 @@ def _mkdir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
+# Intent: discard a staged dump after its executor finishes if its caller was cancelled.
+# Why: the temporary path is returned only when the executor job completes.
+def _discard_cancelled_dump_write(future: asyncio.Future[str]) -> None:
+    try:
+        staged_filepath = future.result()
+    except asyncio.CancelledError:
+        return
+    except Exception as exc:
+        _LOGGER.warning("Failed to finish cancelled dump serialization: %s", exc)
+        return
+    try:
+        os.unlink(staged_filepath)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        _LOGGER.warning("Failed to remove cancelled dump staging file: %s", exc)
+
+
 # Ordered persistence: the directory must exist before the YAML write lands.
-async def _persist_dump(hass: HomeAssistant, filepath: str, dump_data: dict) -> None:
+# Intent: persist the dump only while its coordinator remains active.
+# Why: directory creation yields before the YAML write is submitted.
+async def _persist_dump(
+    hass: HomeAssistant,
+    filepath: str,
+    dump_data: dict,
+    ensure_active: Callable[[], None] | None = None,
+) -> None:
     output_dir = os.path.dirname(filepath)
+    if ensure_active is not None:
+        ensure_active()
     await hass.async_add_executor_job(_mkdir, output_dir)
-    await hass.async_add_executor_job(_write_yaml, filepath, dump_data)
+    if ensure_active is not None:
+        ensure_active()
+    write_future = asyncio.ensure_future(hass.async_add_executor_job(_write_yaml_temp, filepath, dump_data))
+    staged_filepath: str | None = None
+    try:
+        try:
+            staged_filepath = await asyncio.shield(write_future)
+        except asyncio.CancelledError:
+            write_future.add_done_callback(_discard_cancelled_dump_write)
+            raise
+        if ensure_active is not None:
+            ensure_active()
+        os.replace(staged_filepath, filepath)
+    finally:
+        if staged_filepath is not None and os.path.exists(staged_filepath):
+            try:
+                os.unlink(staged_filepath)
+            except FileNotFoundError:
+                pass
 
 
 # Write YAML dump file with security header
@@ -290,3 +515,18 @@ def _write_yaml(filepath: str, data: dict) -> None:
     body = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
     with open(filepath, "w") as f:
         f.write(header + body)
+
+
+# Intent: serialize a dump to a unique temporary file beside its final path.
+# Why: unload can discard the staged file before atomically publishing it.
+def _write_yaml_temp(filepath: str, data: dict) -> str:
+    file_descriptor, staged_filepath = tempfile.mkstemp(
+        prefix=".discovery_dump_", suffix=".yaml", dir=os.path.dirname(filepath)
+    )
+    try:
+        os.close(file_descriptor)
+        _write_yaml(staged_filepath, data)
+    except Exception:
+        os.unlink(staged_filepath)
+        raise
+    return staged_filepath

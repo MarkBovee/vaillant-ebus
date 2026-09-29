@@ -6,6 +6,7 @@ import importlib.machinery
 import importlib.util
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -47,6 +48,38 @@ DeviceGraph = DISCOVERY.DeviceGraph
 DeviceNode = DISCOVERY.DeviceNode
 DeviceType = DISCOVERY.DeviceType
 match_scan_to_circuits = DISCOVERY._match_scan_to_circuits
+
+
+# Intent: an error-only find response creates no placeholder circuit nodes.
+# Why: register-shaped ERR lines are not evidence of discovered device ownership.
+async def test_discover_ignores_error_only_find_rows() -> None:
+    ebus = MagicMock()
+    ebus.last_find_usable = False
+    ebus.find_registers = AsyncMock(return_value=["ctlv3 Hc1FlowTempCalc = (ERR: invalid position)"])
+
+    graph = await DiscoveryService(ebus).discover()
+
+    assert graph.nodes == {}
+    assert graph.raw_registers == {}
+    assert graph.placeholder_registers == set()
+
+
+# Intent: error-shaped register replies remain unavailable placeholders in a usable graph.
+# Why: discovery preserves ownership while entity metadata decides whether the placeholder is safe to expose.
+def test_build_graph_keeps_error_shaped_register_rows_as_placeholders() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = Vaillant;CTLV3;0808;8004",
+            "ctlv3 Z1OpMode = auto",
+            "ctlv3 Hc1FlowTempCalc = (ERR: invalid position)",
+        ]
+    )
+
+    assert "ctlv3" in graph.nodes
+    assert "ctlv3.Hc1FlowTempCalc" not in graph.raw_registers
+    assert "ctlv3.Hc1FlowTempCalc" in graph.placeholder_registers
+    assert any("ctlv3.Hc1FlowTempCalc" in node.registers for node in graph.nodes.values())
+
 
 AROTHERM_LINES = load_find_lines("arotherm_find.txt")
 COMMUNITY_BASV = load_find_lines("community/basv_find.txt")
@@ -413,6 +446,190 @@ def test_heating_controller_two_control_owners_stay_ambiguous() -> None:
 
     assert graph.heating_controller_result().status.name == "AMBIGUOUS"
     assert graph.resolve_circuit_result("ctlv2").circuit == "ctlv2"
+
+
+# Intent: every numbered CTLV alias resolves through the discovered controller role.
+# Why: ctlv1 through ctlv9 must not depend on ctlv2 being the historical default.
+@pytest.mark.parametrize("logical_alias", ["ctlv1", "ctlv2", "ctlv4", "ctlv7", "ctlv9"])
+def test_numbered_controller_aliases_resolve_to_discovered_owner(logical_alias: str) -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            f"scan.15 = Vaillant;CTLV{logical_alias[4:]};0808;8004",
+            f"{logical_alias} HwcOpMode = auto",
+            f"{logical_alias} Z1OpMode = auto",
+        ]
+    )
+
+    assert graph.resolve_circuit_result("ctlv2").circuit == logical_alias
+
+
+# Intent: active high-numbered zones and heating circuits become graph-owned subdevices.
+# Why: controller numbering and zone numbering must not stop at the fixtures' common z1/hc3 range.
+@pytest.mark.parametrize("number", [4, 9])
+def test_active_high_numbered_zone_and_heating_circuit(number: int) -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = Vaillant;CTLV7;0808;8004",
+            f"ctlv7 Z{number}RoomZoneMapping = VR91_1",
+            f"ctlv7 Z{number}RoomTemp = 20",
+            f"ctlv7 Z{number}OpMode = auto",
+            f"ctlv7 Hc{number}FlowTemp = 30",
+        ]
+    )
+
+    assert graph.nodes[f"z{number}"].has_data is True
+    assert graph.nodes[f"hc{number}"].has_data is True
+    assert f"ctlv7.Z{number}RoomTemp" in graph.nodes[f"z{number}"].registers
+    assert f"ctlv7.Hc{number}FlowTemp" in graph.nodes[f"hc{number}"].registers
+
+
+# Intent: lower-case dynamic register names keep the same graph topology as canonical casing.
+# Why: ebusd integrations and test doubles may differ in register-name casing.
+def test_lowercase_dynamic_zone_and_heating_circuit_names() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = Vaillant;CTLV7;0808;8004",
+            "ctlv7 z9roomzonemapping = VR91_1",
+            "ctlv7 z9roomtemp = 20",
+            "ctlv7 z9opmode = auto",
+            "ctlv7 hc9flowtemp = 30",
+        ]
+    )
+
+    assert graph.nodes["z9"].has_data is True
+    assert graph.nodes["hc9"].has_data is True
+
+
+# Intent: passive cooling aliases resolve to the discovered VWZ/VWZIO module.
+# Why: the alternate module name must not become a literal dump or runtime target.
+def test_vwzio_alias_resolves_to_discovered_passive_module() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.76 = Vaillant;VWZIO;0302;0504",
+            "vwzio Status01 = 20;21;18;45;42;off",
+        ]
+    )
+
+    assert graph.resolve_circuit_result("vwz").circuit == "vwzio"
+    assert graph.resolve_circuit_result("vwzio").circuit == "vwzio"
+
+
+# Intent: a placeholder Hwc control register still identifies its physical owner.
+# Why: unavailable DHW data must not let a stale ctlv2 alias win controller routing.
+def test_placeholder_control_owner_beats_stale_ctlv2_alias() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = Vaillant;CTLV3;0808;8004",
+            "ctlv3 HwcSFMode = no data stored",
+            "ctlv2 z1RoomHumidity = 53",
+        ]
+    )
+
+    assert graph.heating_controller_result().circuit == "ctlv3"
+    assert graph.resolve_circuit_result("ctlv2").circuit == "ctlv3"
+
+
+# Intent: dynamic Z9 control ownership beats a stale ctlv2 node.
+# Why: controller routing must follow the discovered zone owner for high-numbered zones too.
+def test_dynamic_z9_control_owner_beats_stale_ctlv2_alias() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = Vaillant;CTLV7;0808;8004",
+            "ctlv7 Z9RoomZoneMapping = VR91_1",
+            "ctlv7 Z9OpMode = auto",
+            "ctlv7 Z9DayTemp = 20",
+            "ctlv2 z1RoomHumidity = 53",
+        ]
+    )
+
+    assert graph.heating_controller_result().circuit == "ctlv7"
+    assert graph.resolve_circuit_result("ctlv2").circuit == "ctlv7"
+
+
+# Intent: writable high-level Hc registers identify the physical controller owner.
+# Why: owner routing must not depend on a short allowlist of common flow registers.
+def test_hc_heat_curve_owner_beats_stale_ctlv2_alias() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = Vaillant;CTLV3;0808;8004",
+            "ctlv3 Hc1HeatCurve = 1.2",
+            "ctlv2 z1RoomHumidity = 53",
+        ]
+    )
+
+    assert graph.heating_controller_result().circuit == "ctlv3"
+    assert graph.resolve_circuit_result("ctlv2").circuit == "ctlv3"
+
+
+# Intent: an exact stale controller node cannot override multiple real control owners.
+# Why: ambiguity must remain safe instead of selecting the first physical alias.
+def test_stale_exact_controller_does_not_override_multiple_owners() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "ctlv2 z1RoomHumidity = 53",
+            "ctlv3 HwcOpMode = auto",
+            "ctlv4 HwcTempDesired = 48",
+        ]
+    )
+
+    assert graph.heating_controller_result().status.name == "AMBIGUOUS"
+    assert graph.resolve_circuit_result("ctlv2").status.name == "AMBIGUOUS"
+
+
+# Intent: a stale unscanned vwz node cannot override a scanned VWZIO module.
+# Why: passive-cooling runtime definitions and fallback reads need scan-owned routing.
+def test_stale_vwz_node_does_not_override_scanned_vwzio() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.76 = Vaillant;VWZIO;0302;0504",
+            "vwzio Status01 = 20;21;18;45;42;off",
+            "vwz Status01 = no data stored",
+        ]
+    )
+
+    assert graph.resolve_circuit_result("vwz").circuit == "vwzio"
+
+
+# Intent: circuit aliases resolve independently of casing used by an advanced service call.
+# Why: uppercase BAI must still select the discovered BAI owner rather than fall back literally.
+def test_uppercase_bai_alias_resolves_to_discovered_owner() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.08 = Vaillant;BAI00;0607;1203",
+            "bai HwcOpMode = auto",
+        ]
+    )
+
+    assert graph.resolve_circuit_result("BAI").circuit == "bai"
+
+
+# Intent: numbered secondary zones beyond HC3 use the same inactive-zone rules.
+# Why: ctlv4/ctlv7/ctlv9 hardware must not lose or invent zone entities because of a fixed HC3 limit.
+def test_numbered_zone_filter_supports_hc4_and_z9() -> None:
+    has_data = {"hc4": False, "z9": False}
+
+    assert DiscoveryService._is_hidden("hc4.SomeRegister", has_data) is True
+    assert DiscoveryService._is_hidden("ctlv7.Z9DayTemp", has_data) is True
+    assert DiscoveryService._is_hidden("ctlv7.Z9DayTemp", {"z9": True}) is False
+
+
+# Intent: an inactive z9 node does not leak static defaults into entities.
+# Why: secondary-zone entity creation must use the same live-data gate as climate setup.
+def test_inactive_z9_subdevice_has_no_registers() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = Vaillant;CTLV7;0808;8004",
+            "ctlv7 Z9RoomZoneMapping = none",
+            "ctlv7 Z9DayTemp = 20",
+            "ctlv7 Z9OpMode = auto",
+            "ctlv7 Z9RoomTemp = empty",
+            "ctlv7 Z9ActualRoomTempDesired = empty",
+        ]
+    )
+
+    assert "z9" in graph.nodes
+    assert graph.nodes["z9"].has_data is False
+    assert graph.nodes["z9"].registers
 
 
 # Intent: unrelated scans bind only to their own circuits, NETX2 to Broadcast.

@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.10.0 - 2026-09-25
+
+### Fixed
+
+- Stopped actively reading the twelve B524 Hc1/Hc2 state registers through
+  runtime definitions, coordinator fallbacks, and discovery-dump probes.
+  BASS3, BASV3, CTLV3, and the owner's live ebusd logs showed repeated
+  `invalid position` replies. Registers that ebusd discovers itself remain
+  available through normal discovery, and BAS-specific setpoint definitions
+  are unchanged.
+- Retry failed ebusd transport reconnections through the normal setup path and
+  distinguish TCP EOF, timeouts, and write failures from a valid empty `find`
+  result. Rebuild the discovery graph after reconnect, and gate register
+  services and dump probes until a non-empty graph is applied. Keep the
+  `ebusd_unreachable` repair active until that recovery completes, so a
+  temporary connection failure cannot strand the coordinator or leave a stale
+  warning.
+- Prevent cache fallback from restoring a previous value when the current find
+  explicitly reports that register as unavailable.
+- Keep invalid-position B524 placeholders unavailable without creating entities
+  when ebusd reports an error row on an otherwise active controller, and retire
+  cached placeholder entities from earlier versions.
+
+### Upgrade
+
+- Restart the ebusd app once after upgrading. ebusd keeps runtime definitions
+  in memory; a Home Assistant restart alone does not clear the old B524 polls.
+
+### Added
+
+- Expose `Hc1RoomTempSwitchOn` as a select with `off`, `modulating`, and
+  `thermostat` options on verified CTLV3 `SW0808/HW8004` hardware. The migration
+  retires the old sensor registry entry and cached description, so the entity
+  ID changes from `sensor.*` to `select.*`; CTLV2 and unverified CTLV3 firmware
+  keep their sensor metadata. A no-data CTLV2 value remains an enabled sensor
+  with an unknown state instead of disabling the existing entity.
+- Added the complete BASV3 discussion #31 capture as a regression fixture for
+  the invalid-position B524 responses.
+
 ## 1.9.5 - 2026-09-23
 
 ### Added

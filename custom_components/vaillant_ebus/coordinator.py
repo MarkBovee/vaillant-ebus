@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
-from collections.abc import Callable
+import tempfile
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import yaml
 from homeassistant.config_entries import ConfigEntry
@@ -23,7 +25,14 @@ from .backend.analysis_service import AnalysisResult, AnalysisService
 from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService
 from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, EbusService
 from .backend.entity_factory import EntityDescription, EntityFactoryService
-from .backend.mapping import REGISTER_MAP, b516_date_bytes, is_field_key, multi_field_fields, split_multi_field
+from .backend.mapping import (
+    REGISTER_MAP,
+    b516_date_bytes,
+    is_field_key,
+    metadata_circuits,
+    multi_field_fields,
+    split_multi_field,
+)
 from .backend.models import (
     CIRCUIT_NAMES,
     COMPRESSOR_STATUS_LABELS,
@@ -33,6 +42,8 @@ from .backend.models import (
     EbusdRegister,
     ResolutionStatus,
     heat_pump_product,
+    is_controller_circuit,
+    is_heat_pump_circuit,
     is_no_data_value,
     is_valid_hmux0_return_temperature,
     zero_idle_registers,
@@ -45,6 +56,11 @@ from .const import (
     DEFAULT_EBUSD_POLL_INTERVAL,
     DEFAULT_ENERGY_DIVISOR,
     DOMAIN,
+)
+from .migration import (
+    disable_legacy_room_temp_switch_sensor_aliases,
+    enable_legacy_room_temp_switch_sensor_entities,
+    remove_legacy_room_temp_switch_sensor_entities,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -97,6 +113,38 @@ def _register_values(register_key: str, raw: str | None) -> dict[str, str | None
     return split_multi_field(register_key, raw)
 
 
+# Intent: discard a staged cache after its executor finishes if its caller was cancelled.
+# Why: the temporary path is returned only when the executor job completes.
+def _discard_cancelled_cache_write(future: asyncio.Future[str]) -> None:
+    try:
+        staged_path = future.result()
+    except asyncio.CancelledError:
+        return
+    except Exception as exc:
+        _LOGGER.warning("Failed to finish cancelled register-cache write: %s", exc)
+        return
+    try:
+        os.unlink(staged_path)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        _LOGGER.warning("Failed to remove cancelled register-cache staging file: %s", exc)
+
+
+# Intent: stage register-cache JSON before lifecycle-gated replacement.
+# Why: executor completion can race with config-entry teardown or reload.
+def _write_cache_temp(cache_path: str, values: dict[str, str]) -> str:
+    cache_dir = os.path.dirname(cache_path)
+    file_descriptor, staged_path = tempfile.mkstemp(prefix=".register_cache_", suffix=".tmp", dir=cache_dir)
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as cache_file:
+            json.dump(values, cache_file)
+    except Exception:
+        os.unlink(staged_path)
+        raise
+    return staged_path
+
+
 class CoordinatorState(TypedDict):
     ebusd: dict[str, str]
 
@@ -120,15 +168,45 @@ def _usable_register_value(register_key: str, raw: str | None) -> str | None:
 # same ctlv2/hmu circuit aliasing as get_meta(). Registers covered by the map
 # may legitimately be present via runtime definitions or the fallback read even
 # when the current find output does not list them.
+# Intent: report whether a map entry may support a cache-only register.
+# Why: disabled fallback reads must not keep stale B524 values alive after discovery.
 def _register_has_enabled_map_entry(register_key: str) -> bool:
     if "." not in register_key:
         return False
     circuit, name = register_key.split(".", 1)
-    for alt in (circuit, "ctlv2", "hmu"):
-        meta = REGISTER_MAP.get(f"{alt}.{name}")
-        if meta is not None and meta.enabled:
+    for alt in metadata_circuits(circuit):
+        meta = next(
+            (value for key, value in REGISTER_MAP.items() if key.casefold() == f"{alt}.{name}".casefold()),
+            None,
+        )
+        if meta is not None and meta.enabled and meta.fallback_read:
             return True
     return False
+
+
+# Intent: detect placeholders that metadata explicitly forbids polling or exposing.
+# Why: cached descriptions must not survive when a live error is the only discovery result.
+def _register_disables_fallback_placeholder(register_key: str) -> bool:
+    if "." not in register_key:
+        return False
+    circuit, name = register_key.split(".", 1)
+    for alt in metadata_circuits(circuit):
+        meta = next(
+            (value for key, value in REGISTER_MAP.items() if key.casefold() == f"{alt}.{name}".casefold()),
+            None,
+        )
+        if meta is not None and meta.enabled and not meta.fallback_read:
+            return True
+    return False
+
+
+# Intent: resolve a register dictionary key while preferring the current spelling.
+# Why: cache/live updates with different casing must update one register object.
+def _mapping_key(mapping: Mapping[str, object], key: str) -> str | None:
+    if key in mapping:
+        return key
+    expected = key.casefold()
+    return next((current for current in mapping if current.casefold() == expected), None)
 
 
 # Intent: determine whether a cache-only mapped register still belongs to the
@@ -137,15 +215,35 @@ def _register_has_enabled_map_entry(register_key: str) -> bool:
 # installation; preserving those aliases creates stale entities and ghost
 # devices even though initial discovery has authoritative circuit metadata.
 def _cache_register_is_supported(register_key: str, live_keys: set[str], graph: DeviceGraph) -> bool:
-    if register_key in graph.placeholder_registers:
+    register_fold = register_key.casefold()
+    raw_keys = {key.casefold() for key in graph.raw_registers}
+    placeholder_keys = {key.casefold() for key in graph.placeholder_registers}
+    if register_fold in raw_keys:
+        return True
+    if register_fold in placeholder_keys:
         return False
-    if register_key in live_keys:
+    if register_fold in {key.casefold() for key in live_keys}:
         return True
     if not _register_has_enabled_map_entry(register_key):
         return False
     circuit = register_key.split(".", 1)[0]
+    if _is_stale_legacy_alias(circuit, graph):
+        return False
+    return True
+
+
+# Intent: identify cache rows from a logical alias that the current graph replaced.
+# Why: preserve normal 1.9.x cache-backed entities while retiring proven old-device ghosts.
+def _is_stale_legacy_alias(circuit: str, graph: DeviceGraph) -> bool:
+    is_logical_alias = (
+        is_controller_circuit(circuit) or is_heat_pump_circuit(circuit) or circuit.casefold() in {"bai", "vwz", "vwzio"}
+    )
+    if not is_logical_alias:
+        return False
     resolved = graph.resolve_circuit_result(circuit)
-    return resolved.status == ResolutionStatus.UNIQUE and resolved.circuit == circuit
+    if resolved.status == ResolutionStatus.UNIQUE and resolved.circuit:
+        return resolved.circuit.casefold() != circuit.casefold()
+    return False
 
 
 # Intent: disable registry entries whose cached source circuit disappeared from
@@ -169,12 +267,14 @@ def _disable_stale_registry_entities(hass: HomeAssistant, entry_id: str, entitie
 def _merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> DeviceGraph:
     nodes = dict(existing.nodes)
     for circuit, node in discovered.nodes.items():
-        previous = nodes.get(circuit)
+        existing_circuit = next((key for key in nodes if key.casefold() == circuit.casefold()), None)
+        previous = nodes.get(existing_circuit) if existing_circuit is not None else None
         if previous is None:
             nodes[circuit] = node
             continue
-        nodes[circuit] = DeviceNode(
-            circuit=circuit,
+        target_circuit = existing_circuit or circuit
+        nodes[target_circuit] = DeviceNode(
+            circuit=target_circuit,
             device_type=(node.device_type if node.device_type != DeviceType.UNKNOWN else previous.device_type),
             registers=list(dict.fromkeys(previous.registers + node.registers)),
             parent=node.parent or previous.parent,
@@ -187,8 +287,18 @@ def _merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> Devi
         )
 
     raw_registers = dict(existing.raw_registers)
-    raw_registers.update(discovered.raw_registers)
-    placeholder_registers = (existing.placeholder_registers | discovered.placeholder_registers) - set(raw_registers)
+    raw_by_fold = {key.casefold(): key for key in raw_registers}
+    for key, value in discovered.raw_registers.items():
+        raw_registers[raw_by_fold.get(key.casefold(), key)] = value
+        raw_by_fold.setdefault(key.casefold(), key)
+    placeholder_registers = set(existing.placeholder_registers)
+    placeholder_by_fold = {key.casefold(): key for key in placeholder_registers}
+    for key in discovered.placeholder_registers:
+        placeholder_registers.add(placeholder_by_fold.get(key.casefold(), key))
+        placeholder_by_fold.setdefault(key.casefold(), key)
+    placeholder_registers = {
+        key for key in placeholder_registers if key.casefold() not in {rk.casefold() for rk in raw_registers}
+    }
     return DeviceGraph(
         nodes=nodes,
         raw_registers=raw_registers,
@@ -201,10 +311,10 @@ def _merge_entities(
     existing: list[EntityDescription],
     additions: list[EntityDescription],
 ) -> list[EntityDescription]:
-    known = {(entity.entity_type, entity.unique_id): entity for entity in existing}
+    known = {(entity.entity_type, entity.unique_id.casefold()): entity for entity in existing}
     merged = list(existing)
     for entity in additions:
-        identity = (entity.entity_type, entity.unique_id)
+        identity = (entity.entity_type, entity.unique_id.casefold())
         if identity not in known:
             merged.append(entity)
             known[identity] = entity
@@ -212,15 +322,43 @@ def _merge_entities(
             # Cache spelling may differ from find; loaded entities keep this
             # description object, so update its lookup key without re-adding it.
             known[identity].name = entity.name
+            known[identity].circuit = entity.circuit
+            known[identity].field = entity.field
+            known[identity].raw_value = entity.raw_value
+            known[identity].register = entity.register
+            known[identity].enabled_by_default = entity.enabled_by_default
     return merged
 
 
+# Intent: retrieve a register value case-insensitively from a coordinator-like object.
+# Why: platform tests and delayed discovery stubs may provide a coordinator without the concrete method.
+def get_register_value(coordinator: Any, circuit: str, name: str, field: str = "value") -> str | None:
+    expected = f"{circuit}.{name}.{field}".casefold()
+    data = getattr(coordinator, "data", {}) or {}
+    ebusd = data.get("ebusd", {}) if isinstance(data, dict) else {}
+    exact_key = f"{circuit}.{name}.{field}"
+    if exact_key in ebusd:
+        value = ebusd[exact_key]
+        return str(value) if value is not None else None
+    for key, value in ebusd.items():
+        if key.casefold() == expected:
+            return str(value) if value is not None else None
+    return None
+
+
 class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
+    # Intent: initialize per-entry connection, cache and recovery state.
+    # Why: setup and retry tasks rely on one consistent starting lifecycle.
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._entry = entry
+        self._stopped = False
+        self._unload_requested = False
+        self._pending_ebus: EbusService | None = None
         self._started = False
+        self._setup_task: asyncio.Task[None] | None = None
+        self._active_dump_tasks: set[asyncio.Task] = set()
         self._ebusd_connected = False
-        self._heating_circuit = "ctlv2"
+        self._ebusd_repair_pending = False
         # Desired DHW boost state (True when boost was requested). HwcSFMode
         # reports "load" while the cylinder charges even after boost is turned
         # off, so the switch/water-heater report this desired value instead of
@@ -236,6 +374,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self._last_find_keys: set[str] = set()
         self._cancel_delayed_rediscovery: Callable[[], None] | None = None
         self._delayed_rediscovery_scheduled = False
+        self._delayed_rediscovery_retry_count = 0
         self._live_since_analysis: set[str] = set()
         self._cancel_analysis: Callable[[], None] | None = None
         self._analysis_scheduled = False
@@ -271,17 +410,25 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     def ebusd_port(self) -> int:
         return self._entry.data.get(CONF_EBUSD_PORT, 8888)
 
+    # Intent: report when reads and writes can trust the current discovery graph.
+    # Why: a live TCP socket alone does not establish register ownership.
+    @property
+    def discovery_ready(self) -> bool:
+        return self._ebusd_connected and self._graph is not None and bool(self._graph.nodes)
+
     @property
     def heating_circuit(self) -> str | None:
         if self._graph is None:
-            return self._heating_circuit
-        return self.resolve_register_circuit("ctlv2")
+            return None
+        result = self._graph.heating_controller_result()
+        return result.circuit if result.status == ResolutionStatus.UNIQUE else None
 
     @property
     def heat_pump_circuit(self) -> str | None:
         if self._graph is None:
-            return "hmu"
-        return self.resolve_register_circuit("hmu")
+            return None
+        result = self._graph.heat_pump_result()
+        return result.circuit if result.status == ResolutionStatus.UNIQUE else None
 
     def resolve_register_circuit(self, circuit: str) -> str | None:
         """Resolve legacy map circuits to circuits discovered on this bus."""
@@ -290,11 +437,19 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if resolution.status != ResolutionStatus.UNIQUE:
                 return None
             return resolution.circuit or circuit
-        return circuit
+        return None
 
+    # Intent: allow user-initiated reads only after the discovered graph is authoritative.
+    # Why: cache-seeded aliases must not route requests during initial discovery.
     async def async_read_register(self, circuit: str, name: str, field: str = "") -> str | None:
         """Read a register only after resolving its discovered circuit owner."""
-        if not self.ebus or not self.ebus.is_connected:
+        if (
+            self._stopped
+            or self._unload_requested
+            or not self.ebus
+            or not self.ebus.is_connected
+            or not self.discovery_ready
+        ):
             return None
         resolved_circuit = self.resolve_register_circuit(circuit)
         if resolved_circuit is None:
@@ -320,6 +475,20 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     owners.setdefault(zone, set()).add(node.circuit)
         return {zone: next(iter(circuits)) for zone, circuits in owners.items() if len(circuits) == 1}
 
+    # Intent: select the lowest-numbered discovered active zone as the primary UI zone.
+    # Why: primary-zone entities must not assume that z1 is present on every controller.
+    @property
+    def primary_zone(self) -> str | None:
+        zones = self.zone_circuits()
+        if not zones:
+            return None
+        return min(zones, key=lambda zone: int(zone[1:]) if zone[1:].isdigit() else zone)
+
+    # Intent: read a coordinator value without depending on ebusd register casing.
+    # Why: protocol dumps may preserve lower-case names while metadata uses canonical casing.
+    def value_for_register(self, circuit: str, name: str, field: str = "value") -> str | None:
+        return get_register_value(self, circuit, name, field)
+
     # Whether a raw zone-register value proves real data: anything the shared
     # no-data helper rejects, except "none" which is a legitimate RoomZoneMapping
     # value for unused zones and must not count as live data.
@@ -332,14 +501,23 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if self._graph is None:
             return False
         zn = zone.upper()
-        mapping = self._graph.raw_registers.get(f"{circuit}.{zn}RoomZoneMapping")
+        expected_mapping = f"{circuit}.{zn}RoomZoneMapping".casefold()
+        mapping = next(
+            (value for key, value in self._graph.raw_registers.items() if key.casefold() == expected_mapping),
+            None,
+        )
         if self._zone_value_has_data(mapping):
             return True
         # Fall back to a measured value on a live register. Static defaults
         # (DayTemp/OpMode) and sentinel values (empty/unknown/no data stored)
         # do not prove the zone is real.
         for name in ZONE_LIVE_REGISTERS:
-            if self._zone_value_has_data(self._graph.raw_registers.get(f"{circuit}.{zn}{name}")):
+            expected = f"{circuit}.{zn}{name}".casefold()
+            value = next(
+                (raw for key, raw in self._graph.raw_registers.items() if key.casefold() == expected),
+                None,
+            )
+            if self._zone_value_has_data(value):
                 return True
         return False
 
@@ -359,6 +537,19 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     def has_zone_register(self, circuit: str, zone: str, name: str) -> bool:
         status = self.zone_register_discovery_status(circuit, zone, name)
         return status is not False
+
+    # Intent: check a discovered HcN register on its owning source circuit.
+    # Why: flow-range and heating-circuit writes must not be confused with ZN registers.
+    def has_heating_circuit_register(self, circuit: str, heating_circuit: str, name: str) -> bool:
+        if self._graph is None or not self._last_find_keys:
+            return False
+        resolved = self.resolve_register_circuit(circuit) or circuit
+        key = f"{resolved}.{heating_circuit.upper()}{name}"
+        return (
+            key in self._graph.raw_registers
+            or key in self._graph.placeholder_registers
+            or any(rk.casefold() == key.casefold() for rk in self._last_find_keys)
+        )
 
     # Whether a controller-owned register exists on the discovered controller circuit.
     def has_controller_register(self, name: str) -> bool:
@@ -382,9 +573,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return
         self._last_find_keys = set(self._graph.raw_registers) | set(self._graph.placeholder_registers)
 
+    # Intent: stage cached discovery state until all asynchronous inputs are ready.
+    # Why: cache and YAML reads may overlap an unload request.
     async def _async_seed_entities_from_cache(self) -> None:
         cache = await self._async_load_cache()
+        if self._stopped or self._unload_requested:
+            return
         find_lines: list[str] = []
+        cached_registers: dict[str, EbusdRegister] = {}
         seen_keys: set[str] = set()
 
         for cache_key, cached_value in cache.items():
@@ -392,6 +588,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 continue
             parts = cache_key.split(".")
             if len(parts) < 2:
+                continue
+            if len(parts) > 2 and parts[2].casefold() != "value":
                 continue
             circuit, name = parts[0], parts[1]
             if any(kw in circuit.lower() for kw in HIDDEN_DEVICE_KEYWORDS):
@@ -402,7 +600,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 continue
             seen_keys.add(normalized)
             find_lines.append(f"{circuit} {name} = {cached_value}")
-            self.registers[rk] = EbusdRegister(
+            cached_registers[rk] = EbusdRegister(
                 circuit=circuit,
                 name=name,
                 fields=["value"],
@@ -412,27 +610,46 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
 
         # Reuse live discovery so cached ZN and HcN registers form logical devices.
         graph = DiscoveryService.build_device_graph(find_lines)
+        yaml_overrides = await self._async_load_yaml_overrides()
+        if self._stopped or self._unload_requested:
+            return
+        cached_entities = self.entity_factory.generate(graph, yaml_overrides=yaml_overrides)
+        self.registers.update(cached_registers)
         if graph.nodes:
             self._graph = graph
-        self.entities = self.entity_factory.generate(graph, yaml_overrides=await self._async_load_yaml_overrides())
+        self.entities = [entity for entity in cached_entities if not entity.meta.writable]
         _LOGGER.info(
             "Seeded %d entities from %d cache entries (%d circuits)", len(self.entities), len(cache), len(graph.nodes)
         )
 
+    # Intent: establish a working ebusd session before clearing connection repairs.
+    # Why: a prior startup failure must stop surfacing once fresh discovery succeeds.
     async def _ebusd_connect_and_discover(self) -> None:
+        if self._stopped or self._unload_requested:
+            return
         host = self.ebusd_host
         if not host:
+            self._started = False
             return
         ebus = EbusService(host=host, port=self.ebusd_port)
+        self._pending_ebus = ebus
         try:
             await ebus.connect()
         except Exception as exc:
+            self._pending_ebus = None
+            if self._stopped or self._unload_requested:
+                self._started = False
+                return
+            await self._async_mark_ebusd_unreachable(f"connect failed: {exc}")
+            return
+        if self._stopped or self._unload_requested:
+            await ebus.disconnect()
+            self._pending_ebus = None
             self._started = False
-            _LOGGER.warning("ebusd connect failed, will retry: %s", exc)
             return
         self.ebus = ebus
+        self._pending_ebus = None
         self.discovery = DiscoveryService(ebus)
-        self._ebusd_connected = True
         self._runtime_definitions.clear()
         self._last_energy_poll = datetime.min
 
@@ -443,28 +660,124 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         try:
             graph = await self.discovery.discover()
         except Exception as exc:
-            self._ebusd_connected = False
-            self._started = False
             await ebus.disconnect()
-            _LOGGER.warning("ebusd discovery failed: %s", exc)
+            if self._stopped or self._unload_requested:
+                self._started = False
+                return
+            await self._async_mark_ebusd_unreachable(f"discovery failed: {exc}")
+            return
+        if self._stopped or self._unload_requested:
+            await ebus.disconnect()
+            self.ebus = None
+            self.discovery = None
+            self._started = False
+            return
+        if not graph.nodes:
+            _LOGGER.warning("ebusd discovery returned no usable graph; retaining the repair and retrying setup")
+            await ebus.disconnect()
+            self.ebus = None
+            self.discovery = None
+            await self._async_mark_ebusd_unreachable("initial discovery returned no device graph")
             return
 
         # Scan-only nodes preserve identity when ebusd has no matching CSV. Runtime
         # definitions are therefore always resolved from discovered ownership.
         self._graph = graph
-        await self._define_custom_registers()
-        # Refresh once so every newly defined register enters the initial graph.
-        # This also avoids polling generic HMU definitions before scan discovery
-        # can identify an HMUX0 device.
-        if self._runtime_definitions:
-            graph = await self.discovery.discover()
-        await self._apply_discovery_graph(graph, "initial")
+        try:
+            await self._define_custom_registers()
+            if self._stopped or self._unload_requested:
+                await ebus.disconnect()
+                self.ebus = None
+                self.discovery = None
+                self._started = False
+                return
+            # Refresh once so every newly defined register enters the initial graph.
+            # This also avoids polling generic HMU definitions before scan discovery
+            # can identify an HMUX0 device.
+            if self._runtime_definitions:
+                refreshed_graph = await self.discovery.discover()
+                if self._stopped or self._unload_requested:
+                    await ebus.disconnect()
+                    self.ebus = None
+                    self.discovery = None
+                    self._started = False
+                    return
+                if graph.nodes and not refreshed_graph.nodes:
+                    _LOGGER.warning("Post-definition find returned no graph; retaining the initial discovery graph")
+                    if self._ebusd_repair_pending:
+                        await ebus.disconnect()
+                        await self._async_mark_ebusd_unreachable(
+                            "post-definition find returned no usable graph during recovery"
+                        )
+                        return
+                else:
+                    graph = refreshed_graph
+        except Exception as exc:
+            await ebus.disconnect()
+            await self._async_mark_ebusd_unreachable(f"post-definition discovery failed: {exc}")
+            return
+        try:
+            self._ebusd_connected = True
+            await self._apply_discovery_graph(graph, "initial")
+        except Exception as exc:
+            self._ebusd_connected = False
+            await ebus.disconnect()
+            await self._async_mark_ebusd_unreachable(f"initial graph application failed: {exc}")
+            return
+        if not ebus.is_connected:
+            if not self._ebusd_repair_pending:
+                await self._async_mark_ebusd_unreachable("connection closed while applying initial discovery")
+            return
+        self._ebusd_connected = True
+        await repairs.async_dismiss_ebusd_unreachable(self.hass)
+        self._ebusd_repair_pending = False
         await repairs.async_dismiss_detection_incomplete(self.hass)
+        self._delayed_rediscovery_retry_count = 0
         self._schedule_delayed_rediscovery()
         self._schedule_analysis()
 
-    # Apply a complete device graph from initial or delayed discovery.
+    # Intent: restore retry eligibility and clean up transport state after setup cancellation.
+    # Why: cancelled background setup must not strand a pending ebusd connection.
+    async def _async_run_setup_task(self) -> None:
+        try:
+            await self._ebusd_connect_and_discover()
+        except asyncio.CancelledError:
+            clients = [self._pending_ebus]
+            if self.ebus is not self._pending_ebus:
+                clients.append(self.ebus)
+            for ebus in clients:
+                if ebus is None:
+                    continue
+                ebus.request_shutdown()
+                await ebus.disconnect()
+                if self._pending_ebus is ebus:
+                    self._pending_ebus = None
+                if self.ebus is ebus:
+                    self.ebus = None
+                    self.discovery = None
+                    self._ebusd_connected = False
+            self._started = False
+            raise
+        finally:
+            if not self._ebusd_connected and not self._stopped and not self._unload_requested:
+                self._started = False
+
+    # Intent: reset the coordinator after an ebusd transport or discovery failure.
+    # Why: future polls must launch a fresh connection instead of reusing a dead client.
+    async def _async_mark_ebusd_unreachable(self, reason: str) -> None:
+        if self._stopped or self._unload_requested:
+            return
+        self._ebusd_connected = False
+        self._started = False
+        self._ebusd_repair_pending = True
+        _LOGGER.warning("ebusd unavailable, will retry: %s", reason)
+        await repairs.async_create_ebusd_unreachable(self.hass)
+
+    # Intent: apply discovery results to cached and generated entity descriptions.
+    # Why: initial and delayed rediscovery must retire stale entities before forwarding replacements.
     async def _apply_discovery_graph(self, graph: DeviceGraph, source: str) -> None:
+        if self._stopped or self._unload_requested:
+            return
         # Delayed rediscovery merges into the known graph so existing entities
         # survive; only registers that are still missing get added afterwards.
         previous = self._graph if source == "delayed" else None
@@ -476,7 +789,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if "." not in rk:
                 continue
             circuit, name = rk.split(".", 1)
-            if rk not in self.registers:
+            existing_key = _mapping_key(self.registers, rk)
+            if existing_key is None:
                 self.registers[rk] = EbusdRegister(
                     circuit=circuit,
                     name=name,
@@ -485,8 +799,13 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     has_data=True,
                 )
             else:
-                self.registers[rk].value.update(_register_values(rk, raw))
-                self.registers[rk].has_data = True
+                register = self.registers[existing_key]
+                if existing_key != rk:
+                    del self.registers[existing_key]
+                    register.circuit, register.name = rk.split(".", 1)
+                    self.registers[rk] = register
+                register.value.update(_register_values(rk, raw))
+                register.has_data = True
 
         self._refresh_find_keys()
 
@@ -509,19 +828,29 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     ", ".join(sorted(stale)),
                 )
             stale_keys = set(stale)
-            placeholder_keys = set(graph.placeholder_registers)
+            raw_key_folds = {key.casefold() for key in graph.raw_registers}
+            placeholder_keys = {key for key in graph.placeholder_registers if key.casefold() not in raw_key_folds}
+            non_exposable_placeholder_keys = {
+                key for key in placeholder_keys if _register_disables_fallback_placeholder(key)
+            }
             for entity in self.entities:
                 entity_key = f"{entity.circuit}.{entity.name}"
-                if entity_key in placeholder_keys:
+                if entity_key.casefold() in {key.casefold() for key in placeholder_keys}:
                     entity.raw_value = ""
                     entity.enabled_by_default = False
-            stale_entity_keys = stale_keys - placeholder_keys
+            stale_entity_key_folds = {
+                key.casefold() for key in (stale_keys - placeholder_keys) | non_exposable_placeholder_keys
+            }
             stale_entities = [
-                entity for entity in self.entities if f"{entity.circuit}.{entity.name}" in stale_entity_keys
+                entity
+                for entity in self.entities
+                if f"{entity.circuit}.{entity.name}".casefold() in stale_entity_key_folds
             ]
             if stale_entities:
                 self.entities = [
-                    entity for entity in self.entities if f"{entity.circuit}.{entity.name}" not in stale_entity_keys
+                    entity
+                    for entity in self.entities
+                    if f"{entity.circuit}.{entity.name}".casefold() not in stale_entity_key_folds
                 ]
                 _disable_stale_registry_entities(self.hass, self._entry.entry_id, stale_entities)
                 _LOGGER.info("Pruned %d stale cache entit(y/ies) after discovery", len(stale_entities))
@@ -530,13 +859,61 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             await self._fallback_read()
         except Exception as exc:
             _LOGGER.warning("%s fallback read failed: %s", source.capitalize(), exc)
+            if not self.ebus or not self.ebus.is_connected:
+                await self._async_mark_ebusd_unreachable(f"{source} fallback read lost transport: {exc}")
+        if self._stopped or self._unload_requested:
+            return
 
         generated_entities = self.entity_factory.generate(graph, yaml_overrides=await self._async_load_yaml_overrides())
-        existing_entity_keys = {(entity.entity_type, entity.unique_id) for entity in self.entities}
+        if self._stopped or self._unload_requested:
+            return
+        room_temp_select_unique_ids = {
+            entity.unique_id
+            for entity in generated_entities
+            if entity.name.casefold() == "hc1roomtempswitchon" and entity.entity_type == "select"
+        }
+        if room_temp_select_unique_ids:
+            self.entities = [
+                entity
+                for entity in self.entities
+                if not (entity.name.casefold() == "hc1roomtempswitchon" and entity.entity_type == "sensor")
+            ]
+            remove_legacy_room_temp_switch_sensor_entities(
+                entity_registry.async_get(self.hass),
+                self._entry.entry_id,
+                DOMAIN,
+                {f"{self._entry.entry_id}_{unique_id}" for unique_id in room_temp_select_unique_ids},
+            )
+            disable_legacy_room_temp_switch_sensor_aliases(
+                entity_registry.async_get(self.hass),
+                self._entry.entry_id,
+                DOMAIN,
+                "Hc1RoomTempSwitchOn",
+            )
+        controller = graph.heating_controller_result().node
+        if controller is not None and controller.scan_type.upper() == "CTLV2":
+            room_temp_sensor_unique_ids = {
+                entity.unique_id
+                for entity in generated_entities
+                if entity.name.casefold() == "hc1roomtempswitchon"
+                and entity.entity_type == "sensor"
+                and entity.circuit.casefold() == controller.circuit.casefold()
+            }
+            for entity in generated_entities:
+                if entity.unique_id in room_temp_sensor_unique_ids:
+                    entity.enabled_by_default = True
+            enable_legacy_room_temp_switch_sensor_entities(
+                entity_registry.async_get(self.hass),
+                self._entry.entry_id,
+                DOMAIN,
+                {f"{self._entry.entry_id}_{unique_id}" for unique_id in room_temp_sensor_unique_ids},
+            )
+        await self._enable_registry_entities(list(graph.raw_registers))
+        existing_entity_keys = {(entity.entity_type, entity.unique_id.casefold()) for entity in self.entities}
         additions = [
             entity
             for entity in generated_entities
-            if (entity.entity_type, entity.unique_id) not in existing_entity_keys
+            if (entity.entity_type, entity.unique_id.casefold()) not in existing_entity_keys
         ]
         # Platforms can already be loaded from cache, even on "initial" discovery.
         # Retain known keys across reconnects to avoid adding the same entity twice.
@@ -561,9 +938,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             except Exception:
                 _LOGGER.warning("Post-discovery callback failed", exc_info=True)
 
-    # Schedule exactly one delayed pass for ebusd values unavailable at startup.
+    # Intent: keep at most one delayed discovery callback pending.
+    # Why: one bounded retry handles transient find failures without polling continuously.
     def _schedule_delayed_rediscovery(self) -> None:
-        if self._delayed_rediscovery_scheduled:
+        if self._stopped or self._unload_requested or self._delayed_rediscovery_scheduled:
             return
         self._delayed_rediscovery_scheduled = True
         self._cancel_delayed_rediscovery = async_call_later(
@@ -572,21 +950,54 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             self._async_delayed_rediscover,
         )
 
-    # Refresh the full graph once after the initial ebusd startup window.
+    # Intent: refresh discovery once after the initial ebusd startup window.
+    # Why: delayed discovery can fill registers that were unavailable during setup.
     async def _async_delayed_rediscover(self, _: datetime) -> None:
+        if self._stopped or self._unload_requested:
+            self._cancel_delayed_rediscovery = None
+            self._delayed_rediscovery_scheduled = False
+            return
         self._cancel_delayed_rediscovery = None
-        if not self.ebus or not self.ebus.is_connected or not self.discovery:
+        self._delayed_rediscovery_scheduled = False
+        if not self.ebus or not self.ebus.is_connected:
+            if self._ebusd_connected:
+                await self._async_mark_ebusd_unreachable("ebusd disconnected before delayed discovery")
+            return
+        if not self.discovery:
+            _LOGGER.warning("Delayed ebusd discovery skipped: no discovery service is available")
             return
         try:
             graph = await self.discovery.discover()
         except Exception as exc:
             _LOGGER.warning("Delayed ebusd discovery failed: %s", exc)
+            if not self.ebus.is_connected:
+                await self._async_mark_ebusd_unreachable(f"delayed discovery lost transport: {exc}")
+            elif self._delayed_rediscovery_retry_count == 0:
+                self._delayed_rediscovery_retry_count = 1
+                if not self._unload_requested:
+                    self._schedule_delayed_rediscovery()
             return
-        await self._apply_discovery_graph(graph, "delayed")
+        if not graph.nodes:
+            _LOGGER.warning("Delayed find returned no graph; retaining current discovery")
+            if self._delayed_rediscovery_retry_count == 0:
+                self._delayed_rediscovery_retry_count = 1
+                if not self._unload_requested:
+                    self._schedule_delayed_rediscovery()
+            return
+        try:
+            await self._apply_discovery_graph(graph, "delayed")
+        except Exception as exc:
+            _LOGGER.warning("Delayed ebusd graph application failed: %s", exc)
+            if self._delayed_rediscovery_retry_count == 0:
+                self._delayed_rediscovery_retry_count = 1
+                if not self._unload_requested:
+                    self._schedule_delayed_rediscovery()
+            return
+        self._delayed_rediscovery_retry_count = 0
 
     # Schedule the recurring background analysis for recently live registers.
     def _schedule_analysis(self) -> None:
-        if self._analysis_scheduled:
+        if self._stopped or self._unload_requested or self._analysis_scheduled:
             return
         self._analysis_scheduled = True
         self._cancel_analysis = async_call_later(
@@ -597,14 +1008,25 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
 
     # Reschedule the analysis loop and hand the live-register set to the service.
     async def _async_run_analysis(self, _: datetime) -> None:
+        if self._stopped or self._unload_requested:
+            self._cancel_analysis = None
+            self._analysis_scheduled = False
+            return
         self._cancel_analysis = None
         self._analysis_scheduled = False
-        if self.ebus and self.ebus.is_connected:
-            await self._analyze_live_registers()
-        self._schedule_analysis()
+        try:
+            if self.ebus and self.ebus.is_connected:
+                await self._analyze_live_registers()
+        except Exception:
+            _LOGGER.warning("Background register analysis failed", exc_info=True)
+        finally:
+            if not self._stopped:
+                self._schedule_analysis()
 
     # Analyze registers that went live since the last tick, discover + enable.
     async def _analyze_live_registers(self) -> None:
+        if self._stopped or self._unload_requested:
+            return
         live: dict[str, str] = {}
         for key in list(self._live_since_analysis):
             register = self.registers.get(key)
@@ -642,16 +1064,22 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # Full rediscovery requested by the "rediscover" service: drop the ebusd
     # connection so the next poll reconnects and discovers from scratch.
     async def async_request_rediscover(self) -> None:
+        if self._stopped or self._unload_requested:
+            return
         _LOGGER.info("Manual ebusd rediscovery requested; reconnecting and rebuilding the discovery graph")
         if self.ebus:
             await self.ebus.disconnect()
         self.ebus = None
         self._ebusd_connected = False
         self._started = False
+        if self._stopped or self._unload_requested:
+            return
         await self.async_request_refresh()
 
     # Push newly discovered entity descriptions to the matching platform adder.
     def _add_new_entities(self, new_entities: list[EntityDescription]) -> None:
+        if self._stopped or self._unload_requested:
+            return
         by_type: dict[str, list[EntityDescription]] = {}
         for entity in new_entities:
             by_type.setdefault(entity.entity_type, []).append(entity)
@@ -671,10 +1099,21 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # disabled unless it is a non-default entity — Home Assistant never
     # auto-enables such an entity, so an enabled entry there is an explicit
     # user choice that a temporary no-data result must not undo (issue #152).
+    # The supported CTLV2 room-temperature threshold sensor also stays enabled
+    # as unknown while its register has no current value.
     def _disable_no_data_registry_entities(self, descriptions: list[EntityDescription]) -> None:
         registry = entity_registry.async_get(self.hass)
         disabled = 0
+        controller = self._graph.heating_controller_result().node if self._graph is not None else None
         for description in descriptions:
+            if (
+                str(getattr(description, "name", "") or "").casefold() == "hc1roomtempswitchon"
+                and getattr(description, "entity_type", None) == "sensor"
+                and controller is not None
+                and controller.circuit.casefold() == getattr(description, "circuit", "").casefold()
+                and controller.scan_type.upper() == "CTLV2"
+            ):
+                continue
             if description.raw_value:
                 continue
             # Only the integration may manage (re-disable) entries it already
@@ -738,7 +1177,13 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # Intent: inject only evidence-backed runtime register definitions after the bus owner is known.
     # Why: definitions must follow discovered circuit identity and preserve safe absent-register behavior.
     async def _define_custom_registers(self) -> None:
-        if not self.ebus or not self.ebus.is_connected:
+        if (
+            self._stopped
+            or self._unload_requested
+            or not self.ebus
+            or not self.ebus.is_connected
+            or self._graph is None
+        ):
             return
         # Definitions may target hardware not present on this bus. ebusd
         # reports those as unavailable; fallback/entity filtering handles that.
@@ -779,32 +1224,6 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             # exposes, and resolution drops the variant that is not discovered.
             "r,vwz,Status01,Status01,31,76,B511,01," + VWZ_STATUS01_FIELDS,
             "r,vwzio,Status01,Status01,31,76,B511,01," + VWZ_STATUS01_FIELDS,
-            # B524 heating-circuit state registers (OP=0x02 GG=0x02, RR=0x20..0x25)
-            # absent from the shipped CSVs (verified against the installed find
-            # output and upstream 15.ctlv2.tsp). Layout documented in the
-            # Helianthus B524 register map (community capture via discussion
-            # #60); wire types EXP (f32) and ULG (u32 LE) confirmed against
-            # ebusd datatype.cpp and the compiled eBUS CSVs. All are read-only
-            # state (S) with no gates; absent hardware reports no data and
-            # stays filtered by the existing no-data handling.
-            "r5,ctlv2,Hc1FlowTempCalc,Hc1FlowTempCalc,31,15,B524"
-            ",020002002000,value,,IGN:4,,,,value,,EXP,,°C,Hc1 Calculated Flow Temp",
-            "r5,ctlv2,Hc1MixerPosition,Hc1MixerPosition,31,15,B524"
-            ",020002002100,value,,IGN:4,,,,value,,EXP,,%,Hc1 Mixer Position",
-            "r5,ctlv2,Hc1Humidity,Hc1Humidity,31,15,B524,020002002200,value,,IGN:4,,,,value,,EXP,,%,Hc1 Humidity",
-            "r5,ctlv2,Hc1DewPointTemp,Hc1DewPointTemp,31,15,B524"
-            ",020002002300,value,,IGN:4,,,,value,,EXP,,°C,Hc1 Dew Point Temp",
-            "r5,ctlv2,Hc1PumpHours,Hc1PumpHours,31,15,B524,020002002400,value,,IGN:4,,,,value,,ULG,,h,Hc1 Pump Hours",
-            "r5,ctlv2,Hc1PumpStarts,Hc1PumpStarts,31,15,B524,020002002500,value,,IGN:4,,,,value,,ULG,,,Hc1 Pump Starts",
-            "r5,ctlv2,Hc2FlowTempCalc,Hc2FlowTempCalc,31,15,B524"
-            ",020002012000,value,,IGN:4,,,,value,,EXP,,°C,Hc2 Calculated Flow Temp",
-            "r5,ctlv2,Hc2MixerPosition,Hc2MixerPosition,31,15,B524"
-            ",020002012100,value,,IGN:4,,,,value,,EXP,,%,Hc2 Mixer Position",
-            "r5,ctlv2,Hc2Humidity,Hc2Humidity,31,15,B524,020002012200,value,,IGN:4,,,,value,,EXP,,%,Hc2 Humidity",
-            "r5,ctlv2,Hc2DewPointTemp,Hc2DewPointTemp,31,15,B524"
-            ",020002012300,value,,IGN:4,,,,value,,EXP,,°C,Hc2 Dew Point Temp",
-            "r5,ctlv2,Hc2PumpHours,Hc2PumpHours,31,15,B524,020002012400,value,,IGN:4,,,,value,,ULG,,h,Hc2 Pump Hours",
-            "r5,ctlv2,Hc2PumpStarts,Hc2PumpStarts,31,15,B524,020002012500,value,,IGN:4,,,,value,,ULG,,,Hc2 Pump Starts",
             # SourceTempInput is absent from the shipped CSVs (upstream issue
             # #632, last compiled 2026-04-19). Layout verified live on brine
             # units in john30/ebusd-configuration PR #565 (flexoTHERM and
@@ -898,20 +1317,23 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             defines = [
                 definition
                 for definition in defines
-                if not (definition.split(",", 3)[1] == "hmu" and definition.split(",", 3)[2] in hmu_only_layouts)
+                if not (
+                    is_heat_pump_circuit(definition.split(",", 3)[1])
+                    and definition.split(",", 3)[2] in hmu_only_layouts
+                )
             ]
 
-        # Resolve logical definition circuits only after discovery identifies their owners.
-        # Drop definitions whose logical owner is ambiguous instead of guessing.
+        # Intent: compile each logical runtime definition against its discovered owner.
+        # Why: definitions must never be sent to a guessed physical circuit.
         def _resolve_definition_circuit(definition: str) -> str | None:
             parts = definition.split(",", 3)
             if len(parts) < 3 or not self._graph:
                 return definition
             resolution = (
                 self._graph.heating_controller_result()
-                if parts[1] == "ctlv2"
+                if is_controller_circuit(parts[1])
                 else self._graph.heat_pump_result()
-                if parts[1] == "hmu"
+                if is_heat_pump_circuit(parts[1])
                 else self._graph.resolve_circuit_result(parts[1])
             )
             if resolution.status != ResolutionStatus.UNIQUE:
@@ -922,6 +1344,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             parts[1] = resolved
             return ",".join(parts)
 
+        # B524 Hc1/Hc2 state reads stay metadata-only until a hardware-scoped capture proves safe polling.
+        controller_node = self._graph.heating_controller_result().node if self._graph is not None else None
+
         # BAS*/BASS* heating controllers (e.g. `Vaillant;BASS3;0708;4304`)
         # expose the zone-1 day setpoint at sub-address 0x22, not the 0x07 slot
         # the shipped `15.700`-lineage CSV poll uses. On this family the 0x07
@@ -931,7 +1356,6 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # write definitions are overridden because the shipped write path still
         # targets 0x07. Hardware-gated so ctlv2/ctlv3 (where 0x07 works) remain
         # unaffected.
-        controller_node = self._graph.heating_controller_result().node if self._graph is not None else None
         if controller_node and controller_node.scan_type.upper().startswith("BAS"):
             circuit = controller_node.circuit
             defines.append(
@@ -946,7 +1370,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             # register has a live value; inactive placeholder zones stay out
             # of active polling. This is a reasonable, fixture-backed
             # assumption for the BASS3 scope captured in issue #129.
-            if f"{circuit}.Z2RoomTemp" in self._graph.raw_registers:
+            if any(key.casefold() == f"{circuit}.Z2RoomTemp".casefold() for key in self._graph.raw_registers):
                 defines.extend(
                     [
                         f"r5,{circuit},Z2DayTemp,Z2DayTemp,31,15,B524,020003012200"
@@ -1035,12 +1459,16 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         defined = 0
         unavailable = 0
         for definition in defines:
+            if self._stopped or self._unload_requested:
+                return
             access, circuit, name = definition.split(",", 3)[:3]
             key = f"{access}.{circuit}.{name}"
             if self._runtime_definitions.get(key) == definition:
                 continue
             try:
                 resp = await self.ebus.define_register(definition)
+                if self._stopped:
+                    return
                 if resp.startswith("ERR:"):
                     unavailable += 1
                     _LOGGER.debug("Runtime register unavailable: %s (%s)", name, resp)
@@ -1059,20 +1487,31 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 len(defines),
             )
 
+    # Intent: avoid cache I/O and state publication after teardown begins.
+    # Why: an in-flight poll may reach this helper after unload is requested.
     async def _async_values_from_registers(self, registers: list[EbusdRegister] | None = None) -> dict[str, str]:
+        if self._stopped or self._unload_requested:
+            return {}
         values: dict[str, str] = {}
         for reg in registers or list(self.registers.values()):
             for field, value in reg.value.items():
                 if value is not None:
                     translated = value
-                    if reg.key == f"{self.heat_pump_circuit}.RunDataStatuscode":
+                    if (
+                        self.heat_pump_circuit is not None
+                        and reg.key.casefold() == f"{self.heat_pump_circuit}.RunDataStatuscode".casefold()
+                    ):
                         translated = COMPRESSOR_STATUS_LABELS.get(value, value)
                     for suffix in EBUSD_STATUS_SUFFIXES:
                         if translated.endswith(suffix):
                             translated = translated[: -len(suffix)]
                             break
                     values[f"{reg.circuit}.{reg.name}.{field}"] = translated
+        if self._stopped or self._unload_requested:
+            return {}
         await self._async_save_cache(values)
+        if self._stopped or self._unload_requested:
+            return {}
         return values
 
     @property
@@ -1159,8 +1598,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         divisor = self._energy_counter_divisor
         if divisor == 1.0:
             return
-        # The b516/runtime energy counters live on the heat-pump (hmu) circuit,
-        # resolved to the discovered heat-pump circuit when available.
+        # The b516/runtime energy counters live on the discovered heat-pump circuit.
+        # This is only a metadata override namespace; it is not a bus target.
         circuit = self.heat_pump_circuit or "hmu"
         for name in self._ENERGY_DIVISOR_REGISTERS:
             key = f"{circuit}.{name}"
@@ -1168,19 +1607,37 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if "divisor" not in entry:
                 entry["divisor"] = divisor
 
+    # Intent: commit register-cache updates only while the coordinator is active.
+    # Why: a late executor write can overwrite cache data from a reloaded coordinator.
     async def _async_save_cache(self, values: dict[str, str]) -> None:
-        cache_dir = os.path.dirname(self._cache_path)
+        if self._stopped or self._unload_requested:
+            return
+        cache_path = self._cache_path
+        cache_dir = os.path.dirname(cache_path)
+        staged_path: str | None = None
         try:
             os.makedirs(cache_dir, exist_ok=True)
-
-            def _write():
-                with open(self._cache_path, "w") as f:
-                    json.dump(values, f)
-
-            await self.hass.async_add_executor_job(_write)
+            write_future = asyncio.ensure_future(
+                self.hass.async_add_executor_job(_write_cache_temp, cache_path, values)
+            )
+            try:
+                try:
+                    staged_path = await asyncio.shield(write_future)
+                except asyncio.CancelledError:
+                    write_future.add_done_callback(_discard_cancelled_cache_write)
+                    raise
+                if self._stopped or self._unload_requested:
+                    return
+                os.replace(staged_path, cache_path)
+            finally:
+                if staged_path is not None and os.path.exists(staged_path):
+                    try:
+                        os.unlink(staged_path)
+                    except FileNotFoundError:
+                        pass
         except Exception:
             # Log the path and failure class only — never cache values.
-            _LOGGER.warning("Failed to save register cache to %s", self._cache_path, exc_info=True)
+            _LOGGER.warning("Failed to save register cache to %s", cache_path, exc_info=True)
 
     async def _async_load_cache(self) -> dict[str, str]:
         try:
@@ -1202,7 +1659,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # decide whether a Home Assistant device is still provided by the
     # integration (and may not be deleted) or is a stale ghost.
     def has_discovered_circuit(self, circuit: str) -> bool:
-        return self._graph is not None and circuit in self._graph.nodes
+        return self._graph is not None and any(key.casefold() == circuit.casefold() for key in self._graph.nodes)
 
     # Name the logical DHW device after the hardware that owns it: a heat pump
     # has a hot-water cylinder, not a boiler. Boiler-only and unresolved buses
@@ -1220,7 +1677,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         node: DeviceNode | None = None
 
         if self._graph is not None:
-            node = self._graph.nodes.get(circuit)
+            node = next(
+                (candidate for key, candidate in self._graph.nodes.items() if key.casefold() == circuit.casefold()),
+                None,
+            )
 
         if node:
             scan_type = node.scan_type
@@ -1285,54 +1745,75 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         Mirrors the ctlv2/hmu aliasing used by get_meta() so registers that
         live under basv3/ctlv3/vwzio are read from the correct circuit.
         """
-        expected_type = {
-            "ctlv2": DeviceType.HEATING_CONTROLLER,
-            "hmu": DeviceType.HEAT_PUMP,
-            "bai": DeviceType.HEATING_CONTROLLER,
-        }.get(logical_circuit)
+        expected_type = (
+            DeviceType.HEATING_CONTROLLER
+            if is_controller_circuit(logical_circuit)
+            else DeviceType.HEAT_PUMP
+            if is_heat_pump_circuit(logical_circuit)
+            else DeviceType.HEATING_CONTROLLER
+            if logical_circuit == "bai"
+            else None
+        )
         candidates: list[str] = []
         if self._graph is not None:
             keys = list(self._graph.raw_registers) + list(self._graph.placeholder_registers)
             candidates = list(
                 dict.fromkeys(
                     circuit
-                    for circuit in (rk.split(".", 1)[0] for rk in keys if rk.endswith(f".{name}"))
+                    for circuit in (rk.split(".", 1)[0] for rk in keys if rk.casefold().endswith(f".{name}".casefold()))
                     if expected_type is None
                     or (
-                        self._graph.nodes.get(circuit) is not None
-                        and self._graph.nodes[circuit].device_type == expected_type
+                        next(
+                            (
+                                node
+                                for node_key, node in self._graph.nodes.items()
+                                if node_key.casefold() == circuit.casefold()
+                            ),
+                            None,
+                        )
+                        is not None
+                        and next(
+                            node
+                            for node_key, node in self._graph.nodes.items()
+                            if node_key.casefold() == circuit.casefold()
+                        ).device_type
+                        == expected_type
                     )
                 )
             )
         resolved = self.resolve_register_circuit(logical_circuit)
-        if resolved is not None and resolved in candidates:
-            return resolved
+        if resolved is not None:
+            return next((candidate for candidate in candidates if candidate.casefold() == resolved.casefold()), None)
         if expected_type is None and len(candidates) == 1:
             return candidates[0]
         return None
 
+    # Intent: read only mapped registers that are safe for active fallback polling.
+    # Why: fallback probes must not bypass per-register polling restrictions.
     async def _fallback_read(
         self,
         include_placeholders: bool = False,
         include_energy: bool = False,
         skip_cache: set[str] | None = None,
     ) -> None:
-        if not self.ebus or not self.ebus.is_connected:
+        if not self.ebus or not self.ebus.is_connected or self._graph is None:
             return
         graph_keys = self._last_find_keys
 
-        # Resolve the REGISTER_MAP entry for a discovered register, applying the
-        # same ctlv2/hmu circuit aliasing as get_meta().
+        # Intent: resolve metadata for a discovered source circuit without changing its owner.
+        # Why: family metadata is presentation compatibility, not bus routing.
         def _meta_key(circuit: str, name: str) -> str | None:
-            for alt in (circuit, "ctlv2", "hmu"):
+            for alt in metadata_circuits(circuit):
                 key = f"{alt}.{name}"
-                if key in REGISTER_MAP:
-                    return key
+                if any(map_key.casefold() == key.casefold() for map_key in REGISTER_MAP):
+                    return next(map_key for map_key in REGISTER_MAP if map_key.casefold() == key.casefold())
             return None
 
         candidates: list[tuple[str, str]] = []
         seen: set[tuple[str, str]] = set()
 
+        # Intent: add each resolved fallback candidate once.
+        # Why: map and placeholder paths can nominate the same register.
         def _add(circuit: str, name: str) -> None:
             key = (circuit, name)
             if key not in seen:
@@ -1344,20 +1825,18 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if include_energy and self._graph:
             for definition in self._runtime_definitions.values():
                 access, circuit, name, _, _, _, message = definition.split(",", 7)[:7]
-                register = self.registers.get(f"{circuit}.{name}")
                 if (
                     access == "r"
                     and message == "B516"
-                    and circuit in self._graph.nodes
-                    and register is not None
-                    and register.has_data
+                    and any(node_key.casefold() == circuit.casefold() for node_key in self._graph.nodes)
                 ):
                     _add(circuit, name)
 
         # Map-driven reads: registers with metadata not yet in the graph.
+        graph_key_folds = {key.casefold() for key in graph_keys}
         for key in REGISTER_MAP:
             meta = REGISTER_MAP[key]
-            if not meta.enabled or key in graph_keys:
+            if not meta.enabled or not meta.fallback_read or key.casefold() in graph_key_folds:
                 continue
             map_circuit, name = key.split(".", 1)
             if is_field_key(key):
@@ -1367,7 +1846,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 candidate_circuit is None
                 and self._graph
                 and any(
-                    rk.endswith(f".{name}") for rk in (*self._graph.raw_registers, *self._graph.placeholder_registers)
+                    rk.casefold().endswith(f".{name}".casefold())
+                    for rk in (*self._graph.raw_registers, *self._graph.placeholder_registers)
                 )
             ):
                 continue
@@ -1381,13 +1861,24 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # resolves via the circuit alias (15-minute interval).
         if include_placeholders and self._graph:
             for key in self._graph.placeholder_registers:
+                if key.casefold() in {raw_key.casefold() for raw_key in self._graph.raw_registers}:
+                    continue
                 parts = key.split(".", 1)
                 if len(parts) != 2:
                     continue
                 circuit, name = parts
                 meta_key = _meta_key(circuit, name)
-                if meta_key and REGISTER_MAP[meta_key].enabled:
-                    _add(circuit, name)
+                if meta_key:
+                    meta = next(
+                        (value for map_key, value in REGISTER_MAP.items() if map_key.casefold() == meta_key.casefold()),
+                        None,
+                    )
+                else:
+                    meta = None
+                if meta and meta.enabled and meta.fallback_read:
+                    resolved = self._fallback_candidate(circuit, name)
+                    if resolved is not None:
+                        _add(resolved, name)
 
         if not candidates:
             return
@@ -1395,11 +1886,16 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         added = 0
         read_with_data = 0
         for circuit, name in candidates:
+            if self._stopped or self._unload_requested:
+                return
             key = f"{circuit}.{name}"
+            register_key = _mapping_key(self.registers, key) or key
             try:
-                value = await self.ebus.read_register(circuit, name)
-                was_new = key not in self.registers
-                value = _usable_register_value(key, value)
+                value = await self.ebus.read_register(circuit, name, raise_transport_errors=True)
+                if self._stopped or self._unload_requested:
+                    return
+                was_new = register_key not in self.registers
+                value = _usable_register_value(register_key, value)
                 if value and (value.startswith("or:") or "read [-" in value):
                     value = None
                 if value is None:
@@ -1409,79 +1905,137 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     # a register the discovery graph still configures (currently
                     # idle) or before a graph exists (startup/cache seeding).
                     graph = self._graph
-                    if graph is None or key in graph.raw_registers:
+                    if graph is None or any(raw_key.casefold() == key.casefold() for raw_key in graph.raw_registers):
                         cache = await self._async_load_cache()
-                        cached = cache.get(f"{circuit}.{name}.value")
-                        cached = _usable_register_value(key, cached)
-                        if cached is not None and key not in (skip_cache or set()):
+                        if self._stopped or self._unload_requested:
+                            return
+                        cache_key = f"{circuit}.{name}.value"
+                        cached = next(
+                            (
+                                cached_value
+                                for cached_name, cached_value in cache.items()
+                                if cached_name.casefold() == cache_key.casefold()
+                            ),
+                            None,
+                        )
+                        cached = _usable_register_value(register_key, cached)
+                        skipped = {item.casefold() for item in (skip_cache or set())}
+                        if cached is not None and key.casefold() not in skipped:
                             value = cached
                 if value is None:
-                    register = self.registers.get(key)
+                    register = self.registers.get(register_key)
                     current_value = register.value.get("value") if register is not None else None
                     is_empty_marker = isinstance(current_value, str) and current_value.strip().lower().startswith(
                         "(empty"
                     )
                     if (
                         register is not None
-                        and (graph is None or key not in graph.raw_registers)
+                        and (
+                            graph is None
+                            or not any(raw_key.casefold() == key.casefold() for raw_key in graph.raw_registers)
+                        )
                         and not is_empty_marker
                     ):
-                        register.value = _register_values(key, None)
+                        register.value = _register_values(register_key, None)
                         register.has_data = False
                     continue
                 if value is not None:
                     read_with_data += 1
                     if was_new:
-                        self.registers[key] = EbusdRegister(
+                        self.registers[register_key] = EbusdRegister(
                             circuit=circuit,
                             name=name,
                             fields=["value"],
-                            value=_register_values(key, value),
+                            value=_register_values(register_key, value),
                             has_data=True,
                         )
                         added += 1
                     else:
-                        self.registers[key].value.update(_register_values(key, value))
-                        self.registers[key].has_data = True
+                        self.registers[register_key].value.update(_register_values(register_key, value))
+                        self.registers[register_key].has_data = True
                     _LOGGER.debug("Fallback read %s = %s", key, value)
+            except ConnectionError, TimeoutError, OSError:
+                raise
             except Exception as exc:
                 _LOGGER.warning("Fallback read failed: %s (%s)", key, exc)
+        if self._stopped or self._unload_requested:
+            return
         if self._graph is not None:
-            graph_added = 0
-            for key, register in self.registers.items():
-                if not register.has_data or key in self._graph.raw_registers:
-                    continue
-                node = self._graph.nodes.get(register.circuit)
-                if node is None:
-                    continue
-                self._graph.raw_registers[key] = register.value.get("value") or ""
-                if key not in node.registers:
-                    node.registers.append(key)
-                node.has_data = True
-                self._last_find_keys.add(key)
-                graph_added += 1
-            if graph_added:
-                _LOGGER.info("Fallback read added %d register(s) to discovery", graph_added)
-                generated = self.entity_factory.generate(
-                    self._graph, yaml_overrides=await self._async_load_yaml_overrides()
-                )
-                known = {(entity.entity_type, entity.unique_id) for entity in self.entities}
-                additions = [entity for entity in generated if (entity.entity_type, entity.unique_id) not in known]
-                self.entities = _merge_entities(self.entities, generated)
-                self._add_new_entities(additions)
+            graph = self._graph
+            graph_additions = [
+                (key, register)
+                for key, register in self.registers.items()
+                if register.has_data and key not in graph.raw_registers and register.circuit in graph.nodes
+            ]
+            if graph_additions:
+                yaml_overrides = await self._async_load_yaml_overrides()
+                if self._stopped or self._unload_requested:
+                    return
+                graph = self._graph
+                if graph is None:
+                    return
+                graph_additions = [
+                    (key, register)
+                    for key, register in self.registers.items()
+                    if register.has_data and key not in graph.raw_registers and register.circuit in graph.nodes
+                ]
+                for key, register in graph_additions:
+                    node = graph.nodes[register.circuit]
+                    graph.raw_registers[key] = register.value.get("value") or ""
+                    if key not in node.registers:
+                        node.registers.append(key)
+                    node.has_data = True
+                    self._last_find_keys.add(key)
+                if graph_additions:
+                    _LOGGER.info("Fallback read added %d register(s) to discovery", len(graph_additions))
+                    generated = self.entity_factory.generate(graph, yaml_overrides=yaml_overrides)
+                    if self._stopped or self._unload_requested:
+                        return
+                    known = {(entity.entity_type, entity.unique_id) for entity in self.entities}
+                    additions = [entity for entity in generated if (entity.entity_type, entity.unique_id) not in known]
+                    self.entities = _merge_entities(self.entities, generated)
+                    self._add_new_entities(additions)
+                    await self._enable_registry_entities(list(graph.raw_registers))
+                    if self._stopped or self._unload_requested:
+                        return
         _LOGGER.info(
             "Fallback read complete: %d/%d registers with data (%d new)", read_with_data, len(candidates), added
         )
 
+    # Intent: refresh register data and recover disconnected ebusd sessions.
+    # Why: failed reconnects must retry, and repairs clear only after a valid poll cycle.
     async def _async_update_data(self) -> CoordinatorState:
+        if self._stopped or self._unload_requested:
+            return {"ebusd": {}}
         if not self._cache_seeded:
-            self._cache_seeded = True
             await self._async_seed_entities_from_cache()
+            if self._stopped or self._unload_requested:
+                return {"ebusd": {}}
+            self._cache_seeded = True
+
+        if self._ebusd_connected and (self.ebus is None or not self.ebus.is_connected):
+            await self._async_mark_ebusd_unreachable("ebusd transport closed between coordinator polls")
+            if self._stopped or self._unload_requested:
+                return {"ebusd": {}}
 
         if not self._ebusd_connected:
+            if self._setup_task is not None:
+                if not self._setup_task.done():
+                    return {"ebusd": await self._async_values_from_registers()}
+                setup_task = self._setup_task
+                self._setup_task = None
+                setup_failed = setup_task.cancelled()
+                if not setup_failed:
+                    setup_error = setup_task.exception()
+                    if setup_error is not None:
+                        _LOGGER.error("ebusd setup task failed unexpectedly: %s", setup_error)
+                        setup_failed = True
+                if setup_failed or not self._ebusd_connected:
+                    self._started = False
             if not self._started:
                 self._started = True
-                self.hass.async_create_task(self._ebusd_connect_and_discover())
+                if not self._unload_requested:
+                    self._setup_task = self.hass.async_create_task(self._async_run_setup_task())
             return {"ebusd": await self._async_values_from_registers()}
 
         if self.ebus and self.ebus.is_connected:
@@ -1490,9 +2044,24 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 poll_energy = now - self._last_energy_poll >= ENERGY_POLL_INTERVAL
                 if poll_energy:
                     await self._define_custom_registers()
+                    if self._stopped or self._unload_requested:
+                        return {"ebusd": await self._async_values_from_registers()}
                 lines = await self.ebus.find_registers()
+                if self._stopped or self._unload_requested:
+                    return {"ebusd": await self._async_values_from_registers()}
+                if getattr(self.ebus, "last_find_usable", None) is False:
+                    _LOGGER.warning("ebusd find returned no usable rows; keeping the current graph unchanged")
+                    return {"ebusd": await self._async_values_from_registers()}
+                if not self.discovery_ready:
+                    discovered = DiscoveryService.build_device_graph(lines)
+                    if discovered.nodes:
+                        await self._apply_discovery_graph(discovered, "delayed")
+                        if self._stopped or self._unload_requested or not self.ebus or not self.ebus.is_connected:
+                            return {"ebusd": await self._async_values_from_registers()}
+                        self._ebusd_connected = True
                 updated = 0
                 invalid_values: set[str] = set()
+                no_data_values: set[str] = set()
                 batch_with_data: set[str] = set()
                 for line in lines:
                     # Shared parser: sentinel/no-data values come back as None.
@@ -1500,7 +2069,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     if not circuit or not name:
                         continue
                     key = f"{circuit}.{name}"
+                    key = _mapping_key(self.registers, key) or key
                     if val is None:
+                        no_data_values.add(key)
                         if key.lower() == "hmux0.rundatareturntemp":
                             raw = line.split("=", 1)[1].strip()
                             if not is_no_data_value(raw):
@@ -1572,30 +2143,49 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 await self._fallback_read(
                     include_placeholders=poll_placeholders,
                     include_energy=poll_energy,
-                    skip_cache=invalid_values,
+                    skip_cache=invalid_values | no_data_values,
                 )
+                if self._stopped or self._unload_requested:
+                    return {"ebusd": await self._async_values_from_registers()}
                 self._disable_no_data_registry_entities(self.entities)
                 if poll_energy:
                     self._last_energy_poll = now
                 heat_pump_circuit = self.heat_pump_circuit
                 if heat_pump_circuit is not None:
                     zero_idle_registers(self.registers, heat_pump_circuit)
+                if self._ebusd_repair_pending and self.discovery_ready:
+                    await repairs.async_dismiss_ebusd_unreachable(self.hass)
+                    if self._stopped or self._unload_requested:
+                        return {"ebusd": {}}
+                    self._ebusd_repair_pending = False
                 if updated:
                     _LOGGER.info("Poll updated %d registers", updated)
                 return {"ebusd": await self._async_values_from_registers()}
             except ConnectionError, TimeoutError, OSError:
+                if self._stopped or self._unload_requested:
+                    return {"ebusd": await self._async_values_from_registers()}
                 _LOGGER.warning("ebusd connection lost, reconnecting")
+                self._ebusd_repair_pending = True
                 try:
                     # Only dismiss the repair issue when this call actually
                     # dialed; a skipped single-flight reconnect proves nothing.
                     reconnected = await self.ebus._reconnect() if self.ebus else False
+                    if self._stopped or self._unload_requested:
+                        return {"ebusd": await self._async_values_from_registers()}
                     if reconnected:
                         self._runtime_definitions.clear()
                         self._last_energy_poll = datetime.min
-                        await repairs.async_dismiss_ebusd_unreachable(self.hass)
+                        ebus = self.ebus
+                        if ebus:
+                            await ebus.disconnect()
+                        self.ebus = None
+                        self.discovery = None
+                        await self._async_mark_ebusd_unreachable("transport restored; fresh discovery is required")
                 except Exception as exc:
                     _LOGGER.error("ebusd reconnect failed: %s", exc)
-                    await repairs.async_create_ebusd_unreachable(self.hass)
+                    reconnected = False
+                if not reconnected:
+                    await self._async_mark_ebusd_unreachable("transport reconnect failed")
 
         return {"ebusd": await self._async_values_from_registers()}
 
@@ -1626,14 +2216,43 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if len(self._write_log) > WRITE_LOG_SIZE:
             del self._write_log[: len(self._write_log) - WRITE_LOG_SIZE]
 
+    # Intent: verify a write target remains present in the authoritative graph.
+    # Why: entities can outlive a partial reconnect and must fail closed before any batch write.
+    def _graph_has_register(self, circuit: str, name: str) -> bool:
+        if self._graph is None:
+            return False
+        expected = f"{circuit}.{name}".casefold()
+        return any(
+            key.casefold() == expected for key in (*self._graph.raw_registers, *self._graph.placeholder_registers)
+        )
+
+    # Intent: write only through an authoritative discovered register owner.
+    # Why: service calls during setup must not target cached or assumed circuits.
     async def async_write_registers(
         self,
         writes: list[tuple[str, str, str]],
         strict_verify: bool = True,
         refresh: bool = True,
+        require_discovered: bool = True,
     ) -> bool:
-        if not self.ebus or not self.ebus.is_connected:
+        if (
+            self._stopped
+            or self._unload_requested
+            or not self.ebus
+            or not self.ebus.is_connected
+            or not self.discovery_ready
+        ):
             return False
+        if require_discovered:
+            for circuit, name, value in writes:
+                resolved_circuit = self.resolve_register_circuit(circuit)
+                mapped = any(
+                    any(map_key.casefold() == f"{alias}.{name}".casefold() for map_key in REGISTER_MAP)
+                    for alias in metadata_circuits(circuit)
+                )
+                if mapped and (resolved_circuit is None or not self._graph_has_register(resolved_circuit, name)):
+                    self._record_write(circuit, name, value, resolved_circuit, False, "register not discovered")
+                    return False
         for circuit, name, value in writes:
             resolved_circuit = self.resolve_register_circuit(circuit)
             if resolved_circuit is None:
@@ -1646,6 +2265,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 self._record_write(circuit, name, value, resolved_circuit, False, result.error_message)
                 return False
             self._record_write(circuit, name, value, resolved_circuit, True)
+            if self._stopped or self._unload_requested or not self.ebus or not self.ebus.is_connected:
+                return False
         if refresh:
             await self.async_request_refresh()
         return True
@@ -1658,8 +2279,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         value: str,
         strict_verify: bool = True,
         refresh: bool = True,
+        require_discovered: bool = True,
     ) -> bool:
-        return await self.async_write_registers([(circuit, name, value)], strict_verify=strict_verify, refresh=refresh)
+        return await self.async_write_registers(
+            [(circuit, name, value)],
+            strict_verify=strict_verify,
+            refresh=refresh,
+            require_discovered=require_discovered,
+        )
 
     async def async_set_mode_override(
         self,
@@ -1672,7 +2299,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if not self.ebus or not self.ebus.is_connected:
             return False
         payload = f"{mode};{flow_temperature:g};{storage_temperature:g};-;-;0;0;0;-;0;0;0"
-        ok = await self.async_write_register("bai", "SetModeOverride", payload, strict_verify=False)
+        ok = await self.async_write_register(
+            "bai", "SetModeOverride", payload, strict_verify=False, require_discovered=False
+        )
         if not ok:
             return False
         self.async_clear_mode_override()
@@ -1694,7 +2323,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             self._cancel_set_mode_override = None
         self._set_mode_override_payload = None
 
+    # Intent: stop polling, scheduled work, and the active ebusd session.
+    # Why: a successfully unloaded config entry must not retain transport or callbacks.
     async def async_stop(self) -> None:
+        self._stopped = True
+        self._ebusd_connected = False
+        self._started = False
+        self._post_discovery_callbacks.clear()
+        self.entity_adders.clear()
         self.async_clear_mode_override()
         if self._cancel_delayed_rediscovery:
             self._cancel_delayed_rediscovery()
@@ -1702,6 +2338,65 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if self._cancel_analysis:
             self._cancel_analysis()
             self._cancel_analysis = None
-        if self.ebus:
-            await self.ebus.disconnect()
+        current_task = asyncio.current_task()
+        dump_tasks = tuple(task for task in self._active_dump_tasks if task is not current_task)
+        for task in dump_tasks:
+            if not task.done() and task.cancelling() == 0:
+                task.cancel()
+        if dump_tasks:
+            await asyncio.gather(*dump_tasks, return_exceptions=True)
+        setup_task = self._setup_task
+        if setup_task is not None:
+            if not setup_task.done():
+                setup_task.cancel()
+            try:
+                await setup_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as exc:
+                _LOGGER.warning("ebusd setup task failed during stop: %s", exc)
+            self._setup_task = None
+        clients = [self._pending_ebus]
+        if self.ebus is not self._pending_ebus:
+            clients.append(self.ebus)
+        for ebus in clients:
+            if ebus is None:
+                continue
+            request_shutdown = getattr(ebus, "request_shutdown", None)
+            if request_shutdown is not None:
+                request_shutdown()
+            await ebus.disconnect()
+        self._pending_ebus = None
         self.ebus = None
+        self.discovery = None
+
+    # Intent: block transport reconnects while Home Assistant unloads platforms.
+    # Why: platform teardown may await while a failed poll is sleeping before reconnect.
+    def request_unload(self) -> None:
+        self._unload_requested = True
+        self._started = False
+        current_task = asyncio.current_task()
+        for task in tuple(self._active_dump_tasks):
+            if task is not current_task and not task.done() and task.cancelling() == 0:
+                task.cancel()
+        for ebus in (self.ebus, self._pending_ebus):
+            if ebus is None:
+                continue
+            request_shutdown = getattr(ebus, "request_shutdown", None)
+            if request_shutdown is not None:
+                request_shutdown()
+
+    # Intent: restore transport reconnects when platform unload did not complete.
+    # Why: HA may retry an unload using the still-loaded coordinator.
+    def cancel_unload_request(self) -> None:
+        self._unload_requested = False
+        self._started = False
+        for ebus in (self.ebus, self._pending_ebus):
+            if ebus is None:
+                continue
+            clear_shutdown = getattr(ebus, "clear_shutdown_request", None)
+            if clear_shutdown is not None:
+                clear_shutdown()
+        if not self._stopped and self.ebus and self.ebus.is_connected:
+            self._schedule_delayed_rediscovery()
+            self._schedule_analysis()

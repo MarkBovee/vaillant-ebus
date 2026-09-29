@@ -157,9 +157,11 @@ class EbusService:
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._version: str | None = None
+        self._last_find_usable: bool | None = None
         self._reconnect_delay = INITIAL_RECONNECT_DELAY
         self._reconnect_count = 0
         self._reconnecting = False
+        self._shutdown_requested = False
         self._lock = asyncio.Lock()
         self._command_log: deque[CommandLogEntry] = deque(maxlen=20)
 
@@ -173,6 +175,12 @@ class EbusService:
         # Return cached ebusd daemon version string
         return self._version
 
+    # Intent: expose whether the most recent find contained a usable row.
+    # Why: an empty/error-only response is distinct from both transport failure and discovery success.
+    @property
+    def last_find_usable(self) -> bool | None:
+        return self._last_find_usable
+
     @property
     def debug_info(self) -> dict[str, object]:
         # Return command log and connection state for diagnostics
@@ -184,7 +192,11 @@ class EbusService:
 
     # Open TCP connection to ebusd, raise ConnectionError on failure
     async def connect(self) -> None:
+        if self._shutdown_requested:
+            raise ConnectionError("shutdown requested")
         async with self._lock:
+            if self._shutdown_requested:
+                raise ConnectionError("shutdown requested")
             if self._writer:
                 return
             try:
@@ -192,6 +204,9 @@ class EbusService:
                     asyncio.open_connection(self._host, self._port),
                     timeout=READ_TIMEOUT,
                 )
+                if self._shutdown_requested:
+                    await self._disconnect_nolock()
+                    raise ConnectionError("shutdown requested")
                 self._reconnect_delay = INITIAL_RECONNECT_DELAY
                 self._reconnect_count = 0
                 _LOGGER.info("Connected to ebusd at %s:%s", self._host, self._port)
@@ -212,6 +227,16 @@ class EbusService:
     async def disconnect(self) -> None:
         async with self._lock:
             await self._disconnect_nolock()
+
+    # Intent: prevent a pending reconnect from opening a socket after unload.
+    # Why: disconnect alone cannot cancel a reconnect that is sleeping outside the lock.
+    def request_shutdown(self) -> None:
+        self._shutdown_requested = True
+
+    # Intent: allow a failed Home Assistant platform unload to resume normally.
+    # Why: a temporary unload failure must not permanently disable the coordinator.
+    def clear_shutdown_request(self) -> None:
+        self._shutdown_requested = False
 
     # Disconnect without acquiring the lock (caller must hold _lock)
     async def _disconnect_nolock(self) -> None:
@@ -239,24 +264,39 @@ class EbusService:
     # Send raw command string to ebusd, return SendResult
     async def send_command(self, cmd: str) -> SendResult:
         async with self._lock:
+            if self._shutdown_requested:
+                return SendResult(data="", error="shutdown_requested")
             t0 = time.monotonic()
             result = await self._send_line_locked(cmd)
             return self._log_cmd(cmd, result, t0)
 
+    # Intent: send one serialized command and clear the socket after EOF or timeout.
+    # Why: later operations must not reuse a TCP stream that stopped returning lines.
     # Drain stale data, send one command, and read its single-line response.
     # Caller must hold _lock for the whole transaction.
     async def _send_line_locked(self, cmd: str) -> SendResult:
         if not self._writer or not self._reader:
             return SendResult(data="", error="not_connected")
-        await self._drain_stale()
-        data = (cmd + "\n").encode("utf-8")
-        self._writer.write(data)
-        await self._writer.drain()
+        try:
+            await self._drain_stale()
+            if self._shutdown_requested:
+                return SendResult(data="", error="shutdown_requested")
+            data = (cmd + "\n").encode("utf-8")
+            self._writer.write(data)
+            await self._writer.drain()
+        except (ConnectionError, OSError) as exc:
+            await self._disconnect_nolock()
+            return SendResult(data="", error=f"connection_closed: {exc}")
         try:
             response = await asyncio.wait_for(self._reader.readline(), timeout=READ_TIMEOUT)
         except TimeoutError:
+            await self._disconnect_nolock()
             return SendResult(data="", error="timeout")
+        except (ConnectionError, OSError) as exc:
+            await self._disconnect_nolock()
+            return SendResult(data="", error=f"connection_closed: {exc}")
         if not response:
+            await self._disconnect_nolock()
             return SendResult(data="", error="connection_closed")
         return SendResult(data=response.decode("utf-8").rstrip("\n\r"))
 
@@ -273,6 +313,8 @@ class EbusService:
         )
         return result
 
+    # Intent: collect multi-line responses and report EOF before the quiet terminator.
+    # Why: a truncated find/info response must not be treated as a complete result.
     # Send one command and collect every response line until ebusd goes quiet.
     # Holds the lock for the whole multi-line transaction so concurrent
     # commands cannot drain these lines or receive one as their own response.
@@ -295,15 +337,39 @@ class EbusService:
                 line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
             except TimeoutError:
                 break
+            except (ConnectionError, OSError) as exc:
+                await self._disconnect_nolock()
+                self._command_log[-1]["error"] = f"connection_closed: {exc}"
+                raise ConnectionError(f"ebusd connection failed while reading {cmd}: {exc}") from exc
             if not line:
-                break
+                await self._disconnect_nolock()
+                self._command_log[-1]["error"] = "connection_closed"
+                raise ConnectionError(f"ebusd connection closed while reading {cmd}")
             lines.append(line.decode("utf-8").rstrip("\n\r"))
         return lines
 
-    # Send a complete find command (see _send_lines_locked).
+    # Intent: record when a completed find contains no usable register or scan rows.
+    # Why: an empty response is not TCP failure, but it cannot prove discovery recovered.
     async def _send_find(self) -> list[str]:
         async with self._lock:
-            return await self._send_lines_locked("f -a")
+            self._last_find_usable = None
+            lines = await self._send_lines_locked("f -a")
+            result = self._command_log[-1]
+            if result["cmd"] == "f -a" and result["error"]:
+                if result["error"] == "timeout":
+                    raise TimeoutError("ebusd find command timed out")
+                raise ConnectionError(f"ebusd find command failed: {result['error']}")
+            usable_lines = [
+                line
+                for line in lines
+                if "=" in line and not line.split("=", 1)[1].strip().lower().startswith(("err:", "(err:"))
+            ]
+            if not usable_lines:
+                self._command_log[-1]["error"] = "no_usable_lines"
+                self._last_find_usable = False
+                return lines
+            self._last_find_usable = True
+            return lines
 
     # Send 'info' and return every banner line. ebusd lists the per-address
     # loaded CSV/include files after the version line, so get_info needs the
@@ -316,10 +382,19 @@ class EbusService:
     async def find_registers(self) -> list[str]:
         return await self._send_find()
 
+    # Intent: read a register value and optionally surface transport errors to pollers.
+    # Why: unsupported values are unavailable data, while TCP failures need a reconnect.
     # Read a single register value from ebusd, strip status suffix. By default
     # ebusd may answer from its cache; force=True adds "-f" so an active-read
     # register is queried from the device instead (used to verify writes).
-    async def read_register(self, circuit: str, name: str, field: str = "", force: bool = False) -> str | None:
+    async def read_register(
+        self,
+        circuit: str,
+        name: str,
+        field: str = "",
+        force: bool = False,
+        raise_transport_errors: bool = False,
+    ) -> str | None:
         _validate_identifier("circuit", circuit)
         _validate_identifier("register name", name)
         if field:
@@ -330,6 +405,11 @@ class EbusService:
         result = await self.send_command(cmd)
         if result.error:
             _LOGGER.debug("Read error %s.%s: %s", circuit, name, result.error)
+            if raise_transport_errors:
+                await self.disconnect()
+                if result.error == "timeout":
+                    raise TimeoutError(f"ebusd read timed out for {circuit}.{name}")
+                raise ConnectionError(f"ebusd read failed for {circuit}.{name}: {result.error}")
             return None
         raw = result.data.strip()
         return _strip_suffix(raw) if raw else None
@@ -348,6 +428,10 @@ class EbusService:
     # while the cylinder finishes charging after boost is turned off, or a
     # write-only register has no read message to verify against).
     async def write_register(self, circuit: str, name: str, value: str, strict_verify: bool = True) -> WriteResult:
+        if self._shutdown_requested:
+            return WriteResult(success=False, error_message="shutdown requested")
+        if "\r" in value or "\n" in value:
+            return WriteResult(success=False, error_message="register value must not contain line breaks")
         _validate_identifier("circuit", circuit)
         _validate_identifier("register name", name)
         cmd = f"write -c {circuit} {name} {value}"
@@ -413,6 +497,8 @@ class EbusService:
 
     # Send 'define' command for runtime register definition
     async def define_register(self, definition: str) -> str:
+        if self._shutdown_requested:
+            return "ERR: shutdown requested"
         if not isinstance(definition, str) or not definition.strip():
             raise ValueError("ebusd register definition must be a non-empty string")
         if "\r" in definition or "\n" in definition:
@@ -429,14 +515,18 @@ class EbusService:
     # restored connection). The disconnect is unconditional because transport
     # failures leave a stale writer behind that must be cleared before dialing.
     async def _reconnect(self) -> bool:
-        if self._reconnecting:
+        if self._shutdown_requested or self._reconnecting:
             return False
         self._reconnecting = True
         try:
             delay = min(self._reconnect_delay, MAX_RECONNECT_DELAY)
             _LOGGER.info("Reconnecting in %ds (attempt %d)", delay, self._reconnect_count + 1)
             await asyncio.sleep(delay)
+            if self._shutdown_requested:
+                return False
             async with self._lock:
+                if self._shutdown_requested:
+                    return False
                 await self._disconnect_nolock()
                 self._reconnect_delay = min(self._reconnect_delay * 2, MAX_RECONNECT_DELAY)
                 self._reconnect_count += 1
@@ -445,6 +535,9 @@ class EbusService:
                         asyncio.open_connection(self._host, self._port),
                         timeout=READ_TIMEOUT,
                     )
+                    if self._shutdown_requested:
+                        await self._disconnect_nolock()
+                        return False
                     self._reconnect_delay = INITIAL_RECONNECT_DELAY
                     self._reconnect_count = 0
                     _LOGGER.info("Reconnected to ebusd at %s:%s", self._host, self._port)

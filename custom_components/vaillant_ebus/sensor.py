@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .backend.entity_factory import EntityDescription
 from .backend.models import derive_operating_state
 from .const import DOMAIN
-from .coordinator import VaillantCoordinator
+from .coordinator import VaillantCoordinator, get_register_value
 
 
 # Create sensor entities from coordinator entity descriptions
@@ -42,9 +42,20 @@ async def async_setup_entry(
     # The Energy Manager State is derived, not a register read. Create it for a
     # discovered heat pump only, so boiler-only buses never grow a phantom
     # entity. It reports `unavailable` until a status field carries data.
-    heat_pump_circuit = coordinator.heat_pump_circuit
-    if heat_pump_circuit is not None:
+    energy_added = False
+
+    # Intent: add the derived energy-state sensor once a heat-pump owner is discovered.
+    # Why: first refresh can finish before background discovery identifies the heat pump.
+    def _ensure_energy_state() -> None:
+        nonlocal energy_added
+        heat_pump_circuit = coordinator.heat_pump_circuit
+        if energy_added or not coordinator.discovery_ready or heat_pump_circuit is None:
+            return
         async_add_entities([EbusdEnergyManagerState(coordinator, entry, heat_pump_circuit)])
+        energy_added = True
+
+    _ensure_energy_state()
+    coordinator.register_post_discovery_callback(_ensure_energy_state)
 
 
 class EbusdEnergyManagerState(CoordinatorEntity[VaillantCoordinator], SensorEntity):
@@ -111,8 +122,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
 
     @property
     def native_value(self) -> float | str | None:
-        data = self.coordinator.data.get("ebusd", {})
-        raw = data.get(self._desc.key)
+        raw = get_register_value(self.coordinator, self._desc.circuit, self._desc.name, self._desc.field)
         if raw is None or raw in ("-", "empty", "") or (raw and "no data stored" in raw):
             # No live register data: report unknown rather than a stale cached
             # value, so a register that stops being read (e.g. a dead circuit
@@ -125,7 +135,7 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
         val: float | str | None
         try:
             val = float(raw)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             if getattr(self, "_attr_native_unit_of_measurement", None):
                 val = None
             else:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -17,7 +18,27 @@ HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
 ALWAYS_HIDDEN = {"memory"}
 HIDDEN_DEVICE_KEYWORDS = {"broadcast", "scan", "general"}
 HIDDEN_REGISTER_NAMES = {"tmpb516montheven"}
-SECONDARY_ZONE_CIRCUITS = frozenset({"hc2", "hc3", "z2", "z3"})
+# Intent: identify numbered zone and heating-circuit node names.
+# Why: filtering must continue to work beyond the common z1/hc3 range.
+_NUMBERED_ZONE_RE = re.compile(r"^(?:hc|z)(\d+)$", re.IGNORECASE)
+
+
+# Intent: identify secondary numbered zone and heating-circuit nodes.
+# Why: inactive-zone filtering must apply consistently beyond z1/hc1.
+def _is_secondary_zone_circuit(circuit: str) -> bool:
+    match = _NUMBERED_ZONE_RE.fullmatch(circuit)
+    return bool(match and int(match.group(1)) > 1)
+
+
+# Intent: detect static registers belonging to inactive numbered zones.
+# Why: DayTemp/OpMode defaults must not authorize a ghost zone entity.
+def _is_inactive_zone_register(name: str, has_data: dict[str, bool]) -> bool:
+    lower = name.lower()
+    for prefix in ("hc", "z"):
+        match = re.match(rf"{prefix}(\d+)", lower)
+        if match and int(match.group(1)) > 1:
+            return not has_data.get(f"{prefix}{match.group(1)}", False)
+    return False
 
 
 class ParsedRegister(NamedTuple):
@@ -43,8 +64,13 @@ class DiscoveryService:
     def __init__(self, ebus: EbusService) -> None:
         self._ebus = ebus
 
+    # Intent: build a device graph only from a find response with usable rows.
+    # Why: error-only register lines can otherwise masquerade as discovered nodes.
     async def discover(self) -> DeviceGraph:
         find_lines = await self._ebus.find_registers()
+        if getattr(self._ebus, "last_find_usable", None) is False:
+            _LOGGER.warning("Skipping graph build from an empty/error-only ebusd find response")
+            return DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
         _LOGGER.info("Starting device discovery via ebusd find (%d lines)", len(find_lines))
         graph = self.build_device_graph(find_lines)
         type_counts: dict[str, int] = {}
@@ -128,7 +154,7 @@ class DiscoveryService:
             return True
         if c_lower in ALWAYS_HIDDEN or any(kw in c_lower for kw in HIDDEN_DEVICE_KEYWORDS):
             return True
-        if n_lower.startswith(("cctimer_", "hwctimer_", "z1timer_", "z2timer_", "z3timer_")):
+        if n_lower.startswith(("cctimer_", "hwctimer_")) or re.match(r"z\d+timer_", n_lower):
             return True
         if n_lower.startswith("prfuelsum"):
             return True
@@ -139,11 +165,10 @@ class DiscoveryService:
         if c_lower == "broadcast" and n_lower in HIDDEN_BROADCAST:
             return True
         if has_data:
-            if c_lower in SECONDARY_ZONE_CIRCUITS and not has_data.get(c_lower):
+            if _is_secondary_zone_circuit(c_lower) and not has_data.get(c_lower):
                 return True
-            for suffix in SECONDARY_ZONE_CIRCUITS:
-                if not has_data.get(suffix) and (n_lower.startswith(suffix) or n_lower.endswith(f"_{suffix}")):
-                    return True
+            if _is_inactive_zone_register(n_lower, has_data):
+                return True
         return False
 
     @staticmethod
@@ -169,6 +194,8 @@ class DiscoveryService:
         _LOGGER.info("Circuit %s categorized as UNKNOWN", circuit)
         return DeviceType.UNKNOWN
 
+    # Intent: build a device graph from register and scan observations.
+    # Why: unavailable rows retain ownership metadata without fabricating a raw value.
     @staticmethod
     def build_device_graph(find_lines: list[str]) -> DeviceGraph:
         raw_registers: dict[str, str] = {}
@@ -184,6 +211,7 @@ class DiscoveryService:
             circuit, name, value = DiscoveryService._parse_register(line)
             if not circuit or not name:
                 continue
+            circuit = circuit.casefold()
             if suppress_hmu_alias and circuit.lower() == "hmu":
                 continue
 
@@ -226,14 +254,18 @@ class DiscoveryService:
                     circuit=sub_name,
                     device_type=existing.device_type,
                     registers=merged,
-                    has_data=existing.has_data or any(raw_registers.get(rk) is not None for rk in regs),
+                    has_data=existing.has_data or _subdevice_has_data(sub_name, parent_circuit, raw_registers),
                 )
                 continue
             nodes[sub_name] = DeviceNode(
                 circuit=sub_name,
                 device_type=d_type,
                 registers=regs,
-                has_data=any(raw_registers.get(rk) is not None for rk in regs),
+                has_data=(
+                    _subdevice_has_data(sub_name, parent_circuit, raw_registers)
+                    if d_type == DeviceType.ZONE
+                    else any(raw_registers.get(rk) is not None for rk in regs)
+                ),
             )
 
         for circuit, reg_keys in regs_by_circuit.items():
@@ -378,7 +410,7 @@ def _extract_zn(name: str) -> str:
     """Extract zone number from register name like 'Z1DayTemp' → '1'."""
     if not name or len(name) < 2:
         return ""
-    n_upper = name.upper() if name[0].isupper() else name.lower()
+    n_upper = name.upper()
     if n_upper[0] != "Z" or not n_upper[1].isdigit():
         return ""
     zn = n_upper[1]
@@ -393,7 +425,7 @@ def _extract_hcn(name: str) -> str:
     """Extract heating circuit number from register name like 'Hc1FlowTemp' → '1'."""
     if not name or len(name) < 3:
         return ""
-    n_upper = name.upper() if name[0].isupper() else name.lower()
+    n_upper = name.upper()
     if not n_upper.startswith("HC") or not n_upper[2].isdigit():
         return ""
     hcn = n_upper[2]
@@ -419,6 +451,38 @@ def _collect_sub_regs(
         if _name_belongs_to_sub(name, sub_name):
             result.append(rk)
     return result
+
+
+# Intent: determine whether a zone or heating-circuit subdevice has live evidence.
+# Why: static defaults are insufficient to create owner-dependent entities.
+def _subdevice_has_data(sub_name: str, parent_circuit: str, raw_registers: dict[str, str]) -> bool:
+    """Return whether a zone/heating-circuit node has live ownership evidence."""
+    number = sub_name[1:] if sub_name.startswith("z") else sub_name[2:]
+    if sub_name.startswith("z"):
+        expected_mapping = f"{parent_circuit}.z{number}roomzonemapping".casefold()
+        mapping = next(
+            (value for key, value in raw_registers.items() if key.casefold() == expected_mapping),
+            None,
+        )
+        if mapping is not None and mapping.strip().lower() not in {"", "none"} and not is_no_data_value(mapping):
+            return True
+        static_suffixes = {"daytemp", "nighttemp", "opmode", "holidaytemp", "roomzonemapping"}
+        return any(
+            value is not None
+            and not is_no_data_value(value)
+            and name.casefold().removeprefix(f"z{number}") not in static_suffixes
+            for key, value in raw_registers.items()
+            if key.casefold().startswith(f"{parent_circuit}.z{number}".casefold())
+            for name in (key.split(".", 1)[1],)
+        )
+    elif sub_name.startswith("hc"):
+        return any(
+            value is not None and not is_no_data_value(value)
+            for key, value in raw_registers.items()
+            if key.casefold().startswith(f"{parent_circuit}.hc{number}".casefold())
+        )
+    else:
+        return False
 
 
 # Match a register name to a logical zone, heating circuit, or DHW device.
@@ -643,8 +707,8 @@ def _is_runtime_only_controller_alias(node: DeviceNode) -> bool:
     """Return whether a node is a scan-less runtime-only controller alias."""
     if node.device_type != DeviceType.HEATING_CONTROLLER or node.scan_type or node.has_data:
         return False
-    names = {register.rsplit(".", 1)[-1] for register in node.registers}
-    return bool(names) and names <= _RUNTIME_ONLY_CONTROLLER_REGISTERS
+    names = {register.rsplit(".", 1)[-1].casefold() for register in node.registers}
+    return bool(names) and names <= {name.casefold() for name in _RUNTIME_ONLY_CONTROLLER_REGISTERS}
 
 
 # Link discovered logical devices to their source circuit and heat-pump parents.

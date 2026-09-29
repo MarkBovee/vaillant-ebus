@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .backend.entity_factory import EntityDescription
 from .backend.models import derive_tank_presence, is_no_data_value
 from .const import DOMAIN
-from .coordinator import VaillantCoordinator
+from .coordinator import VaillantCoordinator, get_register_value
 
 
 # Create binary sensor entities plus connection and fault sensors
@@ -39,15 +39,28 @@ async def async_setup_entry(
         return entities
 
     async_add_entities(_build(coordinator.entities))
-    # The DHW tank-present sensor is derived from the controller's storage-temp
-    # sentinel, not a register read. It reports unknown until the register
-    # carries data, and is always created so discovery can populate it late.
-    async_add_entities([EbusdTankPresentSensor(coordinator, entry)])
+    tank_added = False
+
+    # Intent: add tank presence only after its controller storage register is discovered.
+    # Why: a derived entity without a backing HwcStorageTemp capability is a ghost.
+    def _ensure_tank_entity() -> None:
+        nonlocal tank_added
+        if tank_added or not coordinator.discovery_ready:
+            return
+        if not coordinator.has_controller_register("HwcStorageTemp"):
+            return
+        async_add_entities([EbusdTankPresentSensor(coordinator, entry)])
+        tank_added = True
+
+    _ensure_tank_entity()
+    coordinator.register_post_discovery_callback(_ensure_tank_entity)
     added_fixed = False
 
+    # Intent: add connection and fault sensors once a heat-pump owner exists.
+    # Why: these derived sensors need a discovered physical heat-pump circuit.
     def _ensure_fixed_entities() -> None:
         nonlocal added_fixed
-        if added_fixed or coordinator.heat_pump_circuit is None:
+        if added_fixed or not coordinator.discovery_ready or coordinator.heat_pump_circuit is None:
             return
         async_add_entities([EbusdConnectionSensor(coordinator, entry), EbusdFaultSensor(coordinator, entry)])
         added_fixed = True
@@ -92,8 +105,7 @@ class EbusdBinarySensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEnti
     @property
     def is_on(self) -> bool | None:
         # Return binary state; ebusd sentinels mean "unknown", not off.
-        data = self.coordinator.data.get("ebusd", {})
-        raw = data.get(self._desc.key)
+        raw = get_register_value(self.coordinator, self._desc.circuit, self._desc.name, self._desc.field)
         if raw is None or is_no_data_value(str(raw)):
             return None
         return raw.strip().lower() in BINARY_TRUE_VALUES
@@ -144,8 +156,8 @@ class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntit
         if c is None or hp is None:
             return False
         values = (
-            self.coordinator.data.get("ebusd", {}).get(f"{hp}.Currenterror.value"),
-            self.coordinator.data.get("ebusd", {}).get(f"{c}.Currenterror.value"),
+            get_register_value(self.coordinator, hp, "Currenterror"),
+            get_register_value(self.coordinator, c, "Currenterror"),
         )
         return any(value and any(part.strip() not in {"", "-"} for part in str(value).split(";")) for value in values)
 

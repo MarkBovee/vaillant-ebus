@@ -12,7 +12,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .backend.entity_factory import EntityDescription
 from .const import DOMAIN
-from .coordinator import VaillantCoordinator
+from .coordinator import VaillantCoordinator, get_register_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,9 +39,7 @@ async def async_setup_entry(
         return entities
 
     async_add_entities(_build(coordinator.entities))
-    coordinator.register_entity_adder(
-        "number", lambda descriptions: async_add_entities(_build(descriptions))
-    )
+    coordinator.register_entity_adder("number", lambda descriptions: async_add_entities(_build(descriptions)))
 
 
 class EbusdNumber(CoordinatorEntity[VaillantCoordinator], NumberEntity):
@@ -71,13 +69,12 @@ class EbusdNumber(CoordinatorEntity[VaillantCoordinator], NumberEntity):
     @property
     def native_value(self) -> float | None:
         # Return float value from coordinator data
-        data = self.coordinator.data.get("ebusd", {})
-        raw = data.get(self._desc.key)
+        raw = get_register_value(self.coordinator, self._desc.circuit, self._desc.name, self._desc.field)
         if raw is None:
             return None
         try:
             return float(raw)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     # Write value to ebusd and trigger refresh

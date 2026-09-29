@@ -15,7 +15,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .backend.entity_factory import EntityDescription
 from .backend.models import is_no_data_value
 from .const import DOMAIN
-from .coordinator import VaillantCoordinator
+from .coordinator import VaillantCoordinator, get_register_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,13 +47,48 @@ async def async_setup_entry(
         return entities
 
     async_add_entities(_build(coordinator.entities))
-    async_add_entities(
-        [
-            AwayModeSwitch(coordinator, entry),
-            HwcBoostSwitch(coordinator, entry),
-            HwcAwayModeSwitch(coordinator, entry),
-        ]
-    )
+    fixed_added: set[str] = set()
+
+    # Intent: add each fixed switch only when every register it writes is discovered.
+    # Why: partial capability sets must not expose controls that can issue partial writes.
+    def _ensure_fixed_entities() -> None:
+        if not coordinator.discovery_ready:
+            return
+        entities: list[SwitchEntity] = []
+        primary_zone = coordinator.primary_zone
+        controller = coordinator.heating_circuit
+        if (
+            primary_zone
+            and controller
+            and all(
+                coordinator.has_zone_register(controller, primary_zone, register)
+                for register in ("HolidayStartPeriod", "HolidayEndPeriod", "HolidayTemp")
+            )
+            and all(
+                coordinator.has_controller_register(register)
+                for register in ("HwcHolidayStartPeriod", "HwcHolidayEndPeriod")
+            )
+            and "away" not in fixed_added
+        ):
+            entities.append(AwayModeSwitch(coordinator, entry, primary_zone))
+            fixed_added.add("away")
+        if coordinator.has_controller_register("HwcSFMode") and "boost" not in fixed_added:
+            entities.append(HwcBoostSwitch(coordinator, entry))
+            fixed_added.add("boost")
+        if (
+            all(
+                coordinator.has_controller_register(register)
+                for register in ("HwcHolidayStartPeriod", "HwcHolidayEndPeriod")
+            )
+            and "hwc_away" not in fixed_added
+        ):
+            entities.append(HwcAwayModeSwitch(coordinator, entry))
+            fixed_added.add("hwc_away")
+        if entities:
+            async_add_entities(entities)
+
+    _ensure_fixed_entities()
+    coordinator.register_post_discovery_callback(_ensure_fixed_entities)
     coordinator.register_entity_adder("switch", lambda descriptions: async_add_entities(_build(descriptions)))
 
 
@@ -79,8 +114,7 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         # Return boolean state; ebusd sentinels mean "unknown", not off.
-        data = self.coordinator.data.get("ebusd", {})
-        raw = data.get(self._desc.key)
+        raw = get_register_value(self.coordinator, self._desc.circuit, self._desc.name, self._desc.field)
         if raw is None or is_no_data_value(str(raw)):
             return None
         return raw.strip().lower() in SWITCH_ON_VALUES
@@ -142,23 +176,25 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         self,
         coordinator: VaillantCoordinator,
         entry: ConfigEntry,
+        zone: str,
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_away_mode"
         self._attr_has_entity_name = True
         self._attr_name = "Away Mode"
         self._attr_icon = "mdi:exit-run"
-        self._attr_device_info = coordinator.get_device_info("z1")
+        self._zone = zone
+        self._zn = zone.upper()
+        self._attr_device_info = coordinator.get_device_info(zone)
 
     @property
     def is_on(self) -> bool | None:
         # True when holiday start/end dates contain today
-        data = self.coordinator.data.get("ebusd", {})
         circuit = self.coordinator.heating_circuit
         if circuit is None:
             return None
-        start = data.get(f"{circuit}.Z1HolidayStartPeriod.value")
-        end = data.get(f"{circuit}.Z1HolidayEndPeriod.value")
+        start = get_register_value(self.coordinator, circuit, f"{self._zn}HolidayStartPeriod")
+        end = get_register_value(self.coordinator, circuit, f"{self._zn}HolidayEndPeriod")
         if start is None or end is None:
             return None
         return _is_holiday_active(start, end)
@@ -169,16 +205,15 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         if not self.coordinator.ebus or circuit is None:
             return
         today = _today_str()
-        data = self.coordinator.data.get("ebusd", {})
-        holiday_temp = data.get(f"{circuit}.Z1HolidayTemp.value", "15")
+        holiday_temp = get_register_value(self.coordinator, circuit, f"{self._zn}HolidayTemp") or "15"
         writes = [
-            (circuit, "Z1HolidayStartPeriod", today),
-            (circuit, "Z1HolidayEndPeriod", FAR_FUTURE),
+            (circuit, f"{self._zn}HolidayStartPeriod", today),
+            (circuit, f"{self._zn}HolidayEndPeriod", FAR_FUTURE),
             (circuit, "HwcHolidayStartPeriod", today),
             (circuit, "HwcHolidayEndPeriod", FAR_FUTURE),
         ]
         if holiday_temp:
-            writes.append((circuit, "Z1HolidayTemp", holiday_temp))
+            writes.append((circuit, f"{self._zn}HolidayTemp", holiday_temp))
         await self.coordinator.async_write_registers(writes)
 
     # Reset holiday dates to unset, disable away mode
@@ -187,11 +222,11 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         if not self.coordinator.ebus or circuit is None:
             return
         writes = [
-            (circuit, "Z1HolidayStartPeriod", UNSET_DATE),
-            (circuit, "Z1HolidayEndPeriod", UNSET_DATE),
+            (circuit, f"{self._zn}HolidayStartPeriod", UNSET_DATE),
+            (circuit, f"{self._zn}HolidayEndPeriod", UNSET_DATE),
             (circuit, "HwcHolidayStartPeriod", UNSET_DATE),
             (circuit, "HwcHolidayEndPeriod", UNSET_DATE),
-            (circuit, "Z1HolidayTemp", "15"),
+            (circuit, f"{self._zn}HolidayTemp", "15"),
         ]
         await self.coordinator.async_write_registers(writes)
 
@@ -221,11 +256,10 @@ class HwcBoostSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         desired = self.coordinator.dhw_boost_desired
         if desired is not None:
             return desired
-        data = self.coordinator.data.get("ebusd", {})
         circuit = self.coordinator.heating_circuit
         if circuit is None:
             return None
-        raw = data.get(f"{circuit}.HwcSFMode.value")
+        raw = get_register_value(self.coordinator, circuit, "HwcSFMode")
         if raw is None:
             return None
         return raw.strip().lower() == "load"
@@ -274,12 +308,11 @@ class HwcAwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     # True when HwcHolidayStartPeriod/EndPeriod contain today
     @property
     def is_on(self) -> bool | None:
-        data = self.coordinator.data.get("ebusd", {})
         circuit = self.coordinator.heating_circuit
         if circuit is None:
             return None
-        start = data.get(f"{circuit}.HwcHolidayStartPeriod.value")
-        end = data.get(f"{circuit}.HwcHolidayEndPeriod.value")
+        start = get_register_value(self.coordinator, circuit, "HwcHolidayStartPeriod")
+        end = get_register_value(self.coordinator, circuit, "HwcHolidayEndPeriod")
         if start is None or end is None:
             return None
         return _is_holiday_active(start, end)

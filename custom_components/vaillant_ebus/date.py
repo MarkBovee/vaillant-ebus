@@ -11,21 +11,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import VaillantCoordinator
+from .coordinator import VaillantCoordinator, get_register_value
 
 DATE_FMT = "%d.%m.%Y"
 RESET_VALUES = frozenset(("01.01.2015", "01.01.2019"))
 
-HOLIDAY_ENTITIES = [
-    ("Z1 Holiday Start", "Z1HolidayStartPeriod", "mdi:calendar-start", "z1"),
-    ("Z1 Holiday End", "Z1HolidayEndPeriod", "mdi:calendar-end", "z1"),
-    ("DHW Holiday Start", "HwcHolidayStartPeriod", "mdi:calendar-start", "dhw"),
-    ("DHW Holiday End", "HwcHolidayEndPeriod", "mdi:calendar-end", "dhw"),
-]
-
 MANUAL_COOLING_ENTITIES = [
-    ("Manual Cooling Start Date", "ManualCoolingStartDate", "mdi:snowflake", "ctlv2"),
-    ("Manual Cooling End Date", "ManualCoolingEndDate", "mdi:snowflake", "ctlv2"),
+    ("Manual Cooling Start Date", "ManualCoolingStartDate", "mdi:snowflake", "controller"),
+    ("Manual Cooling End Date", "ManualCoolingEndDate", "mdi:snowflake", "controller"),
 ]
 
 
@@ -38,15 +31,44 @@ async def async_setup_entry(
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
     added_registers: set[str] = set()
 
+    # Intent: add dates only for active discovered zone/controller registers.
+    # Why: cache values and static inactive-zone rows must not create date controls.
     # Add each date control once its backing register appears in the discovery graph.
     def ensure_date_entities() -> None:
         entities: list[DateEntity] = []
-        for name, register, icon, zone in HOLIDAY_ENTITIES:
-            if register not in added_registers and coordinator.has_controller_register(register):
-                entities.append(EbusdHolidayEntity(coordinator, entry, name, register, icon, zone))
-                added_registers.add(register)
+        if not coordinator.discovery_ready:
+            return
+        controller = coordinator.heating_circuit
+        if controller is not None:
+            for zone in coordinator.zone_circuits():
+                number = zone[1:]
+                label = "Z1" if number == "1" else f"Zone {number}"
+                for suffix, title, icon in (
+                    ("HolidayStartPeriod", "Holiday Start", "mdi:calendar-start"),
+                    ("HolidayEndPeriod", "Holiday End", "mdi:calendar-end"),
+                ):
+                    register = f"{zone.upper()}{suffix}"
+                    if register not in added_registers and coordinator.has_zone_register(controller, zone, suffix):
+                        entities.append(
+                            EbusdHolidayEntity(coordinator, entry, f"{label} {title}", register, icon, zone)
+                        )
+                        added_registers.add(register)
+            for register, title, icon in (
+                ("HwcHolidayStartPeriod", "DHW Holiday Start", "mdi:calendar-start"),
+                ("HwcHolidayEndPeriod", "DHW Holiday End", "mdi:calendar-end"),
+            ):
+                if register not in added_registers and coordinator.has_controller_register(register):
+                    entities.append(EbusdHolidayEntity(coordinator, entry, title, register, icon, "dhw"))
+                    added_registers.add(register)
         for name, register, icon, zone in MANUAL_COOLING_ENTITIES:
-            if register not in added_registers and coordinator.has_controller_register(register):
+            paired_register = (
+                "ManualCoolingEndDate" if register == "ManualCoolingStartDate" else "ManualCoolingStartDate"
+            )
+            if (
+                register not in added_registers
+                and coordinator.has_controller_register(register)
+                and coordinator.has_controller_register(paired_register)
+            ):
                 entities.append(EbusdManualCoolingEntity(coordinator, entry, name, register, icon, zone))
                 added_registers.add(register)
         if entities:
@@ -74,7 +96,8 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateEntity):
         self._attr_name = name
         self._attr_icon = icon
         self._attr_unique_id = f"{entry.entry_id}_{register.lower()}"
-        self._attr_device_info = coordinator.get_device_info(zone)
+        device_circuit = "dhw" if zone == "dhw" else zone
+        self._attr_device_info = coordinator.get_device_info(device_circuit)
 
     # Return a configured holiday date without inventing a time component.
     @property
@@ -82,7 +105,7 @@ class EbusdHolidayEntity(CoordinatorEntity[VaillantCoordinator], DateEntity):
         circuit = self.coordinator.heating_circuit
         if circuit is None:
             return None
-        raw = self.coordinator.data.get("ebusd", {}).get(f"{circuit}.{self._register}.value")
+        raw = get_register_value(self.coordinator, circuit, self._register)
         if not raw or str(raw) in RESET_VALUES:
             return None
         try:
@@ -117,7 +140,7 @@ class EbusdManualCoolingEntity(CoordinatorEntity[VaillantCoordinator], DateEntit
         self._attr_name = name
         self._attr_icon = icon
         self._attr_unique_id = f"{entry.entry_id}_{register.lower()}"
-        self._attr_device_info = coordinator.get_device_info(zone)
+        self._attr_device_info = coordinator.get_device_info(coordinator.heating_circuit or "dhw")
 
     # Treat controller reset dates as an unset manual-cooling window.
     @property
@@ -125,7 +148,7 @@ class EbusdManualCoolingEntity(CoordinatorEntity[VaillantCoordinator], DateEntit
         circuit = self.coordinator.heating_circuit
         if circuit is None:
             return None
-        raw = self.coordinator.data.get("ebusd", {}).get(f"{circuit}.{self._register}.value")
+        raw = get_register_value(self.coordinator, circuit, self._register)
         if (
             not raw
             or str(raw) in RESET_VALUES

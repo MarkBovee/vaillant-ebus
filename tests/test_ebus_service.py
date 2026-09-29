@@ -76,6 +76,7 @@ async def test_send_command_timeout() -> None:
     result = await s.send_command("state")
     assert result.data == ""
     assert result.error == "timeout"
+    assert s.is_connected is False
 
 
 # send_command: empty response (connection closed) returns error
@@ -87,6 +88,36 @@ async def test_send_command_connection_closed() -> None:
     result = await s.send_command("state")
     assert result.data == ""
     assert result.error == "connection_closed"
+    assert s.is_connected is False
+
+
+# Intent: socket write/drain failures clear the stale writer and return a transport error.
+# Why: a TCP peer can reset the connection before the next response line is read.
+@pytest.mark.parametrize("operation", ["write", "drain"])
+async def test_send_command_write_or_drain_failure_disconnects(operation: str) -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError()])
+    if operation == "write":
+        s._writer.write = MagicMock(side_effect=ConnectionResetError("peer closed"))
+    else:
+        s._writer.drain = AsyncMock(side_effect=ConnectionResetError("peer closed"))
+
+    result = await s.send_command("state")
+
+    assert result.error.startswith("connection_closed:")
+    assert s.is_connected is False
+
+
+# Intent: a TCP reset during the response read closes the service and reports transport failure.
+# Why: the coordinator must retry instead of treating the missing line as register data.
+async def test_send_command_connection_reset_disconnects() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), ConnectionResetError("reset")])
+
+    result = await s.send_command("state")
+
+    assert result.error == "connection_closed: reset"
+    assert s.is_connected is False
 
 
 # read_register: returns stripped value on success
@@ -117,6 +148,16 @@ async def test_read_register_timeout_returns_none() -> None:
     s._reader.readline = AsyncMock(side_effect=[TimeoutError(), TimeoutError()])
     val = await s.read_register("hmu", "Status")
     assert val is None
+
+
+# Intent: polling reads surface transport timeouts to the coordinator retry path.
+# Why: a timeout is not the same as an unsupported register value.
+async def test_read_register_can_raise_transport_timeout() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), TimeoutError()])
+    with pytest.raises(TimeoutError, match="read timed out"):
+        await s.read_register("hmu", "Status", raise_transport_errors=True)
+    assert s.is_connected is False
 
 
 # read_register: with field parameter
@@ -412,13 +453,72 @@ async def test_find_registers_returns_lines() -> None:
     s._writer.write.assert_called_once_with(b"f -a\n")
 
 
-# find_registers: not connected returns empty list
-# Intent: find_registers on a not-connected service returns an empty list.
-# Why: discovery must degrade to no registers rather than raise.
-async def test_find_registers_not_connected_returns_empty() -> None:
+# find_registers: not connected raises a transport error
+# Intent: find_registers reports an unavailable TCP session instead of an empty discovery graph.
+# Why: coordinator setup must retry when it cannot reach ebusd.
+async def test_find_registers_not_connected_raises() -> None:
     s = EbusService(host="127.0.0.1", port=8888)
-    lines = await s.find_registers()
-    assert lines == []
+    with pytest.raises(ConnectionError, match="not_connected"):
+        await s.find_registers()
+
+
+# Intent: find_registers raises when ebusd closes its TCP connection during a command.
+# Why: a closed socket must trigger coordinator reconnect rather than look like empty discovery.
+async def test_find_registers_connection_closed_raises() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b""])
+    with pytest.raises(ConnectionError, match="connection_closed"):
+        await s.find_registers()
+
+
+# Intent: find_registers raises when ebusd times out before the first response line.
+# Why: a stalled TCP command must enter the coordinator retry path.
+async def test_find_registers_timeout_raises() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), TimeoutError()])
+    with pytest.raises(TimeoutError, match="find command timed out"):
+        await s.find_registers()
+
+
+# Intent: find_registers rejects EOF after a partial multi-line response.
+# Why: applying a truncated graph could clear recovery state before discovery is complete.
+async def test_find_registers_trailing_eof_raises() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"hmu Status = Standby\n", b""])
+    with pytest.raises(ConnectionError, match="closed while reading f -a"):
+        await s.find_registers()
+    assert s.is_connected is False
+    assert s.debug_info["command_log"][-1]["error"] == "connection_closed"
+
+
+# Intent: a TCP reset after one find line rejects the partial graph response.
+# Why: the final EOF/reset must not be confused with the normal quiet terminator.
+async def test_find_registers_trailing_reset_raises() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(
+        side_effect=[TimeoutError(), b"scan.15 = Vaillant;CTLV2;0514;1104\n", ConnectionResetError("reset")]
+    )
+    with pytest.raises(ConnectionError, match="connection failed while reading f -a"):
+        await s.find_registers()
+    assert s.is_connected is False
+    assert s.debug_info["command_log"][-1]["error"] == "connection_closed: reset"
+
+
+# Intent: empty and error-only find responses remain distinct from TCP failures.
+# Why: discovery can retry or retain repairs without falsely reconnecting a live socket.
+@pytest.mark.parametrize(
+    ("response", "expected_lines"),
+    [(b"\n", []), (b"ERR: command failed\n", ["ERR: command failed"])],
+)
+async def test_find_registers_empty_or_error_only_response_is_not_transport_failure(
+    response: bytes, expected_lines: list[str]
+) -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), response, TimeoutError()])
+    assert await s.find_registers() == expected_lines
+    assert s._command_log[-1]["error"] == "no_usable_lines"
+    assert s.last_find_usable is False
+    assert s.is_connected is True
 
 
 # get_info: parse info command response into dict

@@ -4,6 +4,7 @@ multi-entry service dispatch."""
 
 from __future__ import annotations
 
+import asyncio
 import importlib.machinery
 import importlib.util
 import inspect
@@ -140,6 +141,19 @@ async def test_write_register_preserves_values_with_spaces_and_semicolons() -> N
     assert first_cmd == "write -c hmu HwcTempDesired a b;c"
 
 
+# Intent: reject line breaks in write values before sending a protocol command.
+# Why: ebusd commands are newline-delimited and must not allow command injection.
+async def test_write_register_rejects_line_breaks_in_value() -> None:
+    svc = EbusService(host="127.0.0.1", port=8888)
+    svc.send_command = AsyncMock()
+
+    result = await svc.write_register("hmu", "SetMode", "auto\nread -c hmu Status")
+
+    assert result.success is False
+    assert "line breaks" in result.error_message
+    svc.send_command.assert_not_awaited()
+
+
 # --- central write path: stop at the first failure, refresh only on success ---
 
 
@@ -148,6 +162,8 @@ async def test_write_register_preserves_values_with_spaces_and_semicolons() -> N
 async def test_write_registers_stop_on_first_failure_without_refresh() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = _coordinator(tmpdir)
+        c._graph = tc._make_graph()
+        c._ebusd_connected = True
         c.ebus = MagicMock()
         c.ebus.is_connected = True
         c.ebus.write_register = AsyncMock(
@@ -169,6 +185,8 @@ async def test_write_registers_stop_on_first_failure_without_refresh() -> None:
 async def test_write_registers_refresh_once_after_full_success() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         c = _coordinator(tmpdir)
+        c._graph = tc._make_graph()
+        c._ebusd_connected = True
         c.ebus = MagicMock()
         c.ebus.is_connected = True
         c.ebus.write_register = AsyncMock(return_value=WriteResult(success=True, verified_value="ok"))
@@ -236,7 +254,7 @@ async def test_persist_dump_creates_directory_before_write(tmp_path: Path) -> No
     hass.async_add_executor_job = _executor
     target = tmp_path / "nested" / "discovery_dump.yaml"
     await DUMP._persist_dump(hass, str(target), {"metadata": {"dump_version": 3}})
-    assert order == ["_mkdir", "_write_yaml"]
+    assert order == ["_mkdir", "_write_yaml_temp"]
     assert target.exists()
 
 
@@ -250,6 +268,541 @@ async def test_export_dump_reports_disconnected_ebusd(tmp_path: Path) -> None:
 
     with pytest.raises(HomeAssistantError, match="ebusd is not connected"):
         await DUMP.async_export_discovery_dump(hass, coordinator)
+
+
+# Intent: dump export refuses a live socket until the coordinator applies discovery.
+# Why: map-driven probes must not use assumed circuits during initial setup.
+async def test_export_dump_waits_for_discovery_graph(tmp_path: Path) -> None:
+    hass = MagicMock()
+    hass.config.path.return_value = str(tmp_path)
+    coordinator = _coordinator(str(tmp_path))
+    coordinator.ebus = MagicMock()
+    coordinator.ebus.is_connected = True
+    coordinator._graph = tc.DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+    coordinator._ebusd_connected = True
+    coordinator.ebus.find_registers = AsyncMock(return_value=[])
+    coordinator.ebus.read_register = AsyncMock(return_value="25")
+
+    with pytest.raises(HomeAssistantError, match="discovery is complete"):
+        await DUMP.async_export_discovery_dump(hass, coordinator)
+
+    coordinator.ebus.find_registers.assert_not_awaited()
+    coordinator.ebus.read_register.assert_not_awaited()
+
+
+# Intent: dump export refuses to start while platform teardown is requested.
+# Why: diagnostic map probes are active ebusd reads and must obey coordinator lifecycle gates.
+async def test_export_dump_is_lifecycle_gated(tmp_path: Path) -> None:
+    hass = MagicMock()
+    hass.config.path.return_value = str(tmp_path)
+    coordinator = _coordinator(str(tmp_path))
+    coordinator.ebus = MagicMock()
+    coordinator.ebus.is_connected = True
+    coordinator._ebusd_connected = True
+    coordinator._graph = tc.DeviceGraph(
+        nodes={"hmux0": tc.DeviceNode("hmux0", tc.DeviceType.HEAT_PUMP, has_data=True)},
+        raw_registers={},
+        placeholder_registers=set(),
+    )
+    coordinator._unload_requested = True
+    coordinator.ebus.find_registers = AsyncMock(return_value=[])
+
+    with pytest.raises(HomeAssistantError, match="integration is unloading"):
+        await DUMP.async_export_discovery_dump(hass, coordinator)
+
+    coordinator.ebus.find_registers.assert_not_awaited()
+
+
+# Intent: stop map probes as soon as unload starts during a probe.
+# Why: dump export can await several active reads before returning to its caller.
+async def test_export_dump_stops_map_probes_after_unload_requested(tmp_path: Path) -> None:
+    hass = MagicMock()
+    hass.config.path.return_value = str(tmp_path)
+    coordinator = _coordinator(str(tmp_path))
+    coordinator.ebus = MagicMock()
+    coordinator.ebus.is_connected = True
+    coordinator.ebus.version = "26.1"
+    coordinator.ebus.find_registers = AsyncMock(return_value=[])
+    coordinator.ebus.read_register = AsyncMock()
+    coordinator._ebusd_connected = True
+    coordinator._graph = tc.DeviceGraph(
+        nodes={"hmux0": tc.DeviceNode("hmux0", tc.DeviceType.HEAT_PUMP, has_data=True)},
+        raw_registers={},
+        placeholder_registers=set(),
+    )
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {
+        "hmu.FirstProbe": MagicMock(enabled=True, writable=False, fallback_read=True),
+        "hmu.SecondProbe": MagicMock(enabled=True, writable=False, fallback_read=True),
+    }
+
+    # Intent: flip the teardown flag while the current map probe is suspended.
+    # Why: the exporter must stop before attempting the next mapped read.
+    async def _read_and_unload(*args, **kwargs):
+        coordinator._unload_requested = True
+        return "42"
+
+    coordinator.ebus.read_register.side_effect = _read_and_unload
+    try:
+        with pytest.raises(HomeAssistantError, match="integration is unloading"):
+            await DUMP.async_export_discovery_dump(hass, coordinator)
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    coordinator.ebus.read_register.assert_awaited_once()
+
+
+# Intent: skip every map probe when unload starts during discovery find.
+# Why: the dump service must check lifecycle state before iterating discovered mappings.
+async def test_export_dump_stops_map_probes_after_find_unload(tmp_path: Path) -> None:
+    hass = MagicMock()
+    hass.config.path.return_value = str(tmp_path)
+    coordinator = _coordinator(str(tmp_path))
+    coordinator.ebus = MagicMock()
+    coordinator.ebus.is_connected = True
+    coordinator._ebusd_connected = True
+    coordinator._graph = tc.DeviceGraph(
+        nodes={"hmux0": tc.DeviceNode("hmux0", tc.DeviceType.HEAT_PUMP, has_data=True)},
+        raw_registers={},
+        placeholder_registers=set(),
+    )
+    coordinator.ebus.read_register = AsyncMock(return_value="42")
+
+    # Intent: request teardown while find_registers is suspended.
+    # Why: no map probe may start after the find reply arrives.
+    async def _find_then_unload():
+        coordinator._unload_requested = True
+        return []
+
+    coordinator.ebus.find_registers = AsyncMock(side_effect=_find_then_unload)
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {"hmu.FirstProbe": MagicMock(enabled=True, writable=False, fallback_read=True)}
+    try:
+        with pytest.raises(HomeAssistantError, match="integration is unloading"):
+            await DUMP.async_export_discovery_dump(hass, coordinator)
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    coordinator.ebus.read_register.assert_not_awaited()
+
+
+# Intent: dump export does not write YAML if unload starts during directory creation.
+# Why: executor work must not cross the teardown boundary into persistent output.
+async def test_export_dump_stops_before_yaml_write_after_unload_during_mkdir(tmp_path: Path) -> None:
+    _ha_components.persistent_notification.create.reset_mock()
+    hass = MagicMock()
+    hass.config.path.return_value = str(tmp_path)
+    coordinator = _coordinator(str(tmp_path))
+    coordinator.ebus = MagicMock()
+    coordinator.ebus.is_connected = True
+    coordinator.ebus.find_registers = AsyncMock(return_value=[])
+    coordinator.ebus.get_info = AsyncMock(return_value={"version": "test"})
+    coordinator._ebusd_connected = True
+    coordinator._graph = tc.DeviceGraph(
+        nodes={"hmux0": tc.DeviceNode("hmux0", tc.DeviceType.HEAT_PUMP, has_data=True)},
+        raw_registers={},
+        placeholder_registers=set(),
+    )
+
+    # Intent: request teardown after mkdir completes but before the persistence helper resumes.
+    # Why: the exporter must skip the subsequent YAML write and success notification.
+    async def _mkdir_then_unload(func, *args):
+        func(*args)
+        coordinator._unload_requested = True
+
+    hass.async_add_executor_job = AsyncMock(side_effect=_mkdir_then_unload)
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {}
+    try:
+        with pytest.raises(HomeAssistantError, match="integration is unloading"):
+            await DUMP.async_export_discovery_dump(hass, coordinator)
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    assert hass.async_add_executor_job.await_count == 1
+    _ha_components.persistent_notification.create.assert_not_called()
+
+
+# Intent: discard the staged dump when unload starts during file serialization.
+# Why: the final persisted path must appear only after a post-write lifecycle check.
+async def test_export_dump_discards_staged_file_after_unload_during_yaml_write(tmp_path: Path) -> None:
+    _ha_components.persistent_notification.create.reset_mock()
+    hass = MagicMock()
+    output_dir = tmp_path / "vaillant_ebus"
+    hass.config.path.return_value = str(output_dir)
+    coordinator = _coordinator(str(tmp_path))
+    coordinator.ebus = MagicMock()
+    coordinator.ebus.is_connected = True
+    coordinator.ebus.version = "26.1"
+    coordinator.ebus.find_registers = AsyncMock(return_value=[])
+    coordinator.ebus.get_info = AsyncMock(return_value={"version": "test"})
+    coordinator._ebusd_connected = True
+    coordinator._graph = tc.DeviceGraph(
+        nodes={"hmux0": tc.DeviceNode("hmux0", tc.DeviceType.HEAT_PUMP, has_data=True)},
+        raw_registers={},
+        placeholder_registers=set(),
+    )
+
+    # Intent: begin and finish the background serialization before requesting unload.
+    # Why: staged output must be removed rather than promoted to the final dump path.
+    async def _run_executor_then_unload(func, *args):
+        result = func(*args)
+        if func is DUMP._write_yaml_temp:
+            coordinator._unload_requested = True
+        return result
+
+    hass.async_add_executor_job = AsyncMock(side_effect=_run_executor_then_unload)
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {}
+    try:
+        with pytest.raises(HomeAssistantError, match="integration is unloading"):
+            await DUMP.async_export_discovery_dump(hass, coordinator)
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    assert list(output_dir.glob("discovery_dump_*.yaml")) == []
+    _ha_components.persistent_notification.create.assert_not_called()
+
+
+# Intent: abort raw traffic capture promptly and stop ebusd grab when unload begins.
+# Why: a dump request can otherwise keep its capture active for up to five minutes.
+async def test_async_grab_stops_when_unload_starts() -> None:
+    unloading = False
+    commands: list[str] = []
+
+    # Intent: toggle teardown during the capture wait without real-time sleeping.
+    # Why: the capture loop must recheck lifecycle state between wait intervals.
+    async def _sleep(_duration: float) -> None:
+        nonlocal unloading
+        unloading = True
+
+    # Intent: record the ebusd command sequence for the capture lifecycle.
+    # Why: cleanup must send `grab stop` and must not request captured results after unload.
+    async def _grab_cmd(host, port, command, ensure_active=None):
+        commands.append(command)
+        if ensure_active is not None:
+            ensure_active()
+        return ["ok"]
+
+    def _ensure_active() -> None:
+        if unloading:
+            raise HomeAssistantError("integration is unloading")
+
+    original_sleep = asyncio.sleep
+    original_grab_cmd = DUMP._grab_cmd
+    DUMP.asyncio.sleep = _sleep
+    DUMP._grab_cmd = _grab_cmd
+    try:
+        with pytest.raises(HomeAssistantError, match="integration is unloading"):
+            await DUMP.async_grab("127.0.0.1", 8888, 300, ensure_active=_ensure_active)
+    finally:
+        DUMP.asyncio.sleep = original_sleep
+        DUMP._grab_cmd = original_grab_cmd
+
+    assert commands == ["grab", "grab stop"]
+
+
+# Intent: preserve dump cancellation when the cleanup stop command also fails.
+# Why: cleanup errors must not make a cancelled capture appear successful.
+async def test_async_grab_cancellation_survives_stop_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    capture_waiting = asyncio.Event()
+    stop_started = asyncio.Event()
+    allow_stop_to_fail = asyncio.Event()
+
+    # Intent: pause the capture until the parent task is cancelled.
+    # Why: cancellation should enter grab cleanup before the stop command is tested.
+    async def _capture_wait(_duration: float) -> None:
+        capture_waiting.set()
+        await asyncio.Event().wait()
+
+    # Intent: fail grab stop only after a second cancellation reaches its awaiter.
+    # Why: cancellation must remain visible even when cleanup also reports an error.
+    async def _grab_cmd(host, port, command, ensure_active=None):
+        if command == "grab stop":
+            stop_started.set()
+            await allow_stop_to_fail.wait()
+            raise OSError("stop connection failed")
+        return ["ok"]
+
+    monkeypatch.setattr(DUMP.asyncio, "sleep", _capture_wait)
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+    grab_task = asyncio.create_task(DUMP.async_grab("127.0.0.1", 8888, 300))
+    await capture_waiting.wait()
+    grab_task.cancel()
+    await stop_started.wait()
+    allow_stop_to_fail.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await grab_task
+
+
+# Intent: preserve cancellation when grab stop finishes in the same loop turn.
+# Why: a completed stop command must not turn a cancelled capture into success.
+@pytest.mark.parametrize("stop_response", [["done"], ["ERR: stop failed"], []])
+async def test_stop_grab_keeps_cancellation_when_command_completes(
+    stop_response: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent_task: asyncio.Task | None = None
+
+    # Intent: cancel the parent while the child stop command is completing.
+    # Why: exercise the done-task race in the uninterruptible cleanup helper.
+    async def _finish_stop(host, port, command, ensure_active=None):
+        assert parent_task is not None
+        parent_task.cancel()
+        return stop_response
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _finish_stop)
+    parent_task = asyncio.create_task(DUMP._stop_grab_uninterruptibly("127.0.0.1", 8888))
+
+    with pytest.raises(asyncio.CancelledError):
+        await parent_task
+
+
+# Intent: report a failed grab-stop command instead of a successful capture.
+# Why: ebusd may otherwise continue capturing after the service reports completion.
+async def test_async_grab_fails_when_stop_command_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Intent: fail only the cleanup command after an otherwise successful capture.
+    # Why: cleanup failure must not be swallowed by the capture service.
+    async def _fail_stop(host, port, command, ensure_active=None):
+        if command == "grab stop":
+            raise OSError("stop connection failed")
+        return ["ok"]
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _fail_stop)
+
+    with pytest.raises(HomeAssistantError, match="Could not stop ebusd traffic capture"):
+        await DUMP.async_grab("127.0.0.1", 8888, 0)
+
+
+# Intent: reject stop responses that do not confirm ebusd ended the grab.
+# Why: error-shaped replies and closed connections can leave bus capture active.
+@pytest.mark.parametrize("stop_response", [[], ["ERR: invalid command"]])
+async def test_async_grab_rejects_unconfirmed_stop_response(
+    stop_response: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Intent: return an empty/error response only for the cleanup command.
+    # Why: a dump must not report successful capture when ebusd rejected grab stop.
+    async def _grab_cmd(host, port, command, ensure_active=None):
+        if command == "grab stop":
+            return stop_response
+        return ["ok"]
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+
+    with pytest.raises(HomeAssistantError, match="grab stop|confirm"):
+        await DUMP.async_grab("127.0.0.1", 8888, 0)
+
+
+# Intent: reject textual ebusd errors from grab start and result commands.
+# Why: error replies must not be serialized as a successful traffic capture.
+@pytest.mark.parametrize(
+    ("failed_command", "expected_error"),
+    [("grab", "grab failed"), ("grab result all", "grab result all failed")],
+)
+async def test_async_grab_rejects_error_responses(
+    failed_command: str,
+    expected_error: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[str] = []
+
+    # Intent: return an ERR reply at the selected stage and acknowledge cleanup.
+    # Why: response-shaped failures must abort the dump after the stop attempt.
+    async def _grab_cmd(host, port, command, ensure_active=None):
+        commands.append(command)
+        if command == failed_command:
+            return ["ERR: unavailable"]
+        return ["done"]
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+
+    with pytest.raises(HomeAssistantError, match=expected_error):
+        await DUMP.async_grab("127.0.0.1", 8888, 0)
+
+    assert commands[-1] == "grab stop"
+
+
+# Intent: abort when ebusd never acknowledges that raw capture started.
+# Why: an unconfirmed start must not be reported as a successful empty capture.
+async def test_async_grab_rejects_missing_start_acknowledgement(monkeypatch: pytest.MonkeyPatch) -> None:
+    commands: list[str] = []
+
+    # Intent: return no acknowledgement for grab but confirm the cleanup stop.
+    # Why: the failed start must surface while still attempting grab stop.
+    async def _grab_cmd(host, port, command, ensure_active=None):
+        commands.append(command)
+        return [] if command == "grab" else ["done"]
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+
+    with pytest.raises(HomeAssistantError, match="did not confirm that the grab started"):
+        await DUMP.async_grab("127.0.0.1", 8888, 0)
+
+    assert commands == ["grab", "grab stop"]
+
+
+# Intent: preserve a capture transport exception after issuing grab stop.
+# Why: result retrieval failure must not leave the bus grab active or return partial success.
+async def test_async_grab_transport_failure_still_stops_capture(monkeypatch: pytest.MonkeyPatch) -> None:
+    commands: list[str] = []
+
+    # Intent: fail result retrieval while allowing the cleanup command to succeed.
+    # Why: the original transport failure must propagate after cleanup.
+    async def _grab_cmd(host, port, command, ensure_active=None):
+        commands.append(command)
+        if command == "grab result all":
+            raise ConnectionError("grab transport failed")
+        return ["done"]
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+
+    with pytest.raises(ConnectionError, match="grab transport failed"):
+        await DUMP.async_grab("127.0.0.1", 8888, 0)
+
+    assert commands == ["grab", "grab result all", "grab stop"]
+
+
+# Intent: fail dump export if the raw-grab transport fails after capture starts.
+# Why: an error response must not be serialized or announced as a successful dump.
+async def test_export_dump_fails_when_grab_transport_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _ha_components.persistent_notification.create.reset_mock()
+    hass = MagicMock()
+    hass.config.path.return_value = str(tmp_path)
+    coordinator = _coordinator(str(tmp_path))
+    coordinator.ebus = MagicMock()
+    coordinator.ebus.is_connected = True
+    coordinator.ebus.find_registers = AsyncMock(return_value=[])
+    coordinator._ebusd_connected = True
+    coordinator._graph = tc.DeviceGraph(
+        nodes={"hmux0": tc.DeviceNode("hmux0", tc.DeviceType.HEAT_PUMP, has_data=True)},
+        raw_registers={},
+        placeholder_registers=set(),
+    )
+    monkeypatch.setattr(DUMP, "async_grab", AsyncMock(side_effect=ConnectionError("grab transport failed")))
+    monkeypatch.setattr(DUMP, "_persist_dump", AsyncMock())
+    monkeypatch.setattr(DUMP, "REGISTER_MAP", {})
+
+    with pytest.raises(HomeAssistantError, match="Failed to capture raw eBUS traffic"):
+        await DUMP.async_export_discovery_dump(hass, coordinator, grab_duration=1)
+
+    DUMP._persist_dump.assert_not_awaited()
+    DUMP.async_grab.assert_awaited_once()
+    _ha_components.persistent_notification.create.assert_not_called()
+
+
+# Intent: bound a stalled raw ebusd TCP connection attempt.
+# Why: unload cannot wait indefinitely for a socket connect that never completes.
+async def test_grab_command_connection_has_a_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Intent: keep the mocked connect pending until wait_for cancels it.
+    # Why: verify the raw-grab transport applies its configured connection timeout.
+    async def _blocked_open_connection(host, port):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(DUMP.asyncio, "open_connection", _blocked_open_connection)
+    monkeypatch.setattr(DUMP, "GRAB_CONNECT_TIMEOUT", 0.001)
+
+    with pytest.raises(TimeoutError):
+        await DUMP._grab_cmd("127.0.0.1", 8888, "grab")
+
+
+# Intent: unload cancels a tracked dump capture and waits for its grab-stop cleanup.
+# Why: diagnostic tasks must not outlive the config entry that owns their transport.
+async def test_export_dump_is_cancelled_by_coordinator_unload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    hass = MagicMock()
+    hass.config.path.return_value = str(tmp_path)
+    coordinator = _coordinator(str(tmp_path))
+    coordinator.ebus = MagicMock()
+    coordinator.ebus.is_connected = True
+    coordinator.ebus.find_registers = AsyncMock(return_value=[])
+    coordinator._ebusd_connected = True
+    coordinator._graph = tc.DeviceGraph(
+        nodes={"hmux0": tc.DeviceNode("hmux0", tc.DeviceType.HEAT_PUMP, has_data=True)},
+        raw_registers={},
+        placeholder_registers=set(),
+    )
+    capture_started = asyncio.Event()
+    stop_started = asyncio.Event()
+    allow_stop_to_finish = asyncio.Event()
+    commands: list[str] = []
+
+    # Intent: block capture until unload, then block cleanup until a second cancel arrives.
+    # Why: repeated cancellation must not interrupt the final ebusd grab-stop command.
+    async def _grab_cmd(host, port, command, ensure_active=None):
+        commands.append(command)
+        if command == "grab":
+            capture_started.set()
+        if command == "grab stop":
+            stop_started.set()
+            await allow_stop_to_finish.wait()
+        if ensure_active is not None:
+            ensure_active()
+        return ["ok"]
+
+    # Intent: keep the capture waiting until the test requests unload.
+    # Why: test repeated cancellation while the stop command owns cleanup.
+    async def _capture_wait(_duration: float) -> None:
+        await asyncio.Event().wait()
+
+    original_map = DUMP.REGISTER_MAP
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+    monkeypatch.setattr(DUMP.asyncio, "sleep", _capture_wait)
+    DUMP.REGISTER_MAP = {}
+    coordinator.ebus.request_shutdown = MagicMock()
+    coordinator.ebus.disconnect = AsyncMock()
+    try:
+        export_task = asyncio.create_task(DUMP.async_export_discovery_dump(hass, coordinator, grab_duration=300))
+        await capture_started.wait()
+        coordinator.request_unload()
+        await stop_started.wait()
+        export_task.cancel()
+        stop_task = asyncio.create_task(coordinator.async_stop())
+        assert not stop_task.done()
+        allow_stop_to_finish.set()
+        await stop_task
+        with pytest.raises(asyncio.CancelledError):
+            await export_task
+    finally:
+        allow_stop_to_finish.set()
+        DUMP.REGISTER_MAP = original_map
+
+    assert commands == ["grab", "grab stop"]
+    assert coordinator._active_dump_tasks == set()
+
+
+# Intent: remove a staged dump file if export is cancelled during executor serialization.
+# Why: cancellation can arrive before the executor returns the temporary path.
+async def test_persist_dump_cancellation_removes_staged_file(tmp_path: Path) -> None:
+    hass = MagicMock()
+    staged = asyncio.Event()
+    allow_executor_return = asyncio.Event()
+    write_finished = asyncio.Event()
+
+    # Intent: create the staged file, then hold the executor result until cancellation.
+    # Why: persistence must recover the path and clean it even when the caller is cancelled.
+    async def _executor(func, *args):
+        result = func(*args)
+        if func is DUMP._write_yaml_temp:
+            staged.set()
+            await allow_executor_return.wait()
+            write_finished.set()
+        return result
+
+    hass.async_add_executor_job = _executor
+    target = tmp_path / "discovery_dump.yaml"
+    persist_task = asyncio.create_task(DUMP._persist_dump(hass, str(target), {"metadata": {}}))
+    await staged.wait()
+    staged_files = list(tmp_path.glob(".discovery_dump_*.yaml"))
+    assert len(staged_files) == 1
+
+    persist_task.cancel()
+    persist_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await persist_task
+    allow_executor_return.set()
+    await write_finished.wait()
+    await asyncio.sleep(0)
+
+    assert list(tmp_path.glob(".discovery_dump_*.yaml")) == []
 
 
 # Intent: dump map probes skip logical aliases with ambiguous graph ownership.
@@ -282,6 +835,29 @@ async def test_dump_registers_skip_missing_alias() -> None:
 
     assert registers == []
     ebus.read_register.assert_not_called()
+
+
+# Intent: dump map probes respect fallback_read while retaining metadata for skipped registers.
+# Why: discovery export must not reintroduce active reads disabled for unsafe B524 states.
+async def test_dump_registers_skip_disabled_fallback_reads() -> None:
+    ebus = MagicMock()
+    ebus.find_registers = AsyncMock(return_value=[])
+    ebus.read_register = AsyncMock(return_value="42")
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {
+        "ctlv2.Hc1FlowTempCalc": MagicMock(enabled=True, writable=False, fallback_read=False),
+        "ctlv2.Hc1ActualFlowTempDesired": MagicMock(enabled=True, writable=False, fallback_read=True),
+    }
+    try:
+        registers, _, _ = await DUMP._dump_registers(ebus, circuit_aliases={"ctlv2": "ctlv3"})
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    by_name = {register["name"]: register for register in registers}
+    assert by_name["Hc1FlowTempCalc"]["values"] == [None]
+    assert by_name["Hc1FlowTempCalc"]["from_map"] is True
+    assert by_name["Hc1ActualFlowTempDesired"]["values"] == ["42"]
+    ebus.read_register.assert_awaited_once_with("ctlv3", "Hc1ActualFlowTempDesired", raise_transport_errors=True)
 
 
 # Intent: _redact replaces sensitive register names with a placeholder and leaves others untouched.
@@ -366,6 +942,7 @@ async def test_read_parameter_uses_discovered_circuit_resolution() -> None:
             raw_registers={},
             placeholder_registers=set(),
         )
+        coordinator._ebusd_connected = True
         coordinator.ebus = MagicMock()
         coordinator.ebus.is_connected = True
         coordinator.ebus.read_register = AsyncMock(return_value="21.5")
