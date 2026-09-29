@@ -7,6 +7,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+from tests.fake_ebusd import load_discovery_dump
+
 BACKEND_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend"
 COMPONENT_PATH = BACKEND_PATH.parent
 
@@ -89,10 +91,7 @@ class TestParseGrabLines:
     # and labeled telegram lists through the parser.
     # Why: ensures the parser handles real captured grab output, not only the hand-written sample.
     def test_roundtrip_real_fixture(self) -> None:
-        import yaml
-
-        fixture = Path(__file__).parents[1] / "tests/fixtures/community/flexotherm_ctlv2_cooling_discovery.yaml"
-        data = yaml.safe_load(fixture.read_text())
+        data = load_discovery_dump("community/flexotherm_ctlv2_cooling_discovery.yaml")
         grab = data.get("grab", [])
         assert grab, "fixture should contain grab data"
         unknown = unknown_telegrams(grab)

@@ -22,6 +22,9 @@ assert SPEC and SPEC.loader
 EBUS = importlib.util.module_from_spec(SPEC)
 sys.modules["vaillant_ebus.backend.ebus_service"] = EBUS
 SPEC.loader.exec_module(EBUS)
+# Intent: fake-server integration tests use a short quiet interval for their single-burst replies.
+# Why: avoid waiting one second after each fake `find` while keeping the production timeout unchanged.
+EBUS.MULTILINE_RESPONSE_TIMEOUT = 0.01
 EbusService = EBUS.EbusService
 
 

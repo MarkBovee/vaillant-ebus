@@ -15,6 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 MAX_RECONNECT_DELAY = 60
 INITIAL_RECONNECT_DELAY = 1
 READ_TIMEOUT = 10
+MULTILINE_RESPONSE_TIMEOUT = 1.0
 DONE_STR = "done"
 # ebusd serves `read` from its cache unless forced; a freshly written value is
 # cached by the write itself. Re-read once from the bus before treating a
@@ -334,7 +335,7 @@ class EbusService:
             lines.append(first.data)
         while True:
             try:
-                line = await asyncio.wait_for(self._reader.readline(), timeout=1.0)
+                line = await asyncio.wait_for(self._reader.readline(), timeout=MULTILINE_RESPONSE_TIMEOUT)
             except TimeoutError:
                 break
             except (ConnectionError, OSError) as exc:

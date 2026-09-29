@@ -33,6 +33,9 @@ assert EBUS_SPEC and EBUS_SPEC.loader
 EBUS_MOD = importlib.util.module_from_spec(EBUS_SPEC)
 sys.modules["vaillant_ebus.backend.ebus_service"] = EBUS_MOD
 EBUS_SPEC.loader.exec_module(EBUS_MOD)
+# Intent: fake-server discovery tests use a short quiet interval for their single-burst replies.
+# Why: avoid waiting one second after each fake `find` while keeping the production timeout unchanged.
+EBUS_MOD.MULTILINE_RESPONSE_TIMEOUT = 0.01
 EbusService = EBUS_MOD.EbusService
 
 DISCOVERY_SPEC = importlib.util.spec_from_file_location(

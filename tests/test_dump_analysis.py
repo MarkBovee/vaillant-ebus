@@ -7,7 +7,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-import yaml
+from tests.fake_ebusd import load_discovery_dump
 
 BACKEND_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend"
 COMPONENT_PATH = BACKEND_PATH.parent
@@ -105,8 +105,7 @@ def test_normalize_dump_preserves_writes_section() -> None:
 # Intent: normalizes a legacy ctlv2 cooling discovery-dump fixture to version 3 while keeping the raw grab lines.
 # Why: verifies old dumps are upgraded in-memory without mutating or losing their raw capture.
 def test_legacy_fixture_normalizes_without_migration() -> None:
-    path = Path(__file__).parent / "fixtures/community/flexotherm_ctlv2_cooling_discovery.yaml"
-    dump = yaml.safe_load(path.read_text())
+    dump = load_discovery_dump("community/flexotherm_ctlv2_cooling_discovery.yaml")
     normalized = normalize_dump(dump)
 
     assert normalized["dump_version"] == 3

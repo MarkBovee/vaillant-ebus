@@ -113,7 +113,8 @@ def load_discovery_dump(name: str) -> dict:
         raise ValueError(f"Not a discovery dump YAML file: {path}")
     import yaml
 
-    return yaml.safe_load(path.read_text())
+    loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+    return yaml.load(path.read_text(), Loader=loader)
 
 
 def load_find_lines(name: str, after: bool = False) -> list[str]:
@@ -264,7 +265,7 @@ class FakeEbusdServer:
                 response = self._handle_command(raw)
                 writer.write((response + "\n").encode())
                 await writer.drain()
-        except (TimeoutError, ConnectionError, OSError):
+        except TimeoutError, ConnectionError, OSError:
             pass
         finally:
             writer.close()
