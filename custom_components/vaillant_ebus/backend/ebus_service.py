@@ -8,6 +8,7 @@ import time
 from collections import deque
 from typing import TypedDict
 
+from .discovery_service import has_usable_find_records
 from .models import SendResult, WriteResult
 
 _LOGGER = logging.getLogger(__name__)
@@ -16,6 +17,8 @@ MAX_RECONNECT_DELAY = 60
 INITIAL_RECONNECT_DELAY = 1
 READ_TIMEOUT = 10
 MULTILINE_RESPONSE_TIMEOUT = 1.0
+MULTILINE_RESPONSE_MAX_DURATION = 60
+MULTILINE_RESPONSE_MAX_LINES = 10_000
 DONE_STR = "done"
 # ebusd serves `read` from its cache unless forced; a freshly written value is
 # cached by the write itself. Re-read once from the bus before treating a
@@ -171,6 +174,20 @@ class EbusService:
         # Return whether TCP socket is currently connected
         return self._writer is not None
 
+    # Intent: expose the active TCP peer so dump locking uses the connected daemon identity.
+    # Why: DNS aliases may differ even when they reach the same ebusd process.
+    @property
+    def connected_endpoint(self) -> tuple[str, int] | None:
+        if self._writer is None:
+            return None
+        peer = self._writer.get_extra_info("peername")
+        if not isinstance(peer, tuple) or len(peer) < 2 or not isinstance(peer[0], str):
+            return None
+        try:
+            return peer[0].casefold(), int(peer[1])
+        except TypeError, ValueError:
+            return None
+
     @property
     def version(self) -> str | None:
         # Return cached ebusd daemon version string
@@ -288,6 +305,9 @@ class EbusService:
         except (ConnectionError, OSError) as exc:
             await self._disconnect_nolock()
             return SendResult(data="", error=f"connection_closed: {exc}")
+        except ValueError as exc:
+            await self._disconnect_nolock()
+            return SendResult(data="", error=f"invalid_response_line: {exc}")
         try:
             response = await asyncio.wait_for(self._reader.readline(), timeout=READ_TIMEOUT)
         except TimeoutError:
@@ -296,10 +316,18 @@ class EbusService:
         except (ConnectionError, OSError) as exc:
             await self._disconnect_nolock()
             return SendResult(data="", error=f"connection_closed: {exc}")
+        except (ValueError, UnicodeDecodeError) as exc:
+            await self._disconnect_nolock()
+            return SendResult(data="", error=f"invalid_response_line: {exc}")
         if not response:
             await self._disconnect_nolock()
             return SendResult(data="", error="connection_closed")
-        return SendResult(data=response.decode("utf-8").rstrip("\n\r"))
+        try:
+            decoded = response.decode("utf-8").rstrip("\n\r")
+        except UnicodeDecodeError as exc:
+            await self._disconnect_nolock()
+            return SendResult(data="", error=f"invalid_response_line: {exc}")
+        return SendResult(data=decoded)
 
     # Record command in ring-buffer log with duration for diagnostics
     def _log_cmd(self, command: str, result: SendResult, t0: float | None = None) -> SendResult:
@@ -326,27 +354,70 @@ class EbusService:
             self._log_cmd(cmd, SendResult(data="", error="not_connected"))
             return []
         t0 = time.monotonic()
-        first = await self._send_line_locked(cmd)
+        deadline = asyncio.get_running_loop().time() + MULTILINE_RESPONSE_MAX_DURATION
+        remaining = deadline - asyncio.get_running_loop().time()
+        try:
+            first = await asyncio.wait_for(self._send_line_locked(cmd), timeout=remaining)
+        except TimeoutError as exc:
+            await self._disconnect_nolock()
+            self._log_cmd(cmd, SendResult(data="", error="response_timeout"), t0)
+            raise TimeoutError(f"ebusd {cmd} exceeded the total response deadline") from exc
         self._log_cmd(cmd, first, t0)
         if first.error:
             return []
         lines: list[str] = []
-        if first.data.strip():
-            lines.append(first.data)
-        while True:
-            try:
-                line = await asyncio.wait_for(self._reader.readline(), timeout=MULTILINE_RESPONSE_TIMEOUT)
-            except TimeoutError:
-                break
-            except (ConnectionError, OSError) as exc:
-                await self._disconnect_nolock()
-                self._command_log[-1]["error"] = f"connection_closed: {exc}"
-                raise ConnectionError(f"ebusd connection failed while reading {cmd}: {exc}") from exc
-            if not line:
-                await self._disconnect_nolock()
-                self._command_log[-1]["error"] = "connection_closed"
-                raise ConnectionError(f"ebusd connection closed while reading {cmd}")
-            lines.append(line.decode("utf-8").rstrip("\n\r"))
+        try:
+            if first.data.strip():
+                if len(lines) >= MULTILINE_RESPONSE_MAX_LINES:
+                    await self._disconnect_nolock()
+                    self._command_log[-1]["error"] = "response_too_large"
+                    raise ConnectionError(
+                        f"ebusd {cmd} response exceeded the {MULTILINE_RESPONSE_MAX_LINES}-line limit"
+                    )
+                lines.append(first.data)
+            while True:
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    await self._disconnect_nolock()
+                    self._command_log[-1]["error"] = "response_timeout"
+                    raise TimeoutError(f"ebusd {cmd} exceeded the total response deadline")
+                try:
+                    line = await asyncio.wait_for(
+                        self._reader.readline(), timeout=min(MULTILINE_RESPONSE_TIMEOUT, remaining)
+                    )
+                except TimeoutError:
+                    if asyncio.get_running_loop().time() >= deadline:
+                        await self._disconnect_nolock()
+                        self._command_log[-1]["error"] = "response_timeout"
+                        raise TimeoutError(f"ebusd {cmd} exceeded the total response deadline")
+                    break
+                except (ConnectionError, OSError) as exc:
+                    await self._disconnect_nolock()
+                    self._command_log[-1]["error"] = f"connection_closed: {exc}"
+                    raise ConnectionError(f"ebusd connection failed while reading {cmd}: {exc}") from exc
+                except ValueError as exc:
+                    await self._disconnect_nolock()
+                    self._command_log[-1]["error"] = "invalid_response_line"
+                    raise ConnectionError(f"ebusd returned an invalid response line for {cmd}: {exc}") from exc
+                if not line:
+                    await self._disconnect_nolock()
+                    self._command_log[-1]["error"] = "connection_closed"
+                    raise ConnectionError(f"ebusd connection closed while reading {cmd}")
+                try:
+                    decoded = line.decode("utf-8").rstrip("\n\r")
+                except UnicodeDecodeError as exc:
+                    await self._disconnect_nolock()
+                    self._command_log[-1]["error"] = "invalid_response_line"
+                    raise ConnectionError(f"ebusd returned an invalid response line for {cmd}: {exc}") from exc
+                if len(lines) >= MULTILINE_RESPONSE_MAX_LINES:
+                    await self._disconnect_nolock()
+                    self._command_log[-1]["error"] = "response_too_large"
+                    raise ConnectionError(
+                        f"ebusd {cmd} response exceeded the {MULTILINE_RESPONSE_MAX_LINES}-line limit"
+                    )
+                lines.append(decoded)
+        finally:
+            self._command_log[-1]["duration_ms"] = int((time.monotonic() - t0) * 1000)
         return lines
 
     # Intent: record when a completed find contains no usable register or scan rows.
@@ -360,24 +431,32 @@ class EbusService:
                 if result["error"] == "timeout":
                     raise TimeoutError("ebusd find command timed out")
                 raise ConnectionError(f"ebusd find command failed: {result['error']}")
-            usable_lines = [
-                line
-                for line in lines
-                if "=" in line and not line.split("=", 1)[1].strip().lower().startswith(("err:", "(err:"))
-            ]
-            if not usable_lines:
-                self._command_log[-1]["error"] = "no_usable_lines"
+            try:
+                self._last_find_usable = has_usable_find_records(lines)
+            except ValueError as exc:
                 self._last_find_usable = False
+                await self._disconnect_nolock()
+                self._command_log[-1]["error"] = "malformed_find_response"
+                raise ConnectionError(f"ebusd returned a malformed find response: {exc}") from exc
+            if not self._last_find_usable:
+                self._command_log[-1]["error"] = "no_usable_lines"
                 return lines
-            self._last_find_usable = True
             return lines
 
+    # Intent: propagate incomplete `info` transport responses instead of returning a success-shaped empty banner.
+    # Why: discovery dumps must not save as complete when the ebusd metadata read failed.
     # Send 'info' and return every banner line. ebusd lists the per-address
     # loaded CSV/include files after the version line, so get_info needs the
     # whole response rather than the first line only.
     async def _send_info(self) -> list[str]:
         async with self._lock:
-            return await self._send_lines_locked("info")
+            lines = await self._send_lines_locked("info")
+            result = self._command_log[-1]
+            if result["cmd"] == "info" and result["error"]:
+                if result["error"] == "timeout":
+                    raise TimeoutError("ebusd info command timed out")
+                raise ConnectionError(f"ebusd info command failed: {result['error']}")
+            return lines
 
     # Return raw find response lines
     async def find_registers(self) -> list[str]:

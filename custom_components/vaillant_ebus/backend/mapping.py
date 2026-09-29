@@ -4,7 +4,94 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .models import RegisterMeta, is_controller_circuit, is_heat_pump_circuit
+from .models import DeviceGraph, RegisterMeta, is_controller_circuit, is_heat_pump_circuit
+
+HMUX0_SW0407_FALLBACK_BLOCKLIST: frozenset[str] = frozenset(
+    {
+        "Status00",
+        "Status01",
+        "Status07",
+        "BuildingCircuitFlow",
+        "CopCooling",
+        "CopCoolingMonth",
+        "CopHc",
+        "CopHcMonth",
+        "CopHwc",
+        "CopHwcMonth",
+        "CurrentCompressorUtil",
+        "CurrentConsumedPower",
+        "CurrentYieldPower",
+        "FlowTemp",
+        "FlowTemperature",
+        "HoursCool",
+        "LiveMonitorCurrentConsumedPower",
+        "SourceTempInput",
+        "SourceTempOutput",
+        "TotalEnergyUsage",
+        "YieldCoolDay",
+        "YieldCooling",
+        "YieldCoolingMonth",
+        "YieldHc",
+        "YieldHcDay",
+        "YieldHcMonth",
+        "YieldHwc",
+        "YieldHwcDay",
+        "YieldHwcMonth",
+    }
+)
+HMUX0_SW0407_PASSIVE_REGISTER_NAMES: frozenset[str] = frozenset(
+    {
+        "RunDataStatuscode",
+        "RunDataCompressorSpeed",
+        "RunDataElPowerConsumption",
+        "RunDataBuildingCPumpPower",
+        "KmKreisVerflTemp",
+        "UnterkuehlungSoll",
+        "UnterkuehlungIst",
+        "EEVAuslassTemp",
+        "KmKreisKompEinlTemp",
+        "KmKreisKompAuslTemp",
+        "KmKreisHochdruck",
+    }
+)
+HMUX0_SW0407_FALLBACK_NAMES: frozenset[str] = frozenset(
+    item.casefold() for item in HMUX0_SW0407_FALLBACK_BLOCKLIST | HMUX0_SW0407_PASSIVE_REGISTER_NAMES
+)
+VWZIO_SW0500_FALLBACK_BLOCKLIST: frozenset[str] = frozenset({"PowerConsumptionVwz", "Status01"})
+VWZIO_SW0500_FALLBACK_NAMES: frozenset[str] = frozenset(item.casefold() for item in VWZIO_SW0500_FALLBACK_BLOCKLIST)
+
+
+# Intent: return the discovered circuit only for the exact HMUX0 firmware whose map probes are unavailable.
+# Why: the fallback blocklist must not leak to other heat-pump variants or guessed circuits.
+def hmux0_sw0407_circuit(graph: DeviceGraph | None) -> str | None:
+    if graph is None:
+        return None
+    matches = [
+        node
+        for node in graph.nodes.values()
+        if node.device_type.name == "HEAT_PUMP"
+        and node.scan_type.casefold() == "hmux0"
+        and node.scan_sw == "0407"
+        and node.scan_hw == "0504"
+    ]
+    return matches[0].circuit if len(matches) == 1 else None
+
+
+# Intent: return the discovered VWZIO circuit only for the target with unverified active Status01 layout.
+# Why: the SW0500/HW0504 evidence justifies passive B516/14 decoding, not importing the HW5103 active probe.
+def vwzio_sw0500_circuit(graph: DeviceGraph | None) -> str | None:
+    if graph is None:
+        return None
+    matches = [
+        node
+        for node in graph.nodes.values()
+        if node.device_type.name == "PASSIVE_COOLING"
+        and node.scan_type.casefold() == "vwzio"
+        and node.scan_sw == "0500"
+        and node.scan_hw == "0504"
+    ]
+    return matches[0].circuit if len(matches) == 1 else None
+
 
 # BAI registers that are gas/combustion-specific and do not apply to the
 # electric eloBLOCK. They remain discoverable, but are disabled by default
@@ -339,6 +426,55 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Building Circulation Pump Speed",
         unit="%",
     ),
+    "hmux0.KmKreisVerflTemp": RegisterMeta(
+        friendly_name="Refrigerant Condensing Temperature",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "hmux0.UnterkuehlungSoll": RegisterMeta(
+        friendly_name="Subcooling Target",
+        device_class="temperature",
+        unit="K",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "hmux0.UnterkuehlungIst": RegisterMeta(
+        friendly_name="Subcooling Actual",
+        device_class="temperature",
+        unit="K",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "hmux0.EEVAuslassTemp": RegisterMeta(
+        friendly_name="EEV Outlet Temperature",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "hmux0.KmKreisKompEinlTemp": RegisterMeta(
+        friendly_name="Compressor Inlet Temperature",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "hmux0.KmKreisKompAuslTemp": RegisterMeta(
+        friendly_name="Compressor Outlet Temperature",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "hmux0.KmKreisHochdruck": RegisterMeta(
+        friendly_name="Refrigerant High Pressure",
+        device_class="pressure",
+        unit="bar",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
     "hmu.BuildingCircuitPumpSpeed": RegisterMeta(
         friendly_name="Building Circuit Pump Speed",
         unit="%",
@@ -586,6 +722,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Heating Electricity Today",
         device_class="energy",
         unit="Wh",
+        state_class="total_increasing",
         icon="mdi:radiator",
     ),
     "hmu.HwcElecConsTotal": RegisterMeta(
@@ -599,7 +736,23 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="DHW Electricity Today",
         device_class="energy",
         unit="Wh",
+        state_class="total_increasing",
         icon="mdi:water-boiler",
+    ),
+    "ctlv3.YieldTotal": RegisterMeta(
+        friendly_name="Yield Total",
+        device_class="energy",
+        unit="kWh",
+        state_class="total",
+        icon="mdi:counter",
+        fallback_read=False,
+    ),
+    "vwzio.PowerConsumptionVwz": RegisterMeta(
+        friendly_name="Hydraulic Station Power Consumption",
+        device_class="power",
+        unit="kW",
+        icon="mdi:flash",
+        fallback_read=False,
     ),
     # CSV/find-based electric registers that supplement the runtime-defined
     # b516 counters above (issue #50). Units follow the upstream 08.hmu.tsp

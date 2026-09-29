@@ -22,16 +22,20 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from . import repairs
 from .backend.analysis_service import AnalysisResult, AnalysisService
-from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService
+from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService, node_has_live_data
 from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, EbusService
 from .backend.entity_factory import EntityDescription, EntityFactoryService
 from .backend.mapping import (
+    HMUX0_SW0407_FALLBACK_NAMES,
     REGISTER_MAP,
+    VWZIO_SW0500_FALLBACK_NAMES,
     b516_date_bytes,
+    hmux0_sw0407_circuit,
     is_field_key,
     metadata_circuits,
     multi_field_fields,
     split_multi_field,
+    vwzio_sw0500_circuit,
 )
 from .backend.models import (
     CIRCUIT_NAMES,
@@ -43,6 +47,7 @@ from .backend.models import (
     ResolutionStatus,
     heat_pump_product,
     is_controller_circuit,
+    is_ebusd_error_value,
     is_heat_pump_circuit,
     is_no_data_value,
     is_valid_hmux0_return_temperature,
@@ -99,6 +104,49 @@ HMUX0_RUNTIME_REGISTERS = frozenset(
         "CopHwc",
         "CopHwcMonth",
     }
+)
+
+HMUX0_SW0407_STATUS_VALUES = (
+    "34=frost_protection;100=standby;101=heat_compressor_off;102=heat_compressor_blocked;"
+    "103=heat_pump_prerun;104=heat_compressor_active;107=heat_pump_postrun;111=cool_compressor_off;"
+    "112=cool_compressor_blocked;113=cool_pump_prerun;114=cool_compressor_active;117=cool_pump_postrun;"
+    "125=heating_immersion_heater_active;132=dhw_compressor_blocked;133=dhw_pump_prerun;"
+    "134=hwc_compressor_active;135=hwc_immersion_heater_active;137=dhw_pump_postrun;"
+    "141=heating_immersion_heater_off;142=heating_immersion_heater_blocked;"
+    "151=dhw_immersion_heater_off;152=dhw_immersion_heater_blocked;516=defrost"
+)
+HMUX0_SW0407_PASSIVE_REGISTERS = (
+    (
+        "RunDataStatuscode",
+        "B509",
+        "055402008813",
+        f"value,,IGN:4,,,,value,,UIN,{HMUX0_SW0407_STATUS_VALUES},,",
+    ),
+    (
+        "RunDataCompressorSpeed",
+        "B509",
+        "055402000d0a",
+        "value,,IGN:4,,,,value,,EXP,,rps,HMUX0 compressor speed",
+    ),
+    (
+        "RunDataElPowerConsumption",
+        "B509",
+        "055402005b0d",
+        "value,,IGN:4,,,,value,,EXP,,W,HMUX0 electrical power consumption",
+    ),
+    (
+        "RunDataBuildingCPumpPower",
+        "B509",
+        "05540200c509",
+        "value,,IGN:4,,,,value,,EXP,,%,HMUX0 building circuit pump power",
+    ),
+    ("KmKreisVerflTemp", "B51A", "05ff3546", "value,,IGN:3,,,,value,,D2C,,°C,temperature"),
+    ("UnterkuehlungSoll", "B51A", "05ff354a", "value,,IGN:3,,,,value,,D2C,,K,"),
+    ("UnterkuehlungIst", "B51A", "05ff354b", "value,,IGN:3,,,,value,,D2C,,K,"),
+    ("EEVAuslassTemp", "B51A", "05ff3702", "value,,IGN:3,,,,value,,D2C,,°C,temperature"),
+    ("KmKreisKompEinlTemp", "B51A", "05ff3704", "value,,IGN:3,,,,value,,D2C,,°C,temperature"),
+    ("KmKreisKompAuslTemp", "B51A", "05ff3705", "value,,IGN:3,,,,value,,D2C,,°C,temperature"),
+    ("KmKreisHochdruck", "B51A", "05ff370b", "value,,IGN:3,,,,value,,UIN,10,bar,"),
 )
 
 # Registers whose live (non-sentinel) value marks a discovered zone as
@@ -263,7 +311,8 @@ def _disable_stale_registry_entities(hass: HomeAssistant, entry_id: str, entitie
             registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
 
 
-# Merge a delayed graph without removing devices that initial discovery found.
+# Intent: merge delayed discovery while replacing metadata that reflects the latest find response.
+# Why: stale error-row markers must clear when a later usable find reports the register without an error.
 def _merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> DeviceGraph:
     nodes = dict(existing.nodes)
     for circuit, node in discovered.nodes.items():
@@ -280,13 +329,16 @@ def _merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> Devi
             parent=node.parent or previous.parent,
             zone_circuits=list(dict.fromkeys(previous.zone_circuits + node.zone_circuits)),
             heating_circuits=list(dict.fromkeys(previous.heating_circuits + node.heating_circuits)),
-            has_data=previous.has_data or node.has_data,
+            has_data=node.has_data,
             scan_type=node.scan_type or previous.scan_type,
             scan_sw=node.scan_sw or previous.scan_sw,
             scan_hw=node.scan_hw or previous.scan_hw,
         )
 
-    raw_registers = dict(existing.raw_registers)
+    unavailable_keys = {key.casefold() for key in discovered.placeholder_registers}
+    raw_registers = {
+        key: value for key, value in existing.raw_registers.items() if key.casefold() not in unavailable_keys
+    }
     raw_by_fold = {key.casefold(): key for key in raw_registers}
     for key, value in discovered.raw_registers.items():
         raw_registers[raw_by_fold.get(key.casefold(), key)] = value
@@ -299,10 +351,14 @@ def _merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> Devi
     placeholder_registers = {
         key for key in placeholder_registers if key.casefold() not in {rk.casefold() for rk in raw_registers}
     }
+    error_registers = set(discovered.error_registers)
+    for node in nodes.values():
+        node.has_data = node_has_live_data(node, raw_registers)
     return DeviceGraph(
         nodes=nodes,
         raw_registers=raw_registers,
         placeholder_registers=placeholder_registers,
+        error_registers=error_registers,
     )
 
 
@@ -807,6 +863,16 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 register.value.update(_register_values(rk, raw))
                 register.has_data = True
 
+        raw_key_folds = {key.casefold() for key in graph.raw_registers}
+        for key in graph.placeholder_registers:
+            if key.casefold() in raw_key_folds:
+                continue
+            existing_key = _mapping_key(self.registers, key)
+            if existing_key is not None:
+                register = self.registers[existing_key]
+                register.value = _register_values(existing_key, None)
+                register.has_data = False
+
         self._refresh_find_keys()
 
         # A cache-seeded rebuild at startup can carry registers the real bus no
@@ -931,7 +997,13 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             ", ".join(f"{count} {ptype}" for ptype, count in sorted(platform_counts.items())),
             len(additions),
         )
-        self.async_update_listeners()
+        if source == "delayed":
+            values = await self._async_values_from_registers()
+            if self._stopped or self._unload_requested:
+                return
+            self.async_set_updated_data({"ebusd": values})
+        else:
+            self.async_update_listeners()
         for callback in self._post_discovery_callbacks:
             try:
                 callback()
@@ -1303,6 +1375,17 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             and heat_pump.scan_sw in {"0302", "0303"}
             and heat_pump.scan_hw == "0504"
         )
+        hmux0_sw0407_owner = hmux0_sw0407_circuit(self._graph)
+        vwzio_circuit = vwzio_sw0500_circuit(self._graph)
+        vwzio = next(
+            (
+                node
+                for node in self._graph.nodes.values()
+                if node.circuit.casefold() == (vwzio_circuit or "").casefold()
+            ),
+            None,
+        )
+        is_vwzio_0500_0504 = vwzio is not None
         # HMU-only layouts on HMUX0: the brine source-temperature probe is
         # always incompatible with air/water HMUX0. Status00 remains gated to
         # the confirmed 0303/0504 variant, while the B509 monitoring block is
@@ -1419,10 +1502,34 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     ",value,,IGN:4,,,,value,,EXP,,%,HMUX0 building circuit pump power",
                 ]
             )
+        if hmux0_sw0407_owner is not None:
+            defines.extend(
+                f"u,{hmux0_sw0407_owner},{name},{name},f1,08,{message_id},{subaddress},{fields}"
+                for name, message_id, subaddress, fields in HMUX0_SW0407_PASSIVE_REGISTERS
+            )
+        if is_vwzio_0500_0504 and vwzio is not None:
+            # The dump captures the gateway's passive B516/14 station-power frame.
+            # Unlike PR #598's later SW0901 active read, this definition only decodes observed traffic.
+            defines.append(
+                f"u,{vwzio.circuit},PowerConsumptionVwz,PowerConsumptionVwz,f1,76,B516,14"
+                ",value,,IGN:1,,,,value,,EXP,1000,kW,Hydraulic station power consumption"
+            )
+            # Status01's active field layout is documented for VWZIO HW5103, not this HW0504 scan.
+            defines = [
+                definition
+                for definition in defines
+                if not (definition.startswith(("r,vwz,Status01,", "r,vwzio,Status01,")))
+            ]
         if not is_hmux0_0303_0504:
             defines = [definition for definition in defines if ",Status00," not in definition]
         if not is_hmux0_b509_0504:
-            defines = [definition for definition in defines if ",RunDataElPowerConsumption," not in definition]
+            defines = [
+                definition
+                for definition in defines
+                if not (
+                    definition.split(",", 3)[0] == "r" and definition.split(",", 3)[2] == "RunDataElPowerConsumption"
+                )
+            ]
         if heat_pump and heat_pump.scan_type.upper() == "HMU00" and heat_pump.scan_hw == "5103":
             # Upstream ebusd-configuration PR #614, confirmed for HW5103.
             # Status07 is active-read because this HW5103 variant polls b511/07;
@@ -1795,8 +1902,13 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         include_placeholders: bool = False,
         include_energy: bool = False,
         skip_cache: set[str] | None = None,
+        skip_reads: set[str] | None = None,
     ) -> None:
         if not self.ebus or not self.ebus.is_connected or self._graph is None:
+            return
+        # Intent: do not let a retained graph authorize polls after an unusable find.
+        # Why: its circuit ownership may no longer match the devices currently on the bus.
+        if getattr(self.ebus, "last_find_usable", None) is False:
             return
         graph_keys = self._last_find_keys
 
@@ -1811,10 +1923,37 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
 
         candidates: list[tuple[str, str]] = []
         seen: set[tuple[str, str]] = set()
+        skipped_read_keys = {key.casefold() for key in (skip_reads or set())}
+        skipped_read_keys.update(key.casefold() for key in self._graph.error_registers)
+        passive_register_keys = {
+            (parts[1].casefold(), parts[2].casefold())
+            for definition in self._runtime_definitions.values()
+            if len(parts := definition.split(",", 3)) >= 3 and parts[0].startswith("u")
+        }
+        hmux0_sw0407 = hmux0_sw0407_circuit(self._graph)
+        vwzio_sw0500 = vwzio_sw0500_circuit(self._graph)
 
         # Intent: add each resolved fallback candidate once.
-        # Why: map and placeholder paths can nominate the same register.
+        # Why: map, passive-definition, and placeholder paths can nominate the same register.
         def _add(circuit: str, name: str) -> None:
+            circuit_key = circuit.casefold()
+            name_key = name.casefold()
+            if "." in name or f"{circuit}.{name}".casefold() in skipped_read_keys:
+                return
+            if (circuit_key, name_key) in passive_register_keys:
+                return
+            if (
+                hmux0_sw0407 is not None
+                and circuit_key == hmux0_sw0407.casefold()
+                and name_key in HMUX0_SW0407_FALLBACK_NAMES
+            ):
+                return
+            if (
+                vwzio_sw0500 is not None
+                and circuit_key == vwzio_sw0500.casefold()
+                and name_key in VWZIO_SW0500_FALLBACK_NAMES
+            ):
+                return
             key = (circuit, name)
             if key not in seen:
                 seen.add(key)
@@ -1861,12 +2000,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # resolves via the circuit alias (15-minute interval).
         if include_placeholders and self._graph:
             for key in self._graph.placeholder_registers:
-                if key.casefold() in {raw_key.casefold() for raw_key in self._graph.raw_registers}:
-                    continue
                 parts = key.split(".", 1)
                 if len(parts) != 2:
                     continue
                 circuit, name = parts
+                if "." in name or key.casefold() in skipped_read_keys:
+                    continue
+                if key.casefold() in {raw_key.casefold() for raw_key in self._graph.raw_registers}:
+                    continue
                 meta_key = _meta_key(circuit, name)
                 if meta_key:
                     meta = next(
@@ -2050,7 +2191,24 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 if self._stopped or self._unload_requested:
                     return {"ebusd": await self._async_values_from_registers()}
                 if getattr(self.ebus, "last_find_usable", None) is False:
-                    _LOGGER.warning("ebusd find returned no usable rows; keeping the current graph unchanged")
+                    _LOGGER.warning("ebusd find returned no usable rows; keeping the current graph topology")
+                    error_registers: set[str] = set()
+                    for line in lines:
+                        circuit, name, value = DiscoveryService._parse_register(line)
+                        if not circuit or not name or value is not None or "." in name:
+                            continue
+                        raw_value = line.partition("=")[2]
+                        if not is_ebusd_error_value(raw_value):
+                            continue
+                        source_key = f"{circuit}.{name}"
+                        register_key = _mapping_key(self.registers, source_key) or source_key
+                        error_registers.update((source_key, register_key))
+                        register = self.registers.get(register_key)
+                        if register is not None:
+                            register.value = _register_values(register_key, None)
+                            register.has_data = False
+                    if self._graph is not None:
+                        self._graph.error_registers = error_registers
                     return {"ebusd": await self._async_values_from_registers()}
                 if not self.discovery_ready:
                     discovered = DiscoveryService.build_device_graph(lines)
@@ -2062,16 +2220,22 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 updated = 0
                 invalid_values: set[str] = set()
                 no_data_values: set[str] = set()
+                error_values: set[str] = set()
                 batch_with_data: set[str] = set()
                 for line in lines:
                     # Shared parser: sentinel/no-data values come back as None.
                     circuit, name, val = DiscoveryService._parse_register(line)
                     if not circuit or not name:
                         continue
-                    key = f"{circuit}.{name}"
+                    source_key = f"{circuit}.{name}"
+                    if "." in name:
+                        continue
+                    key = source_key
                     key = _mapping_key(self.registers, key) or key
                     if val is None:
                         no_data_values.add(key)
+                        if is_ebusd_error_value(line.partition("=")[2]) and key not in batch_with_data:
+                            error_values.update((source_key, key))
                         if key.lower() == "hmux0.rundatareturntemp":
                             raw = line.split("=", 1)[1].strip()
                             if not is_no_data_value(raw):
@@ -2121,6 +2285,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     val = _usable_register_value(key, val)
                     if val is None:
                         continue
+                    error_values.discard(source_key)
+                    error_values.discard(key)
                     self._live_since_analysis.add(key)
                     batch_with_data.add(key)
                     if key not in self.registers:
@@ -2137,6 +2303,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         self.registers[key].has_data = True
                         updated += 1
                 self._refresh_find_keys()
+                if self._graph is not None:
+                    self._graph.error_registers = error_values
                 poll_placeholders = now - self._last_placeholder_poll >= PLACEHOLDER_POLL_INTERVAL
                 if poll_placeholders:
                     self._last_placeholder_poll = now
@@ -2144,6 +2312,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     include_placeholders=poll_placeholders,
                     include_energy=poll_energy,
                     skip_cache=invalid_values | no_data_values,
+                    skip_reads=error_values,
                 )
                 if self._stopped or self._unload_requested:
                     return {"ebusd": await self._async_values_from_registers()}

@@ -105,15 +105,24 @@ mock_homeassistant.helpers.device_registry.DeviceInfo = dict
 
 
 class _MockDataUpdateCoordinator:
+    # Intent: initialize the published snapshot used by CoordinatorEntity lookups.
+    # Why: tests for pushed updates must observe the same data contract as Home Assistant.
     def __init__(self, hass, logger, **kwargs) -> None:  # noqa: ARG002
         self.hass = hass
         self.name = kwargs.get("name", "")
         self.update_interval = kwargs.get("update_interval")
+        self.data = None
         self.last_update_success = True
         self.listeners: list = []
 
     def async_update_listeners(self) -> None:
         pass
+
+    # Intent: publish pushed data before notifying coordinator listeners.
+    # Why: delayed discovery tests must observe cleared values in the same order as Home Assistant.
+    def async_set_updated_data(self, data: dict[str, object]) -> None:
+        self.data = data
+        self.async_update_listeners()
 
     def __class_getitem__(cls, item):
         return cls
@@ -613,6 +622,330 @@ async def test_issue32_hmux0_runtime_definitions_use_discovered_circuit() -> Non
         assert any(",B509,05540200c509," in definition for definition in definitions)
         assert not any(",hmu," in definition for definition in definitions)
         assert not any(",Status00," in definition for definition in definitions)
+
+
+# Intent: HMUX0 SW0407 B509/B51A gateway frames are decoded passively on the discovered owner.
+# Why: the exact issue #161 capture supports these layouts, but adding ebusd read polling would be unsafe or unverified.
+async def test_issue161_hmux0_sw0407_runtime_definitions_are_passive_and_scan_gated() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fixture = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
+        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+        heat_pump = graph.heat_pump_result().node
+        assert heat_pump is not None
+        assert (heat_pump.scan_type, heat_pump.scan_sw, heat_pump.scan_hw) == ("HMUX0", "0407", "0504")
+
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator._graph = graph
+
+        await coordinator._define_custom_registers()
+
+        definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
+        expected = {
+            ("hmux0", "RunDataStatuscode", "f1", "08", "B509", "055402008813"),
+            ("hmux0", "RunDataCompressorSpeed", "f1", "08", "B509", "055402000d0a"),
+            ("hmux0", "RunDataElPowerConsumption", "f1", "08", "B509", "055402005b0d"),
+            ("hmux0", "RunDataBuildingCPumpPower", "f1", "08", "B509", "05540200c509"),
+            ("hmux0", "KmKreisVerflTemp", "f1", "08", "B51A", "05ff3546"),
+            ("hmux0", "UnterkuehlungSoll", "f1", "08", "B51A", "05ff354a"),
+            ("hmux0", "UnterkuehlungIst", "f1", "08", "B51A", "05ff354b"),
+            ("hmux0", "EEVAuslassTemp", "f1", "08", "B51A", "05ff3702"),
+            ("hmux0", "KmKreisKompEinlTemp", "f1", "08", "B51A", "05ff3704"),
+            ("hmux0", "KmKreisKompAuslTemp", "f1", "08", "B51A", "05ff3705"),
+            ("hmux0", "KmKreisHochdruck", "f1", "08", "B51A", "05ff370b"),
+            ("vwzio", "PowerConsumptionVwz", "f1", "76", "B516", "14"),
+        }
+        actual = set()
+        for definition in definitions:
+            fields = definition.split(",")
+            if len(fields) > 7 and fields[0] == "u":
+                actual.add((fields[1], fields[2], fields[4], fields[5], fields[6], fields[7]))
+        assert expected <= actual
+        assert not any(",B511,021801," in definition or ",B511,021802," in definition for definition in definitions)
+        assert not any(
+            fields[0] == "r" and fields[1] == "hmux0" and fields[2] in {entry[1] for entry in expected}
+            for fields in (definition.split(",") for definition in definitions)
+        )
+        for name in (
+            "KmKreisVerflTemp",
+            "UnterkuehlungSoll",
+            "UnterkuehlungIst",
+            "EEVAuslassTemp",
+            "KmKreisKompEinlTemp",
+            "KmKreisKompAuslTemp",
+            "KmKreisHochdruck",
+        ):
+            assert MAPPING.REGISTER_MAP[f"hmux0.{name}"].fallback_read is False
+        assert MAPPING.REGISTER_MAP["vwzio.PowerConsumptionVwz"].fallback_read is False
+        assert not any(definition.startswith("r,vwzio,Status01,") for definition in definitions)
+        coordinator._last_find_keys = set()
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        await coordinator._fallback_read(include_placeholders=True)
+        assert not any(call.args == ("vwzio", "Status01") for call in coordinator.ebus.read_register.await_args_list)
+
+        nonmatching_lines = [
+            line.replace("VWZIO;0500;0504", "VWZIO;0902;5103") if line.strip().startswith("scan.76 ") else line
+            for line in load_find_lines(fixture, after=True)
+        ]
+        nonmatching_graph = DISCOVERY.DiscoveryService.build_device_graph(nonmatching_lines)
+        assert "vwzio" not in nonmatching_graph.nodes
+        other = VaillantCoordinator(_hass(tmpdir), _entry())
+        other.ebus = MagicMock(spec=EbusService)
+        other.ebus.is_connected = True
+        other.ebus.define_register = AsyncMock(return_value="done")
+        other._graph = nonmatching_graph
+        await other._define_custom_registers()
+        other_definitions = [call.args[0] for call in other.ebus.define_register.await_args_list]
+        assert not any(",PowerConsumptionVwz," in definition for definition in other_definitions)
+
+
+# Intent: define SW0407 passive layouts from their unique scan despite an ambiguous role resolution.
+# Why: a second discovered heat pump must not crash setup or redirect passive frames to the wrong circuit.
+async def test_issue161_sw0407_passive_definitions_survive_other_heat_pump_node() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lines = load_find_lines("community/hmux0_issue161_2026-09-28_154109_discovery.yaml", after=True)
+        lines.extend(
+            [
+                "scan.09 = Vaillant;HMU00;0308;0403",
+                "hmu FlowTemp = 30.0",
+            ]
+        )
+        graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+        assert graph.heat_pump_result().status == ResolutionStatus.AMBIGUOUS
+        assert MAPPING.hmux0_sw0407_circuit(graph) == "hmux0"
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator._graph = graph
+
+        await coordinator._define_custom_registers()
+
+        definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
+        assert any(definition.startswith("u,hmux0,RunDataStatuscode,") for definition in definitions)
+        assert not any(definition.startswith("u,hmu,") for definition in definitions)
+
+
+# Intent: issue #32's SW0302 map retains its existing active B509 path and gains no SW0407-only passive layouts.
+# Why: passive telemetry support is gated to the firmware captured in issue #161.
+async def test_issue161_passive_hmux0_definitions_do_not_generalize_to_sw0302() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml", after=True)
+        )
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator._graph = graph
+
+        await coordinator._define_custom_registers()
+
+        definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
+        assert graph.nodes["hmux0"].scan_sw == "0302"
+        assert any(",B509,055402005b0d," in definition for definition in definitions)
+        assert not any(definition.startswith("u,hmux0,") for definition in definitions)
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._last_find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
+        await coordinator._fallback_read(include_placeholders=True)
+        assert any(
+            call.args == ("hmux0", "RunDataElPowerConsumption")
+            for call in coordinator.ebus.read_register.await_args_list
+        )
+        for register in ("HcElecConsDay", "HwcElecConsDay"):
+            assert ("hmux0", register) in [call.args for call in coordinator.ebus.read_register.await_args_list]
+
+        sw0303_graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/hmux0_issue99_2026-09-10_173229.yaml", after=True)
+        )
+        sw0303 = VaillantCoordinator(_hass(tmpdir), _entry())
+        sw0303.ebus = MagicMock(spec=EbusService)
+        sw0303.ebus.is_connected = True
+        sw0303.ebus.define_register = AsyncMock(return_value="done")
+        sw0303.ebus.read_register = AsyncMock(return_value=None)
+        sw0303._graph = sw0303_graph
+        await sw0303._define_custom_registers()
+        assert sw0303_graph.nodes["hmux0"].scan_sw == "0303"
+        assert any(",B509,055402005b0d," in call.args[0] for call in sw0303.ebus.define_register.await_args_list)
+        sw0303._last_find_keys = set(sw0303_graph.raw_registers) | set(sw0303_graph.placeholder_registers)
+        await sw0303._fallback_read(include_energy=True)
+        for register in ("HcElecConsDay", "HwcElecConsDay"):
+            assert ("hmux0", register) in [call.args for call in sw0303.ebus.read_register.await_args_list]
+
+
+# Intent: SW0407 map probes for unsupported B51A names and passive definitions never become active fallback reads.
+# Why: the complete issue #161 dump records these B51A probes as unavailable, while only B516 reads stay active.
+async def test_issue161_hmux0_sw0407_fallback_skips_unverified_b51a_and_passive_u() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fixture = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
+        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._graph = graph
+
+        await coordinator._define_custom_registers()
+        coordinator._last_find_keys = set()
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+
+        read_calls = coordinator.ebus.read_register.await_args_list
+        passive_names = {
+            "RunDataStatuscode",
+            "RunDataCompressorSpeed",
+            "RunDataElPowerConsumption",
+            "RunDataBuildingCPumpPower",
+            "KmKreisVerflTemp",
+            "UnterkuehlungSoll",
+            "UnterkuehlungIst",
+            "EEVAuslassTemp",
+            "KmKreisKompEinlTemp",
+            "KmKreisKompAuslTemp",
+            "KmKreisHochdruck",
+            "PowerConsumptionVwz",
+        }
+        blocked_b51a_names = {
+            "BuildingCircuitFlow",
+            "CopCooling",
+            "CopCoolingMonth",
+            "CopHc",
+            "CopHcMonth",
+            "CopHwc",
+            "CopHwcMonth",
+            "CurrentCompressorUtil",
+            "CurrentConsumedPower",
+            "CurrentYieldPower",
+            "FlowTemp",
+            "FlowTemperature",
+            "HoursCool",
+            "LiveMonitorCurrentConsumedPower",
+            "SourceTempInput",
+            "SourceTempOutput",
+            "TotalEnergyUsage",
+            "YieldCoolDay",
+            "YieldCooling",
+            "YieldCoolingMonth",
+            "YieldHc",
+            "YieldHcDay",
+            "YieldHcMonth",
+            "YieldHwc",
+            "YieldHwcDay",
+            "YieldHwcMonth",
+        }
+        blocked_hmux0_names = passive_names | blocked_b51a_names | {"Status00", "Status01", "Status07"}
+        blocked_reads = [
+            call.args
+            for call in read_calls
+            if call.args[0].casefold() == "hmux0" and call.args[1] in blocked_hmux0_names
+        ]
+        assert not blocked_reads, blocked_reads
+        for register in ("HcElecConsDay", "HwcElecConsDay"):
+            assert ("hmux0", register) in [call.args for call in read_calls]
+
+
+# Intent: failed passive definitions cannot make the integration actively probe their telegrams as a fallback.
+# Why: safety depends on the exact firmware gate, not on ebusd accepting each optional definition.
+async def test_issue161_failed_passive_definitions_still_skip_active_fallback() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/hmux0_issue161_2026-09-28_154109_discovery.yaml", after=True)
+        )
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="ERR: unsupported")
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._graph = graph
+
+        await coordinator._define_custom_registers()
+        assert not coordinator._runtime_definitions
+        coordinator._last_find_keys = set()
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+
+        calls = [call.args for call in coordinator.ebus.read_register.await_args_list]
+        for name in (
+            "RunDataStatuscode",
+            "RunDataCompressorSpeed",
+            "RunDataElPowerConsumption",
+            "RunDataBuildingCPumpPower",
+            "KmKreisVerflTemp",
+            "UnterkuehlungSoll",
+            "UnterkuehlungIst",
+            "EEVAuslassTemp",
+            "KmKreisKompEinlTemp",
+            "KmKreisKompAuslTemp",
+            "KmKreisHochdruck",
+            "Status00",
+            "Status01",
+            "Status07",
+        ):
+            assert ("hmux0", name) not in calls
+        for name in ("HcElecConsDay", "HwcElecConsDay"):
+            assert ("hmux0", name) in calls
+
+
+# Intent: the SW0407-only fallback exclusion does not suppress any mapped register on SW0302 or SW0303.
+# Why: the new guard is hardware-specific and must preserve legacy fallback behavior on supported variants.
+async def test_issue161_fallback_exclusions_do_not_apply_to_sw0302_or_sw0303() -> None:
+    names = {
+        "Status00",
+        "Status01",
+        "Status07",
+        "BuildingCircuitFlow",
+        "CopCooling",
+        "CopCoolingMonth",
+        "CopHc",
+        "CopHcMonth",
+        "CopHwc",
+        "CopHwcMonth",
+        "CurrentCompressorUtil",
+        "CurrentConsumedPower",
+        "CurrentYieldPower",
+        "FlowTemp",
+        "FlowTemperature",
+        "HoursCool",
+        "LiveMonitorCurrentConsumedPower",
+        "SourceTempInput",
+        "SourceTempOutput",
+        "TotalEnergyUsage",
+        "YieldCoolDay",
+        "YieldCooling",
+        "YieldCoolingMonth",
+        "YieldHc",
+        "YieldHcDay",
+        "YieldHcMonth",
+        "YieldHwc",
+        "YieldHwcDay",
+        "YieldHwcMonth",
+    }
+    test_map = {f"hmux0.{name}": MAPPING.RegisterMeta(enabled=True, fallback_read=True) for name in names}
+    original_map = COORDINATOR.REGISTER_MAP
+    COORDINATOR.REGISTER_MAP = test_map
+    try:
+        for fixture, expected_sw in (
+            ("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml", "0302"),
+            ("community/hmux0_issue99_2026-09-10_173229.yaml", "0303"),
+        ):
+            with tempfile.TemporaryDirectory() as tmpdir:
+                graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+                assert graph.nodes["hmux0"].scan_sw == expected_sw
+                graph.raw_registers = {}
+                graph.placeholder_registers = {f"hmux0.{name}" for name in names}
+                coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+                coordinator.ebus = MagicMock(spec=EbusService)
+                coordinator.ebus.is_connected = True
+                coordinator.ebus.read_register = AsyncMock(return_value=None)
+                coordinator._graph = graph
+
+                await coordinator._fallback_read(include_placeholders=True)
+
+                actual = {call.args for call in coordinator.ebus.read_register.await_args_list}
+                assert actual == {("hmux0", name) for name in names}
+    finally:
+        COORDINATOR.REGISTER_MAP = original_map
 
 
 # Intent: the complete #32 capture decodes the three B509 EXP responses at their documented offsets.
@@ -2521,6 +2854,240 @@ async def test_poll_error_only_find_keeps_repair_pending() -> None:
         assert coordinator._ebusd_repair_pending is True
         repairs_module.async_dismiss_ebusd_unreachable.assert_not_awaited()
         ebus.read_register.assert_not_awaited()
+
+
+# Intent: clear prior readings when an error-only find reports the register unavailable.
+# Why: retaining a value from an earlier poll would present stale data as current after an explicit bus error.
+async def test_poll_error_only_find_clears_previous_value_without_fallback() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        graph = _make_graph({"hmu.FlowTemp": "28"})
+        coordinator._graph = graph
+        coordinator._cache_seeded = coordinator._ebusd_connected = True
+        coordinator._ebusd_repair_pending = True
+        coordinator._last_energy_poll = datetime.now()
+        coordinator.registers["hmu.FlowTemp"] = EbusdRegister(
+            circuit="hmu",
+            name="FlowTemp",
+            fields=["value"],
+            value={"value": "28"},
+            has_data=True,
+        )
+        ebus = MagicMock(spec=EbusService)
+        ebus.is_connected = True
+        ebus.last_find_usable = False
+        ebus.find_registers = AsyncMock(return_value=["hmu FlowTemp = ERR: invalid position"])
+        ebus.read_register = AsyncMock(return_value="28")
+        coordinator.ebus = ebus
+
+        await coordinator._async_update_data()
+
+        assert coordinator._graph is graph
+        assert coordinator.registers["hmu.FlowTemp"].value == {"value": None}
+        assert coordinator.registers["hmu.FlowTemp"].has_data is False
+        assert graph.error_registers == {"hmu.FlowTemp"}
+        assert coordinator._ebusd_repair_pending is True
+        ebus.read_register.assert_not_awaited()
+
+
+# Intent: replace stale raw data with a delayed-discovery placeholder/error row.
+# Why: merging graph metadata must not resurrect an older value after discovery reports it unavailable.
+def test_merge_delayed_error_placeholder_replaces_existing_raw_value() -> None:
+    key = "ctlv3.HwcOpMode"
+    existing = DeviceGraph(nodes={}, raw_registers={key: "auto"}, placeholder_registers=set())
+    discovered = DeviceGraph(
+        nodes={},
+        raw_registers={},
+        placeholder_registers={key},
+        error_registers={key},
+    )
+
+    merged = COORDINATOR._merge_device_graphs(existing, discovered)
+
+    assert key not in merged.raw_registers
+    assert key in merged.placeholder_registers
+    assert merged.error_registers == {key}
+
+
+# Intent: preserve activity when a partial delayed find omits an older live register.
+# Why: omitted rows stay in the merged raw graph and must continue to justify their device.
+def test_merge_delayed_partial_find_recomputes_node_data_from_merged_raw() -> None:
+    existing = DISCOVERY.DiscoveryService.build_device_graph(
+        [
+            "scan.15 = Vaillant;CTLV3;0808;8004",
+            "ctlv3 Z1OpMode = auto",
+            "ctlv3 Z1RoomTemp = 20.5",
+        ]
+    )
+    discovered = DISCOVERY.DiscoveryService.build_device_graph(
+        [
+            "scan.15 = Vaillant;CTLV3;0808;8004",
+            "ctlv3 Z1OpMode = no data stored",
+        ]
+    )
+
+    merged = COORDINATOR._merge_device_graphs(existing, discovered)
+
+    assert merged.raw_registers["ctlv3.Z1RoomTemp"] == "20.5"
+    assert merged.nodes["z1"].has_data is True
+
+
+# Intent: delayed discovery clears the live register value when a placeholder supersedes raw data.
+# Why: listeners must not publish the old value between rediscovery and the next regular poll.
+async def test_apply_delayed_error_placeholder_clears_live_register_value() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        existing = DISCOVERY.DiscoveryService.build_device_graph(
+            [
+                "scan.15 = Vaillant;CTLV3;0808;8004",
+                "ctlv3 Z1OpMode = auto",
+                "ctlv3 HwcOpMode = auto",
+            ]
+        )
+        discovered = DISCOVERY.DiscoveryService.build_device_graph(
+            [
+                "scan.15 = Vaillant;CTLV3;0808;8004",
+                "ctlv3 Z1OpMode = auto",
+                "ctlv3 HwcOpMode = (ERR: invalid position)",
+            ]
+        )
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator._graph = existing
+        coordinator.registers["ctlv3.HwcOpMode"] = EbusdRegister(
+            circuit="ctlv3",
+            name="HwcOpMode",
+            fields=["value"],
+            value={"value": "auto"},
+            has_data=True,
+        )
+        coordinator.ebus = MagicMock()
+        coordinator.ebus.is_connected = False
+        coordinator.data = {"ebusd": {"ctlv3.HwcOpMode.value": "auto"}}
+        listener_snapshots: list[dict] = []
+        coordinator.async_update_listeners = MagicMock(side_effect=lambda: listener_snapshots.append(coordinator.data))
+
+        await coordinator._apply_discovery_graph(discovered, "delayed")
+
+        assert coordinator._graph.raw_registers.get("ctlv3.HwcOpMode") is None
+        assert "ctlv3.HwcOpMode" in coordinator._graph.placeholder_registers
+        assert coordinator._graph.error_registers == {"ctlv3.HwcOpMode"}
+        assert coordinator.registers["ctlv3.HwcOpMode"].value == {"value": None}
+        assert coordinator.registers["ctlv3.HwcOpMode"].has_data is False
+        assert coordinator._graph.nodes["dhw"].has_data is False
+        assert "ctlv3.HwcOpMode.value" not in coordinator.data["ebusd"]
+        assert listener_snapshots == [coordinator.data]
+        assert "ctlv3.HwcOpMode.value" not in await coordinator._async_load_cache()
+
+
+# Intent: block fallback polling when an unusable find leaves an older graph cached.
+# Why: stale discovery metadata must not authorize active map probes after parser rejection.
+async def test_fallback_read_skips_probes_after_unusable_find_with_retained_graph() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        graph = _make_graph()
+        coordinator._graph = graph
+        coordinator._last_find_keys = {"hmu.Status"}
+        coordinator.registers = {"hmu.Status": MagicMock(value={"value": "Standby"})}
+        original_registers = dict(coordinator.registers)
+        ebus = MagicMock()
+        ebus.is_connected = True
+        ebus.last_find_usable = False
+        ebus.read_register = AsyncMock(return_value="20")
+        coordinator.ebus = ebus
+
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+
+        ebus.read_register.assert_not_awaited()
+        assert coordinator._graph is graph
+        assert coordinator._last_find_keys == {"hmu.Status"}
+        assert coordinator.registers == original_registers
+
+
+# Intent: keep error placeholders visible while skipping their active fallback reads.
+# Why: a mixed valid/error find proves the graph exists, but an ERR row still does not authorize polling.
+async def test_poll_skips_error_placeholder_until_a_later_find_recovers_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        error_lines = [
+            "scan.15 = Vaillant;CTLV2;0514;1104",
+            "ctlv2 Z1OpMode = auto",
+            "ctlv2 HwcOpMode = (ERR: invalid position)",
+            "ctlv2 Hc1FlowTempCalc = no data stored",
+        ]
+        recovered_lines = [
+            line.replace("HwcOpMode = (ERR: invalid position)", "HwcOpMode = no data stored") for line in error_lines
+        ]
+        graph = DISCOVERY.DiscoveryService.build_device_graph(error_lines)
+        monkeypatch.setattr(
+            COORDINATOR,
+            "REGISTER_MAP",
+            {
+                "ctlv2.HwcOpMode": MAPPING.RegisterMeta(enabled=True, fallback_read=True),
+                "ctlv2.Hc1FlowTempCalc": MAPPING.RegisterMeta(enabled=True, fallback_read=True),
+            },
+        )
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator._graph = graph
+        coordinator._cache_seeded = coordinator._ebusd_connected = True
+        coordinator._last_energy_poll = datetime.now()
+        coordinator._last_placeholder_poll = datetime.now() - timedelta(days=1)
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.last_find_usable = True
+        coordinator.ebus.find_registers = AsyncMock(side_effect=[error_lines, recovered_lines])
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+
+        await coordinator._async_update_data()
+
+        assert "ctlv2.HwcOpMode" in graph.placeholder_registers
+        assert graph.error_registers == {"ctlv2.HwcOpMode"}
+        assert [call.args[:2] for call in coordinator.ebus.read_register.await_args_list] == [
+            ("ctlv2", "Hc1FlowTempCalc")
+        ]
+
+        coordinator._runtime_definitions["error_energy"] = "r,ctlv2,HwcOpMode,HwcOpMode,31,1,B516,14"
+        coordinator.ebus.read_register.reset_mock()
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        assert [call.args[:2] for call in coordinator.ebus.read_register.await_args_list] == [
+            ("ctlv2", "Hc1FlowTempCalc")
+        ]
+
+        coordinator.ebus.read_register.reset_mock()
+        coordinator._last_placeholder_poll = datetime.now() - timedelta(days=1)
+        await coordinator._async_update_data()
+
+        assert graph.error_registers == set()
+        assert {call.args[:2] for call in coordinator.ebus.read_register.await_args_list} == {
+            ("ctlv2", "HwcOpMode"),
+            ("ctlv2", "Hc1FlowTempCalc"),
+        }
+
+
+# Intent: mixed valid and field-shaped find rows update only standalone bus registers.
+# Why: field suffixes are parsed values, never independent cache entries or fallback targets.
+async def test_poll_ignores_field_shaped_find_rows() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        lines = [
+            "scan.15 = Vaillant;CTLV2;0514;1104",
+            "ctlv2 Z1OpMode = auto",
+            "ctlv2 Status01.temp = 21.0",
+        ]
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+        coordinator._cache_seeded = coordinator._ebusd_connected = True
+        coordinator._last_energy_poll = datetime.now()
+        coordinator._last_placeholder_poll = datetime.now()
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.last_find_usable = True
+        coordinator.ebus.find_registers = AsyncMock(return_value=lines)
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+
+        await coordinator._async_update_data()
+
+        assert "ctlv2.Z1OpMode" in coordinator.registers
+        assert "ctlv2.Status01.temp" not in coordinator.registers
+        assert not any(
+            call.args == ("ctlv2", "Status01.temp") for call in coordinator.ebus.read_register.await_args_list
+        )
 
 
 # Intent: a syntactically usable scan-only response cannot clear repair without an owner graph.

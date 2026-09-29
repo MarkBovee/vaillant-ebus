@@ -13,6 +13,8 @@ capture made the suite pass for the wrong reason.
 
 from __future__ import annotations
 
+import struct
+
 import pytest
 
 from tests.fake_ebusd import FIXTURES_DIR, load_discovery_dump, load_find_lines
@@ -45,6 +47,10 @@ NEW_CAPTURE_PROVENANCE = {
     "community/basv3_issue31_2026-09-17_203723_discovery.yaml": (
         "https://github.com/user-attachments/files/32352593/discovery_dump_2026-09-17_203723.txt",
         "ae16159d3d49d1b912a1fcfff27928477000df8c6643700dc57e8d3db82c260c",
+    ),
+    "community/hmux0_issue161_2026-09-28_154109_discovery.yaml": (
+        "https://github.com/user-attachments/files/32752518/homeassistantvaillant_ebusdiscovery_dump_2026-09-28_154109.yaml",
+        "fbe37286c636ff97baec883dbc25faa2d227898a830b8b921faeaed748d41b8a",
     ),
 }
 
@@ -154,6 +160,71 @@ def test_issue31_basv3_dump_keeps_b524_invalid_position_evidence() -> None:
             line for line in raw_lines if line.startswith("basv3 Hc") and "ERR: invalid position" in line
         ]
         assert len(invalid_state_registers) == 12
+
+
+# Intent: the issue #161 capture retains the exact SW0407/HW0504 telemetry candidates.
+# Why: the passive definitions are scoped to these request/response bytes and must not be generalized to another scan.
+def test_issue161_dump_keeps_hmux0_status_and_telemetry_candidates() -> None:
+    dump = load_discovery_dump("community/hmux0_issue161_2026-09-28_154109_discovery.yaml")
+    configs = dump["metadata"]["ebusd_info"]["loaded_configs"]
+    assert configs["08"]["scanned"] == "MF=Vaillant;ID=HMUX0;SW=0407;HW=0504"
+    assert configs["76"]["scanned"] == "MF=Vaillant;ID=VWZIO;SW=0500;HW=0504"
+    assert len(dump["raw_find_lines"]) == 493
+    assert len(dump["raw_find_lines_after"]) == 493
+
+    rows = {item["request"]: item for item in dump["unknown_telegrams"]}
+    expected = {
+        "f108b509055402008813": ("0e020188136400ffffffffffffffff", "311"),
+        "f108b509055402000d0a": ("0802010d0a00000000", "311"),
+        "f108b509055402005b0d": ("0802015b0d00000041", "3051"),
+        "f108b50905540200c509": ("080201c50900000000", "361"),
+        "f108b51a0405ff3546": ("0aff083e8e010000000000", "51"),
+        "f108b51a0405ff354a": ("0aff080700000000000000", "51"),
+        "f108b51a0405ff354b": ("0aff080700000000000000", "51"),
+        "f108b51a0405ff3702": ("0aff083e2e020000000000", "51"),
+        "f108b51a0405ff3704": ("0aff083e38030000000000", "51"),
+        "f108b51a0405ff3705": ("0aff083e0b030000000000", "51"),
+        "f108b51a0405ff370b": ("0aff084852000000000000", "50"),
+        "f176b511021801": ("09000000000000000000", "51"),
+        "f176b511021802": ("09004500000002000000", "51"),
+        "f176b511021803": ("0101", "51"),
+        "f176b5160114": ("09000000a04000000000", "3003"),
+    }
+    for request, (response, count) in expected.items():
+        item = rows[request]
+        assert item["resp"] == response
+        assert item["count"] == count
+
+
+# Intent: the issue #161 gateway payloads decode to the expected values under the documented B509/B51A layouts.
+# Why: exact addresses alone do not prove offsets, signedness, scaling, or the station-power interpretation.
+def test_issue161_passive_payloads_decode_to_plausible_values() -> None:
+    dump = load_discovery_dump("community/hmux0_issue161_2026-09-28_154109_discovery.yaml")
+    rows = {item["request"]: item for item in dump["unknown_telegrams"]}
+
+    status = bytes.fromhex(rows["f108b509055402008813"]["resp"])
+    assert int.from_bytes(status[5:7], "little") == 100
+
+    power = bytes.fromhex(rows["f108b509055402005b0d"]["resp"])
+    assert struct.unpack("<f", power[5:9])[0] == 8.0
+
+    d2c_values = {
+        "f108b51a0405ff3546": 24.875,
+        "f108b51a0405ff354a": 0.0,
+        "f108b51a0405ff354b": 0.0,
+        "f108b51a0405ff3702": 34.875,
+        "f108b51a0405ff3704": 51.5,
+        "f108b51a0405ff3705": 48.6875,
+    }
+    for request, expected in d2c_values.items():
+        response = bytes.fromhex(rows[request]["resp"])
+        assert int.from_bytes(response[4:6], "little", signed=True) / 16 == expected
+
+    pressure = bytes.fromhex(rows["f108b51a0405ff370b"]["resp"])
+    assert int.from_bytes(pressure[4:6], "little") / 10 == 8.2
+
+    station_power = bytes.fromhex(rows["f176b5160114"]["resp"])
+    assert struct.unpack("<f", station_power[2:6])[0] / 1000 == 0.005
 
 
 # Intent: every discovery-dump fixture carries provenance metadata and at least one find-line set.

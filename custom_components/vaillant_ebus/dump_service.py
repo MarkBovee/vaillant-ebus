@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import socket
 import tempfile
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from datetime import datetime
+from weakref import WeakKeyDictionary
 
 import yaml
 from homeassistant.components import persistent_notification
@@ -16,13 +19,100 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .backend.dump_analysis import CURRENT_DUMP_VERSION, normalize_dump
 from .backend.grab_parser import parse_grab_lines, unknown_telegrams
-from .backend.mapping import REGISTER_MAP, is_field_key
-from .backend.models import is_no_data_value
+from .backend.mapping import (
+    HMUX0_SW0407_FALLBACK_NAMES,
+    REGISTER_MAP,
+    VWZIO_SW0500_FALLBACK_NAMES,
+    hmux0_sw0407_circuit,
+    is_field_key,
+    vwzio_sw0500_circuit,
+)
+from .backend.models import DeviceGraph, is_no_data_value
 from .const import DOMAIN, INTEGRATION_VERSION, SENSITIVE_FIELDS
 from .coordinator import VaillantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 GRAB_CONNECT_TIMEOUT = 5
+GRAB_MAX_RESPONSE_LINES = 10_000
+GRAB_RESPONSE_TIMEOUT = 30
+_GRAB_SESSION_LOCKS: WeakKeyDictionary[asyncio.AbstractEventLoop, dict[tuple[str, int], asyncio.Lock]] = (
+    WeakKeyDictionary()
+)
+
+
+# Intent: resolve hostnames to the socket addresses used for dump-lock identity.
+# Why: DNS names and literal IPs can refer to one ebusd process with global grab state.
+async def _grab_endpoint_keys(
+    host: str,
+    port: int,
+    connected_endpoint: tuple[str, int] | None = None,
+) -> set[tuple[str, int]]:
+    loop = asyncio.get_running_loop()
+    endpoints: set[tuple[str, int]] = set()
+    if (
+        isinstance(connected_endpoint, tuple)
+        and len(connected_endpoint) == 2
+        and isinstance(connected_endpoint[0], str)
+        and isinstance(connected_endpoint[1], int)
+    ):
+        endpoints.add((connected_endpoint[0].casefold(), connected_endpoint[1]))
+    try:
+        addresses = await asyncio.wait_for(
+            loop.getaddrinfo(host, port, type=socket.SOCK_STREAM), timeout=GRAB_CONNECT_TIMEOUT
+        )
+    except OSError, TimeoutError:
+        endpoints.add(("*", port))
+        return endpoints
+    endpoints.update((str(address[4][0]).casefold(), int(address[4][1])) for address in addresses)
+    if not endpoints or not isinstance(connected_endpoint, tuple):
+        endpoints.add(("*", port))
+    return endpoints
+
+
+# Intent: serialize dump captures for every resolved address on the Home Assistant event loop.
+# Why: different host strings can resolve to one daemon whose grab state is global.
+@asynccontextmanager
+async def _grab_session_lock(
+    host: str,
+    port: int,
+    connected_endpoint: tuple[str, int] | None = None,
+) -> AsyncIterator[None]:
+    loop = asyncio.get_running_loop()
+    endpoint_locks = _GRAB_SESSION_LOCKS.get(loop)
+    if endpoint_locks is None:
+        endpoint_locks = {}
+        _GRAB_SESSION_LOCKS[loop] = endpoint_locks
+    locks: list[asyncio.Lock] = []
+    try:
+        for endpoint in sorted(await _grab_endpoint_keys(host, port, connected_endpoint)):
+            lock = endpoint_locks.get(endpoint)
+            if lock is None:
+                lock = asyncio.Lock()
+                endpoint_locks[endpoint] = lock
+            await lock.acquire()
+            locks.append(lock)
+        yield
+    finally:
+        for lock in reversed(locks):
+            lock.release()
+
+
+# Intent: block only passive runtime definitions and firmware-specific unsafe diagnostic reads.
+# Why: dump map probes must not reintroduce active requests omitted by coordinator policy.
+def _fallback_read_skip_keys(graph: DeviceGraph | None, runtime_definitions: list[str]) -> set[tuple[str, str]]:
+    skipped: set[tuple[str, str]] = set()
+    for definition in runtime_definitions:
+        parts = definition.split(",", 3)
+        if len(parts) >= 3 and parts[0].startswith("u"):
+            skipped.add((parts[1].casefold(), parts[2].casefold()))
+
+    hmux0 = hmux0_sw0407_circuit(graph)
+    if hmux0 is not None:
+        skipped.update((hmux0.casefold(), name) for name in HMUX0_SW0407_FALLBACK_NAMES)
+    vwzio = vwzio_sw0500_circuit(graph)
+    if vwzio is not None:
+        skipped.update((vwzio.casefold(), name) for name in VWZIO_SW0500_FALLBACK_NAMES)
+    return skipped
 
 
 # Redact sensitive fields (serial, keycode, etc.) before writing dump
@@ -35,7 +125,8 @@ def _redact(value: str | None, name: str) -> str | None:
     return value
 
 
-# Parse raw find lines into register dicts for dump serialization
+# Intent: parse raw find rows into standalone bus registers for dump serialization.
+# Why: field-shaped keys are parsed values of their parent telegram, not separate registers.
 def _parse_find_lines(raw_lines: list[str]) -> list[dict]:
     result: list[dict] = []
     for line in raw_lines:
@@ -49,6 +140,8 @@ def _parse_find_lines(raw_lines: list[str]) -> list[dict]:
         circuit = parts[0]
         name = parts[1].strip() if len(parts) > 1 else ""
         if not name:
+            continue
+        if "." in name:
             continue
         val = rhs
         key = f"{circuit}.{name}"
@@ -73,6 +166,7 @@ async def _dump_registers(
     seen_keys: set[str] | None = None,
     circuit_aliases: dict[str, str | None] | None = None,
     ensure_active: Callable[[], None] | None = None,
+    skip_fallback_reads: set[tuple[str, str]] | None = None,
 ) -> tuple[list[dict], set[str], list[str]]:
     if ensure_active is not None:
         ensure_active()
@@ -80,6 +174,9 @@ async def _dump_registers(
     if ensure_active is not None:
         ensure_active()
     discovered = _parse_find_lines(raw_lines)
+    find_is_usable = getattr(ebus, "last_find_usable", None)
+    skip_map_probes = find_is_usable is False
+    fallback_read_skip_keys = skip_fallback_reads or set()
     if seen_keys is None:
         seen_keys = set()
     register_list: list[dict] = []
@@ -125,7 +222,11 @@ async def _dump_registers(
         }
         if not meta.enabled:
             map_entry["disabled"] = True
-        if meta.fallback_read:
+        if (
+            meta.fallback_read
+            and not skip_map_probes
+            and (target_circuit.casefold(), name.casefold()) not in fallback_read_skip_keys
+        ):
             try:
                 if ensure_active is not None:
                     ensure_active()
@@ -155,6 +256,7 @@ async def _grab_cmd(
     port: int,
     command: str,
     ensure_active: Callable[[], None] | None = None,
+    on_grab_started: Callable[[], None] | None = None,
 ) -> list[str]:
     if ensure_active is not None:
         ensure_active()
@@ -167,20 +269,34 @@ async def _grab_cmd(
         if ensure_active is not None:
             ensure_active()
         response = []
-        for _ in range(200):
+        deadline = asyncio.get_running_loop().time() + GRAB_RESPONSE_TIMEOUT
+        # ebusd terminates each response with a blank line; limits fail closed if it never arrives.
+        for _ in range(GRAB_MAX_RESPONSE_LINES + 1):
             if ensure_active is not None:
                 ensure_active()
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise TimeoutError(f"ebusd {command} response timed out before its blank-line terminator")
             try:
-                line = await asyncio.wait_for(reader.readline(), timeout=2)
-                if not line:
-                    break
-                decoded = line.decode().strip()
-                if decoded:
-                    response.append(decoded)
-            except TimeoutError:
+                line = await asyncio.wait_for(reader.readline(), timeout=remaining)
+            except TimeoutError as exc:
+                raise TimeoutError(f"ebusd {command} response timed out before its blank-line terminator") from exc
+            if not line:
+                raise ConnectionError(f"ebusd closed {command} response before its blank-line terminator")
+            decoded = line.decode().strip()
+            if command == "grab" and not response and decoded.casefold() == "grab started" and on_grab_started:
+                on_grab_started()
+            if not decoded:
                 break
-        if ensure_active is not None:
-            ensure_active()
+            if len(response) >= GRAB_MAX_RESPONSE_LINES:
+                raise HomeAssistantError(
+                    f"ebusd {command} response exceeded the {GRAB_MAX_RESPONSE_LINES}-line limit before termination"
+                )
+            response.append(decoded)
+        else:
+            raise HomeAssistantError(
+                f"ebusd {command} response exceeded the {GRAB_MAX_RESPONSE_LINES}-line limit before termination"
+            )
         return response
     finally:
         writer.close()
@@ -222,20 +338,44 @@ async def _stop_grab_uninterruptibly(host: str, port: int) -> list[str]:
     return stop_response
 
 
-# Intent: reject ebusd grab errors that arrive as response text.
+# Intent: validate ebusd grab errors and the explicit start/stop acknowledgements.
 # Why: `_grab_cmd` treats protocol replies as data rather than exceptions.
 def _validate_grab_response(command: str, response: list[str]) -> None:
-    error = next((line for line in response if line.strip().upper().startswith("ERR:")), None)
+    error = next(
+        (line for line in response if line.strip().upper().startswith(("ERR:", "USAGE:"))),
+        None,
+    )
     if error is not None:
         raise HomeAssistantError(f"ebusd {command} failed: {error}")
+    expected_acknowledgement = {"grab": "grab started", "grab stop": "grab stopped"}.get(command)
+    if expected_acknowledgement and (len(response) != 1 or response[0].strip().casefold() != expected_acknowledgement):
+        action = "that the grab started" if command == "grab" else "that the grab stopped"
+        raise HomeAssistantError(f"ebusd did not confirm {action}: {response}")
 
 
-# Intent: require an acknowledgement that ebusd stopped raw traffic capture.
-# Why: an empty or error reply can leave the bus capture active after export.
+# Intent: require ebusd's explicit acknowledgement that raw traffic capture stopped.
+# Why: arbitrary non-error text does not prove the bus capture has ended.
 def _validate_grab_stop_response(response: list[str]) -> None:
     _validate_grab_response("grab stop", response)
-    if not response:
-        raise HomeAssistantError("ebusd did not confirm that the grab stopped")
+
+
+# Intent: accept only ebusd-formatted telegram records from a successful grab result.
+# Why: arbitrary non-error text is not evidence that a discovery capture completed.
+def _validate_grab_result_response(response: list[str]) -> None:
+    _validate_grab_response("grab result all", response)
+    for line in response:
+        payload, separator, summary = line.partition(" = ")
+        request, response_separator, response_data = payload.partition(" / ")
+        count = summary.partition(": ")[0].strip()
+        try:
+            request_bytes = bytes.fromhex(request.strip())
+            response_bytes = bytes.fromhex(response_data.strip()) if response_separator else None
+        except ValueError as exc:
+            raise HomeAssistantError(f"ebusd grab result all returned an invalid telegram: {line}") from exc
+        if not separator or len(request_bytes) < 4 or not count.isdecimal() or int(count) < 1:
+            raise HomeAssistantError(f"ebusd grab result all returned an invalid telegram: {line}")
+        if response_separator and not response_bytes:
+            raise HomeAssistantError(f"ebusd grab result all returned an invalid telegram: {line}")
 
 
 # Intent: capture raw traffic for a bounded duration and always stop the ebusd grab.
@@ -247,17 +387,30 @@ async def async_grab(
     ensure_active: Callable[[], None] | None = None,
 ) -> list[str]:
     lines: list[str] = []
-    grab_attempted = False
+    grab_started = False
     cancelled = False
+
+    # Intent: record global grab ownership as soon as ebusd sends its start ACK.
+    # Why: unload may cancel socket cleanup after the ACK but before `_grab_cmd` returns.
+    def _mark_grab_started() -> None:
+        nonlocal grab_started
+        grab_started = True
+
     try:
         if ensure_active is not None:
             ensure_active()
-        grab_attempted = True
-        enable_resp = await _grab_cmd(host, port, "grab", ensure_active=ensure_active)
+        enable_resp = await _grab_cmd(
+            host,
+            port,
+            "grab",
+            ensure_active=ensure_active,
+            on_grab_started=_mark_grab_started,
+        )
         _validate_grab_response("grab", enable_resp)
-        if not enable_resp:
-            raise HomeAssistantError("ebusd did not confirm that the grab started")
+        grab_started = True
         lines.append(f"[grab] {enable_resp[0]}")
+        if ensure_active is not None:
+            ensure_active()
 
         deadline = asyncio.get_running_loop().time() + duration
         while True:
@@ -271,13 +424,15 @@ async def async_grab(
         if ensure_active is not None:
             ensure_active()
         result_resp = await _grab_cmd(host, port, "grab result all", ensure_active=ensure_active)
-        _validate_grab_response("grab result all", result_resp)
+        if ensure_active is not None:
+            ensure_active()
+        _validate_grab_result_response(result_resp)
         lines.extend(result_resp)
     except asyncio.CancelledError:
         cancelled = True
         raise
     finally:
-        if grab_attempted:
+        if grab_started:
             try:
                 stop_resp = await _stop_grab_uninterruptibly(host, port)
                 lines.append(f"[grab stop] {stop_resp[0]}")
@@ -308,7 +463,15 @@ async def async_export_discovery_dump(
     if task is not None and isinstance(active_tasks, set):
         active_tasks.add(task)
     try:
-        await _async_export_discovery_dump_impl(hass, coordinator, grab_duration)
+        if not coordinator.ebus or not coordinator.ebus.is_connected:
+            await _async_export_discovery_dump_impl(hass, coordinator, grab_duration)
+            return
+        async with _grab_session_lock(
+            coordinator.ebusd_host or "",
+            coordinator.ebusd_port,
+            getattr(coordinator.ebus, "connected_endpoint", None),
+        ):
+            await _async_export_discovery_dump_impl(hass, coordinator, grab_duration)
     finally:
         if task is not None and isinstance(active_tasks, set):
             active_tasks.discard(task)
@@ -356,8 +519,15 @@ async def _async_export_discovery_dump_impl(
         logical_circuit: coordinator.resolve_register_circuit(logical_circuit)
         for logical_circuit in ("ctlv2", "hmu", "bai", "vwz", "vwzio")
     }
+    fallback_read_skip_keys = _fallback_read_skip_keys(
+        coordinator._graph,
+        list(coordinator._runtime_definitions.values()),
+    )
     before_registers, seen, raw_find_lines = await _dump_registers(
-        ebus, circuit_aliases=aliases, ensure_active=ensure_active
+        ebus,
+        circuit_aliases=aliases,
+        ensure_active=ensure_active,
+        skip_fallback_reads=fallback_read_skip_keys,
     )
     ensure_active()
 
@@ -382,7 +552,10 @@ async def _async_export_discovery_dump_impl(
     if has_after_snapshot:
         ensure_active()
         after_registers, _, after_raw_lines = await _dump_registers(
-            ebus, circuit_aliases=aliases, ensure_active=ensure_active
+            ebus,
+            circuit_aliases=aliases,
+            ensure_active=ensure_active,
+            skip_fallback_reads=fallback_read_skip_keys,
         )
 
     output_dir = hass.config.path(DOMAIN)

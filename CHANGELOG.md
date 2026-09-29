@@ -22,14 +22,27 @@
 - Keep invalid-position B524 placeholders unavailable without creating entities
   when ebusd reports an error row on an otherwise active controller, and retire
   cached placeholder entities from earlier versions.
+- Harden discovery dumps and ebusd discovery: require exact `grab` acknowledgements,
+  bound responses, reject malformed discovery rows, and skip active fallback reads
+  for unusable finds, error placeholders, and parsed field keys. An incomplete `info`
+  response now fails the dump instead of saving empty metadata.
 
 ### Upgrade
 
-- Restart the ebusd app once after upgrading. ebusd keeps runtime definitions
-  in memory; a Home Assistant restart alone does not clear the old B524 polls.
+- When upgrading from a version that loaded the pre-#158 Hc1/Hc2 B524 runtime
+  definitions, restart ebusd once after installing the integration. A Home
+  Assistant restart alone does not clear those daemon-memory entries. No ebusd
+  restart is needed when the fixed integration was already in use.
 
 ### Added
 
+- Add passive HMUX0 `SW0407/HW0504` telemetry for compressor status, electrical
+  power, compressor speed, building-circuit pump power, and the seven observed
+  refrigerant diagnostics. The runtime definitions decode only gateway telegrams;
+  unsupported B51A map probes no longer trigger active fallback reads on this scan.
+- Add passive VWZIO `PowerConsumptionVwz` from B516/14 for the captured
+  `SW0500/HW0504` station. The integration reports station power, not heater-only
+  power, and does not poll the B511 heater-counter messages.
 - Expose `Hc1RoomTempSwitchOn` as a select with `off`, `modulating`, and
   `thermostat` options on verified CTLV3 `SW0808/HW8004` hardware. The migration
   retires the old sensor registry entry and cached description, so the entity
@@ -38,6 +51,19 @@
   with an unknown state instead of disabling the existing entity.
 - Added the complete BASV3 discussion #31 capture as a regression fixture for
   the invalid-position B524 responses.
+- Added the full issue #161 discovery capture as a community regression fixture,
+  including its original find lines, provenance, and unknown-telegram payloads.
+
+### Changed
+
+- Mark daily heating and DHW electricity counters as `total_increasing` and
+  expose a discovered CTLV3 `YieldTotal` as energy in kWh with state class `total`.
+
+### Deferred
+
+- VWZIO B511 `/021801` and `/021802` remain discovery-only on `SW0500/HW0504`;
+  PR #598 verifies their counter meaning on HW5103, but the issue #161 capture
+  does not correlate those counters with a heater run on HW0504.
 
 ## 1.9.5 - 2026-09-23
 

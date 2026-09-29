@@ -36,6 +36,15 @@ def is_no_data_value(raw: str | None) -> bool:
     return low.startswith("no data stored") or low.startswith("(empty ") or low.startswith("err:") or "(err" in low
 
 
+# Intent: identify ebusd error responses separately from ordinary no-data sentinels.
+# Why: error rows remain diagnostic placeholders but must not authorize active polling.
+def is_ebusd_error_value(raw: str | None) -> bool:
+    if raw is None:
+        return False
+    low = raw.strip().casefold()
+    return low.startswith(("err:", "(err:")) or "(err" in low
+
+
 def is_valid_hmux0_return_temperature(raw: str) -> bool:
     """Return whether an HMUX0 return-temperature decode is physically plausible."""
     try:
@@ -531,6 +540,7 @@ class DeviceGraph:
     nodes: dict[str, DeviceNode]
     raw_registers: dict[str, str]
     placeholder_registers: set[str]
+    error_registers: set[str] = field(default_factory=set)
 
     # Register names that identify the heating/DHW controller. Their source
     # circuit is authoritative even when ebusd exposes them under a logical

@@ -478,11 +478,11 @@ async def test_async_grab_stops_when_unload_starts() -> None:
 
     # Intent: record the ebusd command sequence for the capture lifecycle.
     # Why: cleanup must send `grab stop` and must not request captured results after unload.
-    async def _grab_cmd(host, port, command, ensure_active=None):
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
         commands.append(command)
         if ensure_active is not None:
             ensure_active()
-        return ["ok"]
+        return ["grab started"] if command == "grab" else ["grab stopped"]
 
     def _ensure_active() -> None:
         if unloading:
@@ -502,6 +502,186 @@ async def test_async_grab_stops_when_unload_starts() -> None:
     assert commands == ["grab", "grab stop"]
 
 
+# Intent: read every ebusd grab-result line past the former 200-line cap.
+# Why: the blank line terminates the TCP response; returning at an arbitrary count silently loses telegrams.
+async def test_grab_cmd_reads_until_blank_line_after_more_than_200_lines(monkeypatch: pytest.MonkeyPatch) -> None:
+    reader = asyncio.StreamReader()
+    expected = [f"telegram-{index}" for index in range(250)]
+    reader.feed_data(("\n".join(expected) + "\n\n").encode())
+    reader.feed_eof()
+    writer = MagicMock()
+    writer.drain = AsyncMock()
+    writer.wait_closed = AsyncMock()
+    monkeypatch.setattr(DUMP.asyncio, "open_connection", AsyncMock(return_value=(reader, writer)))
+
+    lines = await DUMP._grab_cmd("127.0.0.1", 8888, "grab result all")
+
+    assert lines == expected
+    writer.close.assert_called_once()
+    writer.wait_closed.assert_awaited_once()
+
+
+# Intent: allow an inter-line delay over two seconds when the complete response meets its total deadline.
+# Why: a fixed per-line timeout can reject a valid, slowly streamed multi-line grab.
+async def test_grab_cmd_allows_delayed_lines_within_total_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    reader = asyncio.StreamReader()
+    reader.feed_data(b"first\n")
+
+    # Intent: deliver the remaining lines after the former per-line timeout.
+    # Why: this regression must distinguish a 30-second total deadline from a two-second line timeout.
+    def _release_remaining_lines() -> None:
+        reader.feed_data(b"second\n\n")
+        reader.feed_eof()
+
+    asyncio.get_running_loop().call_later(2.05, _release_remaining_lines)
+    writer = MagicMock()
+    writer.drain = AsyncMock()
+    writer.wait_closed = AsyncMock()
+    monkeypatch.setattr(DUMP.asyncio, "open_connection", AsyncMock(return_value=(reader, writer)))
+
+    assert await DUMP._grab_cmd("127.0.0.1", 8888, "grab result all") == ["first", "second"]
+
+
+# Intent: retain grab ownership if unload begins on the response terminator before caller resumption.
+# Why: the caller must record the start ACK before its lifecycle guard triggers global stop cleanup.
+async def test_async_grab_stops_owned_capture_when_unload_follows_start_terminator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unloading = False
+    start_line = 0
+    start_reader = MagicMock()
+    stop_reader = MagicMock()
+
+    # Intent: flip unload exactly as the start response reaches its blank-line terminator.
+    # Why: this was the gap between _grab_cmd's final lifecycle check and ownership assignment.
+    async def _read_start_line() -> bytes:
+        nonlocal start_line, unloading
+        start_line += 1
+        if start_line == 1:
+            return b"grab started\n"
+        unloading = True
+        return b"\n"
+
+    start_reader.readline = AsyncMock(side_effect=_read_start_line)
+    stop_reader.readline = AsyncMock(side_effect=[b"grab stopped\n", b"\n"])
+    writers = [MagicMock(), MagicMock()]
+    for writer in writers:
+        writer.drain = AsyncMock()
+        writer.wait_closed = AsyncMock()
+    monkeypatch.setattr(
+        DUMP.asyncio,
+        "open_connection",
+        AsyncMock(side_effect=[(start_reader, writers[0]), (stop_reader, writers[1])]),
+    )
+
+    # Intent: mirror the export's teardown guard.
+    # Why: a teardown just after the start acknowledgement must still stop the owned grab.
+    def _ensure_active() -> None:
+        if unloading:
+            raise HomeAssistantError("integration is unloading")
+
+    with pytest.raises(HomeAssistantError, match="integration is unloading"):
+        await DUMP.async_grab("127.0.0.1", 8888, 0, ensure_active=_ensure_active)
+
+    assert writers[0].write.call_args.args == (b"grab\n",)
+    assert writers[1].write.call_args.args == (b"grab stop\n",)
+
+
+# Intent: stop an owned grab when cancellation interrupts socket cleanup after the start ACK.
+# Why: the start response can be complete before `_grab_cmd` returns its result to the caller.
+async def test_async_grab_cancellation_during_start_socket_cleanup_stops_owned_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    start_reader = asyncio.StreamReader()
+    start_reader.feed_data(b"grab started\n\n")
+    start_reader.feed_eof()
+    stop_reader = asyncio.StreamReader()
+    stop_reader.feed_data(b"grab stopped\n\n")
+    stop_reader.feed_eof()
+    start_close_started = asyncio.Event()
+    wait_for_close = asyncio.Event()
+
+    # Intent: hold the first TCP writer after its full response but before `_grab_cmd` returns.
+    # Why: cancellation at this point must retain the ownership callback's state.
+    async def _block_start_close() -> None:
+        start_close_started.set()
+        await wait_for_close.wait()
+
+    writers = [MagicMock(), MagicMock()]
+    for writer in writers:
+        writer.drain = AsyncMock()
+        writer.wait_closed = AsyncMock()
+    writers[0].wait_closed.side_effect = _block_start_close
+    monkeypatch.setattr(
+        DUMP.asyncio,
+        "open_connection",
+        AsyncMock(side_effect=[(start_reader, writers[0]), (stop_reader, writers[1])]),
+    )
+
+    task = asyncio.create_task(DUMP.async_grab("127.0.0.1", 8888, 0))
+    await start_close_started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert writers[0].write.call_args.args == (b"grab\n",)
+    assert writers[1].write.call_args.args == (b"grab stop\n",)
+
+
+# Intent: fail instead of returning a partial grab when the defensive line ceiling is exceeded.
+# Why: an oversized result must remain visibly incomplete rather than pass as a complete discovery dump.
+async def test_grab_cmd_fails_when_response_exceeds_line_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
+    reader = asyncio.StreamReader()
+    reader.feed_data(b"line-1\nline-2\nline-3\n\n")
+    reader.feed_eof()
+    writer = MagicMock()
+    writer.drain = AsyncMock()
+    writer.wait_closed = AsyncMock()
+    monkeypatch.setattr(DUMP.asyncio, "open_connection", AsyncMock(return_value=(reader, writer)))
+    monkeypatch.setattr(DUMP, "GRAB_MAX_RESPONSE_LINES", 2)
+
+    with pytest.raises(HomeAssistantError, match="exceeded.*line limit"):
+        await DUMP._grab_cmd("127.0.0.1", 8888, "grab result all")
+
+    writer.close.assert_called_once()
+    writer.wait_closed.assert_awaited_once()
+
+
+# Intent: treat EOF before the ebusd response terminator as incomplete data.
+# Why: TCP closure is not the protocol's blank-line success terminator.
+async def test_grab_cmd_fails_on_eof_before_response_terminator(monkeypatch: pytest.MonkeyPatch) -> None:
+    reader = asyncio.StreamReader()
+    reader.feed_data(b"partial telegram\n")
+    reader.feed_eof()
+    writer = MagicMock()
+    writer.drain = AsyncMock()
+    writer.wait_closed = AsyncMock()
+    monkeypatch.setattr(DUMP.asyncio, "open_connection", AsyncMock(return_value=(reader, writer)))
+
+    with pytest.raises(ConnectionError, match="closed.*before.*terminator"):
+        await DUMP._grab_cmd("127.0.0.1", 8888, "grab result all")
+
+    writer.close.assert_called_once()
+    writer.wait_closed.assert_awaited_once()
+
+
+# Intent: apply one overall deadline when ebusd never terminates a grab response.
+# Why: a response that trickles lines indefinitely must not hang a dump request.
+async def test_grab_cmd_fails_when_response_terminator_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    reader = asyncio.StreamReader()
+    writer = MagicMock()
+    writer.drain = AsyncMock()
+    writer.wait_closed = AsyncMock()
+    monkeypatch.setattr(DUMP.asyncio, "open_connection", AsyncMock(return_value=(reader, writer)))
+    monkeypatch.setattr(DUMP, "GRAB_RESPONSE_TIMEOUT", 0.01)
+
+    with pytest.raises(TimeoutError, match="before.*terminator"):
+        await DUMP._grab_cmd("127.0.0.1", 8888, "grab result all")
+
+    writer.close.assert_called_once()
+    writer.wait_closed.assert_awaited_once()
+
+
 # Intent: preserve dump cancellation when the cleanup stop command also fails.
 # Why: cleanup errors must not make a cancelled capture appear successful.
 async def test_async_grab_cancellation_survives_stop_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -517,12 +697,12 @@ async def test_async_grab_cancellation_survives_stop_failure(monkeypatch: pytest
 
     # Intent: fail grab stop only after a second cancellation reaches its awaiter.
     # Why: cancellation must remain visible even when cleanup also reports an error.
-    async def _grab_cmd(host, port, command, ensure_active=None):
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
         if command == "grab stop":
             stop_started.set()
             await allow_stop_to_fail.wait()
             raise OSError("stop connection failed")
-        return ["ok"]
+        return ["grab started"]
 
     monkeypatch.setattr(DUMP.asyncio, "sleep", _capture_wait)
     monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
@@ -538,7 +718,7 @@ async def test_async_grab_cancellation_survives_stop_failure(monkeypatch: pytest
 
 # Intent: preserve cancellation when grab stop finishes in the same loop turn.
 # Why: a completed stop command must not turn a cancelled capture into success.
-@pytest.mark.parametrize("stop_response", [["done"], ["ERR: stop failed"], []])
+@pytest.mark.parametrize("stop_response", [["grab stopped"], ["ERR: stop failed"], []])
 async def test_stop_grab_keeps_cancellation_when_command_completes(
     stop_response: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -563,10 +743,10 @@ async def test_stop_grab_keeps_cancellation_when_command_completes(
 async def test_async_grab_fails_when_stop_command_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     # Intent: fail only the cleanup command after an otherwise successful capture.
     # Why: cleanup failure must not be swallowed by the capture service.
-    async def _fail_stop(host, port, command, ensure_active=None):
+    async def _fail_stop(host, port, command, ensure_active=None, on_grab_started=None):
         if command == "grab stop":
             raise OSError("stop connection failed")
-        return ["ok"]
+        return ["grab started"] if command == "grab" else []
 
     monkeypatch.setattr(DUMP, "_grab_cmd", _fail_stop)
 
@@ -582,10 +762,10 @@ async def test_async_grab_rejects_unconfirmed_stop_response(
 ) -> None:
     # Intent: return an empty/error response only for the cleanup command.
     # Why: a dump must not report successful capture when ebusd rejected grab stop.
-    async def _grab_cmd(host, port, command, ensure_active=None):
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
         if command == "grab stop":
             return stop_response
-        return ["ok"]
+        return ["grab started"] if command == "grab" else []
 
     monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
 
@@ -606,20 +786,86 @@ async def test_async_grab_rejects_error_responses(
 ) -> None:
     commands: list[str] = []
 
-    # Intent: return an ERR reply at the selected stage and acknowledge cleanup.
-    # Why: response-shaped failures must abort the dump after the stop attempt.
-    async def _grab_cmd(host, port, command, ensure_active=None):
+    # Intent: return an ERR reply at the selected stage and acknowledge owned cleanup.
+    # Why: a failed start owns no global grab; result failure after a confirmed start must still stop it.
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
         commands.append(command)
         if command == failed_command:
             return ["ERR: unavailable"]
-        return ["done"]
+        if command == "grab":
+            return ["grab started"]
+        if command == "grab stop":
+            return ["grab stopped"]
+        return []
 
     monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
 
     with pytest.raises(HomeAssistantError, match=expected_error):
         await DUMP.async_grab("127.0.0.1", 8888, 0)
 
-    assert commands[-1] == "grab stop"
+    assert commands == (["grab"] if failed_command == "grab" else ["grab", "grab result all", "grab stop"])
+
+
+# Intent: reject ebusd usage responses instead of serializing them as captured traffic.
+# Why: valid query data can be empty, but a usage response means the command itself was rejected.
+async def test_async_grab_rejects_result_usage_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
+        if command == "grab result all":
+            return ["usage: grab result [all|decode]"]
+        return ["grab started"] if command == "grab" else ["grab stopped"]
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+
+    with pytest.raises(HomeAssistantError, match="grab result all failed: usage:"):
+        await DUMP.async_grab("127.0.0.1", 8888, 0)
+
+
+# Intent: reject non-error grab-result text that is not a telegram record.
+# Why: only parsed ebusd telegram output can be reported as a successful discovery capture.
+@pytest.mark.parametrize("invalid_line", ["ok", "done", "grab not running", "invalid command"])
+async def test_async_grab_rejects_arbitrary_result_text(invalid_line: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    commands: list[str] = []
+
+    # Intent: inject an arbitrary result line after a confirmed start.
+    # Why: verify malformed success-shaped text does not bypass result validation.
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
+        commands.append(command)
+        if command == "grab result all":
+            return [invalid_line]
+        return ["grab started"] if command == "grab" else ["grab stopped"]
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+
+    with pytest.raises(HomeAssistantError, match="invalid telegram"):
+        await DUMP.async_grab("127.0.0.1", 8888, 0)
+
+    assert commands == ["grab", "grab result all", "grab stop"]
+
+
+# Intent: retain valid raw hex telegram lines and an empty successful result.
+# Why: both are legitimate grab-result responses under ebusd's TCP protocol.
+@pytest.mark.parametrize(
+    "result_lines",
+    (
+        [],
+        ["f108b509055402008813 / 0e020188136400ffffffffffffffff = 1"],
+    ),
+)
+async def test_async_grab_accepts_empty_or_valid_telegram_result(
+    result_lines: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Intent: return the selected valid result shape with exact lifecycle acknowledgements.
+    # Why: valid empty and raw-telegram results must both survive stricter validation.
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
+        if command == "grab result all":
+            return result_lines
+        return ["grab started"] if command == "grab" else ["grab stopped"]
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+
+    result = await DUMP.async_grab("127.0.0.1", 8888, 0)
+
+    assert result == ["[grab] grab started", *result_lines, "[grab stop] grab stopped"]
 
 
 # Intent: abort when ebusd never acknowledges that raw capture started.
@@ -627,18 +873,18 @@ async def test_async_grab_rejects_error_responses(
 async def test_async_grab_rejects_missing_start_acknowledgement(monkeypatch: pytest.MonkeyPatch) -> None:
     commands: list[str] = []
 
-    # Intent: return no acknowledgement for grab but confirm the cleanup stop.
-    # Why: the failed start must surface while still attempting grab stop.
-    async def _grab_cmd(host, port, command, ensure_active=None):
+    # Intent: return no acknowledgement for grab.
+    # Why: an unconfirmed global start must surface without stopping another capture.
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
         commands.append(command)
-        return [] if command == "grab" else ["done"]
+        return [] if command == "grab" else ["grab stopped"]
 
     monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
 
     with pytest.raises(HomeAssistantError, match="did not confirm that the grab started"):
         await DUMP.async_grab("127.0.0.1", 8888, 0)
 
-    assert commands == ["grab", "grab stop"]
+    assert commands == ["grab"]
 
 
 # Intent: preserve a capture transport exception after issuing grab stop.
@@ -648,11 +894,11 @@ async def test_async_grab_transport_failure_still_stops_capture(monkeypatch: pyt
 
     # Intent: fail result retrieval while allowing the cleanup command to succeed.
     # Why: the original transport failure must propagate after cleanup.
-    async def _grab_cmd(host, port, command, ensure_active=None):
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
         commands.append(command)
         if command == "grab result all":
             raise ConnectionError("grab transport failed")
-        return ["done"]
+        return ["grab started"] if command == "grab" else ["grab stopped"]
 
     monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
 
@@ -660,6 +906,100 @@ async def test_async_grab_transport_failure_still_stops_capture(monkeypatch: pyt
         await DUMP.async_grab("127.0.0.1", 8888, 0)
 
     assert commands == ["grab", "grab result all", "grab stop"]
+
+
+# Intent: accept only ebusd's explicit grab lifecycle acknowledgements while allowing an empty result.
+# Why: capture output is data, so a non-error but invalid command reply must not be reported as success.
+async def test_async_grab_accepts_exact_acknowledgements_and_empty_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    commands: list[str] = []
+
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
+        commands.append(command)
+        return {
+            "grab": ["grab started"],
+            "grab result all": [],
+            "grab stop": ["grab stopped"],
+        }[command]
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+
+    assert await DUMP.async_grab("127.0.0.1", 8888, 0) == ["[grab] grab started", "[grab stop] grab stopped"]
+    assert commands == ["grab", "grab result all", "grab stop"]
+
+
+# Intent: reject non-error text that is not ebusd's start/stop acknowledgement.
+# Why: a usage or invalid-state reply must not look like a completed capture.
+@pytest.mark.parametrize(
+    ("failed_command", "failure_reply"),
+    [
+        ("grab", "ok"),
+        ("grab", "done"),
+        ("grab", "grab not running"),
+        ("grab stop", "ok"),
+        ("grab stop", "done"),
+        ("grab stop", "grab not running"),
+    ],
+)
+async def test_async_grab_rejects_unexpected_lifecycle_acknowledgements(
+    failed_command: str,
+    failure_reply: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[str] = []
+
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
+        commands.append(command)
+        if command == failed_command:
+            return [failure_reply]
+        if command == "grab":
+            return ["grab started"]
+        if command == "grab stop":
+            return ["grab stopped"]
+        return []
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+
+    with pytest.raises(HomeAssistantError, match="confirm|acknowledge"):
+        await DUMP.async_grab("127.0.0.1", 8888, 0)
+
+    if failed_command == "grab":
+        assert commands == ["grab"]
+    else:
+        assert commands == ["grab", "grab result all", "grab stop"]
+
+
+# Intent: reject extra response lines after a grab lifecycle acknowledgement.
+# Why: only a single exact acknowledgement proves this export owns the global grab state.
+@pytest.mark.parametrize(
+    ("failed_command", "reply"),
+    [
+        ("grab", ["grab started", "unexpected"]),
+        ("grab stop", ["grab stopped", "unexpected"]),
+    ],
+)
+async def test_async_grab_rejects_extra_lifecycle_response_lines(
+    failed_command: str,
+    reply: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[str] = []
+
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
+        commands.append(command)
+        if command == failed_command:
+            return reply
+        if command == "grab":
+            return ["grab started"]
+        if command == "grab stop":
+            return ["grab stopped"]
+        return []
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+
+    with pytest.raises(HomeAssistantError, match="confirm"):
+        await DUMP.async_grab("127.0.0.1", 8888, 0)
+
+    assert commands == (["grab"] if failed_command == "grab" else ["grab", "grab result all", "grab stop"])
 
 
 # Intent: fail dump export if the raw-grab transport fails after capture starts.
@@ -727,7 +1067,7 @@ async def test_export_dump_is_cancelled_by_coordinator_unload(tmp_path: Path, mo
 
     # Intent: block capture until unload, then block cleanup until a second cancel arrives.
     # Why: repeated cancellation must not interrupt the final ebusd grab-stop command.
-    async def _grab_cmd(host, port, command, ensure_active=None):
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
         commands.append(command)
         if command == "grab":
             capture_started.set()
@@ -736,7 +1076,7 @@ async def test_export_dump_is_cancelled_by_coordinator_unload(tmp_path: Path, mo
             await allow_stop_to_finish.wait()
         if ensure_active is not None:
             ensure_active()
-        return ["ok"]
+        return ["grab started"] if command == "grab" else ["grab stopped"]
 
     # Intent: keep the capture waiting until the test requests unload.
     # Why: test repeated cancellation while the stop command owns cleanup.
@@ -766,7 +1106,23 @@ async def test_export_dump_is_cancelled_by_coordinator_unload(tmp_path: Path, mo
         DUMP.REGISTER_MAP = original_map
 
     assert commands == ["grab", "grab stop"]
-    assert coordinator._active_dump_tasks == set()
+
+
+# Intent: do not stop a grab when the start command's transport result is ambiguous.
+# Why: grab state is global, so stopping without an acknowledgement can cancel another capture.
+async def test_async_grab_does_not_stop_after_ambiguous_start_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    commands: list[str] = []
+
+    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
+        commands.append(command)
+        raise ConnectionError("start acknowledgement lost")
+
+    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+
+    with pytest.raises(ConnectionError, match="start acknowledgement lost"):
+        await DUMP.async_grab("127.0.0.1", 8888, 0)
+
+    assert commands == ["grab"]
 
 
 # Intent: remove a staged dump file if export is cancelled during executor serialization.
@@ -842,6 +1198,7 @@ async def test_dump_registers_skip_missing_alias() -> None:
 async def test_dump_registers_skip_disabled_fallback_reads() -> None:
     ebus = MagicMock()
     ebus.find_registers = AsyncMock(return_value=[])
+    ebus.last_find_usable = True
     ebus.read_register = AsyncMock(return_value="42")
     original_map = DUMP.REGISTER_MAP
     DUMP.REGISTER_MAP = {
@@ -858,6 +1215,207 @@ async def test_dump_registers_skip_disabled_fallback_reads() -> None:
     assert by_name["Hc1FlowTempCalc"]["from_map"] is True
     assert by_name["Hc1ActualFlowTempDesired"]["values"] == ["42"]
     ebus.read_register.assert_awaited_once_with("ctlv3", "Hc1ActualFlowTempDesired", raise_transport_errors=True)
+
+
+# Intent: an unusable current find retains diagnostic rows but prevents active map probes.
+# Why: stale discovery or no-data scan rows must not authorize active map probes.
+@pytest.mark.parametrize("raw_line", ["ERR: no usable find result", "scan.08 = no data stored"])
+async def test_dump_registers_skip_active_map_reads_after_unusable_find(raw_line: str) -> None:
+    ebus = MagicMock()
+    ebus.find_registers = AsyncMock(return_value=[raw_line])
+    ebus.last_find_usable = False
+    ebus.read_register = AsyncMock(return_value="8.0")
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {"hmu.RunDataElPowerConsumption": MagicMock(enabled=True, writable=False, fallback_read=True)}
+    try:
+        registers, _, raw_lines = await DUMP._dump_registers(ebus, circuit_aliases={"hmu": "hmux0"})
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    assert raw_lines == [raw_line]
+    assert len(registers) == 1
+    assert registers[0]["circuit"] == "hmux0"
+    assert registers[0]["name"] == "RunDataElPowerConsumption"
+    assert registers[0]["from_map"] is True
+    assert registers[0]["values"] == [None]
+    ebus.read_register.assert_not_awaited()
+
+
+# Intent: raw discovery dumps omit field-shaped pseudo-registers.
+# Why: each field is part of its parent telegram and must not appear as a bus register.
+def test_dump_find_parser_skips_field_shaped_keys() -> None:
+    registers = DUMP._parse_find_lines(
+        ["hmu Status01 = 20;on", "hmu Status01.temp = 20", "hmu Status01.pumpstate = on"]
+    )
+
+    assert [register["key"] for register in registers] == ["hmu.Status01"]
+
+
+# Intent: HMUX0 SW0407 map probes skip the exact unsafe set in discovery dumps while daily B516 reads remain enabled.
+# Why: dump exports must apply the same hardware-scoped fallback safety as coordinator polling.
+async def test_dump_registers_skip_issue161_hmux0_fallback_set() -> None:
+    fixture = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
+    graph = tc.DISCOVERY.DiscoveryService.build_device_graph(tc.load_find_lines(fixture, after=True))
+    expected_names = {
+        "Status00",
+        "Status01",
+        "Status07",
+        "BuildingCircuitFlow",
+        "CopCooling",
+        "CopCoolingMonth",
+        "CopHc",
+        "CopHcMonth",
+        "CopHwc",
+        "CopHwcMonth",
+        "CurrentCompressorUtil",
+        "CurrentConsumedPower",
+        "CurrentYieldPower",
+        "FlowTemp",
+        "FlowTemperature",
+        "HoursCool",
+        "LiveMonitorCurrentConsumedPower",
+        "SourceTempInput",
+        "SourceTempOutput",
+        "TotalEnergyUsage",
+        "YieldCoolDay",
+        "YieldCooling",
+        "YieldCoolingMonth",
+        "YieldHc",
+        "YieldHcDay",
+        "YieldHcMonth",
+        "YieldHwc",
+        "YieldHwcDay",
+        "YieldHwcMonth",
+    }
+    skip_reads = DUMP._fallback_read_skip_keys(
+        graph,
+        [
+            "u,hmux0,RunDataElPowerConsumption",
+            "u,vwzio,PowerConsumptionVwz",
+            "r5,ctlv2,z1RoomHumidity",
+            "wi,bai,HeatingSwitch",
+        ],
+    )
+    skip_without_definitions = DUMP._fallback_read_skip_keys(graph, [])
+    assert {("hmux0", name.casefold()) for name in expected_names} <= skip_reads
+    assert ("hmux0", "rundataelpowerconsumption") in skip_reads
+    assert ("vwzio", "powerconsumptionvwz") in skip_reads
+    assert ("vwzio", "status01") in skip_reads
+    assert ("ctlv2", "z1roomhumidity") not in skip_reads
+    assert ("bai", "heatingswitch") not in skip_reads
+    assert ("hmux0", "rundataelpowerconsumption") in skip_without_definitions
+    assert ("vwzio", "powerconsumptionvwz") in skip_without_definitions
+
+    ebus = MagicMock()
+    ebus.find_registers = AsyncMock(return_value=[])
+    ebus.read_register = AsyncMock(return_value=None)
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {
+        **{f"hmux0.{name}": MagicMock(enabled=True, writable=False, fallback_read=True) for name in expected_names},
+        "hmux0.HcElecConsDay": MagicMock(enabled=True, writable=False, fallback_read=True),
+        "hmux0.HwcElecConsDay": MagicMock(enabled=True, writable=False, fallback_read=True),
+        "vwzio.Status01": MagicMock(enabled=True, writable=False, fallback_read=True),
+        "vwzio.PowerConsumptionVwz": MagicMock(enabled=True, writable=False, fallback_read=True),
+    }
+    try:
+        await DUMP._dump_registers(
+            ebus,
+            circuit_aliases={"hmux0": "hmux0"},
+            skip_fallback_reads=skip_reads,
+        )
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    calls = [call.args[:2] for call in ebus.read_register.await_args_list]
+    assert not any(circuit.casefold() == "hmux0" and name in expected_names for circuit, name in calls)
+    assert ("hmux0", "HcElecConsDay") in calls
+    assert ("hmux0", "HwcElecConsDay") in calls
+    assert ("vwzio", "Status01") not in calls
+    assert ("vwzio", "PowerConsumptionVwz") not in calls
+
+    other_graph = tc.DISCOVERY.DiscoveryService.build_device_graph(
+        tc.load_find_lines("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml", after=True)
+    )
+    other_skip_reads = DUMP._fallback_read_skip_keys(other_graph, [])
+    assert not {("hmux0", name.casefold()) for name in expected_names} & other_skip_reads
+
+
+# Intent: resolve host aliases to the socket address used for dump-lock identity.
+# Why: a DNS name and its IP address can reach the same daemon-global grab state.
+async def test_grab_endpoint_lock_key_uses_resolved_socket_address(monkeypatch: pytest.MonkeyPatch) -> None:
+    loop = asyncio.get_running_loop()
+    monkeypatch.setattr(
+        loop,
+        "getaddrinfo",
+        AsyncMock(return_value=[(2, 1, 6, "", ("192.0.2.10", 8888))]),
+    )
+
+    expected = {("192.0.2.10", 8888), ("*", 8888)}
+    assert await DUMP._grab_endpoint_keys("ebusd.local", 8888) == expected
+    assert await DUMP._grab_endpoint_keys("192.0.2.10", 8888) == expected
+
+
+# Intent: use a shared port lock when DNS cannot establish a canonical socket address.
+# Why: transient resolver failure must not let aliases start overlapping daemon-global captures.
+async def test_grab_endpoint_lock_key_falls_back_to_shared_port_on_dns_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loop = asyncio.get_running_loop()
+    monkeypatch.setattr(loop, "getaddrinfo", AsyncMock(side_effect=OSError("resolver unavailable")))
+
+    assert await DUMP._grab_endpoint_keys("ebusd.local", 8888) == {("*", 8888)}
+
+
+# Intent: serialize dump exports that resolve to the same ebusd endpoint.
+# Why: ebusd's grab state is global and overlapping integration exports would interfere.
+async def test_dump_exports_to_same_ebusd_endpoint_are_serialized(monkeypatch: pytest.MonkeyPatch) -> None:
+    first_entered = asyncio.Event()
+    release_first = asyncio.Event()
+    active_exports = 0
+    maximum_active_exports = 0
+    export_count = 0
+
+    # Intent: hold the first export inside the protected capture section.
+    # Why: prove the second export cannot enter until the first releases the endpoint lock.
+    async def _export_impl(hass, coordinator, grab_duration=0):
+        nonlocal active_exports, maximum_active_exports, export_count
+        active_exports += 1
+        export_count += 1
+        maximum_active_exports = max(maximum_active_exports, active_exports)
+        if export_count == 1:
+            first_entered.set()
+            await release_first.wait()
+        active_exports -= 1
+
+    monkeypatch.setattr(DUMP, "_async_export_discovery_dump_impl", _export_impl)
+    monkeypatch.setattr(DUMP, "_grab_endpoint_keys", AsyncMock(return_value={("192.0.2.10", 8888)}))
+    coordinators = [
+        SimpleNamespace(
+            _active_dump_tasks=set(),
+            ebus=SimpleNamespace(is_connected=True),
+            ebusd_host="ebusd.local",
+            ebusd_port=8888,
+        ),
+        SimpleNamespace(
+            _active_dump_tasks=set(),
+            ebus=SimpleNamespace(is_connected=True),
+            ebusd_host="127.0.0.1",
+            ebusd_port=8888,
+        ),
+    ]
+
+    first_task = asyncio.create_task(DUMP.async_export_discovery_dump(MagicMock(), coordinators[0]))
+    await asyncio.wait_for(first_entered.wait(), timeout=1)
+    second_task = asyncio.create_task(DUMP.async_export_discovery_dump(MagicMock(), coordinators[1]))
+    await asyncio.sleep(0)
+
+    assert export_count == 1
+    assert maximum_active_exports == 1
+    release_first.set()
+    await asyncio.gather(first_task, second_task)
+    assert export_count == 2
+    assert maximum_active_exports == 1
+    assert active_exports == 0
 
 
 # Intent: _redact replaces sensitive register names with a placeholder and leaves others untouched.

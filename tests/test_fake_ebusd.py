@@ -80,6 +80,7 @@ async def test_arotherm_fixture_loads() -> None:
         ("community/f34_issue152_v192_before_cleanup_discovery.yaml", 100),
         ("community/f34_issue152_v192_after_cleanup_discovery.yaml", 100),
         ("community/basv3_issue31_2026-09-17_203723_discovery.yaml", 100),
+        ("community/hmux0_issue161_2026-09-28_154109_discovery.yaml", 100),
     ],
 )
 async def test_all_fixtures_load(fixture: str, min_registers: int) -> None:

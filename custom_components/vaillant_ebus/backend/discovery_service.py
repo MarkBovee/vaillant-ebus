@@ -7,7 +7,14 @@ import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, NamedTuple
 
-from .models import DeviceGraph, DeviceNode, DeviceType, is_no_data_value, is_valid_hmux0_return_temperature
+from .models import (
+    DeviceGraph,
+    DeviceNode,
+    DeviceType,
+    is_ebusd_error_value,
+    is_no_data_value,
+    is_valid_hmux0_return_temperature,
+)
 
 if TYPE_CHECKING:
     from .ebus_service import EbusService
@@ -92,6 +99,8 @@ class DiscoveryService:
         )
         return graph
 
+    # Intent: parse one register row without crashing on an empty or malformed LHS.
+    # Why: malformed find data must be rejected at the transport boundary, not crash discovery.
     @staticmethod
     def _parse_register(line: str) -> ParsedRegister:
         """Parse a find line into (circuit, name, value_or_None)."""
@@ -100,6 +109,8 @@ class DiscoveryService:
             return ParsedRegister("", "", None)
         lhs, rhs = line.split("=", 1)
         parts = lhs.strip().split(None, 1)
+        if not parts:
+            return ParsedRegister("", "", None)
         circuit = parts[0]
         name = parts[1].strip() if len(parts) > 1 else ""
         val = rhs.strip()
@@ -116,6 +127,8 @@ class DiscoveryService:
                 return ParsedRegister(circuit, name, None)
         return ParsedRegister(circuit, name, val)
 
+    # Intent: accept only ebusd's address-qualified scan metadata row shape.
+    # Why: scan-prefixed register names such as `Scan.08 Id` must remain register rows.
     @staticmethod
     def _parse_scan(line: str) -> ScanEntry | None:
         """Parse a scan metadata line into (scan_addr, TYPE, SW, HW) or None."""
@@ -123,7 +136,7 @@ class DiscoveryService:
         if not line or "=" not in line:
             return None
         lhs, rhs = line.split("=", 1)
-        if not lhs.strip().lower().startswith("scan"):
+        if not re.fullmatch(r"scan\.[0-9a-f]{2}", lhs.strip(), re.IGNORECASE):
             return None
         rhs = rhs.strip()
         if rhs.lower() == "no data stored":
@@ -132,9 +145,16 @@ class DiscoveryService:
         if len(parts) != 4:
             return None
         if all("=" in part for part in parts):
-            metadata = dict(part.split("=", 1) for part in parts)
-            if {"MF", "ID", "SW", "HW"} <= metadata.keys():
+            required = {"MF", "ID", "SW", "HW"}
+            metadata: dict[str, str] = {}
+            for part in parts:
+                key, value = part.split("=", 1)
+                metadata[key.strip()] = value.strip()
+            if metadata.keys() == required and all(metadata[key] for key in required):
                 return ScanEntry(lhs.strip(), metadata["ID"], metadata["SW"], metadata["HW"])
+            return None
+        if any("=" in part for part in parts) or not all(part.strip() for part in parts):
+            return None
         return ScanEntry(lhs.strip(), parts[1].strip(), parts[2].strip(), parts[3].strip())
 
     @staticmethod
@@ -203,6 +223,7 @@ class DiscoveryService:
         scan_entries = [scan for line in find_lines if (scan := DiscoveryService._parse_scan(line)) is not None]
         suppress_hmu_alias = _is_hmux0_0303_0504_without_hmu(scan_entries) or _is_boiler_without_heat_pump(scan_entries)
         regs_by_circuit: dict[str, list[str]] = {}
+        error_registers: set[str] = set()
 
         for line in find_lines:
             if DiscoveryService._parse_scan(line) is not None:
@@ -214,13 +235,18 @@ class DiscoveryService:
             circuit = circuit.casefold()
             if suppress_hmu_alias and circuit.lower() == "hmu":
                 continue
+            if "." in name:
+                continue
+            register_key = f"{circuit}.{name}"
 
             if circuit.lower() == "hmu" and name.lower() == "sourcetempinput":
                 raw_value = line.split("=", 1)[1].strip()
                 if value is None and raw_value:
                     continue
 
-            register_key = f"{circuit}.{name}"
+            raw_value = line.split("=", 1)[1].strip()
+            if is_ebusd_error_value(raw_value):
+                error_registers.add(register_key)
             if value is not None:
                 raw_registers[register_key] = value
             else:
@@ -348,7 +374,71 @@ class DiscoveryService:
             nodes=nodes,
             raw_registers=raw_registers,
             placeholder_registers=placeholder_registers,
+            error_registers={
+                key
+                for key in error_registers
+                if key.casefold() not in {raw_key.casefold() for raw_key in raw_registers}
+            },
         )
+
+
+# Intent: accept only find rows that discovery can parse into a register or scan.
+# Why: malformed/error-only lines must not authorize fallback reads against a stale graph.
+def has_usable_find_records(find_lines: Sequence[str]) -> bool:
+    usable = False
+    for line in find_lines:
+        line = line.strip()
+        if not line:
+            continue
+        if line.casefold().startswith(("err:", "(err:")):
+            continue
+        lhs, separator, raw_value = line.partition("=")
+        if not separator:
+            raise ValueError(f"find response contains a row without '=': {line}")
+        lhs = lhs.strip()
+        raw_value = raw_value.strip()
+        if not lhs:
+            raise ValueError(f"find response contains an empty row name: {line}")
+        if DiscoveryService._parse_scan(line) is not None:
+            usable = True
+            continue
+        parsed = DiscoveryService._parse_register(line)
+        if not parsed.circuit or not parsed.name:
+            if re.fullmatch(r"scan\.[0-9a-f]{2}", lhs, re.IGNORECASE) and is_no_data_value(raw_value):
+                continue
+            raise ValueError(f"find response contains malformed register row: {line}")
+        if "." in parsed.name:
+            continue
+        if is_no_data_value(raw_value):
+            if is_ebusd_error_value(raw_value):
+                continue
+            usable = True
+            continue
+        usable = True
+    return usable
+
+
+# Intent: recompute a merged node's live-data state from its current register graph.
+# Why: delayed discovery can remove the register that previously made a device active.
+def node_has_live_data(node: DeviceNode, raw_registers: dict[str, str]) -> bool:
+    raw_by_fold = {key.casefold(): (key, value) for key, value in raw_registers.items()}
+    if node.device_type == DeviceType.ZONE:
+        zone_number = node.circuit[1:] if node.circuit.casefold().startswith("z") else ""
+        static_suffixes = {"daytemp", "nighttemp", "opmode", "holidaytemp", "roomzonemapping"}
+        for key in node.registers:
+            row = raw_by_fold.get(key.casefold())
+            if row is None:
+                continue
+            name = row[0].split(".", 1)[1]
+            lowered_name = name.casefold()
+            if lowered_name == f"z{zone_number}roomzonemapping" and row[1].strip().casefold() not in {"", "none"}:
+                return True
+            if not is_no_data_value(row[1]) and lowered_name.removeprefix(f"z{zone_number}") not in static_suffixes:
+                return True
+        return False
+    return any(
+        key.casefold() in raw_by_fold and not is_no_data_value(raw_by_fold[key.casefold()][1]) for key in node.registers
+    )
 
 
 # Extract the logical sub-device name from its parent-qualified key.
@@ -643,17 +733,18 @@ def _numeric_scan_matches_circuit(scan_type: str, circuit: str) -> bool:
     return scan_type[:3] == circuit and scan_type[3:] == "00"
 
 
+# Intent: retain physical HMUX0 and target VWZIO scans even when no CSV creates a circuit node.
+# Why: exact scan identity can gate additive runtime definitions without inventing a device or address.
 def _scan_only_circuits(
     scan_entries: Sequence[ScanEntry], regs_by_circuit: dict[str, list[str]]
 ) -> dict[str, ScanMetadata]:
-    """Expose an HMUX0 scan when ebusd does not expose an HMUX0 circuit."""
-    if any(_normalize_name(circuit) == "hmux0" for circuit in regs_by_circuit):
-        return {}
+    """Expose supported physical scans when ebusd has no configured circuit."""
+    represented = {_normalize_name(circuit) for circuit in regs_by_circuit}
     scans: dict[str, ScanMetadata] = {}
     conflicts: set[str] = set()
     for entry in scan_entries:
         key = _normalize_name(entry.scan_type)
-        if key in conflicts or key != "hmux0":
+        if key in conflicts or key not in {"hmux0", "vwzio"} or key in represented:
             continue
         current = scans.get(key)
         if current is None:
@@ -672,6 +763,8 @@ def _scan_only_circuits(
         )
     result: dict[str, ScanMetadata] = {}
     for circuit, metadata in scans.items():
+        if circuit == "vwzio" and (metadata.scan_sw != "0500" or metadata.scan_hw != "0504"):
+            continue
         if _categorize_by_scan_type(circuit, metadata.scan_type) is not None:
             result[circuit] = metadata
     return result

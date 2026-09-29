@@ -81,7 +81,26 @@ def test_build_graph_keeps_error_shaped_register_rows_as_placeholders() -> None:
     assert "ctlv3" in graph.nodes
     assert "ctlv3.Hc1FlowTempCalc" not in graph.raw_registers
     assert "ctlv3.Hc1FlowTempCalc" in graph.placeholder_registers
+    assert "ctlv3.Hc1FlowTempCalc" in graph.error_registers
     assert any("ctlv3.Hc1FlowTempCalc" in node.registers for node in graph.nodes.values())
+
+
+# Intent: field-shaped find rows never become independent graph registers.
+# Why: multi-field values belong to their parent ebusd register and must not be polled directly.
+def test_build_graph_tracks_error_rows_and_ignores_field_keys() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.15 = Vaillant;CTLV3;0808;8004",
+            "ctlv3 Z1OpMode = auto",
+            "ctlv3 HwcOpMode = (ERR: invalid position)",
+            "ctlv3 Status01.temp = 21.0",
+        ]
+    )
+
+    assert "ctlv3.HwcOpMode" in graph.placeholder_registers
+    assert graph.error_registers == {"ctlv3.HwcOpMode"}
+    assert "ctlv3.Status01.temp" not in graph.raw_registers
+    assert "ctlv3.Status01.temp" not in graph.placeholder_registers
 
 
 AROTHERM_LINES = load_find_lines("arotherm_find.txt")
@@ -748,6 +767,34 @@ def test_parse_scan_metadata_current_ebusd_format() -> None:
     result = DiscoveryService._parse_scan("scan.76 = MF=Vaillant;ID=VWZ00;SW=0522;HW=5103")
     assert result is not None
     assert result[1:] == ("VWZ00", "0522", "5103")
+
+
+# Intent: reject scan identities with missing positional or keyed metadata values.
+# Why: incomplete identities cannot safely authorize scan-gated hardware behavior.
+@pytest.mark.parametrize(
+    "line",
+    [
+        "scan.15 = ;CTLV3;0808;8004",
+        "scan.15 = Vaillant;;0808;8004",
+        "scan.15 = Vaillant;CTLV3;;8004",
+        "scan.15 = Vaillant;CTLV3;0808;",
+        "scan.15 = MF=Vaillant;ID=CTLV3;SW=;HW=8004",
+        "scan.15 = MF=Vaillant;ID=;SW=0808;HW=8004",
+    ],
+)
+def test_parse_scan_rejects_incomplete_identity(line: str) -> None:
+    assert DiscoveryService._parse_scan(line) is None
+    with pytest.raises(ValueError, match="malformed (scan metadata|register row)"):
+        DISCOVERY.has_usable_find_records([line])
+
+
+# Intent: keep unknown but complete scan identities compatible with discovery.
+# Why: discovery must remain open to new hardware IDs that are not in REGISTER_MAP.
+def test_parse_scan_accepts_unknown_nonempty_identity() -> None:
+    line = "scan.15 = Vendor;NEW_CONTROLLER;ffff;abcd"
+
+    assert DiscoveryService._parse_scan(line) == ("scan.15", "NEW_CONTROLLER", "ffff", "abcd")
+    assert DISCOVERY.has_usable_find_records([line]) is True
 
 
 # Intent: a NETX2 scan line parses and exposes its scan type.

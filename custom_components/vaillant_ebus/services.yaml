@@ -132,7 +132,10 @@ analyze_registers:
 
 export_discovery_dump:
   name: Export Discovery Dump
-  description: Export all discovered registers plus full REGISTER_MAP to a YAML file for troubleshooting.
+  description: >-
+    Export discovered registers and the full REGISTER_MAP to YAML for
+    troubleshooting. Exports to the same ebusd endpoint are serialized, but
+    external `ebusctl grab` clients are not. Do not run one during this export.
   fields:
     grab_duration:
       name: Grab Duration

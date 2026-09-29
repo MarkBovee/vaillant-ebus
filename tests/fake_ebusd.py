@@ -236,6 +236,8 @@ class FakeEbusdServer:
     async def __aexit__(self, *exc_info: object) -> None:
         await self.stop()
 
+    # Intent: expose only ebusd response records from transcript-backed find fixtures.
+    # Why: shell prompts and command echoes are fixture context, not bytes returned by `find -a`.
     async def _handle_client(
         self,
         reader: asyncio.StreamReader,
@@ -257,7 +259,8 @@ class FakeEbusdServer:
                 # Client reads them line by line with timeout loop
                 if raw in ("f", "find", "f -a", "find -a"):
                     for fline in self._find_lines:
-                        writer.write((fline + "\n").encode())
+                        if "=" in fline or fline.strip().casefold().startswith(("err:", "(err:")):
+                            writer.write((fline + "\n").encode())
                     await writer.drain()
                     # No explicit response — find output IS the response
                     continue

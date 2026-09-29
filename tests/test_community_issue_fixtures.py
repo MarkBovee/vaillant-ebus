@@ -283,6 +283,59 @@ def test_hmux0_holiday_capture_keeps_future_zone_holiday_values() -> None:
     assert graph.raw_registers["ctlv3.Z1HolidayEndPeriod"] == "09.10.2027"
 
 
+# Intent: issue #161's CTLV3 yield and HMUX0 daily counters expose supported energy metadata.
+# Why: the capture verifies the register owners and values; missing yield data must remain unavailable.
+def test_issue161_energy_metadata_and_absent_yield_path() -> None:
+    fixture = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
+    graph = DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    assert graph.raw_registers["ctlv3.YieldTotal"] == "70"
+    yield_total = entities["ctlv3.YieldTotal.value"]
+    assert yield_total.meta.device_class == "energy"
+    assert yield_total.meta.unit == "kWh"
+    assert yield_total.meta.state_class == "total"
+    assert yield_total.meta.fallback_read is False
+
+    for key in ("hmux0.HcElecConsDay.value", "hmux0.HwcElecConsDay.value"):
+        assert key in entities
+        assert entities[key].meta.device_class == "energy"
+        assert entities[key].meta.unit == "Wh"
+        assert entities[key].meta.state_class == "total_increasing"
+
+    absent_graph = DiscoveryService.build_device_graph(
+        ["scan.15 = MF=Vaillant;ID=CTLV3;SW=0813;HW=8004", "ctlv3 YieldTotal = no data stored"]
+    )
+    assert "ctlv3.YieldTotal" in absent_graph.placeholder_registers
+    assert "ctlv3.YieldTotal.value" not in {entity.key for entity in EntityFactoryService().generate(absent_graph)}
+
+
+# Intent: issue #161 retains scanned VWZIO identity even before a matching CSV exposes registers.
+# Why: passive station telemetry must be gated to the physical scan, not a guessed address or virtual device.
+def test_issue161_scan_only_vwzio_node_and_missing_scan_path() -> None:
+    fixture = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
+    graph = DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+
+    vwzio = graph.nodes["vwzio"]
+    assert vwzio.device_type.name == "PASSIVE_COOLING"
+    assert (vwzio.scan_type, vwzio.scan_sw, vwzio.scan_hw) == ("VWZIO", "0500", "0504")
+    assert not vwzio.registers
+    assert not any(entity.device_circuit == "vwzio" for entity in EntityFactoryService().generate(graph))
+
+    without_vwzio_scan = [
+        line for line in load_find_lines(fixture, after=True) if not line.strip().startswith("scan.76 ")
+    ]
+    absent_graph = DiscoveryService.build_device_graph(without_vwzio_scan)
+    assert "vwzio" not in absent_graph.nodes
+
+    nonmatching_scan = [
+        line.replace("VWZIO;0500;0504", "VWZIO;0902;5103") if line.strip().startswith("scan.76 ") else line
+        for line in load_find_lines(fixture, after=True)
+    ]
+    nonmatching_graph = DiscoveryService.build_device_graph(nonmatching_scan)
+    assert "vwzio" not in nonmatching_graph.nodes
+
+
 # Intent: ecoTEC VRT380 captures expose bai entities and a controller graph.
 # Why: boiler hardware must be discoverable with its observed register set.
 @pytest.mark.parametrize(

@@ -23,9 +23,7 @@ MODELS = importlib.util.module_from_spec(MODELS_SPEC)
 sys.modules["vaillant_ebus.backend.models"] = MODELS
 MODELS_SPEC.loader.exec_module(MODELS)
 
-MAPPING_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.mapping", BACKEND_PATH / "mapping.py"
-)
+MAPPING_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.mapping", BACKEND_PATH / "mapping.py")
 assert MAPPING_SPEC and MAPPING_SPEC.loader
 MAPPING = importlib.util.module_from_spec(MAPPING_SPEC)
 sys.modules["vaillant_ebus.backend.mapping"] = MAPPING
@@ -104,8 +102,8 @@ def test_b516_exp_reply_decode_contract() -> None:
 
 
 # Intent: the cooling/electric/solar energy registers generate sensors with the
-# expected friendly names, units, device classes, and total_increasing state classes.
-# Why: guards the b516 cooling-energy entity contract and the lifetime-vs-daily monotonic classification (issue #50).
+# expected friendly names, units, device classes, and state classes.
+# Why: guards daily-reset B516 counters and lifetime energy totals for issues #50 and #161.
 def test_b516_cooling_register_entities() -> None:
     lines = [
         "hmu CoolEnvYieldTotal = 1206000",
@@ -117,6 +115,7 @@ def test_b516_cooling_register_entities() -> None:
         "hmu HcElecConsDay = 18000",
         "hmu HwcElecConsTotal = 950000",
         "hmu HwcElecConsDay = 7000",
+        "ctlv3 YieldTotal = 70",
         # CSV/find-based electric registers that supplement the b516 counters.
         "hmu ConsumptionTotal = 12345",
         "hmu RunDataElectricPowerConsumption = 1500",
@@ -140,6 +139,7 @@ def test_b516_cooling_register_entities() -> None:
         "hmu.HcElecConsDay.value": ("Heating Electricity Today", "Wh"),
         "hmu.HwcElecConsTotal.value": ("DHW Electricity Total", "Wh"),
         "hmu.HwcElecConsDay.value": ("DHW Electricity Today", "Wh"),
+        "ctlv3.YieldTotal.value": ("Yield Total", "kWh"),
         "hmu.ConsumptionTotal.value": ("Electrical Energy Consumption", "kWh"),
         "hmu.StatSolarEnergySum.value": ("Solar Energy Sum", "kWh"),
         "hmu.StatSolarEnergySumHc.value": ("Solar Energy Sum (Heating)", "kWh"),
@@ -168,10 +168,12 @@ def test_b516_cooling_register_entities() -> None:
     for key in (
         "hmu.CoolEnvYieldDay.value",
         "hmu.CoolElecConsDay.value",
-        "hmu.HcElecConsDay.value",
-        "hmu.HwcElecConsDay.value",
     ):
         assert by_key[key].meta.state_class != "total_increasing"
+    for key in ("hmu.HcElecConsDay.value", "hmu.HwcElecConsDay.value"):
+        assert by_key[key].meta.state_class == "total_increasing"
+    assert by_key["ctlv3.YieldTotal.value"].meta.state_class == "total"
+    assert by_key["ctlv3.YieldTotal.value"].meta.fallback_read is False
 
     # Power registers use the power device class with the upstream units.
     assert by_key["hmu.RunDataElectricPowerConsumption.value"].meta.device_class == "power"
