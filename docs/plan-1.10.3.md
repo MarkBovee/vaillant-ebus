@@ -1,6 +1,6 @@
 # Release 1.10.3 Plan
 
-Status: **BLOCKED — scan-address safety fix and PR #164 write evidence are required before release**
+Status: **BLOCKED — PR #164 write evidence is outstanding; final validation, HA smoke and release gates remain**
 
 Planning date: 2026-10-02
 
@@ -40,9 +40,12 @@ passes.
   discovered VWZIO `SW0500/HW0504` scan at slave address `0x76`. Preserve the
   complete current scan snapshot in `DeviceGraph`, including address-qualified
   scan rows that map to no node, and carry the uniquely mapped address through
-  `ScanMetadata` and `DeviceNode`. Repeated
-  identical scan rows at one address stay deterministic; conflicting identities
-  at one address or the same scan type at multiple addresses are ambiguous.
+  `ScanMetadata` and `DeviceNode`. Repeated identical scan rows at one address
+  stay deterministic. A same-type scan at multiple addresses may retain identity
+  metadata for classification, but its address ownership is ambiguous and must
+  not authorize fixed-address reads; conflicting identities at one address are
+  unmatched. Conflicts unrelated to the target scan/address must not suppress a
+  uniquely identified VWZIO at `0x76`.
   `_merge_device_graphs()` must replace the prior scan snapshot with the latest
   one, even if the new graph has no VWZIO node, and clear prior station-address
   authorization when current evidence is missing or ambiguous. Authorization
@@ -62,7 +65,8 @@ passes.
   register; PR #598 supplies separate HW5103 evidence.
 - Add graph regressions for a unique VWZIO SW0500/HW0504 at `0x76`, the
   cross-address VWZ00@`0x76` + VWZIO@`0x77` topology, repeated identical same-
-  address scan rows, conflicting identities/addresses, and merges from valid
+  address scan rows, conflicting identities/addresses, unrelated scan conflicts
+  that must not suppress the valid VWZIO owner, and merges from valid
   `0x76` evidence to missing/ambiguous current evidence, including a new graph
   where the old VWZIO node is absent entirely. Assert coordinator and dump paths
   issue neither the target B511 definition/read nor the target Status01 read to
@@ -205,13 +209,13 @@ passes.
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; remote `release/1.10.3` backs draft PR #168; no release tag/publication exists |
 | Plan-check | PASS | Independent plan-check accepted complete scan-snapshot semantics, merge invalidation, coordinator/dump fallback tests, the PR #164 evidence gate, exact allowlist and issue closure boundaries. |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
-| Validation | PASS (CODE; smoke stale) | Full current suite: 951 pytest tests passed; Ruff check and configured format check passed; strict configured mypy passed; version check and compileall passed. One existing deprecation warning remains in `test_legacy_resolve_circuit_keeps_string_contract_without_ownership_authority`. `git diff --check` passed. The earlier 943-test result is historical. |
+| Validation | PENDING FINAL | Commit `c2d7a5b` adds the unrelated-conflict correction after the 951-test full run on `d00c77e`; focused delta tests pass (5), but rerun the full required suite against the final candidate. |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
-| HA smoke | BLOCKED/STALE | The v1.10.3 candidate passed on commit `77c696b` with zero/one-second exports, metadata checks and `grab result all`; rerun after the scan-address code fix because deployed files will change. |
-| Review | PENDING | Independent review of the current validated diff is required |
-| Audit | PENDING | Independent production-path audit of the current diff is required; verify scan-address merge invalidation and wrong-address coordinator/dump bypasses |
-| Release gate | BLOCKED | Do not proceed until scan-address audit finding is closed and PR #164's requested hardware/write/read-back evidence supports the mappings |
-| PR / merge | BLOCKED | Draft PR #168 is open; do not merge before address fix, PR #164 evidence decision, new HA smoke, PR-CI and independent gates |
+| HA smoke | PENDING | The earlier candidate passed on commit `77c696b`; rerun zero/one-second exports, metadata checks and `grab result all` against the committed address-safe candidate. |
+| Review | DELTA PASS | Independent review of delta `d00c77e..c2d7a5b` passed. Final review is required on the post-smoke release candidate. |
+| Audit | DELTA PASS | Independent production audit of delta `d00c77e..c2d7a5b` passed after fixing unrelated-conflict overblocking. Final audit is required on the post-smoke release candidate. |
+| Release gate | BLOCKED | Address-safety audit finding is closed by `c2d7a5b`; publication remains blocked until PR #164 evidence supports the writable mappings and all final validation/release gates pass |
+| PR / merge | BLOCKED | Draft PR #168 is open; address fix is committed. Do not merge before PR #164 evidence decision, new HA smoke, PR-CI and independent final gates |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
 | User communication | IN PROGRESS | Posted an English evidence request on PR #164; release issue notices and #165 closure wait until publication |
 
