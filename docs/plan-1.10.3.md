@@ -270,13 +270,13 @@ passes.
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; remote `release/1.10.3` backs draft PR #168; no release tag/publication exists |
 | Plan-check | PASS | Independent re-check accepted the initial-setup usable/unusable follow-up cases, `normal`/`comfort` options, the single authorized setup regression, fixture scope and release/issue boundaries. |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
-| Validation | STALE | 962 tests passed before the initial-setup fix and Setback option correction; rerun full validation afterward. |
+| Validation | PASS | Current candidate: 963 pytest tests passed; Ruff check/configured format, strict configured mypy, compileall, version check and diff check passed. The deploy script repeated Ruff/pytest/compileall. One existing deprecation warning remains in `test_legacy_resolve_circuit_keeps_string_contract_without_ownership_authority`. |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
-| HA smoke | STALE | The last smoke passed on the pre-setup-fix candidate. Redeploy and rerun zero/one-second exports after the final code change. |
-| Review | FINDING OPEN | Final review found the initial-setup stale-graph bypass and a Setback option mismatch; fix and re-review. |
-| Audit | FINDING OPEN | Final audit found the initial-setup stale-graph bypass; fix and re-audit. |
-| Release gate | BLOCKED | Fix initial setup and Setback options, then rerun validation, HA smoke, final review/audit, PR-CI and release gate before merge/tag/publication. |
-| PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; local candidate commits are not pushed. Add PR #164 metadata after plan-check, then push/review/CI; do not merge before all gates. |
+| HA smoke | PASS (scope-limited) | Deployed with `scripts/deploy.sh --restart` (HTTP 200); HA-MCP confirmed `vaillant_ebus` loaded. Zero dump `/config/vaillant_ebus/discovery_dump_2026-10-02_171733.yaml`: valid YAML/required sections, 631 raw find rows, 730 before-registers, `not_requested`, duration 0. Positive dump `/config/vaillant_ebus/discovery_dump_2026-10-02_171754.yaml`: valid YAML/required sections, 631 raw find rows, 730 before-registers, `continued`/`count_delta`, 1.0004224 s, limitation present, one grab row. Read-only `grab result all` returned data, not `grab disabled`; fresh component ERROR logs were empty. Owner hardware is VWZ00 SW0522/HW5103, so no positive HW0504 B511 read is claimed. |
+| Review | PENDING FINAL | Initial-setup and option findings are addressed; independent final review of this validated, post-smoke candidate remains. |
+| Audit | PENDING FINAL | Initial-setup finding is addressed; independent final audit of this validated, post-smoke candidate remains. |
+| Release gate | BLOCKED | Validation, smoke and code fixes pass; final independent review/audit, PR #168 PR-CI and release-gate decision remain. Do not merge, tag or publish before all pass. |
+| PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; all candidate commits, including PR #164 metadata, are local and unpushed. Push after final review/audit, then wait for PR-CI and release gate. |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
 | User communication | IN PROGRESS | PR #164 dump arrived and is assessed; post the precise evidence summary after publication, close #165 only then, and leave #152/#161 open |
 
