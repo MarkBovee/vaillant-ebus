@@ -869,7 +869,7 @@ async def test_partial_conflicting_scan_at_address76_blocks_status_definition_an
         graph = DISCOVERY.DiscoveryService.build_device_graph(
             [
                 "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
-                "scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW=",
+                "scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW",
                 "vwzio Status01 = no data stored",
             ]
         )

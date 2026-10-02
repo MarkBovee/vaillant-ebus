@@ -2095,7 +2095,7 @@ async def test_dump_status01_fallback_respects_current_station_address() -> None
     partial_address_graph = tc.DISCOVERY.DiscoveryService.build_device_graph(
         [
             "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
-            "scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW=",
+            "scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW",
             "vwzio Status01 = no data stored",
         ]
     )

@@ -189,7 +189,11 @@ class DiscoveryService:
         metadata: dict[str, str] = {}
         for part in parts:
             if "=" not in part:
-                return None
+                key = part.strip().upper()
+                if key not in {"MF", "ID", "SW", "HW"} or key in metadata:
+                    return None
+                metadata[key] = ""
+                continue
             key, value = part.split("=", 1)
             key = key.strip().upper()
             if key not in {"MF", "ID", "SW", "HW"} or key in metadata:
