@@ -1400,6 +1400,59 @@ async def test_issue161_incomplete_hmux0_scan_blocks_stale_sw0303_fallback() -> 
         COORDINATOR.REGISTER_MAP = original_map
 
 
+# Intent: partial HMUX0 evidence under the hmu alias cannot install or poll SW0303-only layouts.
+# Why: the circuit name is a logical alias, so current scan ownership must gate definitions and fallback reads.
+async def test_issue161_partial_hmu_alias_blocks_runtime_definition_and_return_temp() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            ["scan.08 = Vaillant;HMUX0;0303", "hmu FlowTemp = no data stored"]
+        )
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._graph = graph
+        coordinator._last_find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
+
+        await coordinator._define_custom_registers()
+        definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
+        assert not any(",RunDataReturnTemp," in definition for definition in definitions)
+
+        original_map = COORDINATOR.REGISTER_MAP
+        COORDINATOR.REGISTER_MAP = {"hmu.RunDataReturnTemp": MAPPING.RegisterMeta(enabled=True, fallback_read=True)}
+        try:
+            await coordinator._fallback_read(include_placeholders=True)
+        finally:
+            COORDINATOR.REGISTER_MAP = original_map
+        assert ("hmu", "RunDataReturnTemp") not in [
+            call.args for call in coordinator.ebus.read_register.await_args_list
+        ]
+
+
+# Intent: non-HMUX0 HMU00 fallback behavior remains available through the discovered hmu owner.
+# Why: HMUX0-specific safety gates must not globally disable an existing non-HMUX fallback.
+async def test_non_hmux0_hmu_return_temp_fallback_remains_available() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lines = load_find_lines("community/basv_find.txt")
+        graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+        graph.raw_registers.pop("hmu.RunDataReturnTemp", None)
+        graph.placeholder_registers.discard("hmu.RunDataReturnTemp")
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.read_register = AsyncMock(return_value="12.5")
+        coordinator._graph = graph
+        coordinator._last_find_keys = set()
+        original_map = COORDINATOR.REGISTER_MAP
+        COORDINATOR.REGISTER_MAP = {"hmu.RunDataReturnTemp": MAPPING.RegisterMeta(enabled=True, fallback_read=True)}
+        try:
+            await coordinator._fallback_read()
+        finally:
+            COORDINATOR.REGISTER_MAP = original_map
+        assert ("hmu", "RunDataReturnTemp") in [call.args for call in coordinator.ebus.read_register.await_args_list]
+
+
 # Intent: the complete #32 capture decodes the three B509 EXP responses at their documented offsets.
 # Why: definition-string tests alone cannot detect a shifted field or wrong datatype in a real telegram.
 def test_issue32_b509_exp_responses_decode_at_expected_offsets() -> None:

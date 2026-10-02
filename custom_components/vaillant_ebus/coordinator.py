@@ -32,7 +32,10 @@ from .backend.mapping import (
     REGISTER_MAP,
     VWZIO_SW0500_FALLBACK_NAMES,
     b516_date_bytes,
+    hmux0_candidate_circuits,
     hmux0_fallback_blocked_circuits,
+    hmux0_owner_scan,
+    hmux0_sw0303_owner,
     hmux0_sw0407_circuit,
     is_field_key,
     metadata_circuits,
@@ -1416,17 +1419,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     ",HMUX0 DHW environmental yield this month",
                 ]
             )
-        is_hmux0_0303_0504 = bool(
-            heat_pump
-            and heat_pump.scan_type.upper() == "HMUX0"
-            and heat_pump.scan_sw == "0303"
-            and heat_pump.scan_hw == "0504"
-        )
+        hmux0_owner = hmux0_owner_scan(self._graph)
+        hmux0_sw0303_circuit = hmux0_sw0303_owner(self._graph)
+        is_hmux0_0303_0504 = hmux0_sw0303_circuit is not None
         is_hmux0_b509_0504 = bool(
-            heat_pump
-            and heat_pump.scan_type.upper() == "HMUX0"
-            and heat_pump.scan_sw in {"0302", "0303"}
-            and heat_pump.scan_hw == "0504"
+            hmux0_owner
+            and hmux0_owner[1].complete
+            and hmux0_owner[1].scan_sw in {"0302", "0303"}
+            and hmux0_owner[1].scan_hw == "0504"
         )
         vwzio_circuit = vwzio_sw0500_circuit(self._graph)
         vwzio = next(
@@ -1443,7 +1443,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # the confirmed 0303/0504 variant, while the B509 monitoring block is
         # evidence-gated for 0302/0504 and 0303/0504. Shared B516 statistics
         # remain available for every discovered HMUX0.
-        if heat_pump and heat_pump.scan_type.upper() == "HMUX0":
+        if hmux0_owner is not None:
             hmu_only_layouts = {"SourceTempInput"}
             if not is_hmux0_0303_0504:
                 hmu_only_layouts.add("Status00")
@@ -1533,8 +1533,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
 
         defines = [definition for definition in (_resolve_definition_circuit(item) for item in defines) if definition]
         if is_hmux0_0303_0504:
-            assert heat_pump is not None
-            circuit = heat_pump.circuit
+            circuit = hmux0_sw0303_circuit
+            assert circuit is not None
             defines.extend(
                 [
                     f"r,{circuit},RunDataReturnTemp,RunDataReturnTemp,31,08,B509,5402000609"
@@ -2005,6 +2005,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if len(parts := definition.split(",", 3)) >= 3 and parts[0].startswith("u")
         }
         hmux0_blocked_circuits = {circuit.casefold() for circuit in hmux0_fallback_blocked_circuits(self._graph)}
+        hmux0_candidates = {circuit.casefold() for circuit in hmux0_candidate_circuits(self._graph)}
+        hmux0_sw0303 = hmux0_sw0303_owner(self._graph)
         vwzio_sw0500 = vwzio_sw0500_circuit(self._graph)
         vwz_station_76 = vwz_station_scan_76_circuit(self._graph)
 
@@ -2028,6 +2030,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 return
             if circuit_key in hmux0_blocked_circuits and name_key in HMUX0_SW0407_FALLBACK_NAMES:
                 return
+            if name_key == "rundatareturntemp" and circuit_key in hmux0_candidates:
+                if hmux0_sw0303 is None or circuit_key != hmux0_sw0303.casefold():
+                    return
             if (
                 vwzio_sw0500 is not None
                 and circuit_key == vwzio_sw0500.casefold()

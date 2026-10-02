@@ -2238,6 +2238,28 @@ async def test_dump_hmux0_incomplete_current_identity_blocks_map_probes() -> Non
         DUMP.REGISTER_MAP = original_map
 
 
+# Intent: dump map probes use the same HMUX0 owner gate as coordinator fallback.
+# Why: a partial HMUX0 scan exposed through hmu must not re-enable RunDataReturnTemp probing.
+async def test_dump_partial_hmu_alias_blocks_return_temp_probe() -> None:
+    graph = tc.DISCOVERY.DiscoveryService.build_device_graph(["scan.08 = Vaillant;HMUX0;0303", "hmu Other = live"])
+    ebus = MagicMock()
+    ebus.find_registers = AsyncMock(return_value=["scan.08 = Vaillant;HMUX0;0303", "hmu Other = live"])
+    ebus.last_find_usable = True
+    ebus.read_register = AsyncMock(return_value=None)
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {"hmu.RunDataReturnTemp": MagicMock(enabled=True, writable=False, fallback_read=True)}
+    try:
+        await DUMP._dump_registers(
+            ebus,
+            circuit_aliases={"hmu": "hmu"},
+            current_graph=graph,
+            runtime_definitions=[],
+        )
+    finally:
+        DUMP.REGISTER_MAP = original_map
+    assert ("hmu", "RunDataReturnTemp") not in [call.args[:2] for call in ebus.read_register.await_args_list]
+
+
 # Intent: resolve host aliases to the socket address used for dump-lock identity.
 # Why: a DNS name and its IP address can reach the same daemon-global grab state.
 async def test_grab_endpoint_lock_key_uses_resolved_socket_address(monkeypatch: pytest.MonkeyPatch) -> None:

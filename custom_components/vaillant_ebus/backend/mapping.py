@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .models import DeviceGraph, DeviceNode, RegisterMeta, is_controller_circuit, is_heat_pump_circuit
+from .models import DeviceGraph, DeviceNode, RegisterMeta, ScanIdentity, is_controller_circuit, is_heat_pump_circuit
 
 HMUX0_SW0407_FALLBACK_BLOCKLIST: frozenset[str] = frozenset(
     {
@@ -125,6 +125,58 @@ def hmux0_fallback_blocked_circuits(graph: DeviceGraph | None) -> frozenset[str]
     if sw0407 is not None:
         blocked.add(sw0407)
     return frozenset(blocked)
+
+
+# Intent: identify HMUX0 scan evidence for one physical heat-pump owner, including aliases.
+# Why: ebusd may expose a scanned HMUX0 device through the logical `hmu` circuit.
+def hmux0_owner_scan(graph: DeviceGraph | None) -> tuple[str, ScanIdentity] | None:
+    if graph is None:
+        return None
+    owners = [node for node in graph.nodes.values() if node.device_type.name == "HEAT_PUMP"]
+    scans = [row for row in graph.scan_identities if row.scan_type.casefold() == "hmux0"]
+    if not scans:
+        scans = [
+            ScanIdentity(node.scan_address or "scan.unknown", node.scan_type, node.scan_sw, node.scan_hw)
+            for node in owners
+            if node.scan_type.casefold() == "hmux0"
+        ]
+    if len(owners) != 1 or len(scans) != 1:
+        return None
+    node = owners[0]
+    scan = scans[0]
+    if node.scan_type and node.scan_type.casefold() != "hmux0":
+        return None
+    if node.scan_type and not _has_current_unique_scan_identity(graph, node):
+        return node.circuit, scan
+    return node.circuit, scan
+
+
+# Intent: allow SW0303-only runtime definitions only for current unique evidence.
+# Why: retained node firmware fields cannot authorize a definition after a partial refresh.
+def hmux0_sw0303_owner(graph: DeviceGraph | None) -> str | None:
+    owner_scan = hmux0_owner_scan(graph)
+    if owner_scan is None:
+        return None
+    circuit, scan = owner_scan
+    if not scan.complete or scan.scan_sw != "0303" or scan.scan_hw != "0504":
+        return None
+    if (
+        graph.scan_identities
+        and graph.nodes[circuit].scan_type
+        and not _has_current_unique_scan_identity(graph, graph.nodes[circuit])
+    ):
+        return None
+    return circuit
+
+
+# Intent: identify circuits that may be an HMUX0 owner when identity is incomplete.
+# Why: only these candidates need the HMUX0-specific RunDataReturnTemp fallback restriction.
+def hmux0_candidate_circuits(graph: DeviceGraph | None) -> frozenset[str]:
+    if graph is None:
+        return frozenset()
+    if any(row.scan_type.casefold() == "hmux0" for row in graph.scan_identities):
+        return frozenset(node.circuit for node in graph.nodes.values() if node.device_type.name == "HEAT_PUMP")
+    return frozenset()
 
 
 # Intent: resolve the discovered circuit only for the VWZIO scan with passive telemetry evidence.

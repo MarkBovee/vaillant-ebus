@@ -18,6 +18,9 @@
 
 - Apply the HMUX0 SW0407 fallback blocklist when the current scan identity is
   incomplete or ambiguous, in both coordinator polling and dump map probes.
+- Keep SW0303-only runtime definitions and `RunDataReturnTemp` fallback behind
+  a current unique SW0303/HW0504 owner, while preserving non-HMUX0 `hmu`
+  fallback behavior.
 
 ### Notes
 
