@@ -146,9 +146,10 @@ passes.
 |---|---|---|
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; no remote `release/1.10.3`, tag or release exists |
 | Plan-check | PASS | Independent plan-check accepted version order, stage allowlist, deployment identity, HA smoke evidence, CI/gate order, and auto-grab limitations |
-| Candidate/version | COMPLETE | `pyproject.toml`, manifest and `CHANGELOG.md` heading are synchronized at `1.10.3`; changelog date is withheld until candidate gates pass |
-| Validation | PASS | Ruff check/format, strict configured mypy, YAML parsing, 943 pytest tests, version check, compileall and diff check passed |
-| HA smoke | NOT STARTED | Required zero/one-second discovery-dump export on owner HA |
+| Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
+| Validation | PASS | Ruff check/format, strict configured mypy, YAML parsing, 943 pytest tests, version check, compileall and diff check passed before packaging |
+| HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
+| HA smoke | IN PROGRESS | Deploy committed candidate with `scripts/deploy.sh --restart`; then run required zero/one-second exports and checks |
 | Review | NOT STARTED | Independent standard-tier review after validation and HA smoke |
 | Audit | NOT STARTED | Separate independent standard-tier audit after review |
 | Release gate | NOT STARTED | Independent decision against exact final diff and all evidence |
