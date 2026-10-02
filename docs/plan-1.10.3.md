@@ -1,6 +1,6 @@
 # Release 1.10.3 Plan
 
-Status: **BLOCKED — PR #164 changes are approved for inclusion; final validation, PR-CI and release gates remain**
+Status: **BLOCKED — initial-setup address safety and Setback options need correction; PR #164 remains in scope**
 
 Planning date: 2026-10-02
 
@@ -70,6 +70,12 @@ passes.
   definitions, run a follow-up find in the same poll and refresh the graph from
   that usable response before fallback reads; if that response is unusable, skip
   active fallback reads for the poll and retain the last usable scan snapshot.
+  During initial setup, apply the same rule to the post-definition find: merge a
+  usable node-empty snapshot into the initial graph before entity/fallback
+  processing. Initial runtime definitions already sent against the first usable
+  graph are not retroactively suppressed; no fallback read may use that old
+  owner after the follow-up conflict. If the follow-up find is unusable, retain
+  topology only for presentation and skip active fallback reads.
   A same-firmware VWZIO at another address must not authorize B511/021802 to
   `0x76`.
 - Gate generic VWZIO/VWZ `Status01` runtime definitions and coordinator/dump
@@ -108,6 +114,11 @@ passes.
   logical map aliases to route only to the currently discovered circuit. With an
   already-ready coordinator, test error-only/malformed first and follow-up finds:
   retain the last usable scan snapshot and issue no active fallback reads.
+  Add one initial-setup regression covering both post-definition outcomes: a
+  usable, node-empty find with an incomplete same-address row must merge the
+  latest snapshot and block Status01 fallback; an unusable follow-up must retain
+  the last usable snapshot and skip active fallback. Verify initial definitions
+  were generated only from the first complete, usable snapshot.
   Preserve the existing B511 positive frame decode/entity values and absent or
   `no data stored` path, including failed passive-definition behavior without an
   active read or fabricated entity.
@@ -131,7 +142,7 @@ passes.
   Preserve every section and raw find row, add its attachment URL and original
   SHA-256 as provenance, include it in the fixture-load sweep, and add one
   focused regression that checks the discovered CTLV0 values, writable select
-  options and offset range, plus the absent-register path. Do not add hardware
+  `normal`/`comfort` options and offset range, plus the absent-register path. Do not add hardware
   writes to tests.
 - Add the human-written `1.10.3` changelog section with heading `## 1.10.3`
   but no date while the candidate is under review. Then run
@@ -257,14 +268,14 @@ passes.
 | Gate | Status | Evidence |
 |---|---|---|
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; remote `release/1.10.3` backs draft PR #168; no release tag/publication exists |
-| Plan-check | PENDING RECHECK | Owner accepted the reporter's Hc1SetbackMode test attestation and supplied CTLV0 dump/write evidence for PR #164. Revised plan adds both controls plus the full provenance fixture and one focused regression; independent re-check before implementation is required. |
+| Plan-check | PASS | Independent re-check accepted the initial-setup usable/unusable follow-up cases, `normal`/`comfort` options, the single authorized setup regression, fixture scope and release/issue boundaries. |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
-| Validation | PASS | Final candidate: 962 pytest tests passed; Ruff check/configured format, strict configured mypy, compileall, version check and diff check passed. The deploy script repeated Ruff/pytest/compileall. One existing deprecation warning remains in `test_legacy_resolve_circuit_keeps_string_contract_without_ownership_authority`. |
+| Validation | STALE | 962 tests passed before the initial-setup fix and Setback option correction; rerun full validation afterward. |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
-| HA smoke | PASS (scope-limited) | Deployed with `scripts/deploy.sh --restart` (HTTP 200); HA-MCP confirmed `vaillant_ebus` loaded. Zero dump `/config/vaillant_ebus/discovery_dump_2026-10-02_164812.yaml`: valid YAML/required sections, 631 raw find rows, 730 before-registers, `not_requested`, duration 0. Positive dump `/config/vaillant_ebus/discovery_dump_2026-10-02_164832.yaml`: valid YAML/required sections, 631 raw find rows, 730 before-registers, `continued`/`count_delta`, 1.0011159 s, limitation present, two grab rows. Read-only `grab result all` returned data, not `grab disabled`; fresh component ERROR logs were empty. Owner scan is `VWZ00 SW0522/HW5103`, not reporter `VWZIO SW0500/HW0504`; no positive HW0504 counters verified. Files fetched via read-only SSH because HA-MCP has no file reader. |
-| Review | PENDING FINAL | Previous delta reviews passed; final review must include PR #164 metadata and the exact post-smoke diff. |
-| Audit | PENDING FINAL | Previous delta audits passed; final audit must include writable metadata/value-resolution paths and the exact post-smoke diff. |
-| Release gate | BLOCKED | PR #164 evidence is accepted for inclusion; implementation, validation and HA smoke pass, but PR-CI and independent final review/audit/release-gate remain. Do not merge, tag or publish before all pass. |
+| HA smoke | STALE | The last smoke passed on the pre-setup-fix candidate. Redeploy and rerun zero/one-second exports after the final code change. |
+| Review | FINDING OPEN | Final review found the initial-setup stale-graph bypass and a Setback option mismatch; fix and re-review. |
+| Audit | FINDING OPEN | Final audit found the initial-setup stale-graph bypass; fix and re-audit. |
+| Release gate | BLOCKED | Fix initial setup and Setback options, then rerun validation, HA smoke, final review/audit, PR-CI and release gate before merge/tag/publication. |
 | PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; local candidate commits are not pushed. Add PR #164 metadata after plan-check, then push/review/CI; do not merge before all gates. |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
 | User communication | IN PROGRESS | PR #164 dump arrived and is assessed; post the precise evidence summary after publication, close #165 only then, and leave #152/#161 open |
