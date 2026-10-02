@@ -1464,6 +1464,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             parts = definition.split(",", 3)
             if len(parts) < 3 or not self._graph:
                 return definition
+            hmux0_candidates = {circuit.casefold() for circuit in hmux0_candidate_circuits(self._graph)}
+            hmux0_owner = hmux0_owner_scan(self._graph)
+            if (
+                is_heat_pump_circuit(parts[1])
+                and hmux0_candidates
+                and (hmux0_owner is None or not hmux0_owner[1].complete)
+            ):
+                return None
             if (
                 hmux0_sw0407_owner
                 and parts[1].casefold() == hmux0_sw0407_owner.casefold()

@@ -1420,6 +1420,8 @@ async def test_issue161_partial_hmu_alias_blocks_runtime_definition_and_return_t
         await coordinator._define_custom_registers()
         definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
         assert not any(",RunDataReturnTemp," in definition for definition in definitions)
+        assert not any(",Status00," in definition for definition in definitions)
+        assert not any(",RunDataElPowerConsumption," in definition for definition in definitions)
 
         original_map = COORDINATOR.REGISTER_MAP
         COORDINATOR.REGISTER_MAP = {"hmu.RunDataReturnTemp": MAPPING.RegisterMeta(enabled=True, fallback_read=True)}
