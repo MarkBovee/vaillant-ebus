@@ -1,6 +1,6 @@
 # Release 1.10.3 Plan
 
-Status: **BLOCKED — initial-setup address safety and Setback options need correction; PR #164 remains in scope**
+Status: **BLOCKED — HMUX0 fallback safety correction and final release gates remain**
 
 Planning date: 2026-10-02
 
@@ -114,6 +114,9 @@ passes.
   logical map aliases to route only to the currently discovered circuit. With an
   already-ready coordinator, test error-only/malformed first and follow-up finds:
   retain the last usable scan snapshot and issue no active fallback reads.
+  For HMUX0, a stale SW0303 graph followed by incomplete current scan identity
+  must not authorize a fallback read in the SW0407 blocklist; test this on the
+  coordinator path as well as the existing dump path.
   Add one initial-setup regression covering both post-definition outcomes: a
   usable, node-empty find with an incomplete same-address row must merge the
   latest snapshot and block Status01 fallback; an unusable follow-up must retain
@@ -268,14 +271,15 @@ passes.
 | Gate | Status | Evidence |
 |---|---|---|
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; remote `release/1.10.3` backs draft PR #168; no release tag/publication exists |
-| Plan-check | PASS | Independent re-check accepted the initial-setup usable/unusable follow-up cases, `normal`/`comfort` options, the single authorized setup regression, fixture scope and release/issue boundaries. |
+| Plan-check | PASS | Independent plan-check accepted the evidence boundaries and the bounded HMUX0 correction: incomplete or ambiguous current HMUX0 scan identity must fail closed for blocklisted fallback reads, while complete SW0303 behavior remains unchanged. Regression must exercise a ready coordinator receiving a usable incomplete scan, then prove the restricted register is not read. |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
-| Validation | PASS | Current candidate: 963 pytest tests passed; Ruff check/configured format, strict configured mypy, compileall, version check and diff check passed. The deploy script repeated Ruff/pytest/compileall. One existing deprecation warning remains in `test_legacy_resolve_circuit_keeps_string_contract_without_ownership_authority`. |
+| Implementation | PASS | Coordinator fallback now blocks the SW0407-specific register set when HMUX0 scan identity is incomplete or ambiguous; confirmed SW0407 remains blocked and complete SW0303 retains its existing fallback. Regression exercises a ready coordinator receiving a usable incomplete scan. |
+| Validation | PASS | Ruff, configured format check, strict mypy, YAML parse, 964 pytest tests, version check, compileall, and `git diff --check` passed. The suite reports one existing deprecation warning in `test_legacy_resolve_circuit_keeps_string_contract_without_ownership_authority`. |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
-| HA smoke | PASS (scope-limited) | Deployed with `scripts/deploy.sh --restart` (HTTP 200); HA-MCP confirmed `vaillant_ebus` loaded. Zero dump `/config/vaillant_ebus/discovery_dump_2026-10-02_171733.yaml`: valid YAML/required sections, 631 raw find rows, 730 before-registers, `not_requested`, duration 0. Positive dump `/config/vaillant_ebus/discovery_dump_2026-10-02_171754.yaml`: valid YAML/required sections, 631 raw find rows, 730 before-registers, `continued`/`count_delta`, 1.0004224 s, limitation present, one grab row. Read-only `grab result all` returned data, not `grab disabled`; fresh component ERROR logs were empty. Owner hardware is VWZ00 SW0522/HW5103, so no positive HW0504 B511 read is claimed. |
-| Review | PENDING FINAL | Initial-setup and option findings are addressed; independent final review of this validated, post-smoke candidate remains. |
-| Audit | PENDING FINAL | Initial-setup finding is addressed; independent final audit of this validated, post-smoke candidate remains. |
-| Release gate | BLOCKED | Validation, smoke and code fixes pass; final independent review/audit, PR #168 PR-CI and release-gate decision remain. Do not merge, tag or publish before all pass. |
+| HA smoke | STALE | The last smoke passed on the pre-HMUX0-coordinator-fallback candidate. Redeploy and rerun zero/one-second dumps after the final code change. |
+| Review | PENDING FINAL | Initial-setup and option findings are addressed; final review must follow the HMUX0 correction and fresh smoke. |
+| Audit | FINDING OPEN | Final audit found stale HMUX0 firmware metadata can authorize a blocked coordinator fallback; fix and re-audit. |
+| Release gate | BLOCKED | Fix the HMUX0 coordinator path, then rerun validation, HA smoke, final review/audit, PR-CI and release gate before merge/tag/publication. |
 | PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; all candidate commits, including PR #164 metadata, are local and unpushed. Push after final review/audit, then wait for PR-CI and release gate. |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
 | User communication | IN PROGRESS | PR #164 dump arrived and is assessed; post the precise evidence summary after publication, close #165 only then, and leave #152/#161 open |

@@ -1332,6 +1332,48 @@ async def test_issue161_fallback_exclusions_do_not_apply_to_sw0302_or_sw0303() -
         COORDINATOR.REGISTER_MAP = original_map
 
 
+# Intent: a usable incomplete HMUX0 scan blocks fallback reads despite retained SW0303 metadata.
+# Why: the current scan snapshot, not a stale node identity, decides whether the firmware blocklist applies.
+async def test_issue161_incomplete_hmux0_scan_blocks_stale_sw0303_fallback() -> None:
+    original_map = COORDINATOR.REGISTER_MAP
+    COORDINATOR.REGISTER_MAP = {"hmux0.FlowTemp": MAPPING.RegisterMeta(enabled=True, fallback_read=True)}
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            graph = DISCOVERY.DiscoveryService.build_device_graph(
+                load_find_lines("community/hmux0_issue99_2026-09-10_173229.yaml", after=True)
+            )
+            graph.raw_registers.pop("hmux0.FlowTemp", None)
+            graph.placeholder_registers.discard("hmux0.FlowTemp")
+            coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+            coordinator.ebus = MagicMock(spec=EbusService)
+            coordinator.ebus.is_connected = True
+            coordinator.ebus.read_register = AsyncMock(return_value=None)
+            coordinator._ebusd_connected = True
+            coordinator._graph = graph
+            coordinator._last_find_keys = set()
+
+            assert graph.nodes["hmux0"].scan_sw == "0303"
+            await coordinator._fallback_read()
+            assert ("hmux0", "FlowTemp") in [call.args for call in coordinator.ebus.read_register.await_args_list]
+
+            coordinator.ebus.read_register.reset_mock()
+            await coordinator._refresh_graph_from_usable_find(["scan.08 = Vaillant;HMUX0;0303"])
+
+            assert coordinator._graph is not None
+            assert coordinator._graph.nodes["hmux0"].scan_sw == "0303"
+            assert any(
+                not row.complete and row.scan_type.casefold() == "hmux0" for row in coordinator._graph.scan_identities
+            )
+            assert MAPPING.hmux0_sw0407_circuit(coordinator._graph) is None
+            assert MAPPING.hmux0_uncertain_scan_circuits(coordinator._graph) == frozenset({"hmux0"})
+
+            await coordinator._fallback_read()
+
+            assert ("hmux0", "FlowTemp") not in [call.args for call in coordinator.ebus.read_register.await_args_list]
+    finally:
+        COORDINATOR.REGISTER_MAP = original_map
+
+
 # Intent: the complete #32 capture decodes the three B509 EXP responses at their documented offsets.
 # Why: definition-string tests alone cannot detect a shifted field or wrong datatype in a real telegram.
 def test_issue32_b509_exp_responses_decode_at_expected_offsets() -> None:

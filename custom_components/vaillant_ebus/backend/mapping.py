@@ -85,8 +85,23 @@ def hmux0_sw0407_circuit(graph: DeviceGraph | None) -> str | None:
         and node.scan_type.casefold() == "hmux0"
         and node.scan_sw == "0407"
         and node.scan_hw == "0504"
+        and _has_current_unique_scan_identity(graph, node)
     ]
     return matches[0].circuit if len(matches) == 1 else None
+
+
+# Intent: identify HMUX0 circuits whose latest scan evidence cannot authorize fallback polling.
+# Why: retained firmware metadata must not bypass hardware-specific blocklists after incomplete or conflicting scans.
+def hmux0_uncertain_scan_circuits(graph: DeviceGraph | None) -> frozenset[str]:
+    if graph is None:
+        return frozenset()
+    return frozenset(
+        node.circuit
+        for node in graph.nodes.values()
+        if node.device_type.name == "HEAT_PUMP"
+        and node.scan_type.casefold() == "hmux0"
+        and not _has_current_unique_scan_identity(graph, node)
+    )
 
 
 # Intent: resolve the discovered circuit only for the VWZIO scan with passive telemetry evidence.

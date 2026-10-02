@@ -33,6 +33,7 @@ from .backend.mapping import (
     VWZIO_SW0500_FALLBACK_NAMES,
     b516_date_bytes,
     hmux0_sw0407_circuit,
+    hmux0_uncertain_scan_circuits,
     is_field_key,
     metadata_circuits,
     multi_field_fields,
@@ -2004,6 +2005,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if len(parts := definition.split(",", 3)) >= 3 and parts[0].startswith("u")
         }
         hmux0_sw0407 = hmux0_sw0407_circuit(self._graph)
+        hmux0_blocked_circuits = {circuit.casefold() for circuit in hmux0_uncertain_scan_circuits(self._graph)}
+        if hmux0_sw0407 is not None:
+            hmux0_blocked_circuits.add(hmux0_sw0407.casefold())
         vwzio_sw0500 = vwzio_sw0500_circuit(self._graph)
         vwz_station_76 = vwz_station_scan_76_circuit(self._graph)
 
@@ -2025,11 +2029,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 and (vwz_station_76 is None or circuit_key != vwz_station_76.casefold())
             ):
                 return
-            if (
-                hmux0_sw0407 is not None
-                and circuit_key == hmux0_sw0407.casefold()
-                and name_key in HMUX0_SW0407_FALLBACK_NAMES
-            ):
+            if circuit_key in hmux0_blocked_circuits and name_key in HMUX0_SW0407_FALLBACK_NAMES:
                 return
             if (
                 vwzio_sw0500 is not None
