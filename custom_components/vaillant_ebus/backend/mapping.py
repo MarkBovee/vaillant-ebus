@@ -134,11 +134,11 @@ def hmux0_owner_scan(graph: DeviceGraph | None) -> tuple[str, ScanIdentity] | No
         return None
     owners = [node for node in graph.nodes.values() if node.device_type.name == "HEAT_PUMP"]
     scans = [row for row in graph.scan_identities if row.scan_type.casefold() == "hmux0"]
-    if not scans:
+    if not scans and not graph.scan_identities:
         scans = [
             ScanIdentity(node.scan_address or "scan.unknown", node.scan_type, node.scan_sw, node.scan_hw)
             for node in owners
-            if node.scan_type.casefold() == "hmux0"
+            if node.scan_type.casefold() == "hmux0" and not node.scan_address
         ]
     if len(owners) != 1 or len(scans) != 1:
         return None
@@ -176,6 +176,10 @@ def hmux0_candidate_circuits(graph: DeviceGraph | None) -> frozenset[str]:
         return frozenset()
     if any(row.scan_type.casefold() == "hmux0" for row in graph.scan_identities):
         return frozenset(node.circuit for node in graph.nodes.values() if node.device_type.name == "HEAT_PUMP")
+    if not graph.scan_identities:
+        if any(node.scan_type.casefold() == "hmux0" for node in graph.nodes.values()):
+            return frozenset(node.circuit for node in graph.nodes.values() if node.device_type.name == "HEAT_PUMP")
+        return frozenset()
     return frozenset()
 
 

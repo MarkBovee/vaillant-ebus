@@ -21,6 +21,8 @@
 - Keep SW0303-only runtime definitions and `RunDataReturnTemp` fallback behind
   a current unique SW0303/HW0504 owner, while preserving non-HMUX0 `hmu`
   fallback behavior.
+- Do not reuse retained HMUX0 scan metadata after a scan-less or ambiguous
+  refresh when deciding runtime definitions or active fallback reads.
 
 ### Notes
 

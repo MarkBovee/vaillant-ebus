@@ -1453,6 +1453,37 @@ async def test_non_hmux0_hmu_return_temp_fallback_remains_available() -> None:
         assert ("hmu", "RunDataReturnTemp") in [call.args for call in coordinator.ebus.read_register.await_args_list]
 
 
+# Intent: a scan-less refresh cannot authorize retained HMUX0 definitions or ReturnTemp polling.
+# Why: `_merge_device_graphs` retains topology for presentation, but scan authority must expire immediately.
+async def test_scanless_hmux0_refresh_clears_runtime_owner_authority() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        initial = DISCOVERY.DiscoveryService.build_device_graph(
+            ["scan.08 = Vaillant;HMUX0;0303;0504", "hmu Other = live"]
+        )
+        refreshed = DISCOVERY.DiscoveryService.build_device_graph(["hmu Other = live"])
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._graph = COORDINATOR._merge_device_graphs(initial, refreshed)
+        coordinator._last_find_keys = set()
+
+        await coordinator._define_custom_registers()
+        definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
+        assert not any(",RunDataReturnTemp," in definition for definition in definitions)
+
+        original_map = COORDINATOR.REGISTER_MAP
+        COORDINATOR.REGISTER_MAP = {"hmu.RunDataReturnTemp": MAPPING.RegisterMeta(enabled=True, fallback_read=True)}
+        try:
+            await coordinator._fallback_read()
+        finally:
+            COORDINATOR.REGISTER_MAP = original_map
+        assert ("hmu", "RunDataReturnTemp") not in [
+            call.args for call in coordinator.ebus.read_register.await_args_list
+        ]
+
+
 # Intent: the complete #32 capture decodes the three B509 EXP responses at their documented offsets.
 # Why: definition-string tests alone cannot detect a shifted field or wrong datatype in a real telegram.
 def test_issue32_b509_exp_responses_decode_at_expected_offsets() -> None:
