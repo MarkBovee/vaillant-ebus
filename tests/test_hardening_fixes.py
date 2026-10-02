@@ -322,7 +322,8 @@ async def test_export_dump_stops_map_probes_after_unload_requested(tmp_path: Pat
     coordinator.ebus = MagicMock()
     coordinator.ebus.is_connected = True
     coordinator.ebus.version = "26.1"
-    coordinator.ebus.find_registers = AsyncMock(return_value=[])
+    coordinator.ebus.find_registers = AsyncMock(return_value=["hmux0 Status01 = off"])
+    coordinator.ebus.last_find_usable = True
     coordinator.ebus.read_register = AsyncMock()
     coordinator._ebusd_connected = True
     coordinator._graph = tc.DeviceGraph(
@@ -332,8 +333,8 @@ async def test_export_dump_stops_map_probes_after_unload_requested(tmp_path: Pat
     )
     original_map = DUMP.REGISTER_MAP
     DUMP.REGISTER_MAP = {
-        "hmu.FirstProbe": MagicMock(enabled=True, writable=False, fallback_read=True),
-        "hmu.SecondProbe": MagicMock(enabled=True, writable=False, fallback_read=True),
+        "hmux0.FirstProbe": MagicMock(enabled=True, writable=False, fallback_read=True),
+        "hmux0.SecondProbe": MagicMock(enabled=True, writable=False, fallback_read=True),
     }
 
     # Intent: flip the teardown flag while the current map probe is suspended.
