@@ -54,7 +54,10 @@ or register meanings from plausible values alone.
   starts. Together with the correlated before/after values, classify the HW0504
   mapping as a **strong assumption**, not local live verification.
 - Add `RunStatsImmersionHeaterHwc` as a **passive `u` definition** only for the
-  discovered VWZIO circuit with the exact `SW0500/HW0504` scan. Expose its
+  uniquely discovered VWZIO circuit at slave `0x76` with the exact
+  `SW0500/HW0504` scan. Preserve the scan address in the device graph; a matching
+  scan identity on another address or conflicting scans must not authorize this
+  definition. Expose its
   captured runtime in minutes and starts as separate diagnostic sensors. Do
   not actively poll, probe, or write these registers. Keep the value unavailable
   when the frame/register is absent. Set `fallback_read=False` on the mapped

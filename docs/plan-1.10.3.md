@@ -34,11 +34,14 @@ passes.
   deploy, or open a PR before the independent plan-check passes.
 - Do not edit HA entity/device registries or HA configuration, ebusd CSV files
   or `--configpath`, and do not write to eBUS registers.
-- Preserve the runtime definition’s exact scan gate: passive `u` only on the
-  discovered VWZIO `SW0500/HW0504` circuit. Keep `fallback_read=False` on the
-  mapping so a rejected definition cannot trigger a coordinator or dump-service
-  active read. The HW5103 metadata remains graph-driven only for a register that
-  ebusd actually discovers; PR #598 supplies separate HW5103 evidence.
+- Preserve the runtime definition’s exact scan gate: passive `u` only for one
+  discovered VWZIO `SW0500/HW0504` scan at slave address `0x76`, with that scan
+  address carried through the device graph. A same-firmware VWZIO at another
+  address, or conflicting duplicate scan identities, must not authorize a
+  B511/021802 definition to `0x76`. Keep `fallback_read=False` so rejected or
+  absent passive definitions cannot trigger coordinator or dump-service active
+  reads. HW5103 metadata remains graph-driven only when ebusd actually
+  discovers the register; PR #598 supplies separate HW5103 evidence.
 - Add the human-written `1.10.3` changelog section with heading `## 1.10.3`
   but no date while the candidate is under review. Then run
   `python3 tools/version.py bump 1.10.3` so the required heading exists, and
@@ -128,7 +131,8 @@ passes.
 ## Plan-check questions
 
 1. Does the included feature diff contain only the intended HW0504 passive
-   counter mapping plus its evidence-backed metadata, tests and fixtures?
+   counter mapping plus its evidence-backed metadata, tests and fixtures, with
+   scan address 0x76 retained as part of owner identity?
 2. Are version files and changelog synchronized without exposing an unapproved
    release date or promising publication before the gates pass?
 3. Does the deployment/smoke sequence use the required script and HA-MCP paths,
@@ -145,13 +149,13 @@ passes.
 | Gate | Status | Evidence |
 |---|---|---|
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; no remote `release/1.10.3`, tag or release exists |
-| Plan-check | PASS | Independent plan-check accepted version order, stage allowlist, deployment identity, HA smoke evidence, CI/gate order, and auto-grab limitations |
+| Plan-check | PENDING RECHECK | Final audit found the graph did not retain scan address; add address identity and multi-scan regressions before rechecking plan |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
 | Validation | PASS | Ruff check/format, strict configured mypy, YAML parsing, 943 pytest tests, version check, compileall and diff check passed; `scripts/deploy.sh --restart` repeated ruff/pytest/compile successfully |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
 | HA smoke | PASS | Deployed commit `77c696b` with `scripts/deploy.sh --restart` (HTTP 200). HA-MCP confirmed the entry loaded. Zero dump `/config/vaillant_ebus/discovery_dump_2026-10-02_135017.yaml`: YAML valid, required sections, 631 raw find lines, 728 before-registers, `not_requested`, captured duration `0`. Positive dump `/config/vaillant_ebus/discovery_dump_2026-10-02_135110.yaml`: YAML valid, required sections, 631 raw find lines, 728 before-registers, `continued`, `count_delta`, 1.000969 s, limitation present, 4 grab lines. Read-only `grab result all` returned 8,633 lines, not `grab disabled`; fresh filtered logs had zero entries. Owner scan is VWZ00 SW0522/HW5103, so this verifies export and unavailable-data safety, not positive HW0504 B511 reads. HA-MCP had no file reader; read-only SSH fetched both files. |
-| Review | PENDING | Independent final review required after current PR-CI and validation |
-| Audit | PENDING | Separate independent final audit required after review |
+| Review | FINDING OPEN | Final reviewer found stale CI bookkeeping; ledger was corrected before this new address-scope finding |
+| Audit | FINDING OPEN | Independent audit found a missing scan-address invariant; fix and re-audit required |
 | Release gate | NOT STARTED | Independent decision against exact final diff and all evidence |
 | PR / merge | IN PROGRESS | Draft PR #168 is open. PR-CI is required; the release-gate must verify `ci`, `validate`, and `validate-hacs` against the exact current PR head. This plan does not cache per-head check results because a plan-only commit changes the PR head. |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
