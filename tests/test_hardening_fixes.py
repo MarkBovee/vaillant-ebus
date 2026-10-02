@@ -2095,20 +2095,27 @@ async def test_dump_status01_fallback_respects_current_station_address() -> None
     partial_address_graph = tc.DISCOVERY.DiscoveryService.build_device_graph(
         [
             "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
-            "scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW",
             "vwzio Status01 = no data stored",
         ]
     )
+    assert DUMP.vwz_station_scan_76_circuit(partial_address_graph) == "vwzio"
     partial_ebus = MagicMock()
-    partial_ebus.find_registers = AsyncMock(return_value=[])
+    partial_ebus.find_registers = AsyncMock(
+        return_value=[
+            "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+            "scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW",
+        ]
+    )
     partial_ebus.read_register = AsyncMock(return_value=None)
     partial_skips = DUMP._fallback_read_skip_keys(partial_address_graph, [])
     await DUMP._dump_registers(
         partial_ebus,
         circuit_aliases={"vwzio": "vwzio"},
         skip_fallback_reads=partial_skips,
+        current_graph=partial_address_graph,
+        runtime_definitions=[],
     )
-    assert not DUMP.vwz_station_scan_76_circuit(partial_address_graph)
+    assert DUMP.vwz_station_scan_76_circuit(partial_address_graph) == "vwzio"
     assert ("vwzio", "Status01") not in [call.args[:2] for call in partial_ebus.read_register.await_args_list]
 
 

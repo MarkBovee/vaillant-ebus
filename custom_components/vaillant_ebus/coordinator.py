@@ -1020,6 +1020,17 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             except Exception:
                 _LOGGER.warning("Post-discovery callback failed", exc_info=True)
 
+    # Intent: refresh live scan ownership from each usable find before any runtime definition or fallback read.
+    # Why: discovery-ready graphs still need current address evidence when bus identities change.
+    async def _refresh_graph_from_usable_find(self, find_lines: list[str]) -> None:
+        discovered = DiscoveryService.build_device_graph(find_lines)
+        if self.discovery_ready and self._graph is not None:
+            self._graph = _merge_device_graphs(self._graph, discovered)
+        elif discovered.nodes:
+            await self._apply_discovery_graph(discovered, "delayed")
+        elif self._graph is not None:
+            self._graph = _merge_device_graphs(self._graph, discovered)
+
     # Intent: keep at most one delayed discovery callback pending.
     # Why: one bounded retry handles transient find failures without polling continuously.
     def _schedule_delayed_rediscovery(self) -> None:
@@ -2249,10 +2260,6 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             try:
                 now = datetime.now()
                 poll_energy = now - self._last_energy_poll >= ENERGY_POLL_INTERVAL
-                if poll_energy:
-                    await self._define_custom_registers()
-                    if self._stopped or self._unload_requested:
-                        return {"ebusd": await self._async_values_from_registers()}
                 lines = await self.ebus.find_registers()
                 if self._stopped or self._unload_requested:
                     return {"ebusd": await self._async_values_from_registers()}
@@ -2276,13 +2283,28 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     if self._graph is not None:
                         self._graph.error_registers = error_registers
                     return {"ebusd": await self._async_values_from_registers()}
-                if not self.discovery_ready:
-                    discovered = DiscoveryService.build_device_graph(lines)
-                    if discovered.nodes:
-                        await self._apply_discovery_graph(discovered, "delayed")
+                await self._refresh_graph_from_usable_find(lines)
+                if self._stopped or self._unload_requested or not self.ebus or not self.ebus.is_connected:
+                    return {"ebusd": await self._async_values_from_registers()}
+                if not self._ebusd_connected and self.discovery_ready:
+                    self._ebusd_connected = True
+                if poll_energy:
+                    previous_definitions = self._runtime_definitions.copy()
+                    await self._define_custom_registers()
+                    if self._stopped or self._unload_requested:
+                        return {"ebusd": await self._async_values_from_registers()}
+                    if self._runtime_definitions != previous_definitions:
+                        lines = await self.ebus.find_registers()
+                        if self._stopped or self._unload_requested:
+                            return {"ebusd": await self._async_values_from_registers()}
+                        if getattr(self.ebus, "last_find_usable", None) is False:
+                            _LOGGER.warning(
+                                "Post-definition ebusd find returned no usable rows; skipping active fallback reads"
+                            )
+                            return {"ebusd": await self._async_values_from_registers()}
+                        await self._refresh_graph_from_usable_find(lines)
                         if self._stopped or self._unload_requested or not self.ebus or not self.ebus.is_connected:
                             return {"ebusd": await self._async_values_from_registers()}
-                        self._ebusd_connected = True
                 updated = 0
                 invalid_values: set[str] = set()
                 no_data_values: set[str] = set()

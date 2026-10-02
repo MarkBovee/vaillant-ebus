@@ -891,6 +891,111 @@ async def test_partial_conflicting_scan_at_address76_blocks_status_definition_an
         assert ("vwzio", "Status01") not in [call.args[:2] for call in coordinator.ebus.read_register.await_args_list]
 
 
+# Intent: a ready coordinator applies each usable live scan snapshot before any active fallback read.
+# Why: cached graph ownership must not survive a newly observed partial conflict at the fixed station address.
+async def test_ready_coordinator_refreshes_scan_snapshot_before_status_fallback() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.last_find_usable = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator.ebus.find_registers = AsyncMock(
+            return_value=[
+                "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+                "scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW",
+            ]
+        )
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._cache_seeded = coordinator._ebusd_connected = True
+        coordinator._last_energy_poll = datetime.min
+        coordinator._last_placeholder_poll = datetime.min
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            [
+                "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+                "vwzio Status01 = no data stored",
+            ]
+        )
+
+        await coordinator._async_update_data()
+
+        assert MAPPING.vwz_station_scan_76_circuit(coordinator._graph) is None
+        assert not any(
+            call.args[0].startswith("r,vwzio,Status01,") for call in coordinator.ebus.define_register.await_args_list
+        )
+        assert ("vwzio", "Status01") not in [call.args[:2] for call in coordinator.ebus.read_register.await_args_list]
+
+
+# Intent: preserve current ownership and avoid fallback reads when the live find is unusable.
+# Why: malformed/error-only responses cannot replace the last usable scan snapshot or authorize polling.
+async def test_ready_coordinator_unusable_live_find_keeps_scan_snapshot_and_skips_fallback() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.last_find_usable = False
+        coordinator.ebus.find_registers = AsyncMock(return_value=["ERR: response unavailable"])
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._cache_seeded = coordinator._ebusd_connected = True
+        coordinator._last_energy_poll = datetime.min
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            [
+                "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+                "vwzio Status01 = no data stored",
+            ]
+        )
+        previous_scan_snapshot = coordinator._graph.scan_identities
+
+        await coordinator._async_update_data()
+
+        assert coordinator._graph.scan_identities == previous_scan_snapshot
+        assert MAPPING.vwz_station_scan_76_circuit(coordinator._graph) == "vwzio"
+        coordinator.ebus.define_register.assert_not_awaited()
+        coordinator.ebus.read_register.assert_not_awaited()
+
+
+# Intent: skip active fallbacks when the follow-up find after new definitions is unusable.
+# Why: runtime definitions must not turn an error-only response into stale-graph polling authority.
+async def test_unusable_post_definition_find_skips_fallback_and_keeps_usable_snapshot() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._cache_seeded = coordinator._ebusd_connected = True
+        coordinator._last_energy_poll = datetime.min
+        coordinator._last_placeholder_poll = datetime.min
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            [
+                "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+                "vwzio Status01 = no data stored",
+            ]
+        )
+        current_lines = [
+            "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+            "vwzio Status01 = no data stored",
+        ]
+        responses = iter(((current_lines, True), (["ERR: response unavailable"], False)))
+
+        # Intent: expose the validity result associated with each sequential fake find response.
+        # Why: the poll must distinguish its usable pre-definition snapshot from a failed follow-up.
+        async def _find_registers() -> list[str]:
+            lines, usable = next(responses)
+            coordinator.ebus.last_find_usable = usable
+            return lines
+
+        coordinator.ebus.find_registers = AsyncMock(side_effect=_find_registers)
+
+        await coordinator._async_update_data()
+
+        assert MAPPING.vwz_station_scan_76_circuit(coordinator._graph) == "vwzio"
+        assert coordinator.ebus.find_registers.await_count == 2
+        assert coordinator.ebus.define_register.await_count > 0
+        coordinator.ebus.read_register.assert_not_awaited()
+
+
 # Intent: define SW0407 layouts from their unique scan despite ambiguous heat-pump role resolution.
 # Why: a second heat pump must not suppress target registers or redirect definitions to the wrong circuit.
 async def test_issue161_sw0407_passive_definitions_survive_other_heat_pump_node() -> None:
@@ -3250,8 +3355,8 @@ async def test_poll_skips_error_placeholder_until_a_later_find_recovers_it(monke
 
         await coordinator._async_update_data()
 
-        assert "ctlv2.HwcOpMode" in graph.placeholder_registers
-        assert graph.error_registers == {"ctlv2.HwcOpMode"}
+        assert "ctlv2.HwcOpMode" in coordinator._graph.placeholder_registers
+        assert coordinator._graph.error_registers == {"ctlv2.HwcOpMode"}
         assert [call.args[:2] for call in coordinator.ebus.read_register.await_args_list] == [
             ("ctlv2", "Hc1FlowTempCalc")
         ]
@@ -3267,7 +3372,7 @@ async def test_poll_skips_error_placeholder_until_a_later_find_recovers_it(monke
         coordinator._last_placeholder_poll = datetime.now() - timedelta(days=1)
         await coordinator._async_update_data()
 
-        assert graph.error_registers == set()
+        assert coordinator._graph.error_registers == set()
         assert {call.args[:2] for call in coordinator.ebus.read_register.await_args_list} == {
             ("ctlv2", "HwcOpMode"),
             ("ctlv2", "Hc1FlowTempCalc"),

@@ -9,7 +9,7 @@ import socket
 import tempfile
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Literal
 from weakref import WeakKeyDictionary
@@ -19,6 +19,7 @@ from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
+from .backend.discovery_service import DiscoveryService
 from .backend.dump_analysis import CURRENT_DUMP_VERSION, normalize_dump
 from .backend.grab_parser import parse_grab_lines, unknown_telegrams
 from .backend.mapping import (
@@ -216,6 +217,8 @@ async def _dump_registers(
     circuit_aliases: dict[str, str | None] | None = None,
     ensure_active: Callable[[], None] | None = None,
     skip_fallback_reads: set[tuple[str, str]] | None = None,
+    current_graph: DeviceGraph | None = None,
+    runtime_definitions: list[str] | None = None,
 ) -> tuple[list[dict], set[str], list[str]]:
     if ensure_active is not None:
         ensure_active()
@@ -225,7 +228,13 @@ async def _dump_registers(
     discovered = _parse_find_lines(raw_lines)
     find_is_usable = getattr(ebus, "last_find_usable", None)
     skip_map_probes = find_is_usable is False
-    fallback_read_skip_keys = skip_fallback_reads or set()
+    fallback_read_skip_keys = set(skip_fallback_reads or ())
+    if current_graph is not None and find_is_usable is not False:
+        current_scan_identities = tuple(
+            identity for line in raw_lines if (identity := DiscoveryService._parse_scan_identity(line)) is not None
+        )
+        current_graph = replace(current_graph, scan_identities=current_scan_identities)
+        fallback_read_skip_keys.update(_fallback_read_skip_keys(current_graph, runtime_definitions or []))
     if seen_keys is None:
         seen_keys = set()
     register_list: list[dict] = []
@@ -705,15 +714,13 @@ async def _async_export_discovery_dump_impl(
         logical_circuit: coordinator.resolve_register_circuit(logical_circuit)
         for logical_circuit in ("ctlv2", "hmu", "bai", "vwz", "vwzio")
     }
-    fallback_read_skip_keys = _fallback_read_skip_keys(
-        coordinator._graph,
-        list(coordinator._runtime_definitions.values()),
-    )
+    runtime_definitions = list(coordinator._runtime_definitions.values())
     before_registers, seen, raw_find_lines = await _dump_registers(
         ebus,
         circuit_aliases=aliases,
         ensure_active=ensure_active,
-        skip_fallback_reads=fallback_read_skip_keys,
+        current_graph=coordinator._graph,
+        runtime_definitions=runtime_definitions,
     )
     ensure_active()
 
@@ -759,7 +766,8 @@ async def _async_export_discovery_dump_impl(
             ebus,
             circuit_aliases=aliases,
             ensure_active=ensure_active,
-            skip_fallback_reads=fallback_read_skip_keys,
+            current_graph=coordinator._graph,
+            runtime_definitions=runtime_definitions,
         )
 
     output_dir = hass.config.path(DOMAIN)
