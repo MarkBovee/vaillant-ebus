@@ -131,8 +131,7 @@ def _has_current_unique_scan_identity(graph: DeviceGraph, node: DeviceNode) -> b
     if not address or not scan_type:
         return False
     if any(
-        not row.complete
-        and (row.address.casefold() == address or row.scan_type.casefold() == scan_type)
+        not row.complete and (row.address.casefold() == address or row.scan_type.casefold() == scan_type)
         for row in graph.scan_identities
     ):
         return False

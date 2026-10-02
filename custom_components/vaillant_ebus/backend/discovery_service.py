@@ -170,9 +170,20 @@ class DiscoveryService:
         address = lhs.strip()
         if not re.fullmatch(r"scan\.[0-9a-f]{2}", address, re.IGNORECASE):
             return None
-        parts = [part.strip() for part in rhs.strip().split(";")]
+        raw_value = rhs.strip()
+        if not raw_value:
+            return ScanIdentity(address, "", "", "", complete=False)
+        parts = [part.strip() for part in raw_value.split(";")]
         if len(parts) == 1 and parts[0].casefold() == "no data stored":
             return None
+        if 2 <= len(parts) < 4 and not any("=" in part for part in parts) and parts[0].casefold() == "vaillant":
+            return ScanIdentity(
+                address,
+                parts[1],
+                parts[2] if len(parts) > 2 else "",
+                "",
+                complete=False,
+            )
         if len(parts) == 4 and not any("=" in part for part in parts):
             return ScanIdentity(address, parts[1], parts[2], parts[3], complete=all(parts))
         metadata: dict[str, str] = {}
@@ -419,9 +430,7 @@ class DiscoveryService:
                 if key.casefold() not in {raw_key.casefold() for raw_key in raw_registers}
             },
             scan_identities=tuple(
-                identity
-                for line in find_lines
-                if (identity := DiscoveryService._parse_scan_identity(line)) is not None
+                identity for line in find_lines if (identity := DiscoveryService._parse_scan_identity(line)) is not None
             ),
         )
 

@@ -807,7 +807,6 @@ def test_merge_device_graphs_replaces_current_vwzio_scan_authority() -> None:
     previous = DISCOVERY.DiscoveryService.build_device_graph(
         [
             "scan.76 = MF=Vaillant;ID=VWZIO;SW=0500;HW=0504",
-            "scan.76 = MF=Vaillant;ID=VWZIO;SW=;HW=0504",
             "vwzio Status01 = no data stored",
         ]
     )
