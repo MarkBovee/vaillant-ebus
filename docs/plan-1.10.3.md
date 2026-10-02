@@ -1,6 +1,6 @@
 # Release 1.10.3 Plan
 
-Status: **BLOCKED — partial scan rows can bypass address ambiguity; PR #164 write evidence is also outstanding**
+Status: **BLOCKED — poll and dump paths can use stale scan evidence; PR #164 write evidence is also outstanding**
 
 Planning date: 2026-10-02
 
@@ -32,8 +32,10 @@ passes.
 - Create `release/1.10.3` from the verified current `main`. Carry the reviewed
   feature diff and its tests/fixtures; do not include the pre-existing local
   change in `docs/issue-152-f34-analysis.md`.
-- Do not create the release branch, edit release metadata, stage, commit, push,
-  deploy, or open a PR before the independent plan-check passes.
+- The initial plan-check preceded release-branch, metadata, and draft-PR
+  creation. After any later scope or acceptance change, repeat plan-check before
+  further implementation or release actions; do not stage, commit, push, deploy,
+  or open/update a PR while the revised plan-check is pending.
 - Do not edit HA entity/device registries or HA configuration, ebusd CSV files
   or `--configpath`, and do not write to eBUS registers.
 - Preserve the runtime definition’s exact scan gate: passive `u` only for one
@@ -54,6 +56,15 @@ passes.
   one, even if the new graph has no VWZIO node, and clear prior station-address
   authorization when current evidence is missing or ambiguous. Authorization
   must depend only on this current scan snapshot, never a retained node.
+  Every usable live poll `find` must refresh the coordinator graph's scan
+  snapshot before runtime definitions or fallback reads, even when discovery is
+  already ready. Dump-service fallback eligibility must be recomputed from the
+  same raw `find` response used for that map probe, not the coordinator's stale
+  snapshot. Error-only/malformed find responses must not replace current graph
+  evidence or proceed to active fallback reads. When a poll adds new runtime
+  definitions, run a follow-up find in the same poll and refresh the graph from
+  that usable response before fallback reads; if that response is unusable, skip
+  active fallback reads for the poll and retain the last usable scan snapshot.
   A same-firmware VWZIO at another address must not authorize B511/021802 to
   `0x76`.
 - Gate generic VWZIO/VWZ `Status01` runtime definitions and coordinator/dump
@@ -82,8 +93,16 @@ passes.
   Status01 on the correct physical owner at `0x76`. Explicitly test a complete
   VWZIO row at `scan.76` plus a partial VWZ00 row at that address: no station
   owner, no Status01 runtime definition, and no coordinator or dump Status01
-  fallback read to `0x76`. Also test that an unrelated partial scan elsewhere
-  does not disable the valid owner.
+  fallback read to `0x76`, both from direct graph creation and from a previously
+  ready coordinator graph receiving the new usable live find. The dump test must
+  pass a valid/stale coordinator graph with the current conflicting rows only in
+  ebusd's find response and still issue no map probe to `0x76`. Also test that an
+  unrelated partial scan elsewhere does not disable the valid owner. With an
+  already-ready coordinator, test error-only/malformed first and follow-up finds:
+  retain the last usable scan snapshot and issue no active fallback reads.
+  Preserve the existing B511 positive frame decode/entity values and absent or
+  `no data stored` path, including failed passive-definition behavior without an
+  active read or fabricated entity.
 - **Must — PR #164 is evidence-gated.** Its diff adds writable `Hc1SetbackMode`
   and `OffsetOutsideTemp` mappings. The open PR has no capture or test results;
   the available BASV3 capture returns `no data stored` for both registers, and
@@ -217,14 +236,14 @@ passes.
 | Gate | Status | Evidence |
 |---|---|---|
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; remote `release/1.10.3` backs draft PR #168; no release tag/publication exists |
-| Plan-check | PENDING RECHECK | Final audit found a partial address-qualified scan can be lost before ambiguity checks; the revised plan specifies preservation/exclusion rules and the exact same-address regression, requiring independent re-check. |
+| Plan-check | PASS | Independent re-check accepted partial/truncated scan preservation, same-poll coordinator refresh and dump use of current find evidence, malformed/error-only fail-closed behavior, positive/absent B511 coverage, PR #164 evidence gate, allowlist and issue boundaries. |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
-| Validation | STALE | 951 pytest tests and configured lint/type/version/compile checks passed on the prior candidate; the partial-scan audit finding now requires a new regression and code fix, then full validation. |
+| Validation | STALE | 951 pytest tests and configured lint/type/version/compile checks passed on the prior candidate; partial scan and live-snapshot audit findings require regression/fixes, then full validation. |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
 | HA smoke | STALE | Prior address-safe candidate passed zero/one-second export and `grab result all` checks on 2026-10-02; rerun after fixing partial scan-row ambiguity. It did not verify positive reporter HW0504 B511 values. |
 | Review | STALE | Final review passed for the prior candidate; repeat on the corrected post-smoke candidate. |
-| Audit | FINDING OPEN | Final audit found incomplete address-qualified scan rows are discarded before ambiguity checks, allowing a contradictory row at `scan.76` to be ignored. Fix, regress and re-audit. |
-| Release gate | BLOCKED | Partial-scan address-safety audit finding is open; PR #164 evidence is outstanding; rerun validation, HA smoke, final review/audit and PR-CI before any merge decision |
+| Audit | FINDING OPEN | Final audit found both incomplete-row parser/usable-find bypass and stale graph use: ready coordinator polls do not refresh scan identity before definitions/fallback, and dump skip keys are computed before the raw find. Fix both live paths, regress and re-audit. |
+| Release gate | BLOCKED | Live scan-address audit findings are open; PR #164 evidence is outstanding; rerun validation, HA smoke, final review/audit and PR-CI before any merge decision |
 | PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; local candidate has an open audit finding and will be corrected before push. Do not merge before PR #164 evidence decision and all release gates. |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
 | User communication | IN PROGRESS | Posted an English evidence request on PR #164; release issue notices and #165 closure wait until publication |
