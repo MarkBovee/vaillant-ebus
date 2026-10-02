@@ -1,6 +1,6 @@
 # Release 1.10.3 Plan
 
-Status: **BLOCKED — PR #164 write evidence is outstanding; final validation, HA smoke and release gates remain**
+Status: **BLOCKED — partial scan rows can bypass address ambiguity; PR #164 write evidence is also outstanding**
 
 Planning date: 2026-10-02
 
@@ -39,7 +39,11 @@ passes.
 - Preserve the runtime definition’s exact scan gate: passive `u` only for one
   discovered VWZIO `SW0500/HW0504` scan at slave address `0x76`. Preserve the
   complete current scan snapshot in `DeviceGraph`, including address-qualified
-  scan rows that map to no node, and carry the uniquely mapped address through
+  `scan.xx` rows that map to no node and have incomplete metadata. Do not treat
+  `no data stored`, arbitrary text, or rows without an address-qualified scan
+  key as scan identities. An incomplete row at the target address invalidates
+  address authority; an unrelated incomplete row must not suppress a unique
+  target scan. Carry the uniquely mapped address through
   `ScanMetadata` and `DeviceNode`. Repeated identical scan rows at one address
   stay deterministic. A same-type scan at multiple addresses may retain identity
   metadata for classification, but its address ownership is ambiguous and must
@@ -66,14 +70,20 @@ passes.
 - Add graph regressions for a unique VWZIO SW0500/HW0504 at `0x76`, the
   cross-address VWZ00@`0x76` + VWZIO@`0x77` topology, repeated identical same-
   address scan rows, conflicting identities/addresses, unrelated scan conflicts
-  that must not suppress the valid VWZIO owner, and merges from valid
+  that must not suppress the valid VWZIO owner, partial conflicting scans at
+  the target address that must block definitions and both fallback paths, and
+  merges from valid
   `0x76` evidence to missing/ambiguous current evidence, including a new graph
   where the old VWZIO node is absent entirely. Assert coordinator and dump paths
   issue neither the target B511 definition/read nor the target Status01 read to
   `0x76`; preserve Status01 definition/read behavior for the supported HW5103
   station actually scanned at `0x76`. The positive HW5103 test must independently
   assert that both coordinator fallback and dump-service map-probe paths read
-  Status01 on the correct physical owner at `0x76`.
+  Status01 on the correct physical owner at `0x76`. Explicitly test a complete
+  VWZIO row at `scan.76` plus a partial VWZ00 row at that address: no station
+  owner, no Status01 runtime definition, and no coordinator or dump Status01
+  fallback read to `0x76`. Also test that an unrelated partial scan elsewhere
+  does not disable the valid owner.
 - **Must — PR #164 is evidence-gated.** Its diff adds writable `Hc1SetbackMode`
   and `OffsetOutsideTemp` mappings. The open PR has no capture or test results;
   the available BASV3 capture returns `no data stored` for both registers, and
@@ -207,15 +217,15 @@ passes.
 | Gate | Status | Evidence |
 |---|---|---|
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; remote `release/1.10.3` backs draft PR #168; no release tag/publication exists |
-| Plan-check | PASS | Independent plan-check accepted complete scan-snapshot semantics, merge invalidation, coordinator/dump fallback tests, the PR #164 evidence gate, exact allowlist and issue closure boundaries. |
+| Plan-check | PENDING RECHECK | Final audit found a partial address-qualified scan can be lost before ambiguity checks; the revised plan specifies preservation/exclusion rules and the exact same-address regression, requiring independent re-check. |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
-| Validation | PASS | Final candidate: 951 pytest tests passed; Ruff check and configured format check passed; configured strict mypy passed; compileall, version check, and diff check passed. The deploy script repeated Ruff/pytest/compileall successfully. One pre-existing deprecation warning remains in `test_legacy_resolve_circuit_keeps_string_contract_without_ownership_authority`. |
+| Validation | STALE | 951 pytest tests and configured lint/type/version/compile checks passed on the prior candidate; the partial-scan audit finding now requires a new regression and code fix, then full validation. |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
-| HA smoke | PASS (scope-limited) | Deployed the committed address-safe component with `scripts/deploy.sh --restart` (HA returned HTTP 200); HA-MCP confirmed `vaillant_ebus` loaded. Zero dump `/config/vaillant_ebus/discovery_dump_2026-10-02_152145.yaml`: valid YAML and required sections, 631 raw find rows, 728 before-registers, `grab_status: not_requested`, captured duration 0. Positive dump `/config/vaillant_ebus/discovery_dump_2026-10-02_152205.yaml`: valid YAML and required sections, 631 raw find rows, 728 before-registers, `continued`/`count_delta`, 1.00098856 s, capture limitation present, 5 grab rows. Read-only `grab result all` returned data, not `grab disabled`; filtered post-restart HA error logs had zero `custom_components.vaillant_ebus` errors. Both dumps show the owner's `VWZ00 SW0522/HW5103`, not the reporter's VWZIO SW0500/HW0504, so this smoke does not verify positive HW0504 B511 values. Files were fetched using read-only SSH because HA-MCP exposed no file reader. |
-| Review | PENDING FINAL | Independent review of the complete post-smoke release candidate is required; earlier review and delta review are historical. |
-| Audit | PENDING FINAL | Independent production-path audit of the complete post-smoke candidate is required; earlier audit and delta audit are historical. |
-| Release gate | BLOCKED | Address-safety audit finding is closed by `c2d7a5b`; publication remains blocked until PR #164 evidence supports the writable mappings and all final validation/release gates pass |
-| PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; local address-safe commits are not pushed yet. Push only after final review/audit; wait for PR-CI and all independent gates. Do not merge before PR #164 evidence decision. |
+| HA smoke | STALE | Prior address-safe candidate passed zero/one-second export and `grab result all` checks on 2026-10-02; rerun after fixing partial scan-row ambiguity. It did not verify positive reporter HW0504 B511 values. |
+| Review | STALE | Final review passed for the prior candidate; repeat on the corrected post-smoke candidate. |
+| Audit | FINDING OPEN | Final audit found incomplete address-qualified scan rows are discarded before ambiguity checks, allowing a contradictory row at `scan.76` to be ignored. Fix, regress and re-audit. |
+| Release gate | BLOCKED | Partial-scan address-safety audit finding is open; PR #164 evidence is outstanding; rerun validation, HA smoke, final review/audit and PR-CI before any merge decision |
+| PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; local candidate has an open audit finding and will be corrected before push. Do not merge before PR #164 evidence decision and all release gates. |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
 | User communication | IN PROGRESS | Posted an English evidence request on PR #164; release issue notices and #165 closure wait until publication |
 
