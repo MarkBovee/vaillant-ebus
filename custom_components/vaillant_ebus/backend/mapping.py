@@ -134,12 +134,6 @@ def hmux0_owner_scan(graph: DeviceGraph | None) -> tuple[str, ScanIdentity] | No
         return None
     owners = [node for node in graph.nodes.values() if node.device_type.name == "HEAT_PUMP"]
     scans = [row for row in graph.scan_identities if row.scan_type.casefold() == "hmux0"]
-    if not scans and not graph.scan_identities:
-        scans = [
-            ScanIdentity(node.scan_address or "scan.unknown", node.scan_type, node.scan_sw, node.scan_hw)
-            for node in owners
-            if node.scan_type.casefold() == "hmux0" and not node.scan_address
-        ]
     if len(owners) != 1 or len(scans) != 1:
         return None
     node = owners[0]

@@ -567,10 +567,12 @@ async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
                     scan_type="HMUX0",
                     scan_sw="0303",
                     scan_hw="0504",
+                    scan_address="scan.08",
                 )
             },
             raw_registers={},
             placeholder_registers=set(),
+            scan_identities=(MODELS.ScanIdentity("scan.08", "HMUX0", "0303", "0504"),),
         )
         c.ebus.define_register = AsyncMock(return_value="done")
 
