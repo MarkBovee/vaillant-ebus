@@ -4,11 +4,20 @@
 
 ### Added
 
+- Add `Hc1SetbackMode` and `OffsetOutsideTemp` controls for the captured CTLV0
+  SW0313/HW9103 controller. The reporter tested the setback-mode mapping; the
+  community dump records the offset value before and after a successful
+  write/read-back.
 - Add passive VWZIO DHW backup-heater runtime and start-count decoding for
   B511/021802. The SW0500/HW0504 definition uses existing gateway telegrams and
   does not issue active reads; the captures show the counter advancing across
   two known heater runs. The shared field layout is also documented on
   SW0901/SW0902 HW5103 in upstream PR #598.
+
+### Fixed
+
+- Apply the HMUX0 SW0407 fallback blocklist when the current scan identity is
+  incomplete or ambiguous, in both coordinator polling and dump map probes.
 
 ### Notes
 

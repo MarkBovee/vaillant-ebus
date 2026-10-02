@@ -115,8 +115,12 @@ passes.
   already-ready coordinator, test error-only/malformed first and follow-up finds:
   retain the last usable scan snapshot and issue no active fallback reads.
   For HMUX0, a stale SW0303 graph followed by incomplete current scan identity
-  must not authorize a fallback read in the SW0407 blocklist; test this on the
-  coordinator path as well as the existing dump path.
+  must not authorize a fallback read in the SW0407 blocklist. Apply the same
+  current-identity decision to coordinator fallback and dump-service map probes.
+  A fresh graph whose incomplete HMUX0 identity leaves the node without a
+  `scan_type` must fail closed too; multiple HMUX0 scan addresses must not
+  authorize a fixed-circuit probe. Preserve active fallback for a complete
+  SW0303 scan and blocklist reads for a complete SW0407 scan.
   Add one initial-setup regression covering both post-definition outcomes: a
   usable, node-empty find with an incomplete same-address row must merge the
   latest snapshot and block Status01 fallback; an unusable follow-up must retain
@@ -271,16 +275,17 @@ passes.
 | Gate | Status | Evidence |
 |---|---|---|
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; remote `release/1.10.3` backs draft PR #168; no release tag/publication exists |
-| Plan-check | PASS | Independent plan-check accepted the evidence boundaries and the bounded HMUX0 correction: incomplete or ambiguous current HMUX0 scan identity must fail closed for blocklisted fallback reads, while complete SW0303 behavior remains unchanged. Regression must exercise a ready coordinator receiving a usable incomplete scan, then prove the restricted register is not read. |
+| Plan revision | APPROVED | After independent review and audit found fresh-graph and dump-service HMUX0 fallback bypasses on candidate `94f23f3`, Mark approved correcting both before release. This is a fail-closed routing fix; it adds no register semantics or hardware support. |
+| Plan-check | PASS | Independent recheck accepted retained and fresh incomplete HMUX0 graphs in coordinator and dump-service fallback paths, multiple scan addresses, and preservation of complete SW0303/SW0407 behavior. |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
-| Implementation | PASS | Coordinator fallback now blocks the SW0407-specific register set when HMUX0 scan identity is incomplete or ambiguous; confirmed SW0407 remains blocked and complete SW0303 retains its existing fallback. Regression exercises a ready coordinator receiving a usable incomplete scan. |
-| Validation | PASS | Ruff, configured format check, strict mypy, YAML parse, 964 pytest tests, version check, compileall, and `git diff --check` passed. The suite reports one existing deprecation warning in `test_legacy_resolve_circuit_keeps_string_contract_without_ownership_authority`. |
+| Implementation | PASS | Shared HMUX0 fallback authorization now blocks confirmed SW0407 and incomplete/ambiguous current scan identity in coordinator polling and dump-service map probes. Fresh incomplete graphs and multiple HMUX0 addresses fail closed; confirmed SW0303 fallback remains active. |
+| Validation | FOCUSED PASS | Focused coordinator and dump-service HMUX0 regressions, adjacent SW0302/SW0303 and firmware-gate tests, Ruff, format check, and diff check pass. Run the full CI-equivalent suite after delta review/audit. |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
-| HA smoke | PASS (scope-limited) | Commit `345dba2` deployed with `scripts/deploy.sh --restart` (HA HTTP 200). HA-MCP confirmed `vaillant_ebus` loaded. Zero dump `/config/vaillant_ebus/discovery_dump_2026-10-02_185335.yaml`: valid YAML and required sections, 631 raw find rows, 730 before-registers, `not_requested`, duration 0. Positive dump `/config/vaillant_ebus/discovery_dump_2026-10-02_185420.yaml`: valid YAML and required sections, 631 raw find rows, 730 before-registers, `continued`/`count_delta`, 1.00116 s, limitation present, two grab rows. Read-only TCP `grab result all` returned data, not `grab disabled`. Fresh HA-MCP logs contained no `vaillant_ebus` errors. Owner hardware is VWZ00 SW0522/HW5103, so this verifies service safety only, not positive HW0504 B511 reads. |
-| Review | PENDING FINAL | Final independent review must cover the exact candidate after validation and the fresh smoke. |
-| Audit | PENDING RE-AUDIT | The HMUX0 fallback correction is implemented and tested; the final independent audit must confirm the prior stale-metadata bypass is closed. |
-| Release gate | BLOCKED | Final review/audit, PR #168 CI and an independent release-gate decision remain before merge/tag/publication. |
-| PR / merge | BLOCKED | Local candidate `345dba2` is not pushed; draft PR #168 remains at remote head `d6612ae`. The deployed component files match the local candidate. Push after final review/audit, then wait for PR-CI and release gate. |
+| HA smoke | STALE AFTER CODE DELTA | The previous scope-limited smoke passed on `345dba2`; repeat deploy and both exports after the approved correction. The owner's VWZ00 SW0522/HW5103 hardware cannot prove positive HW0504 B511 reads. |
+| Review | PENDING DELTA REVIEW | Independent review found a P1 fresh-graph bypass on `94f23f3`; run delta review against the corrected candidate. |
+| Audit | PENDING DELTA AUDIT | Independent audit found a P1 dump-service map-probe bypass on `94f23f3`; run delta audit against the corrected candidate. |
+| Release gate | BLOCKED | Complete the revised plan-check and safety correction, then rerun validation, HA smoke, independent review/audit, PR-CI and release gate before merge/tag/publication. |
+| PR / merge | BLOCKED | The corrected HMUX0 candidate is local and unpushed; draft PR #168 remains at remote head `d6612ae`. Push after validation, fresh smoke, delta review and audit, then wait for PR-CI and release gate. |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
 | User communication | IN PROGRESS | PR #164 dump arrived and is assessed; post the precise evidence summary after publication, close #165 only then, and leave #152/#161 open |
 

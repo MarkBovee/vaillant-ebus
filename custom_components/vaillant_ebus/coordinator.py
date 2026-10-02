@@ -32,8 +32,8 @@ from .backend.mapping import (
     REGISTER_MAP,
     VWZIO_SW0500_FALLBACK_NAMES,
     b516_date_bytes,
+    hmux0_fallback_blocked_circuits,
     hmux0_sw0407_circuit,
-    hmux0_uncertain_scan_circuits,
     is_field_key,
     metadata_circuits,
     multi_field_fields,
@@ -2004,10 +2004,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             for definition in self._runtime_definitions.values()
             if len(parts := definition.split(",", 3)) >= 3 and parts[0].startswith("u")
         }
-        hmux0_sw0407 = hmux0_sw0407_circuit(self._graph)
-        hmux0_blocked_circuits = {circuit.casefold() for circuit in hmux0_uncertain_scan_circuits(self._graph)}
-        if hmux0_sw0407 is not None:
-            hmux0_blocked_circuits.add(hmux0_sw0407.casefold())
+        hmux0_blocked_circuits = {circuit.casefold() for circuit in hmux0_fallback_blocked_circuits(self._graph)}
         vwzio_sw0500 = vwzio_sw0500_circuit(self._graph)
         vwz_station_76 = vwz_station_scan_76_circuit(self._graph)
 

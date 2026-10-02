@@ -26,7 +26,7 @@ from .backend.mapping import (
     HMUX0_SW0407_FALLBACK_NAMES,
     REGISTER_MAP,
     VWZIO_SW0500_FALLBACK_NAMES,
-    hmux0_sw0407_circuit,
+    hmux0_fallback_blocked_circuits,
     is_field_key,
     vwz_station_scan_76_circuit,
     vwzio_sw0500_circuit,
@@ -142,8 +142,7 @@ def _fallback_read_skip_keys(graph: DeviceGraph | None, runtime_definitions: lis
         if len(parts) >= 3 and parts[0].startswith("u"):
             skipped.add((parts[1].casefold(), parts[2].casefold()))
 
-    hmux0 = hmux0_sw0407_circuit(graph)
-    if hmux0 is not None:
+    for hmux0 in hmux0_fallback_blocked_circuits(graph):
         skipped.update((hmux0.casefold(), name) for name in HMUX0_SW0407_FALLBACK_NAMES)
     vwzio = vwzio_sw0500_circuit(graph)
     if vwzio is not None:

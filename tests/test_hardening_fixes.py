@@ -2168,7 +2168,7 @@ async def test_dump_hmux0_blocklist_uses_current_scan_firmware() -> None:
     stale_graph = tc.DISCOVERY.DiscoveryService.build_device_graph(
         ["scan.08 = MF=Vaillant;ID=HMUX0;SW=0303;HW=0504", "hmux0 Status01 = no data stored"]
     )
-    assert DUMP.hmux0_sw0407_circuit(stale_graph) is None
+    assert tc.MAPPING.hmux0_sw0407_circuit(stale_graph) is None
     current_find = [
         "scan.08 = MF=Vaillant;ID=HMUX0;SW=0407;HW=0504",
         "hmux0 Status01 = no data stored",
@@ -2192,6 +2192,50 @@ async def test_dump_hmux0_blocklist_uses_current_scan_firmware() -> None:
         DUMP.REGISTER_MAP = original_map
 
     assert ("hmux0", "FlowTemp") not in [call.args[:2] for call in ebus.read_register.await_args_list]
+
+
+# Intent: incomplete or multi-address HMUX0 scans block dump map probes despite a retained SW0303 skip set.
+# Why: the dump service must apply current scan uncertainty to every active reader, not only coordinator polling.
+async def test_dump_hmux0_incomplete_current_identity_blocks_map_probes() -> None:
+    stale_graph = tc.DISCOVERY.DiscoveryService.build_device_graph(
+        ["scan.08 = MF=Vaillant;ID=HMUX0;SW=0303;HW=0504", "hmux0 Other = live"]
+    )
+    stale_skips = DUMP._fallback_read_skip_keys(stale_graph, [])
+    assert ("hmux0", "status01") not in stale_skips
+    assert ("hmux0", "flowtemp") not in stale_skips
+
+    current_find_cases = (
+        ["scan.08 = Vaillant;HMUX0;0407", "hmux0 Other = live"],
+        [
+            "scan.08 = Vaillant;HMUX0;0407;0504",
+            "scan.09 = Vaillant;HMUX0;0407;0504",
+            "hmux0 Other = live",
+        ],
+    )
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {
+        "hmux0.Status01": MagicMock(enabled=True, writable=False, fallback_read=True),
+        "hmux0.FlowTemp": MagicMock(enabled=True, writable=False, fallback_read=True),
+    }
+    try:
+        for current_find in current_find_cases:
+            ebus = MagicMock()
+            ebus.find_registers = AsyncMock(return_value=current_find)
+            ebus.last_find_usable = True
+            ebus.read_register = AsyncMock(return_value=None)
+
+            await DUMP._dump_registers(
+                ebus,
+                circuit_aliases={"hmux0": "hmux0"},
+                skip_fallback_reads=stale_skips,
+                current_graph=stale_graph,
+                runtime_definitions=[],
+            )
+
+            calls = [call.args[:2] for call in ebus.read_register.await_args_list]
+            assert not any(circuit.casefold() == "hmux0" for circuit, _ in calls), calls
+    finally:
+        DUMP.REGISTER_MAP = original_map
 
 
 # Intent: resolve host aliases to the socket address used for dump-lock identity.

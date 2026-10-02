@@ -1370,6 +1370,32 @@ async def test_issue161_incomplete_hmux0_scan_blocks_stale_sw0303_fallback() -> 
             await coordinator._fallback_read()
 
             assert ("hmux0", "FlowTemp") not in [call.args for call in coordinator.ebus.read_register.await_args_list]
+
+            fresh_graph = DISCOVERY.DiscoveryService.build_device_graph(
+                ["scan.08 = Vaillant;HMUX0;0407", "hmux0 Other = live"]
+            )
+            assert fresh_graph.nodes["hmux0"].scan_type == ""
+            assert MAPPING.hmux0_uncertain_scan_circuits(fresh_graph) == frozenset({"hmux0"})
+
+            coordinator._graph = fresh_graph
+            coordinator.ebus.read_register.reset_mock()
+            await coordinator._fallback_read()
+            assert ("hmux0", "FlowTemp") not in [call.args for call in coordinator.ebus.read_register.await_args_list]
+
+            multi_address_graph = DISCOVERY.DiscoveryService.build_device_graph(
+                [
+                    "scan.08 = Vaillant;HMUX0;0407;0504",
+                    "scan.09 = Vaillant;HMUX0;0407;0504",
+                    "hmux0 Other = live",
+                ]
+            )
+            assert multi_address_graph.nodes["hmux0"].scan_address == ""
+            assert MAPPING.hmux0_uncertain_scan_circuits(multi_address_graph) == frozenset({"hmux0"})
+
+            coordinator._graph = multi_address_graph
+            coordinator.ebus.read_register.reset_mock()
+            await coordinator._fallback_read()
+            assert ("hmux0", "FlowTemp") not in [call.args for call in coordinator.ebus.read_register.await_args_list]
     finally:
         COORDINATOR.REGISTER_MAP = original_map
 

@@ -99,9 +99,32 @@ def hmux0_uncertain_scan_circuits(graph: DeviceGraph | None) -> frozenset[str]:
         node.circuit
         for node in graph.nodes.values()
         if node.device_type.name == "HEAT_PUMP"
-        and node.scan_type.casefold() == "hmux0"
+        and (
+            node.scan_type.casefold() == "hmux0"
+            or any(
+                row.scan_type.casefold() == "hmux0"
+                and _normalize_scan_name(node.circuit) == _normalize_scan_name(row.scan_type)
+                for row in graph.scan_identities
+            )
+        )
         and not _has_current_unique_scan_identity(graph, node)
     )
+
+
+# Intent: normalize a scan identity or circuit name for generic ownership comparison.
+# Why: incomplete scan rows still need to identify the circuit whose hardware fallback must fail closed.
+def _normalize_scan_name(value: str) -> str:
+    return "".join(character for character in value.casefold() if character.isalnum())
+
+
+# Intent: share HMUX0 fallback restrictions between coordinator polling and dump map probes.
+# Why: both readers must block confirmed SW0407 and uncertain current scan identities identically.
+def hmux0_fallback_blocked_circuits(graph: DeviceGraph | None) -> frozenset[str]:
+    blocked = set(hmux0_uncertain_scan_circuits(graph))
+    sw0407 = hmux0_sw0407_circuit(graph)
+    if sw0407 is not None:
+        blocked.add(sw0407)
+    return frozenset(blocked)
 
 
 # Intent: resolve the discovered circuit only for the VWZIO scan with passive telemetry evidence.
