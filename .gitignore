@@ -51,3 +51,6 @@ discovery_dumps/
 
 # Disposable upstream research evidence cache
 .research-scratch/
+
+# Local planning artifacts
+docs/plan-*.md
