@@ -2035,6 +2035,61 @@ async def test_dump_registers_skip_issue161_vwzio_hwc_counter_without_definition
     ebus.read_register.assert_not_awaited()
 
 
+# Intent: dump fallback reads Status01 only from the station currently scanned at 0x76.
+# Why: an alias that resolves to a VWZIO at 0x77 must not probe slave 0x76 through stale metadata.
+async def test_dump_status01_fallback_respects_current_station_address() -> None:
+    wrong_address_graph = tc.DISCOVERY.DiscoveryService.build_device_graph(
+        [
+            "scan.76 = MF=Vaillant;ID=VWZ00;SW=0522;HW=5103",
+            "scan.77 = MF=Vaillant;ID=VWZIO;SW=0500;HW=0504",
+            "vwz Status01 = no data stored",
+            "vwzio Status01 = no data stored",
+        ]
+    )
+    correct_address_graph = tc.DISCOVERY.DiscoveryService.build_device_graph(
+        [
+            "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+            "vwzio Status01 = no data stored",
+        ]
+    )
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {
+        "vwz.Status01": MagicMock(enabled=True, writable=False, fallback_read=True),
+        "vwzio.Status01": MagicMock(enabled=True, writable=False, fallback_read=True),
+        "vwzio.RunStatsImmersionHeaterHwc": MagicMock(enabled=True, writable=False, fallback_read=True),
+    }
+    try:
+        wrong_ebus = MagicMock()
+        wrong_ebus.find_registers = AsyncMock(return_value=[])
+        wrong_ebus.read_register = AsyncMock(return_value=None)
+        wrong_skips = DUMP._fallback_read_skip_keys(wrong_address_graph, [])
+        await DUMP._dump_registers(
+            wrong_ebus,
+            circuit_aliases={"vwz": "vwz", "vwzio": "vwzio"},
+            skip_fallback_reads=wrong_skips,
+        )
+
+        correct_ebus = MagicMock()
+        correct_ebus.find_registers = AsyncMock(return_value=[])
+        correct_ebus.read_register = AsyncMock(return_value=None)
+        correct_skips = DUMP._fallback_read_skip_keys(correct_address_graph, [])
+        await DUMP._dump_registers(
+            correct_ebus,
+            circuit_aliases={"vwzio": "vwzio"},
+            skip_fallback_reads=correct_skips,
+        )
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    wrong_calls = [call.args[:2] for call in wrong_ebus.read_register.await_args_list]
+    assert ("vwzio", "Status01") not in wrong_calls
+    assert ("vwzio", "RunStatsImmersionHeaterHwc") not in wrong_calls
+    assert ("vwz", "Status01") in wrong_calls
+    correct_calls = [call.args[:2] for call in correct_ebus.read_register.await_args_list]
+    assert ("vwzio", "Status01") in correct_calls
+    assert ("vwzio", "RunStatsImmersionHeaterHwc") not in correct_calls
+
+
 # Intent: resolve host aliases to the socket address used for dump-lock identity.
 # Why: a DNS name and its IP address can reach the same daemon-global grab state.
 async def test_grab_endpoint_lock_key_uses_resolved_socket_address(monkeypatch: pytest.MonkeyPatch) -> None:

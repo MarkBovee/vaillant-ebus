@@ -748,6 +748,110 @@ async def test_issue161_vwzio_hwc_stats_failed_definition_stays_passive() -> Non
         assert not any(key.startswith("vwzio.RunStatsImmersionHeaterHwc") for key in entity_keys)
 
 
+# Intent: a VWZIO SW0500/HW0504 scan at 0x77 cannot authorize slave-0x76 definitions or reads.
+# Why: another scanned VWZ-family station may occupy 0x76, so circuit role alone is not address ownership.
+async def test_issue161_vwzio_definition_and_fallback_require_scan_address_76(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            [
+                "scan.76 = MF=Vaillant;ID=VWZ00;SW=0522;HW=5103",
+                "scan.77 = MF=Vaillant;ID=VWZIO;SW=0500;HW=0504",
+                "vwz Status01 = no data stored",
+                "vwzio Status01 = no data stored",
+                "vwzio RunStatsImmersionHeaterHwc = no data stored",
+            ]
+        )
+        assert graph.nodes["vwz"].scan_address.casefold() == "scan.76"
+        assert graph.nodes["vwzio"].scan_address.casefold() == "scan.77"
+        assert MAPPING.vwzio_sw0500_circuit(graph) is None
+
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._graph = graph
+
+        await coordinator._define_custom_registers()
+        definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
+        assert not any(definition.startswith("u,vwzio,RunStatsImmersionHeaterHwc,") for definition in definitions)
+        assert not any(definition.startswith("r,vwzio,Status01,") for definition in definitions)
+        assert any(definition.startswith("r,vwz,Status01,") for definition in definitions)
+
+        monkeypatch.setitem(
+            COORDINATOR.REGISTER_MAP,
+            "vwzio.RunStatsImmersionHeaterHwc",
+            MAPPING.RegisterMeta(fallback_read=True),
+        )
+        coordinator._last_find_keys = set(graph.raw_registers)
+        await coordinator._fallback_read(include_placeholders=True)
+        read_calls = [call.args[:2] for call in coordinator.ebus.read_register.await_args_list]
+        assert ("vwzio", "Status01") not in read_calls
+        assert ("vwzio", "RunStatsImmersionHeaterHwc") not in read_calls
+        assert ("vwz", "Status01") in read_calls
+
+
+# Intent: stale station scan identity cannot survive a later graph with no station node or ambiguous scans.
+# Why: a cached prior 0x76 address is not current authority for definitions against the live bus.
+def test_merge_device_graphs_replaces_current_vwzio_scan_authority() -> None:
+    previous = DISCOVERY.DiscoveryService.build_device_graph(
+        [
+            "scan.76 = MF=Vaillant;ID=VWZIO;SW=0500;HW=0504",
+            "scan.76 = MF=Vaillant;ID=VWZIO;SW=;HW=0504",
+            "vwzio Status01 = no data stored",
+        ]
+    )
+    assert MAPPING.vwzio_sw0500_circuit(previous) == "vwzio"
+
+    missing = DISCOVERY.DiscoveryService.build_device_graph(
+        ["scan.15 = MF=Vaillant;ID=CTLV2;SW=0514;HW=1104", "ctlv2 Z1OpMode = auto"]
+    )
+    merged_missing = COORDINATOR._merge_device_graphs(previous, missing)
+    assert "vwzio" in merged_missing.nodes
+    assert [(scan.address, scan.scan_type) for scan in merged_missing.scan_identities] == [("scan.15", "CTLV2")]
+    assert MAPPING.vwzio_sw0500_circuit(merged_missing) is None
+
+    conflict = DISCOVERY.DiscoveryService.build_device_graph(
+        [
+            "scan.76 = MF=Vaillant;ID=VWZIO;SW=0500;HW=0504",
+            "scan.77 = MF=Vaillant;ID=VWZIO;SW=0500;HW=0504",
+            "vwzio Status01 = no data stored",
+        ]
+    )
+    merged_conflict = COORDINATOR._merge_device_graphs(previous, conflict)
+    assert MAPPING.vwzio_sw0500_circuit(merged_conflict) is None
+
+
+# Intent: the evidence-backed HW5103 Status01 path remains active only on its discovered 0x76 owner.
+# Why: address gating must reject wrong slaves without disabling the verified station layout.
+async def test_vwzio_status01_fallback_allows_hw5103_owner_at_address76() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            [
+                "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+                "vwzio Status01 = no data stored",
+            ]
+        )
+        assert graph.nodes["vwzio"].scan_address.casefold() == "scan.76"
+
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._graph = graph
+
+        await coordinator._define_custom_registers()
+        definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
+        assert any(definition.startswith("r,vwzio,Status01,") for definition in definitions)
+
+        coordinator._last_find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
+        await coordinator._fallback_read(include_placeholders=True)
+        assert ("vwzio", "Status01") in [call.args[:2] for call in coordinator.ebus.read_register.await_args_list]
+
+
 # Intent: define SW0407 layouts from their unique scan despite ambiguous heat-pump role resolution.
 # Why: a second heat pump must not suppress target registers or redirect definitions to the wrong circuit.
 async def test_issue161_sw0407_passive_definitions_survive_other_heat_pump_node() -> None:

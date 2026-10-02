@@ -8,6 +8,7 @@ import logging
 import os
 import tempfile
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Any, TypedDict
 
@@ -36,6 +37,7 @@ from .backend.mapping import (
     metadata_circuits,
     multi_field_fields,
     split_multi_field,
+    vwz_station_scan_76_circuit,
     vwzio_sw0500_circuit,
 )
 from .backend.models import (
@@ -334,7 +336,13 @@ def _merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> Devi
             scan_type=node.scan_type or previous.scan_type,
             scan_sw=node.scan_sw or previous.scan_sw,
             scan_hw=node.scan_hw or previous.scan_hw,
+            scan_address=node.scan_address,
         )
+
+    discovered_circuits = {circuit.casefold() for circuit in discovered.nodes}
+    for circuit, node in tuple(nodes.items()):
+        if circuit.casefold() in {"vwz", "vwzio"} and circuit.casefold() not in discovered_circuits:
+            nodes[circuit] = replace(node, scan_address="")
 
     unavailable_keys = {key.casefold() for key in discovered.placeholder_registers}
     raw_registers = {
@@ -360,6 +368,7 @@ def _merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> Devi
         raw_registers=raw_registers,
         placeholder_registers=placeholder_registers,
         error_registers=error_registers,
+        scan_identities=discovered.scan_identities,
     )
 
 
@@ -1453,6 +1462,16 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if resolution.status != ResolutionStatus.UNIQUE:
                 return None
             resolved = resolution.circuit or parts[1]
+            if (
+                parts[0] == "r"
+                and parts[2].casefold() == "status01"
+                and parts[1].casefold() in {"vwz", "vwzio"}
+                and (
+                    (station_circuit := vwz_station_scan_76_circuit(self._graph)) is None
+                    or resolved.casefold() != station_circuit.casefold()
+                )
+            ):
+                return None
             if resolved == parts[1]:
                 return definition
             parts[1] = resolved
@@ -1969,6 +1988,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         }
         hmux0_sw0407 = hmux0_sw0407_circuit(self._graph)
         vwzio_sw0500 = vwzio_sw0500_circuit(self._graph)
+        vwz_station_76 = vwz_station_scan_76_circuit(self._graph)
 
         # Intent: add each resolved fallback candidate once.
         # Why: map, passive-definition, and placeholder paths can nominate the same register.
@@ -1978,6 +1998,15 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if "." in name or f"{circuit}.{name}".casefold() in skipped_read_keys:
                 return
             if (circuit_key, name_key) in passive_register_keys:
+                return
+            # B511 counters remain passive even if their map fallback metadata changes.
+            if name_key == "runstatsimmersionheaterhwc":
+                return
+            if (
+                name_key == "status01"
+                and circuit_key in {"vwz", "vwzio"}
+                and (vwz_station_76 is None or circuit_key != vwz_station_76.casefold())
+            ):
                 return
             if (
                 hmux0_sw0407 is not None

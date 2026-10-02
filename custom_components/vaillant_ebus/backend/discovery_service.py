@@ -11,6 +11,7 @@ from .models import (
     DeviceGraph,
     DeviceNode,
     DeviceType,
+    ScanIdentity,
     is_ebusd_error_value,
     is_no_data_value,
     is_valid_hmux0_return_temperature,
@@ -65,6 +66,7 @@ class ScanMetadata(NamedTuple):
     scan_type: str
     scan_sw: str
     scan_hw: str
+    address: str
 
 
 class DiscoveryService:
@@ -329,6 +331,7 @@ class DiscoveryService:
                 scan_type=scan_type,
                 scan_sw=scan_sw,
                 scan_hw=scan_hw,
+                scan_address=scan_info.address if scan_info else "",
             )
 
             for sub_key, (pc, _) in sub_devices.items():
@@ -359,6 +362,7 @@ class DiscoveryService:
                 scan_type=metadata.scan_type,
                 scan_sw=metadata.scan_sw,
                 scan_hw=metadata.scan_hw,
+                scan_address=metadata.address,
             )
 
         # A scan-less controller carrying only the integration's own runtime
@@ -379,6 +383,9 @@ class DiscoveryService:
                 for key in error_registers
                 if key.casefold() not in {raw_key.casefold() for raw_key in raw_registers}
             },
+            scan_identities=tuple(
+                ScanIdentity(entry.address, entry.scan_type, entry.scan_sw, entry.scan_hw) for entry in scan_entries
+            ),
         )
 
 
@@ -617,36 +624,72 @@ def _name_family(name: str) -> str:
 # so a wrong assignment poisons the graph. Identical repeated scan lines (find
 # output may repeat them) collapse to the first occurrence, keeping the result
 # deterministic regardless of duplication.
+# Intent: map unique physical scan identities to their logical ebusd circuits.
+# Why: scan metadata controls hardware-gated runtime definitions and must never be guessed across addresses.
+def _unambiguous_scan_entries(
+    scan_entries: Sequence[ScanEntry | tuple[str, str, str, str]],
+) -> list[ScanEntry]:
+    # Intent: retain one compatible scan identity per address/type pair and reject ambiguous physical identities.
+    # Why: a repeated row at one address is harmless, but scan addresses/types cannot be guessed across devices.
+    grouped: dict[tuple[str, str], list[ScanEntry]] = {}
+    for raw_entry in scan_entries:
+        entry = raw_entry if isinstance(raw_entry, ScanEntry) else ScanEntry(*raw_entry)
+        key = (entry.address.casefold(), entry.scan_type.casefold())
+        grouped.setdefault(key, []).append(entry)
+
+    normalized: list[ScanEntry] = []
+    conflicting_groups: set[tuple[str, str]] = set()
+    for key, entries in grouped.items():
+        software = {entry.scan_sw.casefold() for entry in entries if entry.scan_sw}
+        hardware = {entry.scan_hw.casefold() for entry in entries if entry.scan_hw}
+        if len(software) > 1 or len(hardware) > 1:
+            conflicting_groups.add(key)
+            continue
+        first = entries[0]
+        normalized.append(ScanEntry(first.address, first.scan_type, next(iter(software), ""), next(iter(hardware), "")))
+
+    type_identities: dict[str, set[tuple[str, str]]] = {}
+    address_identities: dict[str, set[tuple[str, str, str]]] = {}
+    for entry in normalized:
+        type_key = entry.scan_type.casefold()
+        address_key = entry.address.casefold()
+        identity = (type_key, entry.scan_sw.casefold(), entry.scan_hw.casefold())
+        type_identities.setdefault(type_key, set()).add((entry.scan_sw.casefold(), entry.scan_hw.casefold()))
+        address_identities.setdefault(address_key, set()).add(identity)
+
+    conflicting_types = {scan_type for scan_type, identities in type_identities.items() if len(identities) > 1}
+    conflicting_types.update(scan_type for _, scan_type in conflicting_groups)
+    ambiguous_addresses = {address for address, identities in address_identities.items() if len(identities) > 1}
+    ambiguous_addresses.update(address for address, _ in conflicting_groups)
+    return [
+        entry
+        for entry in normalized
+        if (entry.address.casefold(), entry.scan_type.casefold()) not in conflicting_groups
+        and entry.scan_type.casefold() not in conflicting_types
+        and entry.address.casefold() not in ambiguous_addresses
+    ]
+
+
+# Intent: bind each usable scan identity to at most one discovered circuit.
+# Why: runtime definitions depend on circuit ownership and physical bus address.
 def _match_scan_to_circuits(
     scan_entries: Sequence[ScanEntry | tuple[str, str, str, str]],
     regs_by_circuit: dict[str, list[str]],
 ) -> dict[str, ScanMetadata]:
     circuit_names = [c for c in regs_by_circuit if not c.lower().startswith("scan")]
 
+    entries_by_type: dict[str, list[ScanEntry]] = {}
+    for entry in _unambiguous_scan_entries(scan_entries):
+        entries_by_type.setdefault(entry.scan_type.casefold(), []).append(entry)
     scans_by_type: dict[str, ScanMetadata] = {}
-    conflicting_types: set[str] = set()
-    for entry in scan_entries:
-        normalized_entry = entry if isinstance(entry, ScanEntry) else ScanEntry(*entry)
-        scan_type = normalized_entry.scan_type
-        scan_key = scan_type.casefold()
-        if scan_key in conflicting_types:
-            continue
-        existing = scans_by_type.get(scan_key)
-        if existing is None:
-            scans_by_type[scan_key] = ScanMetadata(scan_type, normalized_entry.scan_sw, normalized_entry.scan_hw)
-            continue
-        if existing.scan_sw and normalized_entry.scan_sw and existing.scan_sw != normalized_entry.scan_sw:
-            conflicting_types.add(scan_key)
-            scans_by_type.pop(scan_key, None)
-            continue
-        if existing.scan_hw and normalized_entry.scan_hw and existing.scan_hw != normalized_entry.scan_hw:
-            conflicting_types.add(scan_key)
-            scans_by_type.pop(scan_key, None)
-            continue
-        scans_by_type[scan_key] = ScanMetadata(
-            existing.scan_type,
-            existing.scan_sw or normalized_entry.scan_sw,
-            existing.scan_hw or normalized_entry.scan_hw,
+    for entries in entries_by_type.values():
+        first = entries[0]
+        addresses = {entry.address.casefold() for entry in entries}
+        scans_by_type[first.scan_type.casefold()] = ScanMetadata(
+            first.scan_type,
+            first.scan_sw,
+            first.scan_hw,
+            first.address if len(addresses) == 1 else "",
         )
 
     scans = list(scans_by_type.values())
@@ -742,16 +785,18 @@ def _scan_only_circuits(
     represented = {_normalize_name(circuit) for circuit in regs_by_circuit}
     scans: dict[str, ScanMetadata] = {}
     conflicts: set[str] = set()
-    for entry in scan_entries:
+    for entry in _unambiguous_scan_entries(scan_entries):
         key = _normalize_name(entry.scan_type)
         if key in conflicts or key not in {"hmux0", "vwzio"} or key in represented:
             continue
         current = scans.get(key)
         if current is None:
-            scans[key] = ScanMetadata(entry.scan_type, entry.scan_sw, entry.scan_hw)
+            scans[key] = ScanMetadata(entry.scan_type, entry.scan_sw, entry.scan_hw, entry.address)
             continue
-        if (current.scan_sw and entry.scan_sw and current.scan_sw != entry.scan_sw) or (
-            current.scan_hw and entry.scan_hw and current.scan_hw != entry.scan_hw
+        if (
+            current.address.casefold() != entry.address.casefold()
+            or current.scan_sw.casefold() != entry.scan_sw.casefold()
+            or current.scan_hw.casefold() != entry.scan_hw.casefold()
         ):
             scans.pop(key, None)
             conflicts.add(key)
@@ -760,6 +805,7 @@ def _scan_only_circuits(
             current.scan_type,
             current.scan_sw or entry.scan_sw,
             current.scan_hw or entry.scan_hw,
+            current.address,
         )
     result: dict[str, ScanMetadata] = {}
     for circuit, metadata in scans.items():

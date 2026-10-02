@@ -1,6 +1,6 @@
 # Release 1.10.3 Plan
 
-Status: **PRE-MERGE CANDIDATE — local validation and HA smoke passed; PR/release gates pending**
+Status: **BLOCKED — scan-address safety fix and PR #164 write evidence are required before release**
 
 Planning date: 2026-10-02
 
@@ -12,9 +12,11 @@ Implementation branch: `release/1.10.3`
 ## Goal
 
 Release the evidence-backed VWZIO DHW backup-heater runtime/start counters for
-the reporter’s `SW0500/HW0504` scan. Preserve the v1.10.2 dump-export behavior
-and discovery-readiness guard. Do not claim that the separate post-ebusd-crash
-HTTP 500 is fixed, and do not restore the BASS3 calendars.
+the reporter’s `SW0500/HW0504` scan and the owner-requested PR #164 metadata
+only after its hardware and write/read-back evidence is available. Preserve the
+v1.10.2 dump-export behavior and discovery-readiness guard. Do not claim that
+the separate post-ebusd-crash HTTP 500 is fixed, and do not restore the BASS3
+calendars.
 
 This is **significant and release-sensitive**. It adds HA entities and a
 hardware-scoped eBUS definition based on community data. The initial code
@@ -35,13 +37,52 @@ passes.
 - Do not edit HA entity/device registries or HA configuration, ebusd CSV files
   or `--configpath`, and do not write to eBUS registers.
 - Preserve the runtime definition’s exact scan gate: passive `u` only for one
-  discovered VWZIO `SW0500/HW0504` scan at slave address `0x76`, with that scan
-  address carried through the device graph. A same-firmware VWZIO at another
-  address, or conflicting duplicate scan identities, must not authorize a
-  B511/021802 definition to `0x76`. Keep `fallback_read=False` so rejected or
-  absent passive definitions cannot trigger coordinator or dump-service active
-  reads. HW5103 metadata remains graph-driven only when ebusd actually
-  discovers the register; PR #598 supplies separate HW5103 evidence.
+  discovered VWZIO `SW0500/HW0504` scan at slave address `0x76`. Preserve the
+  complete current scan snapshot in `DeviceGraph`, including address-qualified
+  scan rows that map to no node, and carry the uniquely mapped address through
+  `ScanMetadata` and `DeviceNode`. Repeated
+  identical scan rows at one address stay deterministic; conflicting identities
+  at one address or the same scan type at multiple addresses are ambiguous.
+  `_merge_device_graphs()` must replace the prior scan snapshot with the latest
+  one, even if the new graph has no VWZIO node, and clear prior station-address
+  authorization when current evidence is missing or ambiguous. Authorization
+  must depend only on this current scan snapshot, never a retained node.
+  A same-firmware VWZIO at another address must not authorize B511/021802 to
+  `0x76`.
+- Gate generic VWZIO/VWZ `Status01` runtime definitions and coordinator/dump
+  fallback reads against the physical station node actually mapped to slave
+  `0x76`. In the reported counterexample (VWZ00 at `0x76`, target VWZIO at
+  `0x77`), never issue the target VWZIO definition/read to `0x76`; explicitly
+  assert no target `Status01` definition/read is sent to that address. Preserve
+  definitions only when their resolved circuit owns a current scan at that
+  address, including the supported HW5103-at-`0x76` path. Keep
+  `fallback_read=False` for B511/021802 so rejected or absent passive
+  definitions cannot trigger coordinator or dump-service active reads. HW5103
+  metadata remains graph-driven only when ebusd actually discovers the
+  register; PR #598 supplies separate HW5103 evidence.
+- Add graph regressions for a unique VWZIO SW0500/HW0504 at `0x76`, the
+  cross-address VWZ00@`0x76` + VWZIO@`0x77` topology, repeated identical same-
+  address scan rows, conflicting identities/addresses, and merges from valid
+  `0x76` evidence to missing/ambiguous current evidence, including a new graph
+  where the old VWZIO node is absent entirely. Assert coordinator and dump paths
+  issue neither the target B511 definition/read nor the target Status01 read to
+  `0x76`; preserve Status01 definition/read behavior for the supported HW5103
+  station actually scanned at `0x76`. The positive HW5103 test must independently
+  assert that both coordinator fallback and dump-service map-probe paths read
+  Status01 on the correct physical owner at `0x76`.
+- **Must — PR #164 is evidence-gated.** Its diff adds writable `Hc1SetbackMode`
+  and `OffsetOutsideTemp` mappings. The open PR has no capture or test results;
+  the available BASV3 capture returns `no data stored` for both registers, and
+  the owner's CTLV2 SW0514/HW1104 dump contains neither. Evidence was requested
+  on PR #164 in comment
+  https://github.com/MarkBovee/vaillant-ebus/pull/164#issuecomment-5952466752:
+  complete dump/scan identity and current values, plus the prior tests' `done`
+  write responses and read-back values for both controls. A read-only dump alone
+  does not clear the writable-mapping gate. Do not include/merge those writable
+  mappings or publish v1.10.3 until both read and write/read-back evidence is
+  available and supports the entries. If it is absent or contradicts the PR,
+  stop and ask the owner before changing release scope. Do not run register
+  writes without separate explicit authorization and read-back proof.
 - Add the human-written `1.10.3` changelog section with heading `## 1.10.3`
   but no date while the candidate is under review. Then run
   `python3 tools/version.py bump 1.10.3` so the required heading exists, and
@@ -84,8 +125,11 @@ passes.
   unavailable-data safety, not positive live reads of the counters.
 - Stage only this explicit allowlist: `CHANGELOG.md`, `pyproject.toml`,
   `custom_components/vaillant_ebus/manifest.json`,
+  `custom_components/vaillant_ebus/backend/models.py`,
+  `custom_components/vaillant_ebus/backend/discovery_service.py`,
   `custom_components/vaillant_ebus/backend/mapping.py`,
   `custom_components/vaillant_ebus/coordinator.py`,
+  `custom_components/vaillant_ebus/dump_service.py`,
   `docs/plan-1.10.3.md`,
   `docs/plan-issue-follow-up-152-161-165.md`,
   `tests/fake_ebusd.py`, `tests/fixtures/community/dumpvalues.yaml`,
@@ -95,6 +139,7 @@ passes.
   `tests/fixtures/community/hmux0_issue161_2026-09-30_161313_discovery.yaml`,
   `tests/fixtures/community/vwzio_hw5103_pr598_b511_stats.yaml`,
   `tests/test_community_issue_fixtures.py`, `tests/test_coordinator.py`,
+  `tests/test_discovery_service.py`,
   `tests/test_fixture_integrity.py`, and `tests/test_hardening_fixes.py`.
   Before each release commit, inspect `git diff --cached --name-only` and the
   staged diff; reject any path outside this list.
@@ -106,9 +151,11 @@ passes.
   before creating and pushing annotated `v1.10.3`. Verify the tag workflow, zip
   version and published asset.
 - After publication, update issues #152, #161 and #165 in English with only the
-  change relevant to each issue. Keep all three open. Explain explicitly that
-  #152 F34 mappings and #165 BASS3 calendars are unchanged; #161’s separate
-  crash-recovery HTTP 500 remains unverified.
+  change relevant to each issue. Keep #152 and #161 open for the user's
+  requested evidence. Close #165 at the owner's explicit request, with a clear
+  note that BASS3 calendars remain unavailable and can be revisited if valid
+  layout evidence arrives. Close PR #164 only after its evidence-backed changes
+  are included and merged; PR #168 closes through merge.
 
 ### Should
 
@@ -130,36 +177,43 @@ passes.
 
 ## Plan-check questions
 
-1. Does the included feature diff contain only the intended HW0504 passive
-   counter mapping plus its evidence-backed metadata, tests and fixtures, with
-   scan address 0x76 retained as part of owner identity?
-2. Are version files and changelog synchronized without exposing an unapproved
+1. Does the graph retain the exact physical scan address, and does merge clear
+   prior address authorization on missing or ambiguous current scan evidence?
+2. Does a scan at `0x77` prevent the HW0504 B511 definition, generic B511
+   Status01 definitions, and fallbacks from targeting a different slave at
+   `0x76`, while preserving the supported HW5103 scan at `0x76`?
+3. Are repeated same-address scans deterministic and same-type/multi-address or
+   same-address/conflicting identities ambiguous, including after graph merges
+   where the latest scan snapshot no longer has a VWZIO node?
+4. Are version files and changelog synchronized without exposing an unapproved
    release date or promising publication before the gates pass?
-3. Does the deployment/smoke sequence use the required script and HA-MCP paths,
+5. Does the deployment/smoke sequence use the required script and HA-MCP paths,
    deploy the exact committed candidate, serialize exports per endpoint, check
    required metadata, avoid registry/config changes and register writes, and
    preserve ebusd’s shared auto-grab state?
-4. Do the release issue replies distinguish what v1.10.3 changes from the
+6. Does PR #164 remain blocked on dump and write/read-back evidence without
+   introducing unwarranted live writes?
+7. Do the release issue replies distinguish what v1.10.3 changes from the
    unresolved #152, #161 recovery and #165 behavior?
-5. Are review, audit, release-gate, PR CI, merge, tag and artifact checks ordered
+8. Are review, audit, release-gate, PR CI, merge, tag and artifact checks ordered
    against the exact candidate, with no user-owned file staged?
 
 ## Release gates
 
 | Gate | Status | Evidence |
 |---|---|---|
-| Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; no remote `release/1.10.3`, tag or release exists |
-| Plan-check | PENDING RECHECK | Final audit found the graph did not retain scan address; add address identity and multi-scan regressions before rechecking plan |
+| Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; remote `release/1.10.3` backs draft PR #168; no release tag/publication exists |
+| Plan-check | PASS | Independent plan-check accepted complete scan-snapshot semantics, merge invalidation, coordinator/dump fallback tests, the PR #164 evidence gate, exact allowlist and issue closure boundaries. |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
-| Validation | PASS | Ruff check/format, strict configured mypy, YAML parsing, 943 pytest tests, version check, compileall and diff check passed; `scripts/deploy.sh --restart` repeated ruff/pytest/compile successfully |
+| Validation | PASS (CODE; smoke stale) | Full current suite: 951 pytest tests passed; Ruff check and configured format check passed; strict configured mypy passed; version check and compileall passed. One existing deprecation warning remains in `test_legacy_resolve_circuit_keeps_string_contract_without_ownership_authority`. `git diff --check` passed. The earlier 943-test result is historical. |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
-| HA smoke | PASS | Deployed commit `77c696b` with `scripts/deploy.sh --restart` (HTTP 200). HA-MCP confirmed the entry loaded. Zero dump `/config/vaillant_ebus/discovery_dump_2026-10-02_135017.yaml`: YAML valid, required sections, 631 raw find lines, 728 before-registers, `not_requested`, captured duration `0`. Positive dump `/config/vaillant_ebus/discovery_dump_2026-10-02_135110.yaml`: YAML valid, required sections, 631 raw find lines, 728 before-registers, `continued`, `count_delta`, 1.000969 s, limitation present, 4 grab lines. Read-only `grab result all` returned 8,633 lines, not `grab disabled`; fresh filtered logs had zero entries. Owner scan is VWZ00 SW0522/HW5103, so this verifies export and unavailable-data safety, not positive HW0504 B511 reads. HA-MCP had no file reader; read-only SSH fetched both files. |
-| Review | FINDING OPEN | Final reviewer found stale CI bookkeeping; ledger was corrected before this new address-scope finding |
-| Audit | FINDING OPEN | Independent audit found a missing scan-address invariant; fix and re-audit required |
-| Release gate | NOT STARTED | Independent decision against exact final diff and all evidence |
-| PR / merge | IN PROGRESS | Draft PR #168 is open. PR-CI is required; the release-gate must verify `ci`, `validate`, and `validate-hacs` against the exact current PR head. This plan does not cache per-head check results because a plan-only commit changes the PR head. |
+| HA smoke | BLOCKED/STALE | The v1.10.3 candidate passed on commit `77c696b` with zero/one-second exports, metadata checks and `grab result all`; rerun after the scan-address code fix because deployed files will change. |
+| Review | PENDING | Independent review of the current validated diff is required |
+| Audit | PENDING | Independent production-path audit of the current diff is required; verify scan-address merge invalidation and wrong-address coordinator/dump bypasses |
+| Release gate | BLOCKED | Do not proceed until scan-address audit finding is closed and PR #164's requested hardware/write/read-back evidence supports the mappings |
+| PR / merge | BLOCKED | Draft PR #168 is open; do not merge before address fix, PR #164 evidence decision, new HA smoke, PR-CI and independent gates |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
-| User communication | NOT STARTED | English issue updates only after publication |
+| User communication | IN PROGRESS | Posted an English evidence request on PR #164; release issue notices and #165 closure wait until publication |
 
 ## Review/audit cost
 

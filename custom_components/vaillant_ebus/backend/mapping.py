@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .models import DeviceGraph, RegisterMeta, is_controller_circuit, is_heat_pump_circuit
+from .models import DeviceGraph, DeviceNode, RegisterMeta, is_controller_circuit, is_heat_pump_circuit
 
 HMUX0_SW0407_FALLBACK_BLOCKLIST: frozenset[str] = frozenset(
     {
@@ -101,8 +101,59 @@ def vwzio_sw0500_circuit(graph: DeviceGraph | None) -> str | None:
         and node.scan_type.casefold() == "vwzio"
         and node.scan_sw == "0500"
         and node.scan_hw == "0504"
+        and node.scan_address.casefold() == "scan.76"
+        and _has_current_unique_scan_identity(graph, node)
     ]
     return matches[0].circuit if len(matches) == 1 else None
+
+
+# Intent: return the physical VWZ-family circuit currently scanned at slave 0x76.
+# Why: generic VWZ/VWZIO Status01 definitions embed address 0x76 and cannot follow a matching device elsewhere.
+def vwz_station_scan_76_circuit(graph: DeviceGraph | None) -> str | None:
+    if graph is None:
+        return None
+    matches = [
+        node
+        for node in graph.nodes.values()
+        if node.device_type.name == "PASSIVE_COOLING"
+        and node.scan_type.casefold().startswith("vwz")
+        and node.scan_address.casefold() == "scan.76"
+        and _has_current_unique_scan_identity(graph, node)
+    ]
+    return matches[0].circuit if len(matches) == 1 else None
+
+
+# Intent: verify that a device node still matches exactly one current scan identity.
+# Why: cached node metadata cannot authorize bus traffic after scans conflict or disappear.
+def _has_current_unique_scan_identity(graph: DeviceGraph, node: DeviceNode) -> bool:
+    address = node.scan_address.casefold()
+    scan_type = node.scan_type.casefold()
+    if not address or not scan_type:
+        return False
+
+    grouped: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for row in graph.scan_identities:
+        grouped.setdefault((row.address.casefold(), row.scan_type.casefold()), []).append(
+            (row.scan_sw.casefold(), row.scan_hw.casefold())
+        )
+
+    normalized: list[tuple[str, str, str, str]] = []
+    for (row_address, row_type), identities in grouped.items():
+        software = {sw for sw, _ in identities if sw}
+        hardware = {hw for _, hw in identities if hw}
+        if len(software) > 1 or len(hardware) > 1:
+            return False
+        normalized.append((row_address, row_type, next(iter(software), ""), next(iter(hardware), "")))
+
+    matching = [row for row in normalized if row[:2] == (address, scan_type)]
+    if len(matching) != 1:
+        return False
+    if sum(row[1] == scan_type for row in normalized) != 1:
+        return False
+    if sum(row[0] == address for row in normalized) != 1:
+        return False
+    _, _, scan_sw, scan_hw = matching[0]
+    return scan_sw == node.scan_sw.casefold() and scan_hw == node.scan_hw.casefold()
 
 
 # BAI registers that are gas/combustion-specific and do not apply to the

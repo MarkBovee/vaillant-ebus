@@ -27,6 +27,7 @@ from .backend.mapping import (
     VWZIO_SW0500_FALLBACK_NAMES,
     hmux0_sw0407_circuit,
     is_field_key,
+    vwz_station_scan_76_circuit,
     vwzio_sw0500_circuit,
 )
 from .backend.models import DeviceGraph, is_no_data_value
@@ -146,6 +147,20 @@ def _fallback_read_skip_keys(graph: DeviceGraph | None, runtime_definitions: lis
     vwzio = vwzio_sw0500_circuit(graph)
     if vwzio is not None:
         skipped.update((vwzio.casefold(), name) for name in VWZIO_SW0500_FALLBACK_NAMES)
+    station_at_76 = vwz_station_scan_76_circuit(graph)
+    for alias in ("vwz", "vwzio"):
+        resolution = graph.resolve_circuit_result(alias) if graph is not None else None
+        resolved = resolution.circuit if resolution and resolution.status.name == "UNIQUE" else None
+        if station_at_76 is None or resolved is None or resolved.casefold() != station_at_76.casefold():
+            skipped.add((alias.casefold(), "status01"))
+            if resolved:
+                skipped.add((resolved.casefold(), "status01"))
+    resolution = graph.resolve_circuit_result("vwzio") if graph is not None else None
+    resolved = resolution.circuit if resolution and resolution.status.name == "UNIQUE" else None
+    # B511 runtime/start counters are decoded from observed frames, never actively probed.
+    skipped.add(("vwzio", "runstatsimmersionheaterhwc"))
+    if resolved:
+        skipped.add((resolved.casefold(), "runstatsimmersionheaterhwc"))
     return skipped
 
 

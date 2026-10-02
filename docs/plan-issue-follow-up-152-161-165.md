@@ -55,15 +55,27 @@ or register meanings from plausible values alone.
   mapping as a **strong assumption**, not local live verification.
 - Add `RunStatsImmersionHeaterHwc` as a **passive `u` definition** only for the
   uniquely discovered VWZIO circuit at slave `0x76` with the exact
-  `SW0500/HW0504` scan. Preserve the scan address in the device graph; a matching
-  scan identity on another address or conflicting scans must not authorize this
-  definition. Expose its
-  captured runtime in minutes and starts as separate diagnostic sensors. Do
-  not actively poll, probe, or write these registers. Keep the value unavailable
-  when the frame/register is absent. Set `fallback_read=False` on the mapped
-  parent register as well: `coordinator._fallback_read()` and the discovery
-  dump's `_dump_registers()` can both actively probe a mapping entry if ebusd
-  rejects the passive definition.
+  `SW0500/HW0504` scan. Preserve the full current scan snapshot and addresses
+  in `DeviceGraph`, and carry unique address ownership through `ScanMetadata`
+  and `DeviceNode`. Identical scan rows at one address remain deterministic;
+  conflicting identities at one address or the same scan type at multiple
+  addresses are ambiguous. `_merge_device_graphs()` must replace the current
+  scan snapshot even when the new graph lacks a VWZIO node, clearing old address
+  authority. Expose its captured runtime in minutes and starts as separate
+  diagnostic sensors. Do not actively poll, probe, or write these registers.
+  Keep the value unavailable when the frame/register is absent. Set
+  `fallback_read=False` on the mapped parent register as well:
+  `coordinator._fallback_read()` and the discovery dump's `_dump_registers()`
+  can both actively probe a mapping entry if ebusd rejects the passive
+  definition. Gate generic VWZIO/VWZ `Status01` definitions and fallback reads
+  to the physical station circuit currently scanned at `0x76`, so a second
+  VWZIO at another address cannot authorize definitions or reads to the fixed
+  `0x76` target. Tests must assert no target Status01 definition/read or B511
+  definition/read in the VWZ00@76+VWZIO@77 case, and preserve the supported
+  HW5103 Status01 path at 76 by asserting both coordinator fallback and
+  dump-service map-probe reads on the correct physical owner. Also test a
+  previously valid 0x76 scan followed by a usable current find with no VWZIO node
+  and a conflicting scan; retained nodes must not retain address authority.
 - **Metadata scope is graph-driven, not an extra scan gate.** The custom
   passive definition above is only injected for SW0500/HW0504. The entity
   metadata and field parser apply only when the discovery graph actually
@@ -81,7 +93,9 @@ or register meanings from plausible values alone.
   scan identity and the two exact decoded frame values, verify the entity
   metadata, verify that absent frames create no normal entity/value, and prove
   neither fallback reader actively reads the register if definition fails or
-  the scan is missing/non-matching.
+  the scan is missing/non-matching. Also cover VWZ00@`0x76` + VWZIO@`0x77`,
+  repeated identical rows at one address, conflicting addresses, valid-to-missing
+  and valid-to-ambiguous graph merges, and Status01 definition/fallback ownership.
 
 ### Should
 
@@ -172,9 +186,9 @@ or register meanings from plausible values alone.
 | Gate | Status | Evidence |
 |---|---|---|
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; annotated `v1.10.2` points to published merge commit `44f11a9`; issue #152/#161/#165 are open |
-| Plan-check | PASS | Independent re-check confirmed `fallback_read=False` covers coordinator and dump-service active fallbacks, verifies the strong-assumption HWC layout and state delta, and accepted the issue boundaries and BASS3 search inventory |
-| Implementation | COMPLETE | Added the passive VWZIO SW0500/HW0504 HWC definition; metadata remains graph-driven for the separately upstream-confirmed HW5103 variant; added failed-definition fallback guards, four source-preserved captures, and frame/entity regressions |
-| Validation | PASS | Ruff check/format, strict configured mypy, 943 pytest tests, version check, compileall, and `git diff --check` passed |
-| Review | PASS | Independent review confirmed the scoped definition, graph-driven metadata, fixture coverage, and issue boundaries |
-| Audit | PASS | Independent audit closed the HW5103 metadata concern using PR #598 hardware evidence and traced coordinator/dump fallback, entity creation, absent-data, and readiness paths |
-| Release | IN SCOPE | Owner explicitly requested v1.10.3; candidate actions and gates are tracked in `docs/plan-1.10.3.md` |
+| Plan-check | HISTORICAL PASS | Passed for the original feature scope before the later scan-address audit finding and PR #164 addition |
+| Implementation | PRIOR SCOPE COMPLETE | The B511 feature is implemented; the new scan-address gate/merge protection is still pending in `docs/plan-1.10.3.md` |
+| Validation | HISTORICAL PASS | Ruff, strict configured mypy, 943 pytest tests, version, compileall, and diff check passed before the scan-address delta |
+| Review | HISTORICAL PASS | Reviewed the earlier candidate; final release review is pending after the address fix and PR #164 evidence |
+| Audit | FINDING OPEN | Final audit requires scan-address graph state, merge invalidation and Status01/fallback protections; re-audit after implementation |
+| Release | BLOCKED | v1.10.3 is blocked on the scan-address fix and PR #164 hardware/write/read-back evidence; see `docs/plan-1.10.3.md` |
