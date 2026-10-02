@@ -1467,6 +1467,14 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         entity_type="select",
         entity_category="config",
     ),
+    "ctlv2.Hc1SetbackMode": RegisterMeta(
+        friendly_name="Setback Mode (HC1)",
+        icon="mdi:thermostat-auto",
+        writable=True,
+        options=["eco", "normal"],
+        entity_type="select",
+        entity_category="config",
+    ),
     "ctlv2.Hc1RoomTempSwitchOn": RegisterMeta(
         friendly_name="Room Temp Threshold (HC1)",
         unit="°C",
@@ -1822,6 +1830,17 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         device_class="temperature",
         unit="°C",
         state_class="measurement",
+    ),
+    "ctlv2.OffsetOutsideTemp": RegisterMeta(
+        friendly_name="Outside Temperature Offset",
+        device_class="temperature",
+        unit="°C",
+        writable=True,
+        min_value=-3,
+        max_value=3,
+        step=0.5,
+        entity_type="number",
+        entity_category="config",
     ),
     "ctlv2.SystemFlowTemp": RegisterMeta(
         friendly_name="System Flow Temperature",

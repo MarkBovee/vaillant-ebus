@@ -1,6 +1,6 @@
 # Release 1.10.3 Plan
 
-Status: **BLOCKED — PR #164 write/read-back evidence is outstanding; final release gates remain**
+Status: **BLOCKED — PR #164 changes are approved for inclusion; final validation, PR-CI and release gates remain**
 
 Planning date: 2026-10-02
 
@@ -13,7 +13,8 @@ Implementation branch: `release/1.10.3`
 
 Release the evidence-backed VWZIO DHW backup-heater runtime/start counters for
 the reporter’s `SW0500/HW0504` scan and the owner-requested PR #164 metadata
-only after its hardware and write/read-back evidence is available. Preserve the
+using the attached setup dump and the reporter’s write-test statement accepted
+by the owner. Preserve the
 v1.10.2 dump-export behavior and discovery-readiness guard. Do not claim that
 the separate post-ebusd-crash HTTP 500 is fixed, and do not restore the BASS3
 calendars.
@@ -108,19 +109,28 @@ passes.
   Preserve the existing B511 positive frame decode/entity values and absent or
   `no data stored` path, including failed passive-definition behavior without an
   active read or fabricated entity.
-- **Must — PR #164 is evidence-gated.** Its diff adds writable `Hc1SetbackMode`
-  and `OffsetOutsideTemp` mappings. The open PR has no capture or test results;
-  the available BASV3 capture returns `no data stored` for both registers, and
-  the owner's CTLV2 SW0514/HW1104 dump contains neither. Evidence was requested
-  on PR #164 in comment
-  https://github.com/MarkBovee/vaillant-ebus/pull/164#issuecomment-5952466752:
-  complete dump/scan identity and current values, plus the prior tests' `done`
-  write responses and read-back values for both controls. A read-only dump alone
-  does not clear the writable-mapping gate. Do not include/merge those writable
-  mappings or publish v1.10.3 until both read and write/read-back evidence is
-  available and supports the entries. If it is absent or contradicts the PR,
-  stop and ask the owner before changing release scope. Do not run register
-  writes without separate explicit authorization and read-back proof.
+- **Must — include PR #164's `Hc1SetbackMode` and `OffsetOutsideTemp` metadata.**
+  The reporter supplied
+  [a discovery dump](https://github.com/user-attachments/files/32965931/discovery_dump_2026-10-02_161025.yaml)
+  from `Vaillant;CTLV0;SW0313;HW9103` at scan address `0x15`. It shows
+  `ctlv0.Hc1SetbackMode = normal` and `ctlv0.OffsetOutsideTemp = -1.5` before
+  the captured offset write and `-1` afterward. The integration's `writes`
+  section records `OffsetOutsideTemp=-1.0` with `success: true`; its strict
+  write path succeeds only after ebusd acknowledges and the read-back matches.
+  The capture contains no write record for `Hc1SetbackMode`. The PR author states
+  in PR #164 that this control was tested with the proposed mapping and behaves
+  like `Hc1AutoOffMode`, using the `normal`/`comfort` terminology; the owner
+  explicitly accepts that attestation for release inclusion. Record this as
+  reporter-verified/owner-accepted evidence, not local live verification. Do
+  not perform register writes. The BASV3 fixture and owner CTLV2 dump still do
+  not expose these registers, so their entities remain discovery-driven and
+  unavailable on hardware that does not report them.
+- **Must — keep the reporter's full PR #164 dump as a community fixture.**
+  Preserve every section and raw find row, add its attachment URL and original
+  SHA-256 as provenance, include it in the fixture-load sweep, and add one
+  focused regression that checks the discovered CTLV0 values, writable select
+  options and offset range, plus the absent-register path. Do not add hardware
+  writes to tests.
 - Add the human-written `1.10.3` changelog section with heading `## 1.10.3`
   but no date while the candidate is under review. Then run
   `python3 tools/version.py bump 1.10.3` so the required heading exists, and
@@ -175,17 +185,20 @@ passes.
   `tests/fixtures/community/hmux0_issue161_2026-09-30_132044_discovery.yaml`,
   `tests/fixtures/community/hmux0_issue161_2026-09-30_154054_discovery.yaml`,
   `tests/fixtures/community/hmux0_issue161_2026-09-30_161313_discovery.yaml`,
+  `tests/fixtures/community/ctlv0_pr164_2026-10-02_161025_discovery.yaml`,
   `tests/fixtures/community/vwzio_hw5103_pr598_b511_stats.yaml`,
-  `tests/test_community_issue_fixtures.py`, `tests/test_coordinator.py`,
+  `tests/test_community_issue_fixtures.py`, `tests/test_fake_ebusd.py`,
+  `tests/test_coordinator.py`,
   `tests/test_discovery_service.py`,
   `tests/test_fixture_integrity.py`, and `tests/test_hardening_fixes.py`.
   Before each release commit, inspect `git diff --cached --name-only` and the
   staged diff; reject any path outside this list.
-- Deploy and smoke-test the validated release branch before publication. Then
-  push the release branch and open its PR. Wait for PR-CI to pass, then run
-  independent standard-tier review and audit followed by an independent
-  release-gate decision that consumes PR-CI and HA-smoke evidence for the exact
-  PR diff. Merge only after all gates pass. Wait for main-CI on the merge commit
+- Run full repository validation, deploy and smoke-test the committed candidate,
+  then run independent standard-tier final review followed by final audit on
+  that exact candidate. Only after both pass, push the release branch and update
+  draft PR #168. Wait for PR-CI to pass, then run an independent release-gate
+  decision that consumes PR-CI and HA-smoke evidence for the exact PR diff.
+  Merge only after all gates pass. Wait for main-CI on the merge commit
   before creating and pushing annotated `v1.10.3`. Verify the tag workflow, zip
   version and published asset.
 - After publication, update issues #152, #161 and #165 in English with only the
@@ -229,8 +242,9 @@ passes.
    deploy the exact committed candidate, serialize exports per endpoint, check
    required metadata, avoid registry/config changes and register writes, and
    preserve ebusd’s shared auto-grab state?
-6. Does PR #164 remain blocked on dump and write/read-back evidence without
-   introducing unwarranted live writes?
+6. Does the release describe PR #164 evidence accurately: OffsetOutsideTemp's
+   captured write/read-back, Hc1SetbackMode's reporter attestation accepted by
+   the owner, and no local live verification or extra eBUS write?
 7. Do the release issue replies distinguish what v1.10.3 changes from the
    unresolved #152, #161 recovery and #165 behavior?
 8. Are review, audit, release-gate, PR CI, merge, tag and artifact checks ordered
@@ -241,17 +255,17 @@ passes.
 | Gate | Status | Evidence |
 |---|---|---|
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; remote `release/1.10.3` backs draft PR #168; no release tag/publication exists |
-| Plan-check | PASS | Independent re-check accepted partial/truncated scan preservation, same-poll coordinator refresh and dump use of current find evidence, malformed/error-only fail-closed behavior, positive/absent B511 coverage, PR #164 evidence gate, allowlist and issue boundaries. |
+| Plan-check | PENDING RECHECK | Owner accepted the reporter's Hc1SetbackMode test attestation and supplied CTLV0 dump/write evidence for PR #164. Revised plan adds both controls plus the full provenance fixture and one focused regression; independent re-check before implementation is required. |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
-| Validation | STALE | The 959-test full run and configured lint/type/compile checks predate the trailing-empty scan-metadata fix in `fa62f5e`; rerun the full required suite on the final candidate. |
+| Validation | STALE | The 959-test full run predates PR #164's two metadata entries; rerun full validation after inclusion. |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
-| HA smoke | STALE | The prior address-safe candidate passed zero/one-second export and `grab result all` checks on 2026-10-02. Rerun after the `fa62f5e` code change; owner HW5103 does not verify positive reporter HW0504 B511 values. |
-| Review | PENDING FINAL | Delta reviews passed on current fixes; independent final review is required on the exact post-smoke candidate. |
-| Audit | PENDING FINAL | Delta audits passed on current fixes; independent final code audit is required on the exact post-smoke candidate. |
-| Release gate | BLOCKED | Address/graph audit deltas are closed; PR #164 evidence remains outstanding and PR-CI/final independent gates remain. Do not merge, tag or publish before all pass. |
-| PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; the final candidate commits are local and not pushed. Push only after the final independent review/audit; do not merge before PR #164 evidence and all release gates. |
+| HA smoke | STALE | The address-safe candidate passed zero/one-second export and `grab result all` checks on 2026-10-02. Redeploy and smoke-test after PR #164 metadata is included; owner HW5103 does not verify positive reporter HW0504 B511 values. |
+| Review | PENDING FINAL | Previous delta reviews passed; final review must include PR #164 metadata and the exact post-smoke diff. |
+| Audit | PENDING FINAL | Previous delta audits passed; final audit must include writable metadata/value-resolution paths and the exact post-smoke diff. |
+| Release gate | BLOCKED | Evidence is accepted for inclusion; merge/tag/publication still wait for implementation, validation, HA smoke, PR-CI and independent final gates. |
+| PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; local candidate commits are not pushed. Add PR #164 metadata after plan-check, then push/review/CI; do not merge before all gates. |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
-| User communication | IN PROGRESS | Posted an English evidence request on PR #164; release issue notices and #165 closure wait until publication |
+| User communication | IN PROGRESS | PR #164 dump arrived and is assessed; post the precise evidence summary after publication, close #165 only then, and leave #152/#161 open |
 
 ## Review/audit cost
 

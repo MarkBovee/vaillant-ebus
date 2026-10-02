@@ -71,6 +71,10 @@ NEW_CAPTURE_PROVENANCE = {
         "https://github.com/user-attachments/files/32752518/homeassistantvaillant_ebusdiscovery_dump_2026-09-28_154109.yaml",
         "fbe37286c636ff97baec883dbc25faa2d227898a830b8b921faeaed748d41b8a",
     ),
+    "community/ctlv0_pr164_2026-10-02_161025_discovery.yaml": (
+        "https://github.com/user-attachments/files/32965931/discovery_dump_2026-10-02_161025.yaml",
+        "cfb23b3d6b4e77c6d413870db024bdceb2338c8f342103a10216db5397961a79",
+    ),
 }
 
 

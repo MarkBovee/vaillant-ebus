@@ -632,3 +632,41 @@ def test_vrc700_fixture_discovers_numeric_controller_and_dhw() -> None:
     assert graph.raw_registers["700.HwcOpMode"] == "auto"
     assert graph.raw_registers["700.HwcStorageTemp"] == "49.5"
     assert graph.heating_controller_result().circuit == "700"
+
+
+# Intent: the full PR #164 CTLV0 capture supplies writable-control metadata and a safe absent path.
+# Why: OffsetOutsideTemp has strict write/read-back evidence; Hc1SetbackMode relies on
+# the owner's acceptance of the reporter's attestation.
+def test_pr164_ctlv0_dump_exposes_controls_and_keeps_absent_path_safe() -> None:
+    fixture = "community/ctlv0_pr164_2026-10-02_161025_discovery.yaml"
+    dump = load_discovery_dump(fixture)
+    assert dump["metadata"]["ebusd_info"]["loaded_configs"]["15"]["scanned"] == "MF=Vaillant;ID=CTLV0;SW=0313;HW=9103"
+    assert any(line == "ctlv0 Hc1SetbackMode = normal" for line in dump["raw_find_lines"])
+    assert any(line == "ctlv0 OffsetOutsideTemp = -1.5" for line in dump["raw_find_lines"])
+    assert any(line == "ctlv0 OffsetOutsideTemp = -1" for line in dump["raw_find_lines_after"])
+    assert len(dump["writes"]) == 1
+    assert dump["writes"][0]["name"] == "OffsetOutsideTemp"
+    assert dump["writes"][0]["value"] == "-1.0"
+    assert dump["writes"][0]["success"] is True
+
+    graph = DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+    assert graph.raw_registers["ctlv0.Hc1SetbackMode"] == "normal"
+    assert graph.raw_registers["ctlv0.OffsetOutsideTemp"] == "-1"
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    setback = entities["ctlv0.Hc1SetbackMode.value"]
+    assert setback.entity_type == "select"
+    assert setback.meta.writable is True
+    assert setback.meta.options == ["eco", "normal"]
+
+    offset = entities["ctlv0.OffsetOutsideTemp.value"]
+    assert offset.entity_type == "number"
+    assert offset.meta.writable is True
+    assert (offset.meta.min_value, offset.meta.max_value, offset.meta.step) == (-3, 3, 0.5)
+
+    absent_graph = DiscoveryService.build_device_graph(
+        ["scan.15 = MF=Vaillant;ID=CTLV0;SW=0313;HW=9103", "ctlv0 Z1OpMode = auto"]
+    )
+    absent_keys = {entity.key for entity in EntityFactoryService().generate(absent_graph)}
+    assert "ctlv0.Hc1SetbackMode.value" not in absent_keys
+    assert "ctlv0.OffsetOutsideTemp.value" not in absent_keys
