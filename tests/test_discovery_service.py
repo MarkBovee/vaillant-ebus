@@ -309,6 +309,24 @@ def test_scan_graph_rejects_vwzio_address_and_identity_conflicts(scan_lines: lis
     assert len(graph.scan_identities) == 2
 
 
+# Intent: preserve partial address-qualified scan observations without treating them as complete identities.
+# Why: an incomplete conflicting row at scan.76 must invalidate fixed-address runtime definitions.
+def test_scan_graph_preserves_partial_address_qualified_scan_observation() -> None:
+    graph = DiscoveryService.build_device_graph(
+        [
+            "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+            "scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW=",
+            "scan.15 = no data stored",
+            "scan.16 = unrelated text",
+            "vwzio Status01 = no data stored",
+        ]
+    )
+
+    assert len(graph.scan_identities) == 2
+    assert graph.scan_identities[1].scan_type == "VWZ00"
+    assert graph.scan_identities[1].complete is False
+
+
 # Intent: conflicting HMUX0 scan identities produce no node.
 # Why: two hardware revisions on one address must not be silently merged.
 def test_scan_only_hmux0_rejects_conflicting_identity() -> None:

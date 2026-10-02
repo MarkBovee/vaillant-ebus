@@ -633,6 +633,7 @@ async def test_issue161_hmux0_sw0407_runtime_definitions_are_passive_and_scan_ga
             [
                 "scan.50 = MF=Vaillant;ID=CTLV2;SW=0514;HW=1104",
                 "scan.50 = MF=Vaillant;ID=CTLV2;SW=0515;HW=1104",
+                "scan.51 = MF=Vaillant;ID=CTLV2;SW=;HW=",
             ]
         )
         graph = DISCOVERY.DiscoveryService.build_device_graph(find_lines)
@@ -840,6 +841,7 @@ async def test_vwzio_status01_fallback_allows_hw5103_owner_at_address76() -> Non
                 "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
                 "scan.50 = MF=Vaillant;ID=CTLV2;SW=0514;HW=1104",
                 "scan.50 = MF=Vaillant;ID=CTLV2;SW=0515;HW=1104",
+                "scan.51 = MF=Vaillant;ID=CTLV2;SW=;HW=",
                 "vwzio Status01 = no data stored",
             ]
         )
@@ -859,6 +861,35 @@ async def test_vwzio_status01_fallback_allows_hw5103_owner_at_address76() -> Non
         coordinator._last_find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
         await coordinator._fallback_read(include_placeholders=True)
         assert ("vwzio", "Status01") in [call.args[:2] for call in coordinator.ebus.read_register.await_args_list]
+
+
+# Intent: partial identity at the target address blocks station definitions and coordinator fallback reads.
+# Why: a complete row cannot authorize slave 0x76 when another recognized row contradicts its identity.
+async def test_partial_conflicting_scan_at_address76_blocks_status_definition_and_fallback() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            [
+                "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+                "scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW=",
+                "vwzio Status01 = no data stored",
+            ]
+        )
+        assert MAPPING.vwz_station_scan_76_circuit(graph) is None
+
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._graph = graph
+
+        await coordinator._define_custom_registers()
+        definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
+        assert not any(definition.startswith("r,vwzio,Status01,") for definition in definitions)
+
+        coordinator._last_find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
+        await coordinator._fallback_read(include_placeholders=True)
+        assert ("vwzio", "Status01") not in [call.args[:2] for call in coordinator.ebus.read_register.await_args_list]
 
 
 # Intent: define SW0407 layouts from their unique scan despite ambiguous heat-pump role resolution.

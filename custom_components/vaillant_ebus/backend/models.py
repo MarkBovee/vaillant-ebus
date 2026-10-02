@@ -493,6 +493,7 @@ class ScanIdentity:
     scan_type: str
     scan_sw: str
     scan_hw: str
+    complete: bool = True
 
 
 @dataclass

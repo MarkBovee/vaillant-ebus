@@ -159,6 +159,41 @@ class DiscoveryService:
             return None
         return ScanEntry(lhs.strip(), parts[1].strip(), parts[2].strip(), parts[3].strip())
 
+    # Intent: retain recognized address-qualified scan observations even when their identity fields are incomplete.
+    # Why: incomplete evidence at a fixed target address must invalidate hardware authorization, not disappear.
+    @staticmethod
+    def _parse_scan_identity(line: str) -> ScanIdentity | None:
+        line = line.strip()
+        if not line or "=" not in line:
+            return None
+        lhs, rhs = line.split("=", 1)
+        address = lhs.strip()
+        if not re.fullmatch(r"scan\.[0-9a-f]{2}", address, re.IGNORECASE):
+            return None
+        parts = [part.strip() for part in rhs.strip().split(";")]
+        if len(parts) == 1 and parts[0].casefold() == "no data stored":
+            return None
+        if len(parts) == 4 and not any("=" in part for part in parts):
+            return ScanIdentity(address, parts[1], parts[2], parts[3], complete=all(parts))
+        metadata: dict[str, str] = {}
+        for part in parts:
+            if "=" not in part:
+                return None
+            key, value = part.split("=", 1)
+            key = key.strip().upper()
+            if key not in {"MF", "ID", "SW", "HW"} or key in metadata:
+                return None
+            metadata[key] = value.strip()
+        if not metadata:
+            return None
+        return ScanIdentity(
+            address,
+            metadata.get("ID", ""),
+            metadata.get("SW", ""),
+            metadata.get("HW", ""),
+            complete=set(metadata) == {"MF", "ID", "SW", "HW"} and all(metadata.values()),
+        )
+
     @staticmethod
     def _is_hidden(register_key: str, has_data: dict[str, bool] | None = None) -> bool:
         """Return True if register_key should not produce an HA entity."""
@@ -384,7 +419,9 @@ class DiscoveryService:
                 if key.casefold() not in {raw_key.casefold() for raw_key in raw_registers}
             },
             scan_identities=tuple(
-                ScanIdentity(entry.address, entry.scan_type, entry.scan_sw, entry.scan_hw) for entry in scan_entries
+                identity
+                for line in find_lines
+                if (identity := DiscoveryService._parse_scan_identity(line)) is not None
             ),
         )
 
