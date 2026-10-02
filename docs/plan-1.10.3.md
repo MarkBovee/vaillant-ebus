@@ -153,7 +153,7 @@ passes.
 | Review | NOT STARTED | Independent standard-tier review after validation and HA smoke |
 | Audit | NOT STARTED | Separate independent standard-tier audit after review |
 | Release gate | NOT STARTED | Independent decision against exact final diff and all evidence |
-| PR / merge | NOT STARTED | Required checks and gates must be green before merge |
+| PR / merge | IN PROGRESS | Draft PR #168 is open at `https://github.com/MarkBovee/vaillant-ebus/pull/168`; PR-CI and independent gates are still pending |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
 | User communication | NOT STARTED | English issue updates only after publication |
 
