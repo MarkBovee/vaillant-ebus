@@ -45,8 +45,10 @@ passes.
   `scan.xx` rows that map to no node and have incomplete metadata. Do not treat
   `no data stored`, arbitrary text, or rows without an address-qualified scan
   key as scan identities. An incomplete row at the target address invalidates
-  address authority; an unrelated incomplete row must not suppress a unique
-  target scan. Carry the uniquely mapped address through
+  address authority. An incomplete row of the same scan type at another address
+  also makes that type's physical owner ambiguous; “unrelated” here means a
+  different scan type at another address and must not suppress a unique target.
+  Carry the uniquely mapped address through
   `ScanMetadata` and `DeviceNode`. Repeated identical scan rows at one address
   stay deterministic. A same-type scan at multiple addresses may retain identity
   metadata for classification, but its address ownership is ambiguous and must
