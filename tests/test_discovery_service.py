@@ -846,8 +846,8 @@ def test_parse_scan_metadata_current_ebusd_format() -> None:
     assert result[1:] == ("VWZ00", "0522", "5103")
 
 
-# Intent: reject scan identities with missing positional or keyed metadata values.
-# Why: incomplete identities cannot safely authorize scan-gated hardware behavior.
+# Intent: accept incomplete address-qualified scan observations without promoting them to complete identities.
+# Why: they must remain in the live find snapshot so same-address conflicts can block hardware authorization.
 @pytest.mark.parametrize(
     "line",
     [
@@ -857,12 +857,15 @@ def test_parse_scan_metadata_current_ebusd_format() -> None:
         "scan.15 = Vaillant;CTLV3;0808;",
         "scan.15 = MF=Vaillant;ID=CTLV3;SW=;HW=8004",
         "scan.15 = MF=Vaillant;ID=;SW=0808;HW=8004",
+        "scan.15 = MF=Vaillant;ID=CTLV3;SW=;HW",
     ],
 )
-def test_parse_scan_rejects_incomplete_identity(line: str) -> None:
+def test_parse_scan_preserves_incomplete_identity_as_usable_observation(line: str) -> None:
     assert DiscoveryService._parse_scan(line) is None
-    with pytest.raises(ValueError, match="malformed (scan metadata|register row)"):
-        DISCOVERY.has_usable_find_records([line])
+    observation = DiscoveryService._parse_scan_identity(line)
+    assert observation is not None
+    assert observation.complete is False
+    assert DISCOVERY.has_usable_find_records([line]) is True
 
 
 # Intent: keep unknown but complete scan identities compatible with discovery.

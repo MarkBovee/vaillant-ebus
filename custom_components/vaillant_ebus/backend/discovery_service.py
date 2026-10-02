@@ -439,8 +439,9 @@ class DiscoveryService:
         )
 
 
-# Intent: accept only find rows that discovery can parse into a register or scan.
-# Why: malformed/error-only lines must not authorize fallback reads against a stale graph.
+# Intent: accept find rows that discovery can parse into registers or scan observations.
+# Why: incomplete address-qualified scans must remain usable evidence so they can
+# block ambiguous hardware authorization.
 def has_usable_find_records(find_lines: Sequence[str]) -> bool:
     usable = False
     for line in find_lines:
@@ -456,7 +457,7 @@ def has_usable_find_records(find_lines: Sequence[str]) -> bool:
         raw_value = raw_value.strip()
         if not lhs:
             raise ValueError(f"find response contains an empty row name: {line}")
-        if DiscoveryService._parse_scan(line) is not None:
+        if DiscoveryService._parse_scan_identity(line) is not None:
             usable = True
             continue
         parsed = DiscoveryService._parse_register(line)
