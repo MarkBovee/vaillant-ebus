@@ -317,6 +317,7 @@ def test_scan_graph_preserves_partial_address_qualified_scan_observation() -> No
             "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
             "scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW=",
             "scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW",
+            "scan.76 = MF=Vaillant;ID=VWZIO;SW=0500;",
             "scan.76 = ",
             "scan.15 = no data stored",
             "scan.16 = unrelated text",
@@ -324,12 +325,14 @@ def test_scan_graph_preserves_partial_address_qualified_scan_observation() -> No
         ]
     )
 
-    assert len(graph.scan_identities) == 4
+    assert len(graph.scan_identities) == 5
     assert graph.scan_identities[1].scan_type == "VWZ00"
     assert graph.scan_identities[1].complete is False
     assert graph.scan_identities[2].scan_type == "VWZ00"
     assert graph.scan_identities[2].complete is False
+    assert graph.scan_identities[3].scan_type == "VWZIO"
     assert graph.scan_identities[3].complete is False
+    assert graph.scan_identities[4].complete is False
 
 
 # Intent: conflicting HMUX0 scan identities produce no node.

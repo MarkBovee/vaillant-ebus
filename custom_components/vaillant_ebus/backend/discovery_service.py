@@ -188,6 +188,8 @@ class DiscoveryService:
             return ScanIdentity(address, parts[1], parts[2], parts[3], complete=all(parts))
         metadata: dict[str, str] = {}
         for part in parts:
+            if not part:
+                continue
             if "=" not in part:
                 key = part.strip().upper()
                 if key not in {"MF", "ID", "SW", "HW"} or key in metadata:
