@@ -1,6 +1,6 @@
 # Release 1.10.3 Plan
 
-Status: **BLOCKED — live coordinator/dump paths can use stale graph metadata; PR #164 write evidence is also outstanding**
+Status: **BLOCKED — PR #164 write/read-back evidence is outstanding; final release gates remain**
 
 Planning date: 2026-10-02
 
@@ -243,13 +243,13 @@ passes.
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; remote `release/1.10.3` backs draft PR #168; no release tag/publication exists |
 | Plan-check | PASS | Independent re-check accepted partial/truncated scan preservation, same-poll coordinator refresh and dump use of current find evidence, malformed/error-only fail-closed behavior, positive/absent B511 coverage, PR #164 evidence gate, allowlist and issue boundaries. |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
-| Validation | STALE | 951 pytest tests and configured lint/type/version/compile checks passed on the prior candidate; partial scan and live-snapshot audit findings require regression/fixes, then full validation. |
+| Validation | PENDING FINAL | Full validation must be rerun after the partial/truncated scan and live coordinator/dump refresh fixes; then run on the final candidate. |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
-| HA smoke | STALE | Prior address-safe candidate passed zero/one-second export and `grab result all` checks on 2026-10-02; rerun after fixing partial scan-row ambiguity. It did not verify positive reporter HW0504 B511 values. |
-| Review | STALE | Final review passed for the prior candidate; repeat on the corrected post-smoke candidate. |
-| Audit | FINDING OPEN | Final audit found incomplete-row parser/usable-find bypass plus stale graph consumers: ready coordinator polls do not refresh scan identity before definitions/fallback; dump skip keys, hardware blocklists and circuit aliases must all use the current raw find. Fix, regress and re-audit. |
-| Release gate | BLOCKED | Live scan-address audit findings are open; PR #164 evidence is outstanding; rerun validation, HA smoke, final review/audit and PR-CI before any merge decision |
-| PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; local candidate has an open audit finding and will be corrected before push. Do not merge before PR #164 evidence decision and all release gates. |
+| HA smoke | STALE | Prior address-safe candidate passed zero/one-second export and `grab result all` checks on 2026-10-02; rerun after the new executable fixes. It did not verify positive reporter HW0504 B511 values. |
+| Review | DELTA PASS | Independent delta reviews passed for the partial scan/live poll fixes (`b2346f1`, `f6111ab`, `b2dcdd2`, `b2346f1` follow-up) and current dump graph/alias rebuild (`abed944`, test fixture update `952c8d8`). Final review remains required after full validation and HA smoke. |
+| Audit | DELTA PASS | Independent audits passed for partial/truncated scan handling and usable-find validation (`f6111ab`, `b2dcdd2`, `b2346f1`) and current coordinator/dump graph refresh (`83159df`, `abed944`, `952c8d8`). Final audit remains required after full validation and HA smoke. |
+| Release gate | BLOCKED | Address/graph audit deltas are closed; PR #164 evidence is outstanding. Rerun full validation, HA smoke, final review/audit and PR-CI before any merge decision. |
+| PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; the final candidate commits are local and not pushed. Push only after the final independent review/audit; do not merge before PR #164 evidence and all release gates. |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
 | User communication | IN PROGRESS | Posted an English evidence request on PR #164; release issue notices and #165 closure wait until publication |
 
