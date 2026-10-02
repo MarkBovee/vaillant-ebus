@@ -1,13 +1,13 @@
 # Release 1.10.3 Plan
 
-Status: **PLANNED — no release candidate pushed or announced**
+Status: **PRE-MERGE CANDIDATE — local validation and HA smoke passed; PR/release gates pending**
 
 Planning date: 2026-10-02
 
 Base: `main` / `origin/main` at `48af49b`
 
 Previous release: `v1.10.2` at `44f11a9083cd83da04139b690f0d117d96bc23b6`
-Implementation branch: `fix/issue161-vwzio-runtime-counters` (uncommitted)
+Implementation branch: `release/1.10.3`
 
 ## Goal
 
@@ -147,9 +147,9 @@ passes.
 | Initial state | PASS | `main` equals `origin/main` at `48af49b`; `v1.10.2` is published; no remote `release/1.10.3`, tag or release exists |
 | Plan-check | PASS | Independent plan-check accepted version order, stage allowlist, deployment identity, HA smoke evidence, CI/gate order, and auto-grab limitations |
 | Candidate/version | COMPLETE | Release branch `release/1.10.3`; `pyproject.toml`, manifest and undated `CHANGELOG.md` heading are synchronized at `1.10.3` |
-| Validation | PASS | Ruff check/format, strict configured mypy, YAML parsing, 943 pytest tests, version check, compileall and diff check passed before packaging |
+| Validation | PASS | Ruff check/format, strict configured mypy, YAML parsing, 943 pytest tests, version check, compileall and diff check passed; `scripts/deploy.sh --restart` repeated ruff/pytest/compile successfully |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
-| HA smoke | IN PROGRESS | Deploy committed candidate with `scripts/deploy.sh --restart`; then run required zero/one-second exports and checks |
+| HA smoke | PASS | Deployed commit `77c696b` with `scripts/deploy.sh --restart` (HTTP 200). HA-MCP confirmed the entry loaded. Zero dump `/config/vaillant_ebus/discovery_dump_2026-10-02_135017.yaml`: YAML valid, required sections, 631 raw find lines, 728 before-registers, `not_requested`, captured duration `0`. Positive dump `/config/vaillant_ebus/discovery_dump_2026-10-02_135110.yaml`: YAML valid, required sections, 631 raw find lines, 728 before-registers, `continued`, `count_delta`, 1.000969 s, limitation present, 4 grab lines. Read-only `grab result all` returned 8,633 lines, not `grab disabled`; fresh filtered logs had zero entries. Owner scan is VWZ00 SW0522/HW5103, so this verifies export and unavailable-data safety, not positive HW0504 B511 reads. HA-MCP had no file reader; read-only SSH fetched both files. |
 | Review | NOT STARTED | Independent standard-tier review after validation and HA smoke |
 | Audit | NOT STARTED | Separate independent standard-tier audit after review |
 | Release gate | NOT STARTED | Independent decision against exact final diff and all evidence |
