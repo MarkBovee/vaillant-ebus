@@ -138,13 +138,19 @@ def _has_current_unique_scan_identity(graph: DeviceGraph, node: DeviceNode) -> b
         )
 
     normalized: list[tuple[str, str, str, str]] = []
+    conflicting_addresses: set[str] = set()
+    conflicting_types: set[str] = set()
     for (row_address, row_type), identities in grouped.items():
         software = {sw for sw, _ in identities if sw}
         hardware = {hw for _, hw in identities if hw}
         if len(software) > 1 or len(hardware) > 1:
-            return False
+            conflicting_addresses.add(row_address)
+            conflicting_types.add(row_type)
+            continue
         normalized.append((row_address, row_type, next(iter(software), ""), next(iter(hardware), "")))
 
+    if address in conflicting_addresses or scan_type in conflicting_types:
+        return False
     matching = [row for row in normalized if row[:2] == (address, scan_type)]
     if len(matching) != 1:
         return False

@@ -628,7 +628,14 @@ async def test_issue32_hmux0_runtime_definitions_use_discovered_circuit() -> Non
 async def test_issue161_hmux0_sw0407_runtime_definitions_are_passive_and_scan_gated() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         fixture = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
-        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+        find_lines = load_find_lines(fixture, after=True)
+        find_lines.extend(
+            [
+                "scan.50 = MF=Vaillant;ID=CTLV2;SW=0514;HW=1104",
+                "scan.50 = MF=Vaillant;ID=CTLV2;SW=0515;HW=1104",
+            ]
+        )
+        graph = DISCOVERY.DiscoveryService.build_device_graph(find_lines)
         heat_pump = graph.heat_pump_result().node
         assert heat_pump is not None
         assert (heat_pump.scan_type, heat_pump.scan_sw, heat_pump.scan_hw) == ("HMUX0", "0407", "0504")
@@ -831,6 +838,8 @@ async def test_vwzio_status01_fallback_allows_hw5103_owner_at_address76() -> Non
         graph = DISCOVERY.DiscoveryService.build_device_graph(
             [
                 "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+                "scan.50 = MF=Vaillant;ID=CTLV2;SW=0514;HW=1104",
+                "scan.50 = MF=Vaillant;ID=CTLV2;SW=0515;HW=1104",
                 "vwzio Status01 = no data stored",
             ]
         )
