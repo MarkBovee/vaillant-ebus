@@ -1,0 +1,26 @@
+source: https://github.com/john30/ebusd-configuration/pull/598
+evidence_type: upstream_pr_capture_excerpt
+note: This records the complete B511/18xx frames and scan identities published in PR #598, not a full discovery dump.
+systems:
+  second_install:
+    scan: MF=Vaillant;ID=VWZIO;SW=0902;HW=5103
+    frames:
+      - request: f176b511021801
+        response: 0900e02c00001a000000
+        runtime_minutes: 11488
+        starts: 26
+      - request: f176b511021802
+        response: 09000000000000000000
+        runtime_minutes: 0
+        starts: 0
+  pr_author_install:
+    scan: MF=Vaillant;ID=VWZIO;SW=0901;HW=5103
+    frames:
+      - request: f176b511021801
+        response: 0900b20f000038000000
+        runtime_minutes: 4018
+        starts: 56
+      - request: f176b511021802
+        response: 0900240a00003d000000
+        runtime_minutes: 2596
+        starts: 61

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.10.3
+
+### Added
+
+- Add passive VWZIO DHW backup-heater runtime and start-count decoding for
+  B511/021802. The SW0500/HW0504 definition uses existing gateway telegrams and
+  does not issue active reads; the captures show the counter advancing across
+  two known heater runs. The shared field layout is also documented on
+  SW0901/SW0902 HW5103 in upstream PR #598.
+
+### Notes
+
+- The separate HTTP 500 after an ebusd crash is not fixed by this release. Dump
+  export still requires an authoritative discovery graph.
+- BASS3 calendars remain unavailable while timer reads return
+  `ERR: invalid position in decode`.
+- No F34 energy-mapping changes are included.
+
 ## 1.10.2 - 2026-10-02
 
 ### Fixed

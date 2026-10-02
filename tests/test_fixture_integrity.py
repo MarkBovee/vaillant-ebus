@@ -13,6 +13,7 @@ capture made the suite pass for the wrong reason.
 
 from __future__ import annotations
 
+import hashlib
 import struct
 
 import pytest
@@ -27,6 +28,24 @@ ISSUE99_DUMPS = (
 
 ISSUE129_DUMP = "community/saunier_duval_f34_issue129_discovery.yaml"
 ISSUE32_DUMP = "community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml"
+ISSUE161_STATE_CAPTURE_PROVENANCE = {
+    "community/hmux0_issue161_2026-09-30_130640_discovery.yaml": (
+        "https://github.com/user-attachments/files/32861111/discovery_dump_2026-09-30_130640.yaml",
+        "4bb284505a81b71c68d2ceba590301ae550c4f1c1ba84c041893eeaafc9130fb",
+    ),
+    "community/hmux0_issue161_2026-09-30_132044_discovery.yaml": (
+        "https://github.com/user-attachments/files/32861100/discovery_dump_2026-09-30_132044.yaml",
+        "b28482a7a5a0cc07be75e032c6268a235c89ff5e5c827ba135b71c584d59d40e",
+    ),
+    "community/hmux0_issue161_2026-09-30_154054_discovery.yaml": (
+        "https://github.com/user-attachments/files/32861120/discovery_dump_2026-09-30_154054.yaml",
+        "4f58364bcf5bb82822480e99533215b2ff94c0e8b7667dd3da248ffff592720d",
+    ),
+    "community/hmux0_issue161_2026-09-30_161313_discovery.yaml": (
+        "https://github.com/user-attachments/files/32861117/discovery_dump_2026-09-30_161313.yaml",
+        "4b7da7a3cb4864f942ddfcae296d16fd8ffb1301f7ed96a6ed2335e68d099029",
+    ),
+}
 NEW_CAPTURE_PROVENANCE = {
     "community/arotherm_pro7_issue101_2026-09-15_203102_discovery.yaml": (
         "https://github.com/user-attachments/files/32255148/discovery_dump_2026-09-15_203102Whisper.switch.no.heat.yaml",
@@ -194,6 +213,21 @@ def test_issue161_dump_keeps_hmux0_status_and_telemetry_candidates() -> None:
         item = rows[request]
         assert item["resp"] == response
         assert item["count"] == count
+
+
+# Intent: issue #161's four later captures remain byte-for-byte copies of the attached complete dumps.
+# Why: the state-correlated power and heater-counter evidence depends on original scan, find, and grab data.
+@pytest.mark.parametrize(("fixture", "source"), ISSUE161_STATE_CAPTURE_PROVENANCE.items())
+def test_issue161_state_captures_match_source_digests(fixture: str, source: tuple[str, str]) -> None:
+    source_url, expected_sha256 = source
+    path = FIXTURES_DIR / fixture
+    dump = load_discovery_dump(fixture)
+
+    assert source_url.startswith("https://github.com/user-attachments/files/")
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == expected_sha256
+    assert dump["metadata"]["dump_version"]
+    assert dump["raw_find_lines"]
+    assert dump["raw_find_lines_after"]
 
 
 # Intent: the issue #161 gateway payloads decode to the expected values under the documented B509/B51A layouts.

@@ -67,7 +67,9 @@ HMUX0_SW0407_ENVYIELD_REGISTERS: frozenset[str] = frozenset(
         "HwcEnvYieldMonth",
     }
 )
-VWZIO_SW0500_FALLBACK_BLOCKLIST: frozenset[str] = frozenset({"PowerConsumptionVwz", "Status01"})
+VWZIO_SW0500_FALLBACK_BLOCKLIST: frozenset[str] = frozenset(
+    {"PowerConsumptionVwz", "RunStatsImmersionHeaterHwc", "Status01"}
+)
 VWZIO_SW0500_FALLBACK_NAMES: frozenset[str] = frozenset(item.casefold() for item in VWZIO_SW0500_FALLBACK_BLOCKLIST)
 
 
@@ -87,8 +89,8 @@ def hmux0_sw0407_circuit(graph: DeviceGraph | None) -> str | None:
     return matches[0].circuit if len(matches) == 1 else None
 
 
-# Intent: return the discovered VWZIO circuit only for the target with unverified active Status01 layout.
-# Why: the SW0500/HW0504 evidence justifies passive B516/14 decoding, not importing the HW5103 active probe.
+# Intent: resolve the discovered circuit only for the VWZIO scan with passive telemetry evidence.
+# Why: SW0500/HW0504 supports captured B516/B511 frames, not HW5103's active Status01 probe.
 def vwzio_sw0500_circuit(graph: DeviceGraph | None) -> str | None:
     if graph is None:
         return None
@@ -189,6 +191,7 @@ MULTI_FIELD_FIELDS: dict[str, list[str]] = {
     "hmu.CompressorHwc": ["runtime", "cycles"],
     "hmu.RunStatsCompressorHc": ["runtime", "cycles"],
     "hmu.RunStatsCompressorHwc": ["runtime", "cycles"],
+    "vwzio.RunStatsImmersionHeaterHwc": ["runtime", "cycles"],
     "hmu.RunDataElPowerConsumption": ["value"],
     # v32 gas boiler (ecoTEC plus via VR32, bai.308523.inc + hcmode.inc).
     # Status01/Status02 share the hmu Status01 layout (hcmode.inc B511).
@@ -811,6 +814,30 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         device_class="power",
         unit="kW",
         icon="mdi:flash",
+        fallback_read=False,
+    ),
+    "vwzio.RunStatsImmersionHeaterHwc": RegisterMeta(
+        friendly_name="Backup Heater DHW Stats",
+        icon="mdi:information",
+        entity_category="diagnostic",
+        enabled=False,
+        fallback_read=False,
+    ),
+    "vwzio.RunStatsImmersionHeaterHwc.runtime": RegisterMeta(
+        friendly_name="Backup Heater Runtime (DHW)",
+        device_class="duration",
+        unit="min",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+        entity_type="sensor",
+        fallback_read=False,
+    ),
+    "vwzio.RunStatsImmersionHeaterHwc.cycles": RegisterMeta(
+        friendly_name="Backup Heater Starts (DHW)",
+        icon="mdi:counter",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+        entity_type="sensor",
         fallback_read=False,
     ),
     # CSV/find-based electric registers that supplement the runtime-defined

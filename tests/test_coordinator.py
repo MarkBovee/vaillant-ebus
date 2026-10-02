@@ -623,8 +623,8 @@ async def test_issue32_hmux0_runtime_definitions_use_discovered_circuit() -> Non
         assert not any(",Status00," in definition for definition in definitions)
 
 
-# Intent: HMUX0 SW0407 B509/B51A gateway frames are decoded passively on the discovered owner.
-# Why: the exact issue #161 capture supports these layouts, but adding ebusd read polling would be unsafe or unverified.
+# Intent: issue #161 gateway frames are decoded passively on their exact discovered owners.
+# Why: the HW0504 B511 counters are state-correlated, while active polling is not verified or required.
 async def test_issue161_hmux0_sw0407_runtime_definitions_are_passive_and_scan_gated() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         fixture = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
@@ -655,6 +655,7 @@ async def test_issue161_hmux0_sw0407_runtime_definitions_are_passive_and_scan_ga
             ("hmux0", "KmKreisKompAuslTemp", "f1", "08", "B51A", "05ff3705"),
             ("hmux0", "KmKreisHochdruck", "f1", "08", "B51A", "05ff370b"),
             ("vwzio", "PowerConsumptionVwz", "f1", "76", "B516", "14"),
+            ("vwzio", "RunStatsImmersionHeaterHwc", "f1", "76", "B511", "021802"),
         }
         actual = set()
         for definition in definitions:
@@ -662,7 +663,14 @@ async def test_issue161_hmux0_sw0407_runtime_definitions_are_passive_and_scan_ga
             if len(fields) > 7 and fields[0] == "u":
                 actual.add((fields[1], fields[2], fields[4], fields[5], fields[6], fields[7]))
         assert expected <= actual
-        assert not any(",B511,021801," in definition or ",B511,021802," in definition for definition in definitions)
+        assert not any(",B511,021801," in definition for definition in definitions)
+        stats_definition = next(
+            definition for definition in definitions if ",RunStatsImmersionHeaterHwc," in definition
+        )
+        assert stats_definition.startswith(
+            "u,vwzio,RunStatsImmersionHeaterHwc,RunStatsImmersionHeaterHwc,f1,76,B511,021802,"
+        )
+        assert "ign,,IGN:1,,,,runtime,,ULG,,min,,cycles,,ULG" in stats_definition
         assert not any(
             fields[0] == "r" and fields[1] == "hmux0" and fields[2] in {entry[1] for entry in expected}
             for fields in (definition.split(",") for definition in definitions)
@@ -678,11 +686,15 @@ async def test_issue161_hmux0_sw0407_runtime_definitions_are_passive_and_scan_ga
         ):
             assert MAPPING.REGISTER_MAP[f"hmux0.{name}"].fallback_read is False
         assert MAPPING.REGISTER_MAP["vwzio.PowerConsumptionVwz"].fallback_read is False
+        assert MAPPING.REGISTER_MAP["vwzio.RunStatsImmersionHeaterHwc"].fallback_read is False
         assert not any(definition.startswith("r,vwzio,Status01,") for definition in definitions)
         coordinator._last_find_keys = set()
         coordinator.ebus.read_register = AsyncMock(return_value=None)
         await coordinator._fallback_read(include_placeholders=True)
         assert not any(call.args == ("vwzio", "Status01") for call in coordinator.ebus.read_register.await_args_list)
+        assert ("vwzio", "RunStatsImmersionHeaterHwc") not in [
+            call.args[:2] for call in coordinator.ebus.read_register.await_args_list
+        ]
 
         nonmatching_lines = [
             line.replace("VWZIO;0500;0504", "VWZIO;0902;5103") if line.strip().startswith("scan.76 ") else line
@@ -694,10 +706,46 @@ async def test_issue161_hmux0_sw0407_runtime_definitions_are_passive_and_scan_ga
         other.ebus = MagicMock(spec=EbusService)
         other.ebus.is_connected = True
         other.ebus.define_register = AsyncMock(return_value="done")
+        other.ebus.read_register = AsyncMock(return_value=None)
         other._graph = nonmatching_graph
         await other._define_custom_registers()
         other_definitions = [call.args[0] for call in other.ebus.define_register.await_args_list]
         assert not any(",PowerConsumptionVwz," in definition for definition in other_definitions)
+        assert not any(",RunStatsImmersionHeaterHwc," in definition for definition in other_definitions)
+        other._last_find_keys = set(nonmatching_graph.raw_registers) | set(nonmatching_graph.placeholder_registers)
+        await other._fallback_read(include_placeholders=True, include_energy=True)
+        assert ("vwzio", "RunStatsImmersionHeaterHwc") not in [
+            call.args[:2] for call in other.ebus.read_register.await_args_list
+        ]
+
+
+# Intent: a rejected passive HWC counter definition never falls back to an active read or fabricated entity.
+# Why: this HW0504 layout is supported only by observed gateway traffic, and no-data must remain unavailable.
+async def test_issue161_vwzio_hwc_stats_failed_definition_stays_passive() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fixture = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
+        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="ERR: unsupported")
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._graph = graph
+
+        await coordinator._define_custom_registers()
+        assert any(
+            call.args[0].startswith("u,vwzio,RunStatsImmersionHeaterHwc,")
+            for call in coordinator.ebus.define_register.await_args_list
+        )
+        coordinator._last_find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+
+        assert ("vwzio", "RunStatsImmersionHeaterHwc") not in [
+            call.args[:2] for call in coordinator.ebus.read_register.await_args_list
+        ]
+        assert "vwzio.RunStatsImmersionHeaterHwc" not in graph.raw_registers
+        entity_keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+        assert not any(key.startswith("vwzio.RunStatsImmersionHeaterHwc") for key in entity_keys)
 
 
 # Intent: define SW0407 layouts from their unique scan despite ambiguous heat-pump role resolution.
@@ -823,6 +871,7 @@ async def test_issue161_hmux0_sw0407_fallback_skips_unverified_b51a_and_passive_
             "KmKreisKompAuslTemp",
             "KmKreisHochdruck",
             "PowerConsumptionVwz",
+            "RunStatsImmersionHeaterHwc",
         }
         blocked_b51a_names = {
             "BuildingCircuitFlow",

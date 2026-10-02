@@ -5,8 +5,9 @@ from __future__ import annotations
 import struct
 
 import pytest
+import yaml
 
-from tests.fake_ebusd import load_discovery_dump, load_find_lines
+from tests.fake_ebusd import FIXTURES_DIR, load_discovery_dump, load_find_lines
 from tests.test_entity_factory import DiscoveryService, EntityFactoryService
 
 
@@ -389,6 +390,115 @@ def test_issue161_scan_only_vwzio_node_and_missing_scan_path() -> None:
     ]
     nonmatching_graph = DiscoveryService.build_device_graph(nonmatching_scan)
     assert "vwzio" not in nonmatching_graph.nodes
+
+
+# Intent: the exact HW0504 B511/021802 frames decode to the correlated runtime/start deltas.
+# Why: the upstream field layout is from HW5103, so this target variant needs capture-backed regression coverage.
+def test_issue161_vwzio_hwc_runtime_frames_match_heater_cycles() -> None:
+    from vaillant_ebus.backend.mapping import REGISTER_MAP
+
+    baseline_name = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
+    later_name = "community/hmux0_issue161_2026-09-30_161313_discovery.yaml"
+    baseline = load_discovery_dump(baseline_name)
+    later = load_discovery_dump(later_name)
+
+    decoded = []
+    for dump, expected in ((baseline, (69, 2)), (later, (106, 4))):
+        scan = dump["metadata"]["ebusd_info"]["loaded_configs"]["76"]["scanned"]
+        assert scan == "MF=Vaillant;ID=VWZIO;SW=0500;HW=0504"
+        row = next(item for item in dump["unknown_telegrams"] if item["request"] == "f176b511021802")
+        response = bytes.fromhex(row["resp"])
+        assert response[0] == 9
+        assert len(response) == 10
+        values = (
+            int.from_bytes(response[2:6], "little"),
+            int.from_bytes(response[6:10], "little"),
+        )
+        assert values == expected
+        decoded.append(values)
+
+    assert (decoded[1][0] - decoded[0][0], decoded[1][1] - decoded[0][1]) == (37, 2)
+
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines(later_name, after=True) + ["vwzio RunStatsImmersionHeaterHwc = 106;4"]
+    )
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+    runtime = entities["vwzio.RunStatsImmersionHeaterHwc.runtime"].meta
+    starts = entities["vwzio.RunStatsImmersionHeaterHwc.cycles"].meta
+    assert runtime.device_class == "duration"
+    assert runtime.unit == "min"
+    assert runtime.state_class == "total_increasing"
+    assert starts.state_class == "total_increasing"
+    assert REGISTER_MAP["vwzio.RunStatsImmersionHeaterHwc"].fallback_read is False
+
+    absent_graph = DiscoveryService.build_device_graph(load_find_lines(later_name, after=True))
+    absent_keys = {entity.key for entity in EntityFactoryService().generate(absent_graph)}
+    assert not any(key.startswith("vwzio.RunStatsImmersionHeaterHwc") for key in absent_keys)
+
+
+# Intent: the shared HWC counter metadata applies to HW5103 only when its ebusd graph exposes the register.
+# Why: upstream PR #598 confirms the same frame layout on HW5103, while absent graph data must create no entity.
+def test_issue598_vwzio_hw5103_counter_metadata_is_graph_driven() -> None:
+    from vaillant_ebus.backend.mapping import REGISTER_MAP
+
+    evidence = yaml.safe_load(
+        (FIXTURES_DIR / "community/vwzio_hw5103_pr598_b511_stats.yaml").read_text()
+    )
+    assert evidence["source"] == "https://github.com/john30/ebusd-configuration/pull/598"
+
+    for system in evidence["systems"].values():
+        for frame in system["frames"]:
+            response = bytes.fromhex(frame["response"])
+            assert frame["request"].startswith("f176b5110218")
+            assert response[0] == 9
+            assert int.from_bytes(response[2:6], "little") == frame["runtime_minutes"]
+            assert int.from_bytes(response[6:10], "little") == frame["starts"]
+
+    system = evidence["systems"]["pr_author_install"]
+    graph = DiscoveryService.build_device_graph(
+        [f"scan.76 = {system['scan']}", "vwzio RunStatsImmersionHeaterHwc = 2596;61"]
+    )
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+    assert entities["vwzio.RunStatsImmersionHeaterHwc.runtime"].raw_value == "2596"
+    assert entities["vwzio.RunStatsImmersionHeaterHwc.cycles"].raw_value == "61"
+    assert REGISTER_MAP["vwzio.RunStatsImmersionHeaterHwc"].fallback_read is False
+
+    absent_graph = DiscoveryService.build_device_graph([f"scan.76 = {system['scan']}"])
+    absent_keys = {entity.key for entity in EntityFactoryService().generate(absent_graph)}
+    assert not any(key.startswith("vwzio.RunStatsImmersionHeaterHwc") for key in absent_keys)
+
+
+# Intent: issue #161's passive VWZIO power readings track the reported active and idle station states.
+# Why: the feature is hydraulic-station power, not a heater-only measurement or a plausible-value guess.
+@pytest.mark.parametrize(
+    ("fixture", "expected_kw", "expected_status"),
+    (
+        ("community/hmux0_issue161_2026-09-30_130640_discovery.yaml", 4.695, 2),
+        ("community/hmux0_issue161_2026-09-30_132044_discovery.yaml", 0.005, 0),
+        ("community/hmux0_issue161_2026-09-30_154054_discovery.yaml", 0.005, 0),
+        ("community/hmux0_issue161_2026-09-30_161313_discovery.yaml", 0.005, 0),
+    ),
+)
+def test_issue161_vwzio_station_power_tracks_captured_state(
+    fixture: str, expected_kw: float, expected_status: int
+) -> None:
+    dump = load_discovery_dump(fixture)
+    scan = dump["metadata"]["ebusd_info"]["loaded_configs"]["76"]["scanned"]
+    assert scan == "MF=Vaillant;ID=VWZIO;SW=0500;HW=0504"
+    row = next(item for item in dump["unknown_telegrams"] if item["request"] == "f176b5160114")
+    response = bytes.fromhex(row["resp"])
+    assert response[0] == 9
+    assert response[1] == expected_status
+    power_kw = struct.unpack_from("<f", response, 2)[0] / 1000
+    assert power_kw == pytest.approx(expected_kw)
+
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines(fixture, after=True) + [f"vwzio PowerConsumptionVwz = {power_kw}"]
+    )
+    entity = {item.key: item for item in EntityFactoryService().generate(graph)}["vwzio.PowerConsumptionVwz.value"]
+    assert entity.meta.device_class == "power"
+    assert entity.meta.unit == "kW"
+    assert entity.meta.fallback_read is False
 
 
 # Intent: ecoTEC VRT380 captures expose bai entities and a controller graph.

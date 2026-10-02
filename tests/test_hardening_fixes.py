@@ -2000,6 +2000,41 @@ async def test_dump_registers_skip_issue161_hmux0_fallback_set() -> None:
     assert not {("hmux0", name.casefold()) for name in expected_names} & other_skip_reads
 
 
+# Intent: dump export does not actively probe the passive HW0504 HWC counter if ebusd rejects its definition.
+# Why: the mapped parent must remain passive even when no runtime definition is available to build a skip list.
+async def test_dump_registers_skip_issue161_vwzio_hwc_counter_without_definition() -> None:
+    fixture = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
+    graph = tc.DISCOVERY.DiscoveryService.build_device_graph(tc.load_find_lines(fixture, after=True))
+    assert graph.nodes["vwzio"].scan_sw == "0500"
+    assert graph.nodes["vwzio"].scan_hw == "0504"
+
+    ebus = MagicMock()
+    ebus.find_registers = AsyncMock(return_value=[])
+    ebus.read_register = AsyncMock(return_value=None)
+    original_map = DUMP.REGISTER_MAP
+    DUMP.REGISTER_MAP = {
+        "vwzio.RunStatsImmersionHeaterHwc": MagicMock(enabled=False, writable=False, fallback_read=False)
+    }
+    try:
+        registers, _, _ = await DUMP._dump_registers(ebus, circuit_aliases={"vwzio": "vwzio"})
+    finally:
+        DUMP.REGISTER_MAP = original_map
+
+    assert registers == [
+        {
+            "circuit": "vwzio",
+            "name": "RunStatsImmersionHeaterHwc",
+            "fields": ["value"],
+            "values": [None],
+            "writable": False,
+            "has_data": False,
+            "from_map": True,
+            "disabled": True,
+        }
+    ]
+    ebus.read_register.assert_not_awaited()
+
+
 # Intent: resolve host aliases to the socket address used for dump-lock identity.
 # Why: a DNS name and its IP address can reach the same daemon-global grab state.
 async def test_grab_endpoint_lock_key_uses_resolved_socket_address(monkeypatch: pytest.MonkeyPatch) -> None:

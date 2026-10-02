@@ -1545,6 +1545,12 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 f"u,{vwzio.circuit},PowerConsumptionVwz,PowerConsumptionVwz,f1,76,B516,14"
                 ",value,,IGN:1,,,,value,,EXP,1000,kW,Hydraulic station power consumption"
             )
+            # Intent: decode the captured DHW backup-heater runtime/start counters without polling.
+            # Why: issue #161 correlates the HW0504 delta to two runs; absent data must stay unavailable.
+            defines.append(
+                f"u,{vwzio.circuit},RunStatsImmersionHeaterHwc,RunStatsImmersionHeaterHwc,f1,76,B511,021802"
+                ",ign,,IGN:1,,,,runtime,,ULG,,min,,cycles,,ULG"
+            )
             # Status01's active field layout is documented for VWZIO HW5103, not this HW0504 scan.
             defines = [
                 definition
