@@ -996,6 +996,72 @@ async def test_unusable_post_definition_find_skips_fallback_and_keeps_usable_sna
         coordinator.ebus.read_register.assert_not_awaited()
 
 
+# Intent: merge post-definition scan evidence before initial entity fallback handling.
+# Why: a node-empty usable follow-up must revoke stale station ownership; an unusable one must never poll it.
+async def test_initial_setup_post_definition_find_refreshes_scan_safety(monkeypatch: pytest.MonkeyPatch) -> None:
+    for followup_usable in (True, False):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+            initial_graph = DISCOVERY.DiscoveryService.build_device_graph(
+                [
+                    "scan.76 = MF=Vaillant;ID=VWZIO;SW=0901;HW=5103",
+                    "vwzio Status01 = no data stored",
+                ]
+            )
+            post_definition_graph = (
+                DISCOVERY.DiscoveryService.build_device_graph(["scan.76 = MF=Vaillant;ID=VWZ00;SW=;HW"])
+                if followup_usable
+                else MODELS.DeviceGraph(nodes={}, raw_registers={}, placeholder_registers=set())
+            )
+            ebus = MagicMock(spec=EbusService)
+            ebus.is_connected = True
+            ebus.version = "ebusd 26.1"
+            ebus.last_find_usable = True
+            ebus.connect = AsyncMock()
+            ebus.disconnect = AsyncMock()
+            ebus.define_register = AsyncMock(return_value="done")
+            ebus.read_register = AsyncMock(return_value=None)
+            graphs = iter((initial_graph, post_definition_graph))
+            validities = iter((True, followup_usable))
+            discovery = MagicMock()
+
+            # Intent: pair each fake graph with the transport's current find-validity state.
+            # Why: setup behavior differs for a usable partial scan and an unusable follow-up response.
+            async def _discover() -> MODELS.DeviceGraph:
+                ebus.last_find_usable = next(validities)
+                return next(graphs)
+
+            discovery.discover = AsyncMock(side_effect=_discover)
+            monkeypatch.setattr(COORDINATOR, "EbusService", MagicMock(return_value=ebus))
+            monkeypatch.setattr(COORDINATOR, "DiscoveryService", MagicMock(return_value=discovery))
+            monkeypatch.setattr(COORDINATOR.repairs, "async_dismiss_ebusd_unreachable", AsyncMock())
+            monkeypatch.setattr(COORDINATOR.repairs, "async_dismiss_detection_incomplete", AsyncMock())
+            coordinator._schedule_delayed_rediscovery = MagicMock()
+            coordinator._schedule_analysis = MagicMock()
+            applied_graphs: list[MODELS.DeviceGraph] = []
+
+            # Intent: exercise the initial graph's actual fallback decision without unrelated HA entity setup.
+            # Why: this test isolates whether post-definition scan evidence reaches the active-read gate.
+            async def _apply_graph(graph: MODELS.DeviceGraph, source: str) -> None:
+                assert source == "initial"
+                coordinator._graph = graph
+                applied_graphs.append(graph)
+                await coordinator._fallback_read(include_placeholders=True)
+
+            coordinator._apply_discovery_graph = AsyncMock(side_effect=_apply_graph)
+
+            await coordinator._ebusd_connect_and_discover()
+
+            definitions = [call.args[0] for call in ebus.define_register.await_args_list]
+            assert any(definition.startswith("r,vwzio,Status01,") for definition in definitions)
+            assert applied_graphs
+            if followup_usable:
+                assert MAPPING.vwz_station_scan_76_circuit(applied_graphs[-1]) is None
+            else:
+                assert MAPPING.vwz_station_scan_76_circuit(applied_graphs[-1]) == "vwzio"
+            assert ("vwzio", "Status01") not in [call.args[:2] for call in ebus.read_register.await_args_list]
+
+
 # Intent: define SW0407 layouts from their unique scan despite ambiguous heat-pump role resolution.
 # Why: a second heat pump must not suppress target registers or redirect definitions to the wrong circuit.
 async def test_issue161_sw0407_passive_definitions_survive_other_heat_pump_node() -> None:

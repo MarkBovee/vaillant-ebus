@@ -769,7 +769,13 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     self._started = False
                     return
                 if graph.nodes and not refreshed_graph.nodes:
-                    _LOGGER.warning("Post-definition find returned no graph; retaining the initial discovery graph")
+                    if getattr(ebus, "last_find_usable", None) is not False:
+                        _LOGGER.warning(
+                            "Post-definition find returned no graph nodes; merging the current scan snapshot"
+                        )
+                        graph = _merge_device_graphs(graph, refreshed_graph)
+                    else:
+                        _LOGGER.warning("Post-definition find was unusable; retaining the initial discovery graph")
                     if self._ebusd_repair_pending:
                         await ebus.disconnect()
                         await self._async_mark_ebusd_unreachable(
