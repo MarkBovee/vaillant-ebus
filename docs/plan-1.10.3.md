@@ -1,6 +1,6 @@
 # Release 1.10.3 Plan
 
-Status: **BLOCKED — poll and dump paths can use stale scan evidence; PR #164 write evidence is also outstanding**
+Status: **BLOCKED — live coordinator/dump paths can use stale graph metadata; PR #164 write evidence is also outstanding**
 
 Planning date: 2026-10-02
 
@@ -60,7 +60,9 @@ passes.
   snapshot before runtime definitions or fallback reads, even when discovery is
   already ready. Dump-service fallback eligibility must be recomputed from the
   same raw `find` response used for that map probe, not the coordinator's stale
-  snapshot. Error-only/malformed find responses must not replace current graph
+  graph or precomputed circuit aliases. Rebuild dump-side device metadata and
+  aliases from that current find so hardware-specific blocklists and circuit
+  routing reflect changed scan identities. Error-only/malformed find responses must not replace current graph
   evidence or proceed to active fallback reads. When a poll adds new runtime
   definitions, run a follow-up find in the same poll and refresh the graph from
   that usable response before fallback reads; if that response is unusable, skip
@@ -97,7 +99,10 @@ passes.
   ready coordinator graph receiving the new usable live find. The dump test must
   pass a valid/stale coordinator graph with the current conflicting rows only in
   ebusd's find response and still issue no map probe to `0x76`. Also test that an
-  unrelated partial scan elsewhere does not disable the valid owner. With an
+  unrelated partial scan elsewhere does not disable the valid owner. In dump
+  tests, also switch a discovered HMUX0 from SW0303 to SW0407 and require the
+  current SW0407 fallback blocklist to apply; switch CTLV2 to CTLV3 and require
+  logical map aliases to route only to the currently discovered circuit. With an
   already-ready coordinator, test error-only/malformed first and follow-up finds:
   retain the last usable scan snapshot and issue no active fallback reads.
   Preserve the existing B511 positive frame decode/entity values and absent or
@@ -242,7 +247,7 @@ passes.
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
 | HA smoke | STALE | Prior address-safe candidate passed zero/one-second export and `grab result all` checks on 2026-10-02; rerun after fixing partial scan-row ambiguity. It did not verify positive reporter HW0504 B511 values. |
 | Review | STALE | Final review passed for the prior candidate; repeat on the corrected post-smoke candidate. |
-| Audit | FINDING OPEN | Final audit found both incomplete-row parser/usable-find bypass and stale graph use: ready coordinator polls do not refresh scan identity before definitions/fallback, and dump skip keys are computed before the raw find. Fix both live paths, regress and re-audit. |
+| Audit | FINDING OPEN | Final audit found incomplete-row parser/usable-find bypass plus stale graph consumers: ready coordinator polls do not refresh scan identity before definitions/fallback; dump skip keys, hardware blocklists and circuit aliases must all use the current raw find. Fix, regress and re-audit. |
 | Release gate | BLOCKED | Live scan-address audit findings are open; PR #164 evidence is outstanding; rerun validation, HA smoke, final review/audit and PR-CI before any merge decision |
 | PR / merge | BLOCKED | Draft PR #168 is still at remote head `d6612ae`; local candidate has an open audit finding and will be corrected before push. Do not merge before PR #164 evidence decision and all release gates. |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |

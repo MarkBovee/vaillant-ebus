@@ -9,7 +9,7 @@ import socket
 import tempfile
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 from weakref import WeakKeyDictionary
@@ -229,12 +229,18 @@ async def _dump_registers(
     find_is_usable = getattr(ebus, "last_find_usable", None)
     skip_map_probes = find_is_usable is False
     fallback_read_skip_keys = set(skip_fallback_reads or ())
+    aliases = dict(circuit_aliases or {})
     if current_graph is not None and find_is_usable is not False:
-        current_scan_identities = tuple(
-            identity for line in raw_lines if (identity := DiscoveryService._parse_scan_identity(line)) is not None
-        )
-        current_graph = replace(current_graph, scan_identities=current_scan_identities)
+        current_graph = DiscoveryService.build_device_graph(raw_lines)
         fallback_read_skip_keys.update(_fallback_read_skip_keys(current_graph, runtime_definitions or []))
+        aliases = {
+            alias: (
+                resolution.circuit
+                if (resolution := current_graph.resolve_circuit_result(alias)).status.name == "UNIQUE"
+                else None
+            )
+            for alias in aliases
+        }
     if seen_keys is None:
         seen_keys = set()
     register_list: list[dict] = []
@@ -252,7 +258,6 @@ async def _dump_registers(
         }
         register_list.append(entry)
 
-    aliases = circuit_aliases or {}
     for key, meta in REGISTER_MAP.items():
         if ensure_active is not None:
             ensure_active()
