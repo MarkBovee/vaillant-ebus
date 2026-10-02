@@ -150,10 +150,10 @@ passes.
 | Validation | PASS | Ruff check/format, strict configured mypy, YAML parsing, 943 pytest tests, version check, compileall and diff check passed; `scripts/deploy.sh --restart` repeated ruff/pytest/compile successfully |
 | HA baseline | PASS | HA-MCP: Core 2026.9.4 running; `vaillant_ebus` entry loaded. One unrelated Govee restart-required repair and one generic loader warning were present; no `custom_components.vaillant_ebus` runtime error was found. |
 | HA smoke | PASS | Deployed commit `77c696b` with `scripts/deploy.sh --restart` (HTTP 200). HA-MCP confirmed the entry loaded. Zero dump `/config/vaillant_ebus/discovery_dump_2026-10-02_135017.yaml`: YAML valid, required sections, 631 raw find lines, 728 before-registers, `not_requested`, captured duration `0`. Positive dump `/config/vaillant_ebus/discovery_dump_2026-10-02_135110.yaml`: YAML valid, required sections, 631 raw find lines, 728 before-registers, `continued`, `count_delta`, 1.000969 s, limitation present, 4 grab lines. Read-only `grab result all` returned 8,633 lines, not `grab disabled`; fresh filtered logs had zero entries. Owner scan is VWZ00 SW0522/HW5103, so this verifies export and unavailable-data safety, not positive HW0504 B511 reads. HA-MCP had no file reader; read-only SSH fetched both files. |
-| Review | PENDING DELTA | First review found only stale PR-CI bookkeeping in this plan; update the ledger, then review the new head |
-| Audit | PENDING DELTA | Production audit passed on the prior PR head; repeat against the new head after the plan ledger update |
+| Review | PENDING | Independent final review required after current PR-CI and validation |
+| Audit | PENDING | Separate independent final audit required after review |
 | Release gate | NOT STARTED | Independent decision against exact final diff and all evidence |
-| PR / merge | IN PROGRESS | Draft PR #168 is open. `ci`, `validate`, and `validate-hacs` passed on head `3dafc92`; update this ledger, push, and wait for checks on the new head before final gates |
+| PR / merge | IN PROGRESS | Draft PR #168 is open. PR-CI is required; the release-gate must verify `ci`, `validate`, and `validate-hacs` against the exact current PR head. This plan does not cache per-head check results because a plan-only commit changes the PR head. |
 | Tag / artifact | NOT STARTED | Annotated tag after merge; verify published zip and workflow |
 | User communication | NOT STARTED | English issue updates only after publication |
 
