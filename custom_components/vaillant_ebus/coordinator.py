@@ -98,6 +98,9 @@ VWZ_STATUS01_FIELDS = (
     "pumpstate,,UCH,0=off;1=on;2=overrun;4=hwc,,"
 )
 
+# Intent: (circuit, register) pairs of the HMUX0 precise temperatures, for poll-time key matching.
+_HMUX0_PRECISE_TEMPERATURE_KEYS = frozenset(("hmux0", name) for name in HMUX0_PRECISE_TEMPERATURE_REGISTERS)
+
 HMUX0_RUNTIME_REGISTERS = frozenset(
     {
         "RunDataFlowTemp",
@@ -2049,7 +2052,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 return
             if circuit_key in hmux0_blocked_circuits and name_key in HMUX0_SW0407_FALLBACK_NAMES:
                 return
-            if name_key == "rundatareturntemp" and circuit_key in hmux0_candidates:
+            if name_key in HMUX0_PRECISE_TEMPERATURE_REGISTERS and circuit_key in hmux0_candidates:
                 if hmux0_sw0303 is None or circuit_key != hmux0_sw0303.casefold():
                     return
             if (
@@ -2351,7 +2354,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         no_data_values.add(key)
                         if is_ebusd_error_value(line.partition("=")[2]) and key not in batch_with_data:
                             error_values.update((source_key, key))
-                        if key.lower() == "hmux0.rundatareturntemp":
+                        if key.lower().partition(".")[::2] in _HMUX0_PRECISE_TEMPERATURE_KEYS:
                             raw = line.split("=", 1)[1].strip()
                             if not is_no_data_value(raw):
                                 invalid_values.add(key)

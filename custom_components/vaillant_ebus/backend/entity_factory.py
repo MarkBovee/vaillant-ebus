@@ -88,7 +88,7 @@ def _is_numeric(value: str) -> bool:
 # Why: a counter that currently reads 0 or 1 (for example YieldTotal at 0) must stay a sensor and not flip
 # into a binary_sensor that disagrees with its own later values.
 _NUMERIC_MEASURE_NAME_PATTERN = re.compile(
-    r"(yield|energy|hours|starts|cycles|count|total|sum|power|consumption)", re.IGNORECASE
+    r"(yield|energy|hours|starts|cycles|count|total|sum(?!mer)|power|consumption)", re.IGNORECASE
 )
 
 
@@ -397,7 +397,7 @@ class EntityFactoryService:
                     entity_enabled = False
                 # Why: the composite "a;b;c" Status string repeats values that the per-field entities
                 # already expose and changes on almost every poll, which floods the recorder history.
-                if name_lower.startswith("status") and multi_field_fields(rk):
+                if name_lower.startswith("status") and multi_field_fields(rk) and override.get("enabled") is not True:
                     entity_enabled = False
 
                 dummy_reg = EbusdRegister(

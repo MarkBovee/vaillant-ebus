@@ -654,6 +654,8 @@ async def test_issue161_hmux0_sw0407_runtime_definitions_are_passive_and_scan_ga
         await coordinator._define_custom_registers()
 
         definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
+        # Issue #171: the active flow-temperature define is SW0303/HW0504-only.
+        assert not any(",RunDataFlowTemp," in definition for definition in definitions)
         expected = {
             ("hmux0", "RunDataStatuscode", "f1", "08", "B509", "055402008813"),
             ("hmux0", "RunDataCompressorSpeed", "f1", "08", "B509", "055402000d0a"),

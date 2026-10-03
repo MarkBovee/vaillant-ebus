@@ -587,7 +587,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         device_class="temperature",
         unit="°C",
     ),
-    "hmu.RunDataFlowTemp": RegisterMeta(
+    "hmux0.RunDataFlowTemp": RegisterMeta(
         friendly_name="Flow Temperature (precise)",
         device_class="temperature",
         unit="°C",

@@ -1406,3 +1406,32 @@ class TestOutsideTempDeviceClass:
         assert "hmu.CompressorHwc.cycles" in keys
         uids = [e.unique_id for e in entities]
         assert len(uids) == len(set(uids)), f"duplicate unique IDs: {uids}"
+
+
+# Intent: a YAML override that enables a composite Status parent is honoured.
+# Why: the default-disable of Status parents must not silently ignore an explicit user choice.
+def test_status_parent_override_enabled_wins_over_default_disable() -> None:
+    graph = DiscoveryService.build_device_graph(["vwzio Status01 = 20;21;18;45;42;off"])
+
+    default = {e.key: e for e in EntityFactoryService().generate(graph)}
+    forced = {
+        e.key: e
+        for e in EntityFactoryService().generate(graph, yaml_overrides={"vwzio.Status01": {"enabled": True}})
+    }
+
+    assert default["vwzio.Status01.value"].enabled_by_default is False
+    assert forced["vwzio.Status01.value"].enabled_by_default is True
+
+
+# Intent: only read-only measurement-like names leave binary detection; other 0/1 registers keep their type.
+# Why: guards the YieldTotal/PumpPower fix against over-reach (Summer-like names, writable switches).
+def test_zero_one_classification_keeps_flags_and_switches() -> None:
+    from tests.test_entity_factory import FACTORY
+
+    def classify(name: str, writable: bool) -> str:
+        reg = MODELS.EbusdRegister(circuit="bai", name=name, fields=["value"], value={"value": "0"}, writable=writable)
+        return FACTORY._classify_register(reg, "value", "0", MAPPING.RegisterMeta())
+
+    assert classify("YieldTotal", False) == "sensor"
+    assert classify("SummerModeActive", False) == "binary_sensor"
+    assert classify("YieldTotal", True) == "switch"

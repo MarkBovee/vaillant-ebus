@@ -17,7 +17,9 @@
   now disabled by default. It repeated values that the separate flow, return,
   outside, storage and pump entities already show, and it changed on almost
   every poll. This affects newly created entities only; existing entities keep
-  their current setting (discussion #31, issue #152).
+  their current setting (discussion #31, issue #152). The same applies to the
+  other combined status sensors (`Status00`, `Status02` and `Status07`). A YAML
+  override with `enabled: true` still turns any of them back on.
 - Registers that count or measure something, such as `YieldTotal` and
   `PumpPower`, no longer turn into on/off sensors when their value happens to be
   `0` or `1`. They stay normal sensors (issue #152).
