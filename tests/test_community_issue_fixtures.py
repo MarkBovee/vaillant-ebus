@@ -670,3 +670,63 @@ def test_pr164_ctlv0_dump_exposes_controls_and_keeps_absent_path_safe() -> None:
     absent_keys = {entity.key for entity in EntityFactoryService().generate(absent_graph)}
     assert "ctlv0.Hc1SetbackMode.value" not in absent_keys
     assert "ctlv0.OffsetOutsideTemp.value" not in absent_keys
+
+
+# Intent: discussion #31 (aroTHERM split plus VWL 77/8.2, HMUX0 SW0303/HW0504, Modbus link) keeps its
+# per-field hydraulic-station entities while the composite Status string is no longer enabled by default.
+# Why: the "a;b;c;-;d;off" parent repeats the per-field values and flooded the recorder history.
+def test_discussion31_hydraulic_station_composite_status_is_disabled_by_default() -> None:
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/hmux0_discussion31_vwl77_2026-10-02_205648_discovery.yaml")
+    )
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    assert entities["vwzio.Status01.value"].raw_value == "27.0;24.5;16.867;-;67.0;off"
+    assert entities["vwzio.Status01.value"].enabled_by_default is False
+    assert entities["vwzio.Status01.temp"].enabled_by_default is True
+    assert entities["vwzio.Status01.pumpstate"].enabled_by_default is True
+
+
+# Intent: the same capture proves the implausible Modbus-split return temperature stays unavailable.
+# Why: issue #171 adds a flow-temperature register that shares the layout, so both must be rejected here.
+def test_discussion31_implausible_hmux0_return_temperature_stays_unavailable() -> None:
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/hmux0_discussion31_vwl77_2026-10-02_205648_discovery.yaml")
+    )
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    assert "hmux0.RunDataReturnTemp" not in graph.raw_registers
+    assert entities["hmux0.RunDataReturnTemp.value"].raw_value == ""
+
+
+# Intent: F34 issue #152 capture (BAI/BASS3/VR_70): numeric counters that read 0 stay sensors.
+# Why: value-based 0/1 detection turned YieldTotal and PumpPower into binary sensors that duplicate real ones.
+def test_issue152_f34_zero_valued_counters_are_sensors_not_binary_sensors() -> None:
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/saunier_duval_f34_issue152_2026-10-02_194815_discovery.yaml")
+    )
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    assert entities["bass.YieldTotal.value"].entity_type == "sensor"
+    assert entities["bai.PumpPower.value"].entity_type == "sensor"
+    assert entities["bai.StorageLoadPumpHours.value"].entity_type == "sensor"
+    # The composite boiler Status string is hidden by default; per-field entities remain.
+    assert entities["bai.Status01.value"].enabled_by_default is False
+
+
+# Intent: issue #171 - a valid 1/16 degC HMUX0 flow temperature becomes an extra precise sensor.
+# Why: the reporter's value must appear next to the existing 0.5 degC Status01 flow sensor, not replace it.
+def test_issue171_hmux0_run_data_flow_temperature_becomes_precise_sensor() -> None:
+    lines = [
+        *load_find_lines("community/hmux0_discussion31_vwl77_2026-10-02_205648_discovery.yaml"),
+        "hmux0 RunDataFlowTemp = 25.0625",
+    ]
+    graph = DiscoveryService.build_device_graph(lines)
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    flow = entities["hmux0.RunDataFlowTemp.value"]
+    assert flow.raw_value == "25.0625"
+    assert flow.meta.friendly_name == "Flow Temperature (precise)"
+    assert flow.meta.unit == "°C"
+    assert flow.enabled_by_default is True
+    assert entities["vwzio.Status01.temp"].meta.friendly_name == "Flow Temperature"

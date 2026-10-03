@@ -84,6 +84,14 @@ def _is_numeric(value: str) -> bool:
         return False
 
 
+# Intent: register-name fragments that mark a numeric measurement (counter, energy, power) rather than a flag.
+# Why: a counter that currently reads 0 or 1 (for example YieldTotal at 0) must stay a sensor and not flip
+# into a binary_sensor that disagrees with its own later values.
+_NUMERIC_MEASURE_NAME_PATTERN = re.compile(
+    r"(yield|energy|hours|starts|cycles|count|total|sum|power|consumption)", re.IGNORECASE
+)
+
+
 def _classify_register(
     register: EbusdRegister,
     field: str,
@@ -102,6 +110,8 @@ def _classify_register(
         return "binary_sensor" if not register.writable else "switch"
     if low in ("0", "1", "yes", "no"):
         if meta.unit or meta.device_class:
+            return "sensor"
+        if not register.writable and _NUMERIC_MEASURE_NAME_PATTERN.search(register.name):
             return "sensor"
         if register.writable:
             return "switch"
@@ -384,6 +394,10 @@ class EntityFactoryService:
                 ):
                     entity_enabled = True
                 if eloblock and circuit.lower() == "bai" and name in ELOBLOCK_GAS_REGISTERS:
+                    entity_enabled = False
+                # Why: the composite "a;b;c" Status string repeats values that the per-field entities
+                # already expose and changes on almost every poll, which floods the recorder history.
+                if name_lower.startswith("status") and multi_field_fields(rk):
                     entity_enabled = False
 
                 dummy_reg = EbusdRegister(

@@ -33,7 +33,7 @@ from .backend.mapping import (
     vwz_station_scan_76_circuit,
     vwzio_sw0500_circuit,
 )
-from .backend.models import DeviceGraph, is_no_data_value
+from .backend.models import HMUX0_PRECISE_TEMPERATURE_REGISTERS, DeviceGraph, is_no_data_value
 from .const import DOMAIN, INTEGRATION_VERSION, SENSITIVE_FIELDS
 from .coordinator import VaillantCoordinator
 
@@ -149,7 +149,7 @@ def _fallback_read_skip_keys(graph: DeviceGraph | None, runtime_definitions: lis
     hmux0_sw0303 = hmux0_sw0303_owner(graph)
     for circuit in hmux0_candidate_circuits(graph):
         if hmux0_sw0303 is None or circuit.casefold() != hmux0_sw0303.casefold():
-            skipped.add((circuit.casefold(), "rundatareturntemp"))
+            skipped.update((circuit.casefold(), name) for name in HMUX0_PRECISE_TEMPERATURE_REGISTERS)
     vwzio = vwzio_sw0500_circuit(graph)
     if vwzio is not None:
         skipped.update((vwzio.casefold(), name) for name in VWZIO_SW0500_FALLBACK_NAMES)

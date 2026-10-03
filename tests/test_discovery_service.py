@@ -2005,3 +2005,21 @@ def test_bai_with_native_registers_is_kept() -> None:
     graph = DiscoveryService.build_device_graph(["bai FlowTemp = 28.69", "bai StorageTemp = 56.12"])
 
     assert graph.nodes["bai"].device_type.name == "HEATING_CONTROLLER"
+
+
+# Intent: implausible HMUX0 flow temperatures are rejected like return temperatures.
+# Why: issue #171 flow shares the B509 1/16 degC layout; Modbus-split units decode garbage.
+@pytest.mark.parametrize("raw", ("1093.94", "-890.44"))
+def test_parse_register_rejects_invalid_hmux0_flow_temperature(raw: str) -> None:
+    _, _, value = DiscoveryService._parse_register(f"hmux0 RunDataFlowTemp = {raw}")
+
+    assert value is None
+
+
+# Intent: plausible 1/16 degC HMUX0 flow temperatures are preserved verbatim.
+# Why: the reporter's values (25.0625, 25.1875) must not be dropped by the range guard.
+@pytest.mark.parametrize("raw", ("24.5", "25.0625", "25.1875"))
+def test_parse_register_keeps_valid_hmux0_flow_temperature(raw: str) -> None:
+    _, _, value = DiscoveryService._parse_register(f"hmux0 RunDataFlowTemp = {raw}")
+
+    assert value == raw

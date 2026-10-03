@@ -45,8 +45,13 @@ def is_ebusd_error_value(raw: str | None) -> bool:
     return low.startswith(("err:", "(err:")) or "(err" in low
 
 
+# Intent: lower-cased names of the HMUX0 B509 1/16 degC flow/return temperature registers.
+# Why: both share one layout, so they must share the same plausibility guard and fallback restriction.
+HMUX0_PRECISE_TEMPERATURE_REGISTERS: frozenset[str] = frozenset({"rundataflowtemp", "rundatareturntemp"})
+
+
 def is_valid_hmux0_return_temperature(raw: str) -> bool:
-    """Return whether an HMUX0 return-temperature decode is physically plausible."""
+    """Return whether an HMUX0 flow/return-temperature decode is physically plausible."""
     try:
         return -50 <= float(raw) <= 100
     except ValueError:

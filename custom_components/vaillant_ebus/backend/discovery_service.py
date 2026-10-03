@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, NamedTuple
 
 from .models import (
+    HMUX0_PRECISE_TEMPERATURE_REGISTERS,
     DeviceGraph,
     DeviceNode,
     DeviceType,
@@ -124,7 +125,7 @@ class DiscoveryService:
                     return ParsedRegister(circuit, name, None)
             except ValueError:
                 return ParsedRegister(circuit, name, None)
-        if circuit.lower() == "hmux0" and name.lower() == "rundatareturntemp":
+        if circuit.lower() == "hmux0" and name.lower() in HMUX0_PRECISE_TEMPERATURE_REGISTERS:
             if not is_valid_hmux0_return_temperature(val):
                 return ParsedRegister(circuit, name, None)
         return ParsedRegister(circuit, name, val)

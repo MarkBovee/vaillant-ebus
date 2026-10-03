@@ -580,9 +580,11 @@ async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0 = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0) == 24
+        assert len(hmux0) == 25
         assert all(",hmu," not in definition for definition in hmux0)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0)
+        # Issue #171: upstream PR #496 flow-temperature layout (B509 ext 0xfc/0x08), 1/16 degC.
+        assert any(",hmux0,RunDataFlowTemp,RunDataFlowTemp,31,08,B509,540200fc08," in d for d in hmux0)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0)
         assert any(",hmux0,CopHwcMonth," in definition for definition in hmux0)
         assert any(",hmux0,HcElecConsDay," in definition for definition in hmux0)
@@ -2875,7 +2877,7 @@ async def test_hmux0_runtime_definitions_use_issue99_fixture_metadata() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_defs = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_defs) == 24
+        assert len(hmux0_defs) == 25
         assert all(",hmu," not in definition for definition in hmux0_defs)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0_defs)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0_defs)
@@ -3070,7 +3072,7 @@ async def test_hmux0_scan_bootstrap_defines_only_confirmed_registers() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_definitions = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_definitions) == 24
+        assert len(hmux0_definitions) == 25
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 
@@ -3109,7 +3111,7 @@ async def test_hmux0_scan_bootstrap_rediscovers_defined_registers() -> None:
 
         assert discovery.discover.await_count == 2
         definitions = [call.args[0] for call in mock_ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 24
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 25
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
         assert c.heat_pump_circuit == "hmux0"
         assert c.heating_circuit == "ctlv3"
@@ -3136,7 +3138,7 @@ async def test_hmux0_scan_bootstrap_ignores_generic_hmu_alias_definitions() -> N
         await c._define_custom_registers()
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 24
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 25
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 

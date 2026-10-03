@@ -47,6 +47,7 @@ from .backend.mapping import (
 from .backend.models import (
     CIRCUIT_NAMES,
     COMPRESSOR_STATUS_LABELS,
+    HMUX0_PRECISE_TEMPERATURE_REGISTERS,
     DeviceGraph,
     DeviceNode,
     DeviceType,
@@ -99,6 +100,7 @@ VWZ_STATUS01_FIELDS = (
 
 HMUX0_RUNTIME_REGISTERS = frozenset(
     {
+        "RunDataFlowTemp",
         "RunDataReturnTemp",
         "YieldHc",
         "YieldHcDay",
@@ -214,7 +216,12 @@ def _usable_register_value(register_key: str, raw: str | None) -> str | None:
                 return None
         except ValueError:
             return None
-    if register_key.lower() == "hmux0.rundatareturntemp" and not is_valid_hmux0_return_temperature(raw):
+    circuit, _, register_name = register_key.lower().partition(".")
+    if (
+        circuit == "hmux0"
+        and register_name in HMUX0_PRECISE_TEMPERATURE_REGISTERS
+        and not is_valid_hmux0_return_temperature(raw)
+    ):
         return None
     return raw
 
@@ -1545,6 +1552,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             assert circuit is not None
             defines.extend(
                 [
+                    # Upstream ebusd-configuration PR #496 (merged) defines flow as ext 0xfc/0x08 next to
+                    # return (0x06/0x09); both decode as tempv (1/16 degC), confirmed live in issue #171.
+                    f"r,{circuit},RunDataFlowTemp,RunDataFlowTemp,31,08,B509,540200fc08"
+                    ",value,,IGN:4,,,,value,,D2C,,°C,HMUX0 flow temperature",
                     f"r,{circuit},RunDataReturnTemp,RunDataReturnTemp,31,08,B509,5402000609"
                     ",value,,IGN:4,,,,value,,D2C,,°C,HMUX0 return temperature",
                     f"r,{circuit},YieldHc,YieldHc,31,08,B51A,05ff3210"

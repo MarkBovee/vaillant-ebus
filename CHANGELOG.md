@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.10.4 - 2026-10-03
+
+### Added
+
+- Add a "Flow Temperature (precise)" sensor for HMUX0 SW0303/HW0504 units
+  (issue #171). It reads `RunDataFlowTemp` with the same 1/16 °C resolution as
+  the existing return temperature. The existing flow sensor stays as it is.
+  The layout comes from upstream ebusd-configuration PR #496 and the reporter
+  confirmed values on an aroTHERM Plus. Units that do not answer, or that
+  return an implausible value, keep the sensor unavailable.
+
+### Fixed
+
+- The combined "Status" sensor (for example `26.0;26.0;16.613;-;67.0;off`) is
+  now disabled by default. It repeated values that the separate flow, return,
+  outside, storage and pump entities already show, and it changed on almost
+  every poll. This affects newly created entities only; existing entities keep
+  their current setting (discussion #31, issue #152).
+- Registers that count or measure something, such as `YieldTotal` and
+  `PumpPower`, no longer turn into on/off sensors when their value happens to be
+  `0` or `1`. They stay normal sensors (issue #152).
+
 ## 1.10.3 - 2026-10-02
 
 ### Added
