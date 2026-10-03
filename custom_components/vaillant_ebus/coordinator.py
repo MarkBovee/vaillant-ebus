@@ -2100,6 +2100,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             resolved_circuit = (
                 candidate_circuit if candidate_circuit is not None else self.resolve_register_circuit(map_circuit)
             )
+            # Why: RunDataFlowTemp is only evidenced for the current SW0303/HW0504 HMUX0 owner (issue #171); an
+            # HMUX0 alias key must not trigger an active B509 read on any other heat-pump circuit.
+            if (
+                resolved_circuit is not None
+                and name.casefold() == "rundataflowtemp"
+                and (hmux0_sw0303 is None or resolved_circuit.casefold() != hmux0_sw0303.casefold())
+            ):
+                continue
             if resolved_circuit is not None:
                 _add(resolved_circuit, name)
 

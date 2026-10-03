@@ -3211,6 +3211,60 @@ async def test_hmux0_return_temperature_invalid_poll_does_not_restore_cache() ->
         assert "hmux0.RunDataReturnTemp.value" not in values["ebusd"]
 
 
+# Intent: an invalid polled HMUX0 flow temperature is not overwritten by the cached prior value.
+# Why: issue #171 flow shares the return-temperature guard; the audit found the cache guard covered return only.
+async def test_hmux0_flow_temperature_invalid_poll_does_not_restore_cache() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c._graph = DISCOVERY.DiscoveryService.build_device_graph(["hmux0 RunDataFlowTemp = 25.0625"])
+        c.registers["hmux0.RunDataFlowTemp"] = EbusdRegister(
+            circuit="hmux0",
+            name="RunDataFlowTemp",
+            fields=["value"],
+            value={"value": "25.0625"},
+            has_data=True,
+        )
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.find_registers = AsyncMock(return_value=["hmux0 RunDataFlowTemp = 1093.94"])
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c._async_load_cache = AsyncMock(return_value={"hmux0.RunDataFlowTemp.value": "25.0625"})
+        c._last_energy_poll = datetime.now()
+
+        values = await c._async_update_data()
+
+        assert c.registers["hmux0.RunDataFlowTemp"].value["value"] is None
+        assert "hmux0.RunDataFlowTemp.value" not in values["ebusd"]
+
+
+# Intent: the flow-temperature map entry never triggers an active read outside the SW0303/HW0504 owner.
+# Why: the audit flagged fallback-read traffic on HMUX0 SW0407 and on plain hmu pumps.
+@pytest.mark.parametrize(
+    "scan_line",
+    ("scan.08 = Vaillant;HMUX0;0407;0504", "scan.08 = Vaillant;HMUX0;0302;0504", "scan.08 = Vaillant;HMU00;0522;5103"),
+)
+async def test_run_data_flow_temp_fallback_is_not_read_outside_sw0303_owner(scan_line: str) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph([scan_line, "hmux0 FlowTemp = no data stored"])
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.read_register = AsyncMock(return_value="25.0625")
+        coordinator._graph = graph
+        coordinator._last_find_keys = set()
+        original_map = COORDINATOR.REGISTER_MAP
+        COORDINATOR.REGISTER_MAP = {
+            "hmux0.RunDataFlowTemp": MAPPING.RegisterMeta(enabled=True, fallback_read=True),
+        }
+        try:
+            await coordinator._fallback_read(include_placeholders=True)
+        finally:
+            COORDINATOR.REGISTER_MAP = original_map
+
+        assert not any(call.args[1] == "RunDataFlowTemp" for call in coordinator.ebus.read_register.await_args_list)
+
+
 # Intent: date-coded b516 definitions refresh at the day rollover and failed definitions retry until success.
 # Why: protects long-running sessions from keeping stale date-coded registers.
 async def test_runtime_definitions_roll_over_and_retry_failures(monkeypatch) -> None:
