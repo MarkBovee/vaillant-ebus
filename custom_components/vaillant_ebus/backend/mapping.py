@@ -4,7 +4,18 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .models import DeviceGraph, DeviceNode, RegisterMeta, ScanIdentity, is_controller_circuit, is_heat_pump_circuit
+from .hardware_profiles import (
+    HMUX0_PRECISE_TEMPERATURE,
+    HMUX0_SW0303,
+    HMUX0_SW0407,
+    VWZ_STATION_76,
+    VWZIO_SW0500,
+    HardwareProfile,
+    has_current_unique_scan_identity,
+    profile_owner,
+    scan_matches,
+)
+from .models import DeviceGraph, RegisterMeta, ScanIdentity, is_controller_circuit, is_heat_pump_circuit
 
 HMUX0_SW0407_FALLBACK_BLOCKLIST: frozenset[str] = frozenset(
     {
@@ -79,18 +90,7 @@ VWZIO_SW0500_FALLBACK_NAMES: frozenset[str] = frozenset(item.casefold() for item
 # Intent: return the discovered circuit only for the exact HMUX0 firmware whose map probes are unavailable.
 # Why: the fallback blocklist must not leak to other heat-pump variants or guessed circuits.
 def hmux0_sw0407_circuit(graph: DeviceGraph | None) -> str | None:
-    if graph is None:
-        return None
-    matches = [
-        node
-        for node in graph.nodes.values()
-        if node.device_type.name == "HEAT_PUMP"
-        and node.scan_type.casefold() == "hmux0"
-        and node.scan_sw == "0407"
-        and node.scan_hw == "0504"
-        and _has_current_unique_scan_identity(graph, node)
-    ]
-    return matches[0].circuit if len(matches) == 1 else None
+    return profile_owner(graph, HMUX0_SW0407)
 
 
 # Intent: identify HMUX0 circuits whose latest scan evidence cannot authorize fallback polling.
@@ -110,7 +110,7 @@ def hmux0_uncertain_scan_circuits(graph: DeviceGraph | None) -> frozenset[str]:
                 for row in graph.scan_identities
             )
         )
-        and not _has_current_unique_scan_identity(graph, node)
+        and not has_current_unique_scan_identity(graph, node)
     )
 
 
@@ -140,7 +140,7 @@ def hmux0_owner_scan(graph: DeviceGraph | None) -> tuple[str, ScanIdentity] | No
     identified = [
         node
         for node in owners
-        if node.scan_type.casefold() == "hmux0" and _has_current_unique_scan_identity(graph, node)
+        if node.scan_type.casefold() == "hmux0" and has_current_unique_scan_identity(graph, node)
     ]
     if len(scans) == 1 and len(identified) == 1:
         return identified[0].circuit, scans[0]
@@ -158,22 +158,22 @@ def hmux0_owner_scan(graph: DeviceGraph | None) -> tuple[str, ScanIdentity] | No
 # Intent: HMUX0 firmware revisions (with HW0504) whose B509 RunDataFlowTemp/RunDataReturnTemp use the 1/16 degC layout.
 # Why: SW0303 was confirmed live (issue #171) and SW0406 answers the same layout (27.3125 read on SW0406/HW0504);
 # other HMUX0 revisions returned absurd decodes (issue #99), so they stay out until they have their own evidence.
-HMUX0_PRECISE_TEMPERATURE_SW_VERSIONS: frozenset[str] = frozenset({"0303", "0406"})
+HMUX0_PRECISE_TEMPERATURE_SW_VERSIONS: frozenset[str] = HMUX0_PRECISE_TEMPERATURE.sw
 
 
 # Intent: return the HMUX0 owner circuit only when its complete, current, unique scan matches the given firmware set.
 # Why: retained node firmware fields cannot authorize a definition or an active read after a partial refresh.
-def _hmux0_owner_for_sw(graph: DeviceGraph | None, sw_versions: frozenset[str]) -> str | None:
+def _hmux0_owner_for_profile(graph: DeviceGraph | None, profile: HardwareProfile) -> str | None:
     owner_scan = hmux0_owner_scan(graph)
     if graph is None or owner_scan is None:
         return None
     circuit, scan = owner_scan
-    if not scan.complete or scan.scan_sw not in sw_versions or scan.scan_hw != "0504":
+    if not scan_matches(profile, scan):
         return None
     if (
         graph.scan_identities
         and graph.nodes[circuit].scan_type
-        and not _has_current_unique_scan_identity(graph, graph.nodes[circuit])
+        and not has_current_unique_scan_identity(graph, graph.nodes[circuit])
     ):
         return None
     return circuit
@@ -182,13 +182,13 @@ def _hmux0_owner_for_sw(graph: DeviceGraph | None, sw_versions: frozenset[str]) 
 # Intent: allow SW0303-only runtime definitions only for current unique evidence.
 # Why: ebusd's own CSV lacks the SW0303 RunData definitions, so only this revision needs a runtime `define`.
 def hmux0_sw0303_owner(graph: DeviceGraph | None) -> str | None:
-    return _hmux0_owner_for_sw(graph, frozenset({"0303"}))
+    return _hmux0_owner_for_profile(graph, HMUX0_SW0303)
 
 
 # Intent: allow active RunDataFlowTemp/RunDataReturnTemp reads only for HMUX0 revisions with evidenced layout.
 # Why: SW0406 units already receive both registers from ebusd's CSV and need polling, not a `define` (issue #171).
 def hmux0_precise_temperature_owner(graph: DeviceGraph | None) -> str | None:
-    return _hmux0_owner_for_sw(graph, HMUX0_PRECISE_TEMPERATURE_SW_VERSIONS)
+    return _hmux0_owner_for_profile(graph, HMUX0_PRECISE_TEMPERATURE)
 
 
 # Intent: identify circuits that may be an HMUX0 owner when identity is incomplete.
@@ -208,79 +208,13 @@ def hmux0_candidate_circuits(graph: DeviceGraph | None) -> frozenset[str]:
 # Intent: resolve the discovered circuit only for the VWZIO scan with passive telemetry evidence.
 # Why: SW0500/HW0504 supports captured B516/B511 frames, not HW5103's active Status01 probe.
 def vwzio_sw0500_circuit(graph: DeviceGraph | None) -> str | None:
-    if graph is None:
-        return None
-    matches = [
-        node
-        for node in graph.nodes.values()
-        if node.device_type.name == "PASSIVE_COOLING"
-        and node.scan_type.casefold() == "vwzio"
-        and node.scan_sw == "0500"
-        and node.scan_hw == "0504"
-        and node.scan_address.casefold() == "scan.76"
-        and _has_current_unique_scan_identity(graph, node)
-    ]
-    return matches[0].circuit if len(matches) == 1 else None
+    return profile_owner(graph, VWZIO_SW0500)
 
 
 # Intent: return the physical VWZ-family circuit currently scanned at slave 0x76.
 # Why: generic VWZ/VWZIO Status01 definitions embed address 0x76 and cannot follow a matching device elsewhere.
 def vwz_station_scan_76_circuit(graph: DeviceGraph | None) -> str | None:
-    if graph is None:
-        return None
-    matches = [
-        node
-        for node in graph.nodes.values()
-        if node.device_type.name == "PASSIVE_COOLING"
-        and node.scan_type.casefold().startswith("vwz")
-        and node.scan_address.casefold() == "scan.76"
-        and _has_current_unique_scan_identity(graph, node)
-    ]
-    return matches[0].circuit if len(matches) == 1 else None
-
-
-# Intent: verify that a device node still matches exactly one current scan identity.
-# Why: cached node metadata cannot authorize bus traffic after scans conflict or disappear.
-def _has_current_unique_scan_identity(graph: DeviceGraph, node: DeviceNode) -> bool:
-    address = node.scan_address.casefold()
-    scan_type = node.scan_type.casefold()
-    if not address or not scan_type:
-        return False
-    if any(
-        not row.complete and (row.address.casefold() == address or row.scan_type.casefold() == scan_type)
-        for row in graph.scan_identities
-    ):
-        return False
-
-    grouped: dict[tuple[str, str], list[tuple[str, str]]] = {}
-    for row in graph.scan_identities:
-        grouped.setdefault((row.address.casefold(), row.scan_type.casefold()), []).append(
-            (row.scan_sw.casefold(), row.scan_hw.casefold())
-        )
-
-    normalized: list[tuple[str, str, str, str]] = []
-    conflicting_addresses: set[str] = set()
-    conflicting_types: set[str] = set()
-    for (row_address, row_type), identities in grouped.items():
-        software = {sw for sw, _ in identities if sw}
-        hardware = {hw for _, hw in identities if hw}
-        if len(software) > 1 or len(hardware) > 1:
-            conflicting_addresses.add(row_address)
-            conflicting_types.add(row_type)
-            continue
-        normalized.append((row_address, row_type, next(iter(software), ""), next(iter(hardware), "")))
-
-    if address in conflicting_addresses or scan_type in conflicting_types:
-        return False
-    matching = [row for row in normalized if row[:2] == (address, scan_type)]
-    if len(matching) != 1:
-        return False
-    if sum(row[1] == scan_type for row in normalized) != 1:
-        return False
-    if sum(row[0] == address for row in normalized) != 1:
-        return False
-    _, _, scan_sw, scan_hw = matching[0]
-    return scan_sw == node.scan_sw.casefold() and scan_hw == node.scan_hw.casefold()
+    return profile_owner(graph, VWZ_STATION_76)
 
 
 # BAI registers that are gas/combustion-specific and do not apply to the

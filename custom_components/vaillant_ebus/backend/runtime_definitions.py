@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from .hardware_profiles import HMU00_HW5103, HMUX0_B509_MONITORING, node_matches, scan_matches
 from .mapping import (
     HMUX0_SW0407_ENVYIELD_REGISTERS,
     b516_date_bytes,
@@ -210,12 +211,7 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime) -> list[str]:
     hmux0_owner = hmux0_owner_scan(graph)
     hmux0_sw0303_circuit = hmux0_sw0303_owner(graph)
     is_hmux0_0303_0504 = hmux0_sw0303_circuit is not None
-    is_hmux0_b509_0504 = bool(
-        hmux0_owner
-        and hmux0_owner[1].complete
-        and hmux0_owner[1].scan_sw in {"0302", "0303"}
-        and hmux0_owner[1].scan_hw == "0504"
-    )
+    is_hmux0_b509_0504 = bool(hmux0_owner and scan_matches(HMUX0_B509_MONITORING, hmux0_owner[1]))
     vwzio_circuit = vwzio_sw0500_circuit(graph)
     vwzio = next(
         (node for node in graph.nodes.values() if node.circuit.casefold() == (vwzio_circuit or "").casefold()),
@@ -397,7 +393,7 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime) -> list[str]:
             for definition in defines
             if not (definition.split(",", 3)[0] == "r" and definition.split(",", 3)[2] == "RunDataElPowerConsumption")
         ]
-    if heat_pump and heat_pump.scan_type.upper() == "HMU00" and heat_pump.scan_hw == "5103":
+    if heat_pump and node_matches(HMU00_HW5103, heat_pump):
         # Upstream ebusd-configuration PR #614, confirmed for HW5103.
         # Status07 is active-read because this HW5103 variant polls b511/07;
         # unsupported hardware returns ERR and remains absent from entities.
