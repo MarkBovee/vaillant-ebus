@@ -47,7 +47,7 @@ does not cover this service.
 - The release version must stay identical across `pyproject.toml`, `custom_components/vaillant_ebus/manifest.json`, and the top `## <version>` heading in `CHANGELOG.md`.
 - `tools/version.py` is the single source of truth. Bump with `python tools/version.py bump X.Y.Z`, then add the matching `## X.Y.Z - YYYY-MM-DD` CHANGELOG section (release notes are human-written).
 - `tests/test_version_consistency.py` runs `python tools/version.py check`, so CI fails on drift. Never hand-edit one version file without updating the other two.
-- Publishing a release means pushing the release branch and an annotated `v*` tag; the CI `release` job builds the zip and creates or updates the GitHub release from the top CHANGELOG section. Do not merge the release branch until it has been tested on Home Assistant.
+- Publishing a release means pushing the release branch and an annotated `v*` tag; the CI `release` job first runs the shared checks (`.github/workflows/checks.yml`), then the release gate (`tools/release_gate.py`: hassfest and HACS validation must be green on the tagged commit, it waits up to 15 minutes), then builds the zip and creates or updates the GitHub release from the top CHANGELOG section. Older releases are in `docs/changelog-archive.md`; only the top section of `CHANGELOG.md` is published. Do not merge the release branch until it has been tested on Home Assistant.
 
 ## Deploying To The Owner's Home Assistant
 
@@ -78,6 +78,6 @@ does not cover this service.
    smoke test, and record deviations in the plan.
 5. Commit, push the branch and open the PR. **Wait for all PR checks (including hassfest and HACS validation) to be
    green before pushing the annotated `vX.Y.Z` tag**: the tag triggers the release job at once, and in 1.10.5 a tag
-   pushed early published a release whose hassfest check failed, so the tag had to be moved. Merge only after the
+   pushed early published a release whose hassfest check failed, so the tag had to be moved. The release gate now refuses that case, but still wait for green checks. Merge only after the
    owner agrees. Then reply on the affected issues and discussions with `tools/gh_reply.py`, once the owner has
    approved the texts.
