@@ -815,7 +815,7 @@ async def test_issue161_vwzio_definition_and_fallback_require_scan_address_76(
 
 # Intent: stale station scan identity cannot survive a later graph with no station node or ambiguous scans.
 # Why: a cached prior 0x76 address is not current authority for definitions against the live bus.
-def test_merge_device_graphs_replaces_current_vwzio_scan_authority() -> None:
+def testmerge_device_graphs_replaces_current_vwzio_scan_authority() -> None:
     previous = DISCOVERY.DiscoveryService.build_device_graph(
         [
             "scan.76 = MF=Vaillant;ID=VWZIO;SW=0500;HW=0504",
@@ -827,7 +827,7 @@ def test_merge_device_graphs_replaces_current_vwzio_scan_authority() -> None:
     missing = DISCOVERY.DiscoveryService.build_device_graph(
         ["scan.15 = MF=Vaillant;ID=CTLV2;SW=0514;HW=1104", "ctlv2 Z1OpMode = auto"]
     )
-    merged_missing = COORDINATOR._merge_device_graphs(previous, missing)
+    merged_missing = COORDINATOR.merge_device_graphs(previous, missing)
     assert "vwzio" in merged_missing.nodes
     assert [(scan.address, scan.scan_type) for scan in merged_missing.scan_identities] == [("scan.15", "CTLV2")]
     assert MAPPING.vwzio_sw0500_circuit(merged_missing) is None
@@ -839,7 +839,7 @@ def test_merge_device_graphs_replaces_current_vwzio_scan_authority() -> None:
             "vwzio Status01 = no data stored",
         ]
     )
-    merged_conflict = COORDINATOR._merge_device_graphs(previous, conflict)
+    merged_conflict = COORDINATOR.merge_device_graphs(previous, conflict)
     assert MAPPING.vwzio_sw0500_circuit(merged_conflict) is None
 
 
@@ -1646,7 +1646,7 @@ async def test_non_hmux0_hmu_return_temp_fallback_remains_available() -> None:
 
 
 # Intent: a scan-less refresh cannot authorize retained HMUX0 definitions or ReturnTemp polling.
-# Why: `_merge_device_graphs` retains topology for presentation, but scan authority must expire immediately.
+# Why: `merge_device_graphs` retains topology for presentation, but scan authority must expire immediately.
 async def test_scanless_hmux0_refresh_clears_runtime_owner_authority() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         initial = DISCOVERY.DiscoveryService.build_device_graph(
@@ -1658,7 +1658,7 @@ async def test_scanless_hmux0_refresh_clears_runtime_owner_authority() -> None:
         coordinator.ebus.is_connected = True
         coordinator.ebus.define_register = AsyncMock(return_value="done")
         coordinator.ebus.read_register = AsyncMock(return_value=None)
-        coordinator._graph = COORDINATOR._merge_device_graphs(initial, refreshed)
+        coordinator._graph = COORDINATOR.merge_device_graphs(initial, refreshed)
         coordinator._last_find_keys = set()
 
         await coordinator._define_custom_registers()
@@ -3711,7 +3711,7 @@ def test_merge_delayed_error_placeholder_replaces_existing_raw_value() -> None:
         error_registers={key},
     )
 
-    merged = COORDINATOR._merge_device_graphs(existing, discovered)
+    merged = COORDINATOR.merge_device_graphs(existing, discovered)
 
     assert key not in merged.raw_registers
     assert key in merged.placeholder_registers
@@ -3735,7 +3735,7 @@ def test_merge_delayed_partial_find_recomputes_node_data_from_merged_raw() -> No
         ]
     )
 
-    merged = COORDINATOR._merge_device_graphs(existing, discovered)
+    merged = COORDINATOR.merge_device_graphs(existing, discovered)
 
     assert merged.raw_registers["ctlv3.Z1RoomTemp"] == "20.5"
     assert merged.nodes["z1"].has_data is True

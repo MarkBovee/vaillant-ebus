@@ -9,7 +9,6 @@ import os
 import re
 import tempfile
 from collections.abc import Callable, Mapping
-from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Any, TypedDict
 
@@ -24,10 +23,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from . import repairs
 from .backend.analysis_service import AnalysisResult, AnalysisService
-from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService, node_has_live_data
+from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService
 from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, EbusService
 from .backend.entity_factory import EntityDescription, EntityFactoryService
 from .backend.fallback_planner import fallback_candidate, plan_fallback_reads
+from .backend.graph_merge import is_stale_legacy_alias, merge_device_graphs, merge_entities
 from .backend.mapping import (
     REGISTER_MAP,
     metadata_circuits,
@@ -44,9 +44,7 @@ from .backend.models import (
     EbusdRegister,
     ResolutionStatus,
     heat_pump_product,
-    is_controller_circuit,
     is_ebusd_error_value,
-    is_heat_pump_circuit,
     is_no_data_value,
     is_valid_hmux0_return_temperature,
     zero_idle_registers,
@@ -232,7 +230,7 @@ def _cache_register_is_supported(register_key: str, live_keys: set[str], graph: 
     if not _register_has_enabled_map_entry(register_key):
         return False
     circuit = register_key.split(".", 1)[0]
-    if _is_stale_legacy_alias(circuit, graph):
+    if is_stale_legacy_alias(circuit, graph):
         return False
     # A cache-only zone/heating-circuit register whose live twin sits under another circuit is the same physical
     # register cached under a stale label (issue #152: bai.z1RoomHumidity next to the live bass.z1RoomHumidity).
@@ -244,20 +242,6 @@ def _cache_register_is_supported(register_key: str, live_keys: set[str], graph: 
     ):
         return False
     return True
-
-
-# Intent: identify cache rows from a logical alias that the current graph replaced.
-# Why: preserve normal 1.9.x cache-backed entities while retiring proven old-device ghosts.
-def _is_stale_legacy_alias(circuit: str, graph: DeviceGraph) -> bool:
-    is_logical_alias = (
-        is_controller_circuit(circuit) or is_heat_pump_circuit(circuit) or circuit.casefold() in {"bai", "vwz", "vwzio"}
-    )
-    if not is_logical_alias:
-        return False
-    resolved = graph.resolve_circuit_result(circuit)
-    if resolved.status == ResolutionStatus.UNIQUE and resolved.circuit:
-        return resolved.circuit.casefold() != circuit.casefold()
-    return False
 
 
 # Intent: disable registry entries whose cached source circuit disappeared from
@@ -275,88 +259,6 @@ def _disable_stale_registry_entities(hass: HomeAssistant, entry_id: str, entitie
             and entry.disabled_by != "user"
         ):
             registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
-
-
-# Intent: merge delayed discovery while replacing metadata that reflects the latest find response.
-# Why: stale error-row markers must clear when a later usable find reports the register without an error.
-def _merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> DeviceGraph:
-    nodes = dict(existing.nodes)
-    for circuit, node in discovered.nodes.items():
-        existing_circuit = next((key for key in nodes if key.casefold() == circuit.casefold()), None)
-        previous = nodes.get(existing_circuit) if existing_circuit is not None else None
-        if previous is None:
-            nodes[circuit] = node
-            continue
-        target_circuit = existing_circuit or circuit
-        nodes[target_circuit] = DeviceNode(
-            circuit=target_circuit,
-            device_type=(node.device_type if node.device_type != DeviceType.UNKNOWN else previous.device_type),
-            registers=list(dict.fromkeys(previous.registers + node.registers)),
-            parent=node.parent or previous.parent,
-            zone_circuits=list(dict.fromkeys(previous.zone_circuits + node.zone_circuits)),
-            heating_circuits=list(dict.fromkeys(previous.heating_circuits + node.heating_circuits)),
-            has_data=node.has_data,
-            scan_type=node.scan_type or previous.scan_type,
-            scan_sw=node.scan_sw or previous.scan_sw,
-            scan_hw=node.scan_hw or previous.scan_hw,
-            scan_address=node.scan_address,
-        )
-
-    discovered_circuits = {circuit.casefold() for circuit in discovered.nodes}
-    for circuit, node in tuple(nodes.items()):
-        if circuit.casefold() in {"vwz", "vwzio"} and circuit.casefold() not in discovered_circuits:
-            nodes[circuit] = replace(node, scan_address="")
-
-    unavailable_keys = {key.casefold() for key in discovered.placeholder_registers}
-    raw_registers = {
-        key: value for key, value in existing.raw_registers.items() if key.casefold() not in unavailable_keys
-    }
-    raw_by_fold = {key.casefold(): key for key in raw_registers}
-    for key, value in discovered.raw_registers.items():
-        raw_registers[raw_by_fold.get(key.casefold(), key)] = value
-        raw_by_fold.setdefault(key.casefold(), key)
-    placeholder_registers = set(existing.placeholder_registers)
-    placeholder_by_fold = {key.casefold(): key for key in placeholder_registers}
-    for key in discovered.placeholder_registers:
-        placeholder_registers.add(placeholder_by_fold.get(key.casefold(), key))
-        placeholder_by_fold.setdefault(key.casefold(), key)
-    placeholder_registers = {
-        key for key in placeholder_registers if key.casefold() not in {rk.casefold() for rk in raw_registers}
-    }
-    error_registers = set(discovered.error_registers)
-    for node in nodes.values():
-        node.has_data = node_has_live_data(node, raw_registers)
-    return DeviceGraph(
-        nodes=nodes,
-        raw_registers=raw_registers,
-        placeholder_registers=placeholder_registers,
-        error_registers=error_registers,
-        scan_identities=discovered.scan_identities,
-    )
-
-
-# Append entity descriptions without duplicating keys already present.
-def _merge_entities(
-    existing: list[EntityDescription],
-    additions: list[EntityDescription],
-) -> list[EntityDescription]:
-    known = {(entity.entity_type, entity.unique_id.casefold()): entity for entity in existing}
-    merged = list(existing)
-    for entity in additions:
-        identity = (entity.entity_type, entity.unique_id.casefold())
-        if identity not in known:
-            merged.append(entity)
-            known[identity] = entity
-        else:
-            # Cache spelling may differ from find; loaded entities keep this
-            # description object, so update its lookup key without re-adding it.
-            known[identity].name = entity.name
-            known[identity].circuit = entity.circuit
-            known[identity].field = entity.field
-            known[identity].raw_value = entity.raw_value
-            known[identity].register = entity.register
-            known[identity].enabled_by_default = entity.enabled_by_default
-    return merged
 
 
 # Intent: retrieve a register value case-insensitively from a coordinator-like object.
@@ -736,7 +638,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         _LOGGER.warning(
                             "Post-definition find returned no graph nodes; merging the current scan snapshot"
                         )
-                        graph = _merge_device_graphs(graph, refreshed_graph)
+                        graph = merge_device_graphs(graph, refreshed_graph)
                     else:
                         _LOGGER.warning("Post-definition find was unusable; retaining the initial discovery graph")
                     if self._ebusd_repair_pending:
@@ -817,7 +719,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # survive; only registers that are still missing get added afterwards.
         previous = self._graph if source == "delayed" else None
         if previous is not None:
-            graph = _merge_device_graphs(previous, graph)
+            graph = merge_device_graphs(previous, graph)
         self._graph = graph
 
         for rk, raw in graph.raw_registers.items():
@@ -976,7 +878,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         ]
         # Platforms can already be loaded from cache, even on "initial" discovery.
         # Retain known keys across reconnects to avoid adding the same entity twice.
-        self.entities = _merge_entities(self.entities, generated_entities)
+        self.entities = merge_entities(self.entities, generated_entities)
         self._disable_no_data_registry_entities(generated_entities)
         self._add_new_entities(additions)
         platform_counts: dict[str, int] = {}
@@ -1008,11 +910,11 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     async def _refresh_graph_from_usable_find(self, find_lines: list[str]) -> None:
         discovered = DiscoveryService.build_device_graph(find_lines)
         if self.discovery_ready and self._graph is not None:
-            self._graph = _merge_device_graphs(self._graph, discovered)
+            self._graph = merge_device_graphs(self._graph, discovered)
         elif discovered.nodes:
             await self._apply_discovery_graph(discovered, "delayed")
         elif self._graph is not None:
-            self._graph = _merge_device_graphs(self._graph, discovered)
+            self._graph = merge_device_graphs(self._graph, discovered)
 
     # Intent: keep at most one delayed discovery callback pending.
     # Why: one bounded retry handles transient find failures without polling continuously.
@@ -1115,7 +1017,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
 
         result: AnalysisResult = self._analysis.analyze(live, self._graph, self.entities)
         if result.new_entities:
-            self.entities = _merge_entities(self.entities, result.new_entities)
+            self.entities = merge_entities(self.entities, result.new_entities)
             self._add_new_entities(result.new_entities)
         if result.registers_to_enable:
             await self._enable_registry_entities(result.registers_to_enable)
@@ -1695,7 +1597,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         return
                     known = {(entity.entity_type, entity.unique_id) for entity in self.entities}
                     additions = [entity for entity in generated if (entity.entity_type, entity.unique_id) not in known]
-                    self.entities = _merge_entities(self.entities, generated)
+                    self.entities = merge_entities(self.entities, generated)
                     self._add_new_entities(additions)
                     await self._enable_registry_entities(list(graph.raw_registers))
                     if self._stopped or self._unload_requested:
