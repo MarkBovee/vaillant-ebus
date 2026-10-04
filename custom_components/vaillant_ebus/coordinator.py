@@ -27,19 +27,12 @@ from .backend.analysis_service import AnalysisResult, AnalysisService
 from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService, node_has_live_data
 from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, EbusService
 from .backend.entity_factory import EntityDescription, EntityFactoryService
+from .backend.fallback_planner import fallback_candidate, plan_fallback_reads
 from .backend.mapping import (
-    HMUX0_SW0407_FALLBACK_NAMES,
     REGISTER_MAP,
-    VWZIO_SW0500_FALLBACK_NAMES,
-    hmux0_candidate_circuits,
-    hmux0_fallback_blocked_circuits,
-    hmux0_precise_temperature_owner,
-    is_field_key,
     metadata_circuits,
     multi_field_fields,
     split_multi_field,
-    vwz_station_scan_76_circuit,
-    vwzio_sw0500_circuit,
 )
 from .backend.models import (
     CIRCUIT_NAMES,
@@ -87,9 +80,6 @@ ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 ENERGY_POLL_INTERVAL = timedelta(minutes=5)
 WRITE_LOG_SIZE = 100
-
-# Intent: register names of the HMUX0 precise (1/16 degC) temperatures that need an explicit active read.
-HMUX0_PRECISE_TEMPERATURE_NAMES = ("RunDataFlowTemp", "RunDataReturnTemp")
 
 # Intent: (circuit, register) pairs of the HMUX0 precise temperatures, for poll-time key matching.
 _HMUX0_PRECISE_TEMPERATURE_KEYS = frozenset(("hmux0", name) for name in HMUX0_PRECISE_TEMPERATURE_REGISTERS)
@@ -1565,55 +1555,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
 
     # Select a unique discovered owner for a logical register map entry.
     def _fallback_candidate(self, logical_circuit: str, name: str) -> str | None:
-        """Return the circuit to read a register from.
-
-        Prefer the circuit where the register was discovered (its raw or
-        placeholder graph key); otherwise fall back to the literal map circuit.
-        Mirrors the ctlv2/hmu aliasing used by get_meta() so registers that
-        live under basv3/ctlv3/vwzio are read from the correct circuit.
-        """
-        expected_type = (
-            DeviceType.HEATING_CONTROLLER
-            if is_controller_circuit(logical_circuit)
-            else DeviceType.HEAT_PUMP
-            if is_heat_pump_circuit(logical_circuit)
-            else DeviceType.HEATING_CONTROLLER
-            if logical_circuit == "bai"
-            else None
-        )
-        candidates: list[str] = []
-        if self._graph is not None:
-            keys = list(self._graph.raw_registers) + list(self._graph.placeholder_registers)
-            candidates = list(
-                dict.fromkeys(
-                    circuit
-                    for circuit in (rk.split(".", 1)[0] for rk in keys if rk.casefold().endswith(f".{name}".casefold()))
-                    if expected_type is None
-                    or (
-                        next(
-                            (
-                                node
-                                for node_key, node in self._graph.nodes.items()
-                                if node_key.casefold() == circuit.casefold()
-                            ),
-                            None,
-                        )
-                        is not None
-                        and next(
-                            node
-                            for node_key, node in self._graph.nodes.items()
-                            if node_key.casefold() == circuit.casefold()
-                        ).device_type
-                        == expected_type
-                    )
-                )
-            )
-        resolved = self.resolve_register_circuit(logical_circuit)
-        if resolved is not None:
-            return next((candidate for candidate in candidates if candidate.casefold() == resolved.casefold()), None)
-        if expected_type is None and len(candidates) == 1:
-            return candidates[0]
-        return None
+        return fallback_candidate(self._graph, self.resolve_register_circuit, logical_circuit, name)
 
     # Intent: read only mapped registers that are safe for active fallback polling.
     # Why: fallback probes must not bypass per-register polling restrictions.
@@ -1630,150 +1572,16 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # Why: its circuit ownership may no longer match the devices currently on the bus.
         if getattr(self.ebus, "last_find_usable", None) is False:
             return
-        graph_keys = self._last_find_keys
-
-        # Intent: resolve metadata for a discovered source circuit without changing its owner.
-        # Why: family metadata is presentation compatibility, not bus routing.
-        def _meta_key(circuit: str, name: str) -> str | None:
-            for alt in metadata_circuits(circuit):
-                key = f"{alt}.{name}"
-                if any(map_key.casefold() == key.casefold() for map_key in REGISTER_MAP):
-                    return next(map_key for map_key in REGISTER_MAP if map_key.casefold() == key.casefold())
-            return None
-
-        candidates: list[tuple[str, str]] = []
-        seen: set[tuple[str, str]] = set()
-        skipped_read_keys = {key.casefold() for key in (skip_reads or set())}
-        skipped_read_keys.update(key.casefold() for key in self._graph.error_registers)
-        passive_register_keys = {
-            (parts[1].casefold(), parts[2].casefold())
-            for definition in self._runtime_definitions.values()
-            if len(parts := definition.split(",", 3)) >= 3 and parts[0].startswith("u")
-        }
-        hmux0_blocked_circuits = {circuit.casefold() for circuit in hmux0_fallback_blocked_circuits(self._graph)}
-        hmux0_candidates = {circuit.casefold() for circuit in hmux0_candidate_circuits(self._graph)}
-        hmux0_precise_temperature = hmux0_precise_temperature_owner(self._graph)
-        vwzio_sw0500 = vwzio_sw0500_circuit(self._graph)
-        vwz_station_76 = vwz_station_scan_76_circuit(self._graph)
-
-        # Intent: add each resolved fallback candidate once.
-        # Why: map, passive-definition, and placeholder paths can nominate the same register.
-        def _add(circuit: str, name: str) -> None:
-            circuit_key = circuit.casefold()
-            name_key = name.casefold()
-            if "." in name or f"{circuit}.{name}".casefold() in skipped_read_keys:
-                return
-            if (circuit_key, name_key) in passive_register_keys:
-                return
-            # B511 counters remain passive even if their map fallback metadata changes.
-            if name_key == "runstatsimmersionheaterhwc":
-                return
-            if (
-                name_key == "status01"
-                and circuit_key in {"vwz", "vwzio"}
-                and (vwz_station_76 is None or circuit_key != vwz_station_76.casefold())
-            ):
-                return
-            if circuit_key in hmux0_blocked_circuits and name_key in HMUX0_SW0407_FALLBACK_NAMES:
-                return
-            if name_key in HMUX0_PRECISE_TEMPERATURE_REGISTERS and circuit_key in hmux0_candidates:
-                if hmux0_precise_temperature is None or circuit_key != hmux0_precise_temperature.casefold():
-                    return
-            if (
-                vwzio_sw0500 is not None
-                and circuit_key == vwzio_sw0500.casefold()
-                and name_key in VWZIO_SW0500_FALLBACK_NAMES
-            ):
-                return
-            key = (circuit, name)
-            if key not in seen:
-                seen.add(key)
-                candidates.append(key)
-
-        # Plain-r B516 definitions are not polled by ebusd. Re-read supported
-        # counters even after find has cached their first value (#53/#97).
-        if include_energy and self._graph:
-            for definition in self._runtime_definitions.values():
-                access, circuit, name, _, _, _, message = definition.split(",", 7)[:7]
-                if (
-                    access == "r"
-                    and message == "B516"
-                    and any(node_key.casefold() == circuit.casefold() for node_key in self._graph.nodes)
-                ):
-                    _add(circuit, name)
-
-        # The HMUX0 precise temperatures are plain-`r` messages that ebusd never polls. Their REGISTER_MAP key
-        # matches the graph key, so the map-driven pass below skips them once `find` lists them; read them
-        # explicitly for the evidenced firmware so the value follows the heat pump instead of ebusd's cache (#171).
-        if hmux0_precise_temperature is not None and self._graph:
-            discovered_keys = {
-                key.casefold() for key in (*self._graph.raw_registers, *self._graph.placeholder_registers)
-            }
-            for name in HMUX0_PRECISE_TEMPERATURE_NAMES:
-                if f"{hmux0_precise_temperature}.{name}".casefold() in discovered_keys:
-                    _add(hmux0_precise_temperature, name)
-
-        # Map-driven reads: registers with metadata not yet in the graph.
-        graph_key_folds = {key.casefold() for key in graph_keys}
-        for key in REGISTER_MAP:
-            meta = REGISTER_MAP[key]
-            if not meta.enabled or not meta.fallback_read or key.casefold() in graph_key_folds:
-                continue
-            map_circuit, name = key.split(".", 1)
-            if is_field_key(key):
-                continue
-            candidate_circuit = self._fallback_candidate(map_circuit, name)
-            if (
-                candidate_circuit is None
-                and self._graph
-                and any(
-                    rk.casefold().endswith(f".{name}".casefold())
-                    for rk in (*self._graph.raw_registers, *self._graph.placeholder_registers)
-                )
-            ):
-                continue
-            resolved_circuit = (
-                candidate_circuit if candidate_circuit is not None else self.resolve_register_circuit(map_circuit)
-            )
-            # Why: RunDataFlowTemp is only evidenced for the current SW0303/SW0406 HW0504 HMUX0 owner (issue #171); an
-            # HMUX0 alias key must not trigger an active B509 read on any other heat-pump circuit.
-            if (
-                resolved_circuit is not None
-                and name.casefold() == "rundataflowtemp"
-                and (
-                    hmux0_precise_temperature is None
-                    or resolved_circuit.casefold() != hmux0_precise_temperature.casefold()
-                )
-            ):
-                continue
-            if resolved_circuit is not None:
-                _add(resolved_circuit, name)
-
-        # Placeholder reads: discovered no-data registers whose metadata
-        # resolves via the circuit alias (15-minute interval).
-        if include_placeholders and self._graph:
-            for key in self._graph.placeholder_registers:
-                parts = key.split(".", 1)
-                if len(parts) != 2:
-                    continue
-                circuit, name = parts
-                if "." in name or key.casefold() in skipped_read_keys:
-                    continue
-                if key.casefold() in {raw_key.casefold() for raw_key in self._graph.raw_registers}:
-                    continue
-                meta_key = _meta_key(circuit, name)
-                if meta_key:
-                    meta = next(
-                        (value for map_key, value in REGISTER_MAP.items() if map_key.casefold() == meta_key.casefold()),
-                        None,
-                    )
-                else:
-                    meta = None
-                if meta and meta.enabled and meta.fallback_read:
-                    resolved = self._fallback_candidate(circuit, name)
-                    if resolved is not None:
-                        _add(resolved, name)
-
+        candidates = plan_fallback_reads(
+            self._graph,
+            self._last_find_keys,
+            self._runtime_definitions,
+            self.resolve_register_circuit,
+            REGISTER_MAP,
+            include_placeholders=include_placeholders,
+            include_energy=include_energy,
+            skip_reads=skip_reads,
+        )
         if not candidates:
             return
         _LOGGER.info("Fallback reading %d known register(s)", len(candidates))
