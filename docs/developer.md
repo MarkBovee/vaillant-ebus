@@ -62,7 +62,14 @@ custom_components/vaillant_ebus/
 │   ├── ebus_service.py # EbusService — asyncio TCP transport
 │   ├── discovery_service.py # DeviceGraph construction from ebusd find output
 │   ├── models.py       # Dataclasses (EbusdRegister, RegisterMeta, etc.)
-│   ├── mapping.py      # Register metadata (friendly names, icons, units)
+│   ├── mapping.py      # Mapping helpers; REGISTER_MAP is assembled from the register_map_*.py modules
+│   ├── register_map_heat_pump.py  # Register metadata: heat pumps and boilers
+│   ├── register_map_controller.py # Register metadata: heating controller (ctlv2 family)
+│   ├── register_map_other.py      # Register metadata: broadcast, vwz, v32
+│   ├── hardware_profiles.py  # Firmware/hardware gates (one table, with evidence)
+│   ├── runtime_definitions.py # Pure builder of the runtime `define` strings
+│   ├── fallback_planner.py   # Pure planner of active fallback reads
+│   ├── graph_merge.py        # Pure merge of discovery graphs and entity descriptions
 │   └── entity_factory.py # Dynamic entity generation from DeviceGraph
 ├── brand/
 │   ├── logo.png        # HACS branding
@@ -89,7 +96,7 @@ Ebusd raw TCP uses text commands terminated by `\n`. Responses end with `\n`.
 
 ## Adding register metadata
 
-Edit `backend/mapping.py`:
+Edit the matching `backend/register_map_*.py` module (heat pump and boiler, controller, or other):
 
 ```python
 "hmu.ExampleRegister": RegisterMeta(
@@ -117,7 +124,7 @@ Key fields:
 
 Some registers aren't in the CSV database and must be defined at runtime via `define`. Example: room humidity on CTLV2.
 
-Define format in `coordinator.py:_define_custom_registers()`:
+Define format in `backend/runtime_definitions.py:build_runtime_defines()` (the coordinator only sends the result):
 
 ```python
 defines = [
@@ -126,7 +133,7 @@ defines = [
 ]
 ```
 
-The register then appears as `ctlv2.z1RoomHumidity` and needs a mapping entry in `mapping.py`.
+The register then appears as `ctlv2.z1RoomHumidity` and needs a mapping entry in one of the `register_map_*.py` modules.
 
 ### Date registers (manual cooling start/end)
 

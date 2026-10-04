@@ -11,7 +11,11 @@ COMPONENT = PROJECT_ROOT / "custom_components" / "vaillant_ebus"
 # Intent: prevent physical controller and zone defaults from returning to runtime routing.
 # Why: a new ctlv2/hmu/z1 fallback can silently target the wrong hardware while tests remain green.
 def test_runtime_routing_has_no_physical_startup_defaults() -> None:
-    coordinator = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
+    # The routing logic now lives in coordinator.py and the pure backend planners, so scan them together.
+    coordinator = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (COMPONENT / "coordinator.py", *(COMPONENT / "backend").glob("*.py"))
+    )
     climate = (COMPONENT / "climate.py").read_text(encoding="utf-8")
     platform_code = "\n".join(
         (COMPONENT / name).read_text(encoding="utf-8")

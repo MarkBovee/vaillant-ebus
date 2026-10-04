@@ -29,10 +29,12 @@
 
 ## Architecture
 
-- `custom_components/vaillant_ebus/coordinator.py` owns connection lifecycle, discovery, polling, caching, and runtime register definitions.
+- `custom_components/vaillant_ebus/coordinator.py` owns connection lifecycle, discovery, polling and caching. It sends the runtime definitions and performs fallback reads, but does not decide them.
+- `backend/runtime_definitions.py` (`build_runtime_defines`) is the single pure builder of runtime `define` strings. `backend/fallback_planner.py` plans active fallback reads. `backend/graph_merge.py` merges graphs and entity lists. All three are pure and testable without HA.
+- `backend/hardware_profiles.py` is the one table of firmware/hardware gates (`HMUX0_SW0407`, `VWZIO_SW0500`, ...), each with evidence. Add a revision there, with a capture and a gate test, never as a literal `scan_sw ==` condition elsewhere.
 - `custom_components/vaillant_ebus/backend/ebus_service.py` provides the ebusd transport and handles register reads and writes (writes are verified by read-back).
 - `backend/entity_factory.py` maps the discovered graph to Home Assistant entity descriptions.
-- `backend/mapping.py` contains register metadata such as names, icons, units, and limits.
+- `backend/register_map_*.py` hold the register metadata (names, icons, units, limits); `backend/mapping.py` assembles `REGISTER_MAP` and holds the lookup helpers.
 - Platform modules in `custom_components/vaillant_ebus/` expose the generated entities to Home Assistant.
 
 ## Discovery And Entities
@@ -84,7 +86,7 @@ Some supported registers are not returned by ebusd `find` and must be defined or
 
 When functionality is missing, inspect the raw `find` output, discovery dump, ebusd metadata, and unmapped registers before adding a one-off implementation. Test each candidate directly against ebusd, confirm its message format and read-back value, and add only registers supported by the connected hardware.
 
-Keep all runtime definitions in `VaillantCoordinator._define_custom_registers()` and execute them after connecting to ebusd and before discovery. Use one data-driven collection for additional definitions instead of separate register-specific code paths.
+Keep all runtime definitions in `backend/runtime_definitions.py` (`build_runtime_defines`; `VaillantCoordinator._define_custom_registers()` only sends them) and execute them after connecting to ebusd and before discovery. Use one data-driven collection for additional definitions instead of separate register-specific code paths.
 
 The confirmed `z1RoomHumidity` definition is:
 
@@ -196,6 +198,8 @@ Hard-won facts from the 1.10.x line. Read these before touching `_define_custom_
 | `tools/gh_reply.py` | Post a reply from a Markdown file to an issue or discussion thread and update `.gh-inbox-state.json`. Only after the owner approved the text. |
 | `tools/deploy_ha.sh` | Validate and deploy to the owner's Home Assistant (see below). |
 | `tools/search_upstream.sh`, `tools/compare_dumps.py`, `tools/dump_projection.py`, `tools/version.py` | Upstream search, dump diff, dump projection, version consistency. |
+| `tools/hardware_matrix.py` | Which hardware variants the community fixtures cover (also in the CI step summary). |
+| `tools/release_gate.py` | Release-job gate: hassfest and HACS must be green on the tagged commit. |
 
 Shell notes for agents: on Windows with Git Bash, never pass multi-line Python with backslashes, quotes or `$` through an
 inline heredoc. Write a script file (a scratch directory is fine) and run it. Check `git status` before and after bulk
@@ -244,7 +248,8 @@ Use the repository virtualenv: `.venv/bin/<tool>` on Linux/macOS, `.venv/Scripts
 
 ```bash
 .venv/bin/ruff check .
-.venv/bin/ruff format --check custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py custom_components/vaillant_ebus/backend/entity_factory.py custom_components/vaillant_ebus/backend/mapping.py custom_components/vaillant_ebus/coordinator.py custom_components/vaillant_ebus/dump_service.py
+.venv/bin/ruff format --check custom_components
+.venv/bin/mypy --strict --follow-imports=skip custom_components/vaillant_ebus/backend
 .venv/bin/pytest -q
 python3 tools/version.py check
 python3 -m compileall -f custom_components/vaillant_ebus/
