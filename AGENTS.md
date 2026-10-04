@@ -36,6 +36,16 @@
 - `backend/entity_factory.py` maps the discovered graph to Home Assistant entity descriptions.
 - `backend/register_map_*.py` hold the register metadata (names, icons, units, limits); `backend/mapping.py` assembles `REGISTER_MAP` and holds the lookup helpers.
 - Platform modules in `custom_components/vaillant_ebus/` expose the generated entities to Home Assistant.
+- **Services are the architecture.** Adding a service module is welcome when it has real value: its own input and
+  output, a clear boundary, and tests that run without Home Assistant. Do not avoid a new module just to keep a file
+  count low, and do not grow `coordinator.py` when a service fits.
+  - Prefer **pure services** (no I/O, like `runtime_definitions`, `fallback_planner`, `graph_merge`): they are
+    cheapest to test with a fixture and a graph.
+  - Give a service with I/O (transport, cache) its own module only when it has its own lifecycle.
+  - No service per register or per hardware variant. Hardware differences belong in data (`hardware_profiles`,
+    `register_map_*`), not in new classes.
+  - A new service gets its own tests, a fixture-driven one where it decides hardware behaviour. Check weak spots
+    with `tools/mutation_check.py`.
 
 ## Discovery And Entities
 
