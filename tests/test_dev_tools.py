@@ -97,7 +97,7 @@ def test_fetch_attachments_helpers() -> None:
     assert tool.inside_fixtures(ROOT / "docs") is False
 
 
-# Intent: the release gate passes only when hassfest and HACS finished green, fails on a red one, waits on a missing one.
+# Intent: the release gate passes only when hassfest and HACS finished green, fails on red, waits on missing.
 # Why: 1.10.5 published a release before hassfest finished; the gate must make that impossible.
 def test_release_gate_states_and_timeout() -> None:
     gate = load_tool("release_gate")
