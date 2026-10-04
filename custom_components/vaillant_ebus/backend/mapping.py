@@ -165,7 +165,7 @@ HMUX0_PRECISE_TEMPERATURE_SW_VERSIONS: frozenset[str] = frozenset({"0303", "0406
 # Why: retained node firmware fields cannot authorize a definition or an active read after a partial refresh.
 def _hmux0_owner_for_sw(graph: DeviceGraph | None, sw_versions: frozenset[str]) -> str | None:
     owner_scan = hmux0_owner_scan(graph)
-    if owner_scan is None:
+    if graph is None or owner_scan is None:
         return None
     circuit, scan = owner_scan
     if not scan.complete or scan.scan_sw not in sw_versions or scan.scan_hw != "0504":

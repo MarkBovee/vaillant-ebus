@@ -218,8 +218,7 @@ class VaillantOptionsFlow(OptionsFlow):
                 for device_id, device in devices.devices.items()
                 if self._config_entry.entry_id in device.config_entries
                 and any(
-                    identifier[0] == DOMAIN and identifier[1] in current_circuits
-                    for identifier in device.identifiers
+                    identifier[0] == DOMAIN and identifier[1] in current_circuits for identifier in device.identifiers
                 )
             }
             removed = 0
@@ -232,17 +231,12 @@ class VaillantOptionsFlow(OptionsFlow):
                     and (
                         is_internal_helper
                         or (state is not None and state.state == "unknown")
-                        or (
-                            entry.device_id is not None
-                            and entry.device_id not in active_device_ids
-                        )
+                        or (entry.device_id is not None and entry.device_id not in active_device_ids)
                     )
                 ):
                     registry.async_remove(entity_id)
                     removed += 1
-            remaining_device_ids = {
-                entry.device_id for entry in registry.entities.values() if entry.device_id
-            }
+            remaining_device_ids = {entry.device_id for entry in registry.entities.values() if entry.device_id}
             removed_devices = 0
             for device_id, device in list(devices.devices.items()):
                 if (
@@ -267,10 +261,7 @@ class VaillantOptionsFlow(OptionsFlow):
             device_id
             for device_id, device in devices.devices.items()
             if self._config_entry.entry_id in device.config_entries
-            and any(
-                identifier[0] == DOMAIN and identifier[1] in current_circuits
-                for identifier in device.identifiers
-            )
+            and any(identifier[0] == DOMAIN and identifier[1] in current_circuits for identifier in device.identifiers)
         }
         stale_count = sum(
             1
@@ -279,14 +270,8 @@ class VaillantOptionsFlow(OptionsFlow):
                 entry.config_entry_id == self._config_entry.entry_id
                 and entry.platform == DOMAIN
                 and (
-                    (
-                        (state := self.hass.states.get(entry.entity_id)) is not None
-                        and state.state == "unknown"
-                    )
-                    or (
-                        entry.device_id is not None
-                        and entry.device_id not in active_device_ids
-                    )
+                    ((state := self.hass.states.get(entry.entity_id)) is not None and state.state == "unknown")
+                    or (entry.device_id is not None and entry.device_id not in active_device_ids)
                 )
             )
         )
@@ -398,9 +383,7 @@ class VaillantOptionsFlow(OptionsFlow):
                 grab_duration = user_input.get("grab_duration", 10)
                 from .dump_service import async_export_discovery_dump
 
-                self.hass.async_create_task(
-                    async_export_discovery_dump(self.hass, coordinator, grab_duration)
-                )
+                self.hass.async_create_task(async_export_discovery_dump(self.hass, coordinator, grab_duration))
             return self.async_abort(reason="export_started")
 
         return self.async_show_form(

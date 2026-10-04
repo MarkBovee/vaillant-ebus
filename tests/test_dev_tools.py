@@ -95,3 +95,39 @@ def test_fetch_attachments_helpers() -> None:
     assert tool.normalized_digest(b"a\r\nb\r\n") == tool.normalized_digest(b"a\nb\n")
     assert tool.inside_fixtures(tool.FIXTURES / "x.yaml") is True
     assert tool.inside_fixtures(ROOT / "docs") is False
+
+
+# Intent: the release gate passes only when hassfest and HACS finished green, fails on a red one, waits on a missing one.
+# Why: 1.10.5 published a release before hassfest finished; the gate must make that impossible.
+def test_release_gate_states_and_timeout() -> None:
+    gate = load_tool("release_gate")
+    ok = {"status": "completed", "conclusion": "success"}
+    red = {"status": "completed", "conclusion": "failure"}
+    running = {"status": "in_progress", "conclusion": None}
+
+    assert gate.evaluate([{"name": "validate", **ok}, {"name": "validate-hacs", **ok}])[0] == "pass"
+    assert gate.evaluate([{"name": "validate", **red}, {"name": "validate-hacs", **ok}])[0] == "fail"
+    assert gate.evaluate([{"name": "validate", **running}, {"name": "validate-hacs", **ok}])[0] == "pending"
+    assert gate.evaluate([{"name": "validate", **ok}])[0] == "pending"
+
+    now = [0.0]
+    passed, detail = gate.wait_for_gate(
+        lambda: [{"name": "validate", **running}],
+        timeout=30,
+        interval=20,
+        sleep=lambda seconds: now.__setitem__(0, now[0] + seconds),
+        clock=lambda: now[0],
+    )
+    assert not passed and detail.startswith("timeout")
+
+
+# Intent: the hardware matrix lists a variant per scanned device and flags one no test references.
+# Why: community-only hardware paths must stay visible so a fixture is never silently orphaned.
+def test_hardware_matrix_renders_and_flags_untested_variants() -> None:
+    tool = load_tool("hardware_matrix")
+
+    rendered = tool.render({"HMUX0 SW0406/HW0504": {"a.yaml": 2}, "VWZIO SW0500/HW0504": {"b.yaml": 0}})
+
+    assert "| HMUX0 SW0406/HW0504 | 1 | 1 | ok |" in rendered
+    assert "| VWZIO SW0500/HW0504 | 1 | 0 | NO TEST REFERENCE |" in rendered
+    assert "HMUX0 SW0406/HW0504" in tool.build_matrix()

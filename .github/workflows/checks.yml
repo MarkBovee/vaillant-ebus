@@ -1,0 +1,55 @@
+name: Checks
+
+# Reusable: the one list of checks that both the branch/PR run and the release run use.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: pip install ruff==0.16.4 mypy==1.15.0 pytest pytest-asyncio pyyaml types-cryptography
+
+      - name: Version check
+        run: python tools/version.py check
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Validate YAML
+        run: python -c "import pathlib, yaml; [yaml.safe_load(path.read_text()) for pattern in ('*.yml', '*.yaml') for path in pathlib.Path('.').rglob(pattern)]"
+
+      - name: Format check
+        run: ruff format --check custom_components
+
+      - name: Type check
+        run: mypy --strict --follow-imports=skip custom_components/vaillant_ebus/backend
+
+      - name: Test
+        run: pytest -q tests/ --junitxml=pytest-report.xml
+
+      - name: Hardware coverage matrix
+        if: always()
+        run: python tools/hardware_matrix.py >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compile
+        run: python3 -m compileall -f custom_components/vaillant_ebus/
+
+      - name: Diff check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}"
+          else
+            git diff --check HEAD^ HEAD
+          fi

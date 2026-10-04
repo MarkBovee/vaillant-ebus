@@ -120,7 +120,7 @@ SSH/SMB workflow for custom_components on a local HA instance. Includes ebusd TC
 
 The script loads credentials from `.env`, builds a clean zip (excludes `__pycache__`), uploads via SMB, unzips on HA, and optionally restarts HA.
 
-`tools/deploy_ha.sh` and `tools/deploy_ha.py` are checked in (without secrets). Windows setup (SSH add-on without SFTP, `/config` owned by root, `sudo -n`, backup in `/config/.deploy_backups/`): see AGENTS.md "Deploying To The Owner's Home Assistant". Restart with HA-MCP `ha_restart`.
+`tools/deploy_ha.sh` and `tools/deploy_ha.py` are checked in (without secrets). Windows setup (SSH add-on without SFTP, `/config` owned by root, `sudo -n`, backup in `/config/.deploy_backups/`): see docs/release-process.md "Deploying To The Owner's Home Assistant". Restart with HA-MCP `ha_restart`.
 
 **If `tools/deploy_ha.sh` doesn't exist**, create it at `<repo>/tools/deploy_ha.sh` with:
 1. Load HA_HOST/HA_USER/HA_PASSWORD/HA_SSH_PASSWORD from `.env`

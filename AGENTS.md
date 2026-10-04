@@ -119,166 +119,18 @@ Climate behavior must follow the corresponding `mypyllant` implementation.
 - Before changing integration code for a register write, test the register directly against ebusd over TCP or HTTP, verify a `done` response, and read the value back.
 - Treat registers that return `ERR: element not found` or `no data stored` as unsupported or temporarily unavailable; do not fabricate values or entities.
 
-## Discovering Registers Absent From CSV
+## Register Discovery And Community Data
 
-The installed ebusd CSV files only cover what `find` returns. The bus carries more
-telegrams; capture them with `grab` and mine the unknown ones for new registers.
+Full rules: [docs/register-discovery.md](docs/register-discovery.md). Read it before mining a dump, adding a
+runtime `define`, or mapping a community register. Hard rules that always apply:
 
-- Live grab: `grab` → wait N seconds → `grab result all` → `grab stop`. Do **not**
-  use `grab -m ...` (invalid syntax). A grab that runs while the user changes a
-  setting in the myVaillant app shows the write telegram that carries the new
-  register (app → cloud → NETX2 → bus).
-- Unknown telegrams have no register label after the count: `.../ 09410111... = 3`.
-  Labeled ones look like `... = 19: hmu SetMode`. Parse them with
-  `backend/grab_parser.py` (`parse_grab_lines`, `unknown_telegrams`).
-- Dumps capture them as `unknown_telegrams` (and `labeled_telegrams`) next to the
-  raw `grab` lines. When a dump exists, prefer mining its `unknown_telegrams` over
-  a fresh grab.
-- Register candidates found this way must have message format and layout evidence
-  before adding a `define -r` to `_define_custom_registers()`; owner hardware live
-  verification is preferred but not mandatory when upstream/community evidence is
-  strong and the hardware scope is explicit.
-- A register with a strong upstream/community layout match may be added through
-  `_define_custom_registers()` even when the installed ebusd CSV does not expose it.
-  This is the preferred path for community-supported opt-in registers; never modify
-  or upload addon CSV files. The definition must hardcode the verified circuit/address
-  and message layout, be additive, and tolerate an absent or `ERR` response without
-  creating a normal entity.
-- Before adding a runtime definition, confirm all of the following: the evidence
-  telegram master/slave and message/sub-address match the candidate; the response
-  byte length and field offsets match; the value has plausible units/range; hardware
-  and firmware scope is explicit; and the definition does not introduce active polling
-  that can alter bus behaviour unless active reads are explicitly required and safe.
-  Prefer passive `u` definitions for passively observed telegrams. Add the definition
-  only after a fixture-backed test covers both the decoded value and absent-register
-  path.
-- **Live verification applies only to the owner's own hardware.** A single grab on the
-  owner's own bus can be tested live. Data that comes from others (dumps, gists, issue
-  snippets, upstream threads) can **never** be tested live — treat it as community data
-  (see "Community Data" below), not as owner-live verification.
-- During dump analysis, search every useful unknown telegram and unmapped live register
-  in `john30/ebusd-configuration` issues and pull requests before classifying it as
-  unsupported. Search by register name, message ID, sub-address, and distinctive payload
-  fragments where useful. Use `tools/search_upstream.sh`, including `--comments` and
-  `--all` when appropriate; do not limit the search to the repository's CSV/TSP files.
-- **Unknown-telegram investigation is mandatory, not optional.** For every unknown
-  telegram that is relevant to the user request, create a candidate row before drawing
-  a conclusion. At minimum record: local dump(s), master, slave, message ID, sub-address,
-  request bytes, response length, response bytes, observed state(s), and occurrence
-  count. Deduplicate identical `(slave, message ID, sub-address)` candidates, but retain
-  state-specific payloads and counts.
-- Search each candidate systematically, not only by a guessed register name. Run
-  `tools/search_upstream.sh --comments --all` for: the complete message ID (`b511`),
-  message ID plus sub-address (`b511 0101`), request/payload fragments with and without
-  spaces, slave/device identifiers (`HMUX0`, `HW0504`), and any candidate name found in
-  search results. Also search relevant hardware terms and feature terms separately (for
-  example `Quiet mode`, `NoiseReduction`, `DeicingActive`). A zero-result search is
-  evidence only for that query, never proof that no mapping exists.
-- Search result handling must survive GitHub search rate limits. Cache command output,
-  reduce parallel requests, wait and retry when GitHub returns HTTP 403, and use direct
-  `gh issue view <number> --comments` / `gh pr view <number> --comments` for promising
-  threads. If search remains blocked, report the blocked queries and do not classify the
-  candidate as unsupported solely because of the failure.
-- Inspect every promising issue and PR in full, including comments. Extract exact CSV,
-  TSP, `define -r`, message/sub-address, field layout, hardware, firmware, and live-test
-  evidence. Then compare those fields with the local candidate byte-for-byte: master/slave,
-  message ID, sub-address, response length, field offsets, encoding, and plausible values.
-- Before concluding that no mapping exists, explicitly report the candidate inventory,
-  all upstream query variants attempted, matching threads (or confirmed no matches), and
-  why each candidate is `confirmed`, `strong assumption`, `speculative`, or remains
-  `discovery-only`. Never summarize this as merely “no unknown registers found” when the
-  dump contains unknown telegrams.
-- Treat upstream matches as evidence, not local live verification. Upstream/community
-  evidence is sufficient for production when classified `confirmed` or `strong
-  assumption`, hardware scope is explicit, and absent-register behavior is safe. Do not
-  require owner-hardware live verification or wait for 100% certainty once those gates
-  are met; treat the mapping as an in-scope production candidate. Open
-  promising issues or PRs
-  with `gh issue view <number> --comments` and read the complete conversation before using
-  a snippet. Record the upstream URL, hardware context, and whether the mapping is
-  `confirmed`, `strong assumption`, or `speculative`.
-- For a local live dump, correlate upstream candidates against the local telegram's master,
-  slave, message ID, sub-address, response layout, and observed value. A name match alone
-  is insufficient for production code.
-- Add the relevant upstream evidence and local capture as fixture-backed analysis notes when
-  a candidate moves toward production. Keep candidates without a matching layout or safe
-  absent-register behavior discovery-only until evidence improves.
-
-## Upstream Issues/PRs as a Register Source
-
-The shipped CSVs in `john30/ebusd-configuration` and the compiled CDN copies run far
-behind the bus (see `john30/ebusd-configuration#632`). Do **not** expect unknown
-register definitions, field layouts, or message IDs to exist in the `.tsp`/CSV source.
-The working knowledge lives in that repo's **issues and pull requests** — people post
-CSV snippets, `define` strings, `find` output, and per-hardware field layouts there.
-
-- Search issues and PRs with `tools/search_upstream.sh`, which wraps `gh search`
-  against `john30/ebusd-configuration`:
-  - `tools/search_upstream.sh "PrEnergySum"` — issues matching title/body.
-  - `tools/search_upstream.sh --comments "YieldHwcDay"` — also match comment bodies
-    (most CSV snippets and layouts are pasted in comments).
-  - `tools/search_upstream.sh --all "SourceTempInput"` — issues and PRs.
-  - `tools/search_upstream.sh "query" "john30/ebusd"` — search another repo.
-  - Add `--compact` when passing search output into agent context; it keeps
-    issue/PR markers while omitting decorative headings and blank separators.
-- The ebusd-configuration repo has discussions **disabled**; search issues and PRs only.
-- When a promising thread is found, open it (`gh issue view <n> --comments`) and read
-  the full conversation before trusting a snippet. Prefer definitions that the reporter
-  verified against a live device.
-- Never modify or upload ebusd CSV files and never set `--configpath`; that is addon-side.
-
-## Community Data (user/upstream dumps)
-
-Data from users and upstream threads (discovery dumps, gists, `find` output, CSV or
-`define` snippets) can **never** be live-tested — the hardware is not ours. Strong
-evidence from captures may still justify a conservative production assumption when
-that assumption is isolated, fixture-covered, and safe when the register is absent
-or returns no data.
-
-### Strong-assumption production rule
-
-`Strong assumption` is a production-evidence class, not a reason to defer work until
-someone supplies perfect or owner-hardware proof. Implement a strong-assumption mapping
-when the available community/upstream evidence consistently establishes the message
-family, layout or value semantics, hardware scope, and safe absent path. Hardware-gate
-it, preserve complete source fixtures, add positive and absent-path regressions, and
-record the uncertainty. Defer only when evidence conflicts, cannot be scoped to
-hardware/firmware, lacks a safe failure mode, or remains merely `speculative`.
-
-When adding registers, devices, or metadata derived from community data:
-
-- Add the capture as a fixture under `tests/fixtures/community/` and drive the new code
-  from that fixture (see "Test Fixtures"). The fixture replaces live verification as the
-  correctness gate.
-- Classify each inferred mapping as `confirmed`, `strong assumption`, or `speculative`.
-  `Confirmed` means the register name and value/layout are explicit. `Strong assumption`
-  means multiple consistent observations or a clear before/after correlation supports the
-  mapping. `Speculative` means evidence is insufficient for production code.
-- Add the entity/register through the existing data-driven paths (`REGISTER_MAP`,
-  `MULTI_FIELD_FIELDS`, `_define_custom_registers()`, device-type tables) so it is
-  covered by the same discovery/entity-factory logic as everything else. Do not bolt on
-  one-off register-specific code paths.
-- `Confirmed` and `strong assumption` mappings must be considered for production through
-  those existing data-driven paths; do not silently defer them for missing live proof.
-  Document the evidence and keep inferred entities unavailable unless the expected
-  register/value is actually discovered.
-- A reasonable, fixture-backed assumption may also enter production when the exact telegram
-  family, message/sub-address, response shape, field layout, and hardware scope match
-  available community or upstream evidence. Classify it explicitly as a reasonable
-  assumption, keep the implementation hardware-gated, and preserve a safe absent-register
-  path. A register-name match, plausible value, or uncorrelated telegram is not enough.
-- Keep changes additive and opt-in: enabling a community register/device must not change
-  behavior for hardware that does not expose it, and must not crash discovery or entity
-  generation when the register is absent.
-- Prefer conservative metadata: map layouts and read-back values explicit in the capture;
-  for strong assumptions, document the evidence and do not fabricate a field layout from
-  an isolated or contradictory snippet.
-- Add a regression test that loads the fixture and asserts the expected register/entity
-  appears on the discovered device graph without error.
-- For inferred mappings, also assert that the absent-register path remains safe.
-- If the data is incomplete or ambiguous, prefer a discovery-only or YAML-override
-  approach until evidence reaches `strong assumption`, and flag the uncertainty to the
-  owner rather than presenting it as verified hardware behavior.
+- Unknown-telegram investigation is mandatory: build a candidate row, search upstream (`tools/search_upstream.sh
+  --comments --all`), classify as `confirmed`, `strong assumption`, `speculative` or `discovery-only`.
+- Only the owner's own hardware can be live-tested. Community data is gated by a complete fixture under
+  `tests/fixtures/community/` plus a positive and an absent-register test.
+- Confirmed and strong-assumption mappings go through the existing data-driven paths and are hardware-gated,
+  additive, and safe when the register is absent. Never add a one-off code path.
+- Never modify or upload ebusd CSV files and never set `--configpath`.
 
 ## ebusd Define And Polling Rules
 
@@ -407,67 +259,17 @@ python3 -m compileall -f custom_components/vaillant_ebus/
 - Never overwrite an existing community fixture when downloading an attachment: check `git status` first (`curl -o`
   over a tracked file silently modifies it) and compare with `cmp` before adding a duplicate.
 
-## Home Assistant Release Smoke Test
+## Release, Smoke Test And Deploy
 
-Every release candidate must exercise the discovery-dump service on the owner's
-Home Assistant server after deployment; a successful startup or unit test alone
-does not cover this service.
+Full procedure: [docs/release-process.md](docs/release-process.md) (release plan, versioning, HA smoke test,
+deploy). Hard rules that always apply:
 
-1. Deploy the candidate with `tools/deploy_ha.sh` after repository validation passes (see "Deploying To The
-   Owner's Home Assistant" below), then restart Home Assistant with the HA-MCP `ha_restart` tool. Do not
-   substitute an ad-hoc SSH/SMB deployment.
-2. Through HA-MCP, confirm the `vaillant_ebus` entry is loaded. Call
-   `vaillant_ebus.export_discovery_dump` once with `grab_duration: 0`, then
-   again with a short positive duration such as one second. Do not run external
-   `grab`/`grab stop` commands or restart ebusd during the positive-duration
-   call; the protocol has no session ID to protect against those races.
-   Run only one export per ebusd endpoint at a time, including across separate
-   Home Assistant instances.
-3. Read both newly written files from the paths in the service log/notification.
-   Use an HA-MCP file-read tool when available; use the documented read-only SSH
-   path only if HA-MCP cannot expose the file.
-4. Parse both files as YAML and verify `metadata`, `raw_find_lines`,
-   `before_registers`, and `registers`. For the zero-second dump, require
-   `grab_status: not_requested` and `grab_captured_duration: 0`. On the owner's
-   current ebusd version, the positive-duration dump should report
-   `grab_status: continued`, `grab_capture_method: count_delta`, and a positive
-   `grab_captured_duration` plus `grab_capture_limitation`; older ebusd versions
-   may report an owned `captured` session instead. The continued capture keeps
-   only the last payload for each message key and cannot detect an external grab
-   stop/restart during its interval, so do not claim it preserves every state
-   transition. If the positive-duration dump reports `skipped_active` because `grab result all` exceeded the line
-   limit (`GRAB_MAX_RESPONSE_LINES`, 100,000 since 1.10.5), record it as a deviation: the service degraded to a
-   register-only dump as designed, but the `continued` criterion is not met.
-5. After the positive-duration call, use the documented read-only ebusd command
-   `grab result all` through SSH and confirm the response is not `grab disabled`.
-   Do not use `grab` as a status probe because it can start capture and hide a
-   stopped state.
-6. Check fresh HA logs for errors from `custom_components.vaillant_ebus` and
-   record the service results and both dump paths in the release plan. A service
-   error, missing file, invalid YAML, or missing required section fails the
-   smoke test.
-
-## Release Versioning
-
-- The release version must stay identical across `pyproject.toml`, `custom_components/vaillant_ebus/manifest.json`, and the top `## <version>` heading in `CHANGELOG.md`.
-- `tools/version.py` is the single source of truth. Bump with `python tools/version.py bump X.Y.Z`, then add the matching `## X.Y.Z - YYYY-MM-DD` CHANGELOG section (release notes are human-written).
-- `tests/test_version_consistency.py` runs `python tools/version.py check`, so CI fails on drift. Never hand-edit one version file without updating the other two.
-- Publishing a release means pushing the release branch and an annotated `v*` tag; the CI `release` job builds the zip and creates or updates the GitHub release from the top CHANGELOG section. Do not merge the release branch until it has been tested on Home Assistant.
-
-## Deploying To The Owner's Home Assistant
-
-- `tools/deploy_ha.sh` validates (`tools/validate.py`), then runs `tools/deploy_ha.py` (paramiko; `pip install paramiko`).
-  Credentials come only from the git-ignored `.env` (`HA_HOST`, `HA_SSH_USER`, `HA_SSH_PASSWORD`; see `.env.example`).
-  Never print, grep for, or commit credentials. Never read the Supervisor token to work around a blocked command.
-- The HA OS SSH add-on has **no SFTP** and `/config/custom_components` is root-owned: upload over an exec channel and
-  use `sudo -n` for writes. The script takes a verified `tar.gz` backup in `/config/.deploy_backups/` first; restore with
-  `sudo tar -xzf <backup> -C /config/custom_components`. An unknown SSH host key needs `--accept-new-host-key`
-  (trust-on-first-use; only for the owner's host, after the owner agrees).
-- Prefer the connected HA-MCP for everything else: `ha_restart`, `ha_get_integration`, `ha_call_service`
-  (`vaillant_ebus.export_discovery_dump`), `ha_get_system_health(include="repairs")`. Read logs with
-  `ha_get_logs(source="error_log", search="vaillant")`; `ha_get_logs(source="system")` and `ha core logs` are empty on
-  HA 2026.x. The MCP cannot write files.
-- Dump files live in `/config/vaillant_ebus/` (root-readable via `sudo -n cat`).
+- One version in `pyproject.toml`, `manifest.json` and the top `CHANGELOG.md` heading (`tools/version.py`).
+- Deploy only with `tools/deploy_ha.sh`; restart with HA-MCP `ha_restart`; never print or commit credentials.
+- Every release candidate runs the discovery-dump smoke test on the owner's HA before it is called ready.
+- Push the `vX.Y.Z` tag only after all PR checks are green. The release job also enforces this
+  (`tools/release_gate.py`).
+- Approvals do not carry over: deploy, restart, push, tag and GitHub posts are separate outward actions.
 
 ## Working With Agents (Claude Code and others)
 
@@ -485,24 +287,6 @@ does not cover this service.
   text is true.
 - The auto-mode classifier blocks credential reads and token access. If an action is blocked, stop and ask; do not
   rephrase the same outcome through another tool.
-
-## Release Procedure (what 1.10.5 followed)
-
-1. Plan in `docs/plan-X.Y.Z.md` (git-ignored through `docs/plan-*.md`): inbox scan, evidence table, must/should/could/out.
-   Fetch dumps with `python tools/fetch_attachments.py <issue> --out <scratch>/issueN` (add `--discussion` for a
-   discussion); it reports attachments that are already fixtures.
-2. Branch `release/X.Y.Z`; fixtures first with a failing test, then the fix; classify each register as `confirmed`,
-   `strong assumption`, `speculative` or `discovery-only`.
-3. `python tools/version.py bump X.Y.Z`, write the human CHANGELOG section (simple language, honest notes about what is
-   not changed), run `python tools/validate.py` (a new failure, a translation rule or a hassfest-style problem must be
-   fixed before review), then independent review and audit.
-4. Deploy with `tools/deploy_ha.sh` (dry-run first with `--dry-run`), restart with the HA-MCP `ha_restart`, run the
-   smoke test, and record deviations in the plan.
-5. Commit, push the branch and open the PR. **Wait for all PR checks (including hassfest and HACS validation) to be
-   green before pushing the annotated `vX.Y.Z` tag**: the tag triggers the release job at once, and in 1.10.5 a tag
-   pushed early published a release whose hassfest check failed, so the tag had to be moved. Merge only after the
-   owner agrees. Then reply on the affected issues and discussions with `tools/gh_reply.py`, once the owner has
-   approved the texts.
 
 ## GitHub Communication
 

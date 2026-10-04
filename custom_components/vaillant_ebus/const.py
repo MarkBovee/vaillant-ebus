@@ -15,7 +15,7 @@ def _read_manifest_version() -> str:
     try:
         manifest = json.loads(Path(__file__).with_name("manifest.json").read_text())
         return str(manifest["version"])
-    except (OSError, KeyError, TypeError, ValueError):
+    except OSError, KeyError, TypeError, ValueError:
         return "unknown"
 
 
