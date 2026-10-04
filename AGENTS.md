@@ -199,6 +199,7 @@ Hard-won facts from the 1.10.x line. Read these before touching `_define_custom_
 | `tools/deploy_ha.sh` | Validate and deploy to the owner's Home Assistant (see below). |
 | `tools/search_upstream.sh`, `tools/compare_dumps.py`, `tools/dump_projection.py`, `tools/version.py` | Upstream search, dump diff, dump projection, version consistency. |
 | `tools/hardware_matrix.py` | Which hardware variants the community fixtures cover (also in the CI step summary). |
+| `tools/mutation_check.py` | Mutation check of one source file against chosen tests; survivors show missing or weak tests (use on small pure modules). |
 | `tools/release_gate.py` | Release-job gate: hassfest and HACS must be green on the tagged commit. |
 
 Shell notes for agents: on Windows with Git Bash, never pass multi-line Python with backslashes, quotes or `$` through an

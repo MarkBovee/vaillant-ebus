@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -16,6 +17,7 @@ def load_tool(name: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location(f"dev_tool_{name}", ROOT / "tools" / f"{name}.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses look the module up by name
     spec.loader.exec_module(module)
     return module
 
@@ -131,3 +133,21 @@ def test_hardware_matrix_renders_and_flags_untested_variants() -> None:
     assert "| HMUX0 SW0406/HW0504 | 1 | 1 | ok |" in rendered
     assert "| VWZIO SW0500/HW0504 | 1 | 0 | NO TEST REFERENCE |" in rendered
     assert "HMUX0 SW0406/HW0504" in tool.build_matrix()
+
+
+# Intent: the mutation tool finds condition mutants and produces valid, different source for each.
+# Why: a tool that silently yields identical or broken mutants would report false confidence.
+def test_mutation_tool_generates_distinct_valid_mutants() -> None:
+    import ast
+
+    tool = load_tool("mutation_check")
+    source = "def f(a, b):\n    if a == b and not a:\n        return a\n    return 0\n"
+    tree = ast.parse(source)
+
+    mutants = tool.find_mutants(tree)
+    mutated = {tool.apply_mutant(tree, mutant) for mutant in mutants}
+
+    assert {m.kind for m in mutants} == {"compare", "boolop", "not", "return"}
+    assert len(mutated) == len(mutants)
+    assert all(ast.parse(text) for text in mutated)
+    assert ast.unparse(tree) not in mutated
