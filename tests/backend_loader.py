@@ -18,18 +18,22 @@ BACKEND_PATH = Path(__file__).parents[1] / "custom_components" / "vaillant_ebus"
 COMPONENT_PATH = BACKEND_PATH.parent
 
 
-# Intent: register stand-in `vaillant_ebus` and `vaillant_ebus.backend` packages unless they already exist.
-# Why: other test modules register the same names; reusing them keeps one module object per backend file.
+PACKAGE = "vaillant_ebus_pure"
+
+
+# Intent: register private stand-in packages (`vaillant_ebus_pure`, `vaillant_ebus_pure.backend`) unless they exist.
+# Why: older test files re-execute backend modules under the `vaillant_ebus` name and replace each other's classes;
+# a private namespace keeps every module imported here consistent with the others imported here.
 def _ensure_packages() -> None:
-    for name, path in (("vaillant_ebus", COMPONENT_PATH), ("vaillant_ebus.backend", BACKEND_PATH)):
+    for name, path in ((PACKAGE, COMPONENT_PATH), (f"{PACKAGE}.backend", BACKEND_PATH)):
         if name not in sys.modules:
             package = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None, is_package=True))
             package.__path__ = [str(path)]
             sys.modules[name] = package
 
 
-# Intent: return a backend module (for example ``"models"``) loaded under ``vaillant_ebus.backend``.
+# Intent: return a backend module (for example ``"models"``) loaded under the private ``vaillant_ebus_pure.backend``.
 # Why: tests need the production module objects, not copies, so identity checks and enums stay consistent.
 def load_backend(name: str) -> ModuleType:
     _ensure_packages()
-    return importlib.import_module(f"vaillant_ebus.backend.{name}")
+    return importlib.import_module(f"{PACKAGE}.backend.{name}")
