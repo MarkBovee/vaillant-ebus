@@ -773,128 +773,87 @@ async def test_stop_grab_keeps_cancellation_when_command_completes(
         await parent_task
 
 
-# Intent: report a failed grab-stop command instead of a successful capture.
-# Why: ebusd may otherwise continue capturing after the service reports completion.
-async def test_async_grab_fails_when_stop_command_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Intent: fail only the cleanup command after an otherwise successful capture.
-    # Why: cleanup failure must not be swallowed by the capture service.
-    async def _fail_stop(host, port, command, ensure_active=None, on_grab_started=None):
-        if command == "grab stop":
-            raise OSError("stop connection failed")
-        return ["grab started"] if command == "grab" else []
-
-    monkeypatch.setattr(DUMP, "_grab_cmd", _fail_stop)
-
-    with pytest.raises(DUMP.GrabIntervalUnavailableError, match="could not stop exporter-started"):
-        await DUMP.async_grab("127.0.0.1", 8888, 0)
+# Intent: scripted ebusd replies for the grab lifecycle (start, result, stop) map to the right outcome.
+# Why: a dump must never report a capture when ebusd rejected, ignored or half-confirmed a lifecycle command.
+# One table replaces ten near-identical tests; every row is a separate case.
+_GRAB_OK = {"grab": ["grab started"], "grab result all": [], "grab stop": ["grab stopped"]}
+_FULL_RUN = ["grab", "grab result all", "grab stop"]
+_TELEGRAM = "f108b509055402008813 / 0e020188136400ffffffffffffffff = 1"
 
 
-# Intent: reject stop responses that do not confirm ebusd ended the grab.
-# Why: error-shaped replies and closed connections can leave bus capture active.
-@pytest.mark.parametrize("stop_response", [[], ["ERR: invalid command"]])
-async def test_async_grab_rejects_unconfirmed_stop_response(
-    stop_response: list[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Intent: return an empty/error response only for the cleanup command.
-    # Why: a dump must not report successful capture when ebusd rejected grab stop.
-    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
-        if command == "grab stop":
-            return stop_response
-        return ["grab started"] if command == "grab" else []
-
-    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
-
-    with pytest.raises(HomeAssistantError, match="grab stop|confirm"):
-        await DUMP.async_grab("127.0.0.1", 8888, 0)
-
-
-# Intent: reject textual ebusd errors from grab start and result commands.
-# Why: error replies must not be serialized as a successful traffic capture.
 @pytest.mark.parametrize(
-    ("failed_command", "expected_error"),
-    [("grab", "grab failed"), ("grab result all", "grab result all failed")],
+    ("replies", "error", "match", "commands"),
+    [
+        ({"grab stop": OSError("stop connection failed")}, "GrabIntervalUnavailableError", "could not stop", None),
+        ({"grab stop": []}, "HomeAssistantError", "grab stop|confirm", None),
+        ({"grab stop": ["ERR: invalid command"]}, "HomeAssistantError", "grab stop|confirm", None),
+        ({"grab": ["ERR: unavailable"]}, "HomeAssistantError", "grab failed", ["grab"]),
+        ({"grab result all": ["ERR: unavailable"]}, "HomeAssistantError", "grab result all failed", _FULL_RUN),
+        (
+            {"grab result all": ["usage: grab result [all|decode]"]},
+            "HomeAssistantError",
+            "grab result all failed: usage:",
+            None,
+        ),
+        *(
+            ({"grab result all": [line]}, "HomeAssistantError", "invalid telegram", _FULL_RUN)
+            for line in ("ok", "done", "grab not running", "invalid command")
+        ),
+        ({"grab": []}, "HomeAssistantError", "did not confirm that the grab started", ["grab"]),
+        *(
+            (
+                {command: [reply]},
+                "HomeAssistantError",
+                "confirm|acknowledge",
+                ["grab"] if command == "grab" else _FULL_RUN,
+            )
+            for command in ("grab", "grab stop")
+            for reply in ("ok", "done", "grab not running")
+        ),
+        ({"grab": ["grab started", "unexpected"]}, "HomeAssistantError", "confirm", ["grab"]),
+        ({"grab stop": ["grab stopped", "unexpected"]}, "HomeAssistantError", "confirm", _FULL_RUN),
+    ],
+    ids=lambda value: value if isinstance(value, str) else None,
 )
-async def test_async_grab_rejects_error_responses(
-    failed_command: str,
-    expected_error: str,
+async def test_async_grab_lifecycle_rejections(
+    replies: dict[str, object],
+    error: str,
+    match: str,
+    commands: list[str] | None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    commands: list[str] = []
+    seen: list[str] = []
 
-    # Intent: return an ERR reply at the selected stage and acknowledge owned cleanup.
-    # Why: a failed start owns no global grab; result failure after a confirmed start must still stop it.
     async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
-        commands.append(command)
-        if command == failed_command:
-            return ["ERR: unavailable"]
-        if command == "grab":
-            return ["grab started"]
-        if command == "grab stop":
-            return ["grab stopped"]
-        return []
+        seen.append(command)
+        reply = replies.get(command, _GRAB_OK[command])
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
 
     monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
+    expected_error = (
+        DUMP.GrabIntervalUnavailableError if error == "GrabIntervalUnavailableError" else HomeAssistantError
+    )
 
-    with pytest.raises(HomeAssistantError, match=expected_error):
+    with pytest.raises(expected_error, match=match):
         await DUMP.async_grab("127.0.0.1", 8888, 0)
 
-    assert commands == (["grab"] if failed_command == "grab" else ["grab", "grab result all", "grab stop"])
+    if commands is not None:
+        assert seen == commands
 
 
-# Intent: reject ebusd usage responses instead of serializing them as captured traffic.
-# Why: valid query data can be empty, but a usage response means the command itself was rejected.
-async def test_async_grab_rejects_result_usage_response(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
-        if command == "grab result all":
-            return ["usage: grab result [all|decode]"]
-        return ["grab started"] if command == "grab" else ["grab stopped"]
-
-    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
-
-    with pytest.raises(HomeAssistantError, match="grab result all failed: usage:"):
-        await DUMP.async_grab("127.0.0.1", 8888, 0)
-
-
-# Intent: reject non-error grab-result text that is not a telegram record.
-# Why: only parsed ebusd telegram output can be reported as a successful discovery capture.
-@pytest.mark.parametrize("invalid_line", ["ok", "done", "grab not running", "invalid command"])
-async def test_async_grab_rejects_arbitrary_result_text(invalid_line: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    commands: list[str] = []
-
-    # Intent: inject an arbitrary result line after a confirmed start.
-    # Why: verify malformed success-shaped text does not bypass result validation.
-    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
-        commands.append(command)
-        if command == "grab result all":
-            return [invalid_line]
-        return ["grab started"] if command == "grab" else ["grab stopped"]
-
-    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
-
-    with pytest.raises(HomeAssistantError, match="invalid telegram"):
-        await DUMP.async_grab("127.0.0.1", 8888, 0)
-
-    assert commands == ["grab", "grab result all", "grab stop"]
-
-
-# Intent: retain valid raw hex telegram lines and an empty successful result.
-# Why: both are legitimate grab-result responses under ebusd's TCP protocol.
-@pytest.mark.parametrize(
-    "result_lines",
-    (
-        [],
-        ["f108b509055402008813 / 0e020188136400ffffffffffffffff = 1"],
-    ),
-)
+# Intent: an empty result and a raw-hex telegram result are both accepted with exact lifecycle acknowledgements.
+# Why: both are legitimate ebusd grab responses and must survive the stricter validation above.
+@pytest.mark.parametrize("result_lines", [[], [_TELEGRAM]])
 async def test_async_grab_accepts_empty_or_valid_telegram_result(
     result_lines: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Intent: return the selected valid result shape with exact lifecycle acknowledgements.
-    # Why: valid empty and raw-telegram results must both survive stricter validation.
+    seen: list[str] = []
+
     async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
-        if command == "grab result all":
-            return result_lines
-        return ["grab started"] if command == "grab" else ["grab stopped"]
+        seen.append(command)
+        return result_lines if command == "grab result all" else _GRAB_OK[command]
 
     monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
 
@@ -902,25 +861,7 @@ async def test_async_grab_accepts_empty_or_valid_telegram_result(
 
     assert result.lines == ("[grab] grab started", *result_lines, "[grab stop] grab stopped")
     assert result.status == "captured"
-
-
-# Intent: abort when ebusd never acknowledges that raw capture started.
-# Why: an unconfirmed start must not be reported as a successful empty capture.
-async def test_async_grab_rejects_missing_start_acknowledgement(monkeypatch: pytest.MonkeyPatch) -> None:
-    commands: list[str] = []
-
-    # Intent: return no acknowledgement for grab.
-    # Why: an unconfirmed global start must surface without stopping another capture.
-    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
-        commands.append(command)
-        return [] if command == "grab" else ["grab stopped"]
-
-    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
-
-    with pytest.raises(HomeAssistantError, match="did not confirm that the grab started"):
-        await DUMP.async_grab("127.0.0.1", 8888, 0)
-
-    assert commands == ["grab"]
+    assert seen == _FULL_RUN
 
 
 # Intent: derive only interval telegram counts when ebusd's global grab is already active.
@@ -1525,102 +1466,6 @@ async def test_async_grab_transport_failure_still_stops_capture(monkeypatch: pyt
         await DUMP.async_grab("127.0.0.1", 8888, 0)
 
     assert commands == ["grab", "grab result all", "grab stop"]
-
-
-# Intent: accept only ebusd's explicit grab lifecycle acknowledgements while allowing an empty result.
-# Why: capture output is data, so a non-error but invalid command reply must not be reported as success.
-async def test_async_grab_accepts_exact_acknowledgements_and_empty_result(monkeypatch: pytest.MonkeyPatch) -> None:
-    commands: list[str] = []
-
-    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
-        commands.append(command)
-        return {
-            "grab": ["grab started"],
-            "grab result all": [],
-            "grab stop": ["grab stopped"],
-        }[command]
-
-    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
-
-    capture = await DUMP.async_grab("127.0.0.1", 8888, 0)
-    assert capture.lines == ("[grab] grab started", "[grab stop] grab stopped")
-    assert capture.status == "captured"
-    assert commands == ["grab", "grab result all", "grab stop"]
-
-
-# Intent: reject non-error text that is not ebusd's start/stop acknowledgement.
-# Why: a usage or invalid-state reply must not look like a completed capture.
-@pytest.mark.parametrize(
-    ("failed_command", "failure_reply"),
-    [
-        ("grab", "ok"),
-        ("grab", "done"),
-        ("grab", "grab not running"),
-        ("grab stop", "ok"),
-        ("grab stop", "done"),
-        ("grab stop", "grab not running"),
-    ],
-)
-async def test_async_grab_rejects_unexpected_lifecycle_acknowledgements(
-    failed_command: str,
-    failure_reply: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    commands: list[str] = []
-
-    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
-        commands.append(command)
-        if command == failed_command:
-            return [failure_reply]
-        if command == "grab":
-            return ["grab started"]
-        if command == "grab stop":
-            return ["grab stopped"]
-        return []
-
-    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
-
-    with pytest.raises(HomeAssistantError, match="confirm|acknowledge"):
-        await DUMP.async_grab("127.0.0.1", 8888, 0)
-
-    if failed_command == "grab":
-        assert commands == ["grab"]
-    else:
-        assert commands == ["grab", "grab result all", "grab stop"]
-
-
-# Intent: reject extra response lines after a grab lifecycle acknowledgement.
-# Why: only a single exact acknowledgement proves this export owns the global grab state.
-@pytest.mark.parametrize(
-    ("failed_command", "reply"),
-    [
-        ("grab", ["grab started", "unexpected"]),
-        ("grab stop", ["grab stopped", "unexpected"]),
-    ],
-)
-async def test_async_grab_rejects_extra_lifecycle_response_lines(
-    failed_command: str,
-    reply: list[str],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    commands: list[str] = []
-
-    async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
-        commands.append(command)
-        if command == failed_command:
-            return reply
-        if command == "grab":
-            return ["grab started"]
-        if command == "grab stop":
-            return ["grab stopped"]
-        return []
-
-    monkeypatch.setattr(DUMP, "_grab_cmd", _grab_cmd)
-
-    with pytest.raises(HomeAssistantError, match="confirm"):
-        await DUMP.async_grab("127.0.0.1", 8888, 0)
-
-    assert commands == (["grab"] if failed_command == "grab" else ["grab", "grab result all", "grab stop"])
 
 
 # Intent: save a register-only dump when grab startup or a continued snapshot fails.
