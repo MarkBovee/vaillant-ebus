@@ -2,60 +2,20 @@
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
 import sys
-from pathlib import Path
 
 import pytest
 
+from tests import _component_loader  # noqa: F401 — loads the shared modules once
 from tests.fake_ebusd import load_find_lines
 
-BACKEND_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend"
-COMPONENT_PATH = BACKEND_PATH.parent
-
-for name in ("vaillant_ebus", "vaillant_ebus.backend"):
-    pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None))
-    pkg.__path__ = [str(COMPONENT_PATH)] if name == "vaillant_ebus" else [str(BACKEND_PATH)]
-    sys.modules[name] = pkg
-
-MODELS_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.models", BACKEND_PATH / "models.py")
-assert MODELS_SPEC and MODELS_SPEC.loader
-MODELS = importlib.util.module_from_spec(MODELS_SPEC)
-sys.modules["vaillant_ebus.backend.models"] = MODELS
-MODELS_SPEC.loader.exec_module(MODELS)
-
-MAPPING_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.mapping", BACKEND_PATH / "mapping.py")
-assert MAPPING_SPEC and MAPPING_SPEC.loader
-MAPPING = importlib.util.module_from_spec(MAPPING_SPEC)
-sys.modules["vaillant_ebus.backend.mapping"] = MAPPING
-MAPPING_SPEC.loader.exec_module(MAPPING)
-
-EBUS_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.ebus_service", BACKEND_PATH / "ebus_service.py"
-)
-assert EBUS_SPEC and EBUS_SPEC.loader
-EBUS_MOD = importlib.util.module_from_spec(EBUS_SPEC)
-sys.modules["vaillant_ebus.backend.ebus_service"] = EBUS_MOD
-EBUS_SPEC.loader.exec_module(EBUS_MOD)
+MODELS = sys.modules["vaillant_ebus.backend.models"]
+MAPPING = sys.modules["vaillant_ebus.backend.mapping"]
+EBUS_MOD = sys.modules["vaillant_ebus.backend.ebus_service"]
+DISCOVERY = sys.modules["vaillant_ebus.backend.discovery_service"]
 EbusService = EBUS_MOD.EbusService
-
-DISCOVERY_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.discovery_service", BACKEND_PATH / "discovery_service.py"
-)
-assert DISCOVERY_SPEC and DISCOVERY_SPEC.loader
-DISCOVERY = importlib.util.module_from_spec(DISCOVERY_SPEC)
-sys.modules["vaillant_ebus.backend.discovery_service"] = DISCOVERY
-DISCOVERY_SPEC.loader.exec_module(DISCOVERY)
 DiscoveryService = DISCOVERY.DiscoveryService
-
-FACTORY_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.entity_factory", BACKEND_PATH / "entity_factory.py"
-)
-assert FACTORY_SPEC and FACTORY_SPEC.loader
-FACTORY = importlib.util.module_from_spec(FACTORY_SPEC)
-sys.modules["vaillant_ebus.backend.entity_factory"] = FACTORY
-FACTORY_SPEC.loader.exec_module(FACTORY)
+FACTORY = sys.modules["vaillant_ebus.backend.entity_factory"]
 
 from vaillant_ebus.backend.entity_factory import (  # noqa: E402
     EntityFactoryService,

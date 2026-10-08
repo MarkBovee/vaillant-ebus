@@ -2,29 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
 import sys
-from pathlib import Path
 
+from tests import _component_loader  # noqa: F401 — loads the shared modules once
 from tests.fake_ebusd import load_discovery_dump
 
-BACKEND_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend"
-COMPONENT_PATH = BACKEND_PATH.parent
-
-for name, path in (
-    ("vaillant_ebus", COMPONENT_PATH),
-    ("vaillant_ebus.backend", BACKEND_PATH),
-):
-    pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None))
-    pkg.__path__ = [str(path)]
-    sys.modules[name] = pkg
-
-spec = importlib.util.spec_from_file_location("vaillant_ebus.backend.grab_parser", BACKEND_PATH / "grab_parser.py")
-assert spec and spec.loader
-module = importlib.util.module_from_spec(spec)
-sys.modules["vaillant_ebus.backend.grab_parser"] = module
-spec.loader.exec_module(module)
+module = sys.modules["vaillant_ebus.backend.grab_parser"]
 
 parse_grab_lines = module.parse_grab_lines
 iter_grab_telegrams = module.iter_grab_telegrams

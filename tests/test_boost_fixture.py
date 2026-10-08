@@ -11,50 +11,15 @@ data.
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
 import sys
-from pathlib import Path
 
+from tests import _component_loader  # noqa: F401 — loads the shared modules once
 from tests.fake_ebusd import load_discovery_dump, load_find_lines
 
-BACKEND_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend"
-COMPONENT_PATH = BACKEND_PATH.parent
-
-for name in ("vaillant_ebus", "vaillant_ebus.backend"):
-    pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None))
-    pkg.__path__ = [str(COMPONENT_PATH)] if name == "vaillant_ebus" else [str(BACKEND_PATH)]
-    sys.modules[name] = pkg
-
-MODELS_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.models", BACKEND_PATH / "models.py")
-assert MODELS_SPEC and MODELS_SPEC.loader
-MODELS = importlib.util.module_from_spec(MODELS_SPEC)
-sys.modules["vaillant_ebus.backend.models"] = MODELS
-MODELS_SPEC.loader.exec_module(MODELS)
-
-MAPPING_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.mapping", BACKEND_PATH / "mapping.py"
-)
-assert MAPPING_SPEC and MAPPING_SPEC.loader
-MAPPING = importlib.util.module_from_spec(MAPPING_SPEC)
-sys.modules["vaillant_ebus.backend.mapping"] = MAPPING
-MAPPING_SPEC.loader.exec_module(MAPPING)
-
-ENTITY_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.entity_factory", BACKEND_PATH / "entity_factory.py"
-)
-assert ENTITY_SPEC and ENTITY_SPEC.loader
-ENTITY = importlib.util.module_from_spec(ENTITY_SPEC)
-sys.modules["vaillant_ebus.backend.entity_factory"] = ENTITY
-ENTITY_SPEC.loader.exec_module(ENTITY)
-
-DISCOVERY_SPEC = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.discovery_service", BACKEND_PATH / "discovery_service.py"
-)
-assert DISCOVERY_SPEC and DISCOVERY_SPEC.loader
-DISCOVERY = importlib.util.module_from_spec(DISCOVERY_SPEC)
-sys.modules["vaillant_ebus.backend.discovery_service"] = DISCOVERY
-DISCOVERY_SPEC.loader.exec_module(DISCOVERY)
+MODELS = sys.modules["vaillant_ebus.backend.models"]
+MAPPING = sys.modules["vaillant_ebus.backend.mapping"]
+ENTITY = sys.modules["vaillant_ebus.backend.entity_factory"]
+DISCOVERY = sys.modules["vaillant_ebus.backend.discovery_service"]
 
 DiscoveryService = DISCOVERY.DiscoveryService
 EntityFactoryService = ENTITY.EntityFactoryService

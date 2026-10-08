@@ -1,146 +1,29 @@
 """Unit tests for the climate platform — per-zone thermostat and flow range.
 
-Reuses the homeassistant mock scaffolding from tests.test_coordinator so both
-files share one set of sys.modules entries (importing a test module does not
-re-collect it under pytest).
+Uses the shared homeassistant mock scaffolding from tests._component_loader, so every
+component test file reads one set of sys.modules entries.
 """
 
 from __future__ import annotations
 
-import enum
-import importlib.machinery
-import importlib.util
 import sys
 import tempfile
 from datetime import datetime, timedelta
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests import test_coordinator as tc  # noqa: F401 — installs shared HA mocks
+from tests import test_coordinator as tc  # noqa: F401 — shared test helpers
+from tests._component_loader import (  # loads the shared modules once
+    HVACAction,
+    HVACMode,
+    MockHomeAssistantError,
+)
 from tests.fake_ebusd import load_find_lines
 
-PROJECT_ROOT = Path(__file__).parents[1]
-COMPONENT_PATH = PROJECT_ROOT / "custom_components/vaillant_ebus"
-
 mock_homeassistant = sys.modules["homeassistant"]
-
-
-class HVACMode(enum.StrEnum):
-    OFF = "off"
-    HEAT = "heat"
-    COOL = "cool"
-    AUTO = "auto"
-
-
-class HVACAction(enum.StrEnum):
-    OFF = "off"
-    HEATING = "heating"
-    COOLING = "cooling"
-    IDLE = "idle"
-
-
-class ClimateEntityFeature(enum.IntFlag):
-    TARGET_TEMPERATURE = 1
-    TARGET_TEMPERATURE_RANGE = 2
-    PRESET_MODE = 4
-    TURN_ON = 8
-    TURN_OFF = 16
-
-
-class _MockClimateEntity:
-    @property
-    def unique_id(self) -> str | None:
-        return getattr(self, "_attr_unique_id", None)
-
-    @property
-    def hvac_modes(self) -> list:
-        return getattr(self, "_attr_hvac_modes", [])
-
-    @property
-    def preset_modes(self) -> list:
-        return getattr(self, "_attr_preset_modes", [])
-
-
-class _MockCoordinatorEntity(_MockClimateEntity):
-    def __init__(self, coordinator) -> None:
-        self.coordinator = coordinator
-
-    def async_write_ha_state(self) -> None:
-        pass
-
-    def _handle_coordinator_update(self) -> None:
-        pass
-
-    async def async_update(self) -> None:
-        pass
-
-    def __class_getitem__(cls, item):
-        return cls
-
-
-class _UnitOfTemperature:
-    CELSIUS = "°C"
-
-
-components_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components", None))
-climate_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components.climate", None))
-climate_const = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("homeassistant.components.climate.const", None)
-)
-climate_pkg.ClimateEntity = _MockClimateEntity
-climate_pkg.ClimateEntityFeature = ClimateEntityFeature
-climate_const.PRESET_AWAY = "away"
-climate_const.PRESET_BOOST = "boost"
-climate_const.PRESET_NONE = "none"
-climate_const.HVACAction = HVACAction
-climate_const.HVACMode = HVACMode
-sys.modules["homeassistant.components"] = components_pkg
-sys.modules["homeassistant.components.climate"] = climate_pkg
-sys.modules["homeassistant.components.climate.const"] = climate_const
-
-ha_const = sys.modules["homeassistant.const"]
-ha_const.ATTR_TEMPERATURE = "temperature"
-ha_const.UnitOfTemperature = _UnitOfTemperature
-
-entity_platform = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("homeassistant.helpers.entity_platform", None)
-)
-entity_platform.AddEntitiesCallback = object
-sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
-
-mock_homeassistant.helpers.update_coordinator.CoordinatorEntity = _MockCoordinatorEntity
-mock_homeassistant.config_entries.ConfigEntry = object
-mock_homeassistant.core.HomeAssistant = object
-
-
-class _MockHomeAssistantError(Exception):
-    """Home Assistant service exception used by the climate write-contract tests."""
-
-
-exceptions_module = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.exceptions", None))
-exceptions_module.HomeAssistantError = _MockHomeAssistantError
-sys.modules["homeassistant.exceptions"] = exceptions_module
-
 const_module = sys.modules["vaillant_ebus.const"]
-const_module.CONF_COOLING_DURATION = "cooling_duration"
-const_module.DEFAULT_COOLING_DURATION = 3
-const_module.EBUSD_TO_HA_HVAC = {
-    "off": "off",
-    "auto": "auto",
-    "day": "heat",
-    "night": "cool",
-    "heat": "heat",
-    "cool": "cool",
-}
-const_module.HA_TO_EBUSD_HVAC = {"off": "off", "auto": "auto", "heat": "day"}
-
-CLIMATE_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.climate", COMPONENT_PATH / "climate.py")
-assert CLIMATE_SPEC and CLIMATE_SPEC.loader
-CLIMATE = importlib.util.module_from_spec(CLIMATE_SPEC)
-sys.modules["vaillant_ebus.climate"] = CLIMATE
-CLIMATE_SPEC.loader.exec_module(CLIMATE)
+CLIMATE = sys.modules["vaillant_ebus.climate"]
 
 from vaillant_ebus.backend.models import DeviceGraph, DeviceNode, DeviceType  # noqa: E402
 from vaillant_ebus.climate import EbusdClimate, EbusdFlowTempRange  # noqa: E402
@@ -509,7 +392,7 @@ async def test_auto_temperature_rejects_missing_quick_veto_duration() -> None:
         coordinator.async_write_register = AsyncMock(return_value=True)
         z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
 
-        with pytest.raises(_MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
+        with pytest.raises(MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
             await z1.async_set_temperature(temperature=22.0)
 
         coordinator.async_write_register.assert_not_awaited()
@@ -528,7 +411,7 @@ async def test_bass3_fixture_rejects_quick_veto_without_duration() -> None:
         z1 = EbusdClimate(coordinator, _entry(), "z1", "bass")
 
         assert coordinator.zone_register_discovery_status("bass", "z1", "QuickVetoDuration") is False
-        with pytest.raises(_MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
+        with pytest.raises(MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
             await z1.async_set_temperature(temperature=22.0)
 
         coordinator.async_write_register.assert_not_awaited()
@@ -570,7 +453,7 @@ async def test_active_veto_rejects_missing_quick_veto_duration() -> None:
         coordinator.async_write_register = AsyncMock(return_value=True)
         z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
 
-        with pytest.raises(_MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
+        with pytest.raises(MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
             await z1.async_set_temperature(temperature=22.0)
 
         coordinator.async_write_register.assert_not_awaited()
@@ -597,7 +480,7 @@ async def test_boost_cancellation_rejects_missing_quick_veto_duration() -> None:
         coordinator.async_write_register = AsyncMock(return_value=True)
         z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
 
-        with pytest.raises(_MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
+        with pytest.raises(MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
             await z1.async_set_preset_mode("none")
 
         coordinator.async_write_register.assert_not_awaited()
@@ -651,7 +534,7 @@ async def test_hvac_mode_change_rejects_stale_boost_quick_veto_write() -> None:
         coordinator.async_write_register = AsyncMock(return_value=True)
         z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
 
-        with pytest.raises(_MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
+        with pytest.raises(MockHomeAssistantError, match="Quick veto is unavailable for Z1"):
             await z1.async_set_hvac_mode(HVACMode.HEAT)
 
         calls = [(call.args[1], call.args[2]) for call in coordinator.async_write_register.await_args_list]

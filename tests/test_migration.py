@@ -2,26 +2,13 @@
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
 import sys
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-PROJECT_ROOT = Path(__file__).parents[1]
-COMPONENT_PATH = PROJECT_ROOT / "custom_components/vaillant_ebus"
+from tests import _component_loader  # noqa: F401 — loads the shared modules once
 
-for name in ("vaillant_ebus",):
-    package = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None))
-    package.__path__ = [str(COMPONENT_PATH)]
-    sys.modules[name] = package
-
-MIGRATION_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.migration", COMPONENT_PATH / "migration.py")
-assert MIGRATION_SPEC and MIGRATION_SPEC.loader
-MIGRATION = importlib.util.module_from_spec(MIGRATION_SPEC)
-sys.modules["vaillant_ebus.migration"] = MIGRATION
-MIGRATION_SPEC.loader.exec_module(MIGRATION)
+MIGRATION = sys.modules["vaillant_ebus.migration"]
 
 
 # Legacy datetime entries are removed so their date-platform replacements do not create stale duplicates.

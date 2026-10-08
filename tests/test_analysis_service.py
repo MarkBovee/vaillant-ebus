@@ -2,33 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
-import sys
-from pathlib import Path
-
-BACKEND_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend"
-COMPONENT_PATH = BACKEND_PATH.parent
-
-for name in ("vaillant_ebus", "vaillant_ebus.backend"):
-    pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None))
-    pkg.__path__ = [str(COMPONENT_PATH)] if name == "vaillant_ebus" else [str(BACKEND_PATH)]
-    sys.modules[name] = pkg
-
-for mod_name, mod_file in (
-    ("vaillant_ebus.backend.models", "models.py"),
-    ("vaillant_ebus.backend.mapping", "mapping.py"),
-    ("vaillant_ebus.backend.ebus_service", "ebus_service.py"),
-    ("vaillant_ebus.backend.discovery_service", "discovery_service.py"),
-    ("vaillant_ebus.backend.entity_factory", "entity_factory.py"),
-    ("vaillant_ebus.backend.analysis_service", "analysis_service.py"),
-):
-    spec = importlib.util.spec_from_file_location(mod_name, BACKEND_PATH / mod_file)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[mod_name] = module
-    spec.loader.exec_module(module)
-
 from vaillant_ebus.backend.analysis_service import AnalysisService  # noqa: E402
 from vaillant_ebus.backend.discovery_service import DiscoveryService  # noqa: E402
 from vaillant_ebus.backend.entity_factory import EntityDescription  # noqa: E402

@@ -2,58 +2,13 @@
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
 import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 
-from tests import test_coordinator as tc  # noqa: F401 — installs shared HA/backend mocks
-
-PROJECT_ROOT = Path(__file__).parents[1]
-COMPONENT_PATH = PROJECT_ROOT / "custom_components/vaillant_ebus"
+from tests import test_coordinator as tc  # noqa: F401 — shared test helpers
 
 mock_homeassistant = sys.modules["homeassistant"]
-
-
-class _MockCoordinatorEntity:
-    def __init__(self, coordinator) -> None:
-        self.coordinator = coordinator
-
-    def __class_getitem__(cls, item):
-        return cls
-
-
-mock_homeassistant.helpers.update_coordinator.CoordinatorEntity = _MockCoordinatorEntity
-
-
-class _MockSensorEntity:
-    pass
-
-
-class _MockRestoreEntity:
-    pass
-
-
-sensor_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components.sensor", None))
-sensor_pkg.SensorEntity = _MockSensorEntity
-sys.modules["homeassistant.components.sensor"] = sensor_pkg
-
-restore = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.helpers.restore_state", None))
-restore.RestoreEntity = _MockRestoreEntity
-sys.modules["homeassistant.helpers.restore_state"] = restore
-
-entity_platform = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("homeassistant.helpers.entity_platform", None)
-)
-entity_platform.AddEntitiesCallback = object
-sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
-
-SENSOR_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.sensor", COMPONENT_PATH / "sensor.py")
-assert SENSOR_SPEC and SENSOR_SPEC.loader
-SENSOR = importlib.util.module_from_spec(SENSOR_SPEC)
-sys.modules["vaillant_ebus.sensor"] = SENSOR
-SENSOR_SPEC.loader.exec_module(SENSOR)
+SENSOR = sys.modules["vaillant_ebus.sensor"]
 
 from vaillant_ebus.backend.entity_factory import EntityDescription  # noqa: E402
 from vaillant_ebus.backend.mapping import RegisterMeta  # noqa: E402

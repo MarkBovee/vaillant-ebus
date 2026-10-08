@@ -4,114 +4,21 @@ HwcSFMode reports "load" while the cylinder charges even after boost is turned
 off, so the boost switch and water heater report the coordinator's desired DHW
 boost state once a toggle has happened. These tests pin that behavior.
 
-Reuses the homeassistant mock scaffolding from tests.test_coordinator.
+Uses the shared homeassistant mock scaffolding from tests._component_loader.
 """
 
 from __future__ import annotations
 
-import enum
-import importlib.machinery
-import importlib.util
 import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests import test_coordinator as tc  # noqa: F401 — installs shared HA mocks
+from tests import test_coordinator as tc  # noqa: F401 — shared test helpers
 from tests.fake_ebusd import load_find_lines
 
-PROJECT_ROOT = Path(__file__).parents[1]
-COMPONENT_PATH = PROJECT_ROOT / "custom_components/vaillant_ebus"
-
 mock_homeassistant = sys.modules["homeassistant"]
-
-
-class _MockBaseEntity:
-    @property
-    def unique_id(self) -> str | None:
-        return getattr(self, "_attr_unique_id", None)
-
-    @property
-    def name(self) -> str | None:
-        return getattr(self, "_attr_name", None)
-
-    @property
-    def is_on(self):  # pragma: no cover - overridden by real entities
-        return None
-
-
-class _MockCoordinatorEntity(_MockBaseEntity):
-    def __init__(self, coordinator) -> None:
-        self.coordinator = coordinator
-
-    def async_write_ha_state(self) -> None:
-        pass
-
-    def _handle_coordinator_update(self) -> None:
-        pass
-
-    async def async_update(self) -> None:
-        pass
-
-    def __class_getitem__(cls, item):
-        return cls
-
-
-class _UnitOfTemperature:
-    CELSIUS = "°C"
-
-
-class _WaterHeaterEntityFeature(enum.IntFlag):
-    TARGET_TEMPERATURE = 1
-    OPERATION_MODE = 2
-    AWAY_MODE = 4
-    ON_OFF = 8
-
-
-components_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components", None))
-switch_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components.switch", None))
-switch_pkg.SwitchEntity = _MockBaseEntity
-binary_sensor_pkg = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("homeassistant.components.binary_sensor", None)
-)
-binary_sensor_pkg.BinarySensorDeviceClass = enum.Enum("BinarySensorDeviceClass", "PROBLEM CONNECTIVITY HEAT")
-binary_sensor_pkg.BinarySensorEntity = _MockBaseEntity
-water_heater_pkg = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("homeassistant.components.water_heater", None)
-)
-water_heater_pkg.WaterHeaterEntity = _MockBaseEntity
-water_heater_pkg.WaterHeaterEntityFeature = _WaterHeaterEntityFeature
-sys.modules["homeassistant.components"] = components_pkg
-sys.modules["homeassistant.components.switch"] = switch_pkg
-sys.modules["homeassistant.components.binary_sensor"] = binary_sensor_pkg
-sys.modules["homeassistant.components.water_heater"] = water_heater_pkg
-
-ha_const = sys.modules["homeassistant.const"]
-ha_const.ATTR_TEMPERATURE = "temperature"
-ha_const.UnitOfTemperature = _UnitOfTemperature
-
-entity_platform = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("homeassistant.helpers.entity_platform", None)
-)
-entity_platform.AddEntitiesCallback = object
-sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
-
-mock_homeassistant.helpers.update_coordinator.CoordinatorEntity = _MockCoordinatorEntity
-mock_homeassistant.config_entries.ConfigEntry = object
-mock_homeassistant.core.HomeAssistant = object
-
 const_module = sys.modules["vaillant_ebus.const"]
-const_module.CONF_AWAY_DURATION = "away_duration"
-const_module.DEFAULT_AWAY_DURATION = 5
-const_module.DOMAIN = "vaillant_ebus"
-
-for _name in ("switch", "water_heater", "binary_sensor"):
-    _spec = importlib.util.spec_from_file_location(f"vaillant_ebus.{_name}", COMPONENT_PATH / f"{_name}.py")
-    assert _spec and _spec.loader
-    _mod = importlib.util.module_from_spec(_spec)
-    sys.modules[f"vaillant_ebus.{_name}"] = _mod
-    _spec.loader.exec_module(_mod)
 
 from vaillant_ebus.binary_sensor import EbusdTankPresentSensor  # noqa: E402
 from vaillant_ebus.switch import (  # noqa: E402

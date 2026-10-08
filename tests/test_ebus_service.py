@@ -3,28 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import importlib.machinery
-import importlib.util
 import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests import _component_loader  # noqa: F401 — loads the shared modules once
 from tests.fake_ebusd import FakeEbusdServer, load_find_lines
 
-SERVICE_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend/ebus_service.py"
-
-for name in ("vaillant_ebus", "vaillant_ebus.backend"):
-    pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None))
-    pkg.__path__ = [str(SERVICE_PATH.parents[1])] if name == "vaillant_ebus" else [str(SERVICE_PATH.parent)]
-    sys.modules[name] = pkg
-
-SPEC = importlib.util.spec_from_file_location("vaillant_ebus.backend.ebus_service", SERVICE_PATH)
-assert SPEC and SPEC.loader
-EBUS = importlib.util.module_from_spec(SPEC)
-sys.modules["vaillant_ebus.backend.ebus_service"] = EBUS
-SPEC.loader.exec_module(EBUS)
+EBUS = sys.modules["vaillant_ebus.backend.ebus_service"]
 
 # Intent: fake-server integration tests use a short quiet interval because each response is sent as one burst.
 # Why: a real one-second silence timeout per fake `find`/`info` call adds no coverage and needlessly slows the suite.

@@ -2,41 +2,14 @@
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
 import sys
-from pathlib import Path
 
+from tests import _component_loader  # noqa: F401 — loads the shared modules once
 from tests.fake_ebusd import load_discovery_dump
 
-BACKEND_PATH = Path(__file__).parents[1] / "custom_components/vaillant_ebus/backend"
-COMPONENT_PATH = BACKEND_PATH.parent
-for name, path in (("vaillant_ebus", COMPONENT_PATH), ("vaillant_ebus.backend", BACKEND_PATH)):
-    package = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None))
-    package.__path__ = [str(path)]
-    sys.modules[name] = package
-
-parser_spec = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.grab_parser", BACKEND_PATH / "grab_parser.py"
-)
-assert parser_spec and parser_spec.loader
-parser_module = importlib.util.module_from_spec(parser_spec)
-sys.modules["vaillant_ebus.backend.grab_parser"] = parser_module
-parser_spec.loader.exec_module(parser_module)
-
-ebus_spec = importlib.util.spec_from_file_location(
-    "vaillant_ebus.backend.ebus_service", BACKEND_PATH / "ebus_service.py"
-)
-assert ebus_spec and ebus_spec.loader
-ebus_module = importlib.util.module_from_spec(ebus_spec)
-sys.modules["vaillant_ebus.backend.ebus_service"] = ebus_module
-ebus_spec.loader.exec_module(ebus_module)
-
-spec = importlib.util.spec_from_file_location("vaillant_ebus.backend.dump_analysis", BACKEND_PATH / "dump_analysis.py")
-assert spec and spec.loader
-module = importlib.util.module_from_spec(spec)
-sys.modules["vaillant_ebus.backend.dump_analysis"] = module
-spec.loader.exec_module(module)
+parser_module = sys.modules["vaillant_ebus.backend.grab_parser"]
+ebus_module = sys.modules["vaillant_ebus.backend.ebus_service"]
+module = sys.modules["vaillant_ebus.backend.dump_analysis"]
 
 normalize_dump = module.normalize_dump
 group_telegrams = module.group_telegrams

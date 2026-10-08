@@ -5,66 +5,24 @@ graph), so nothing else pins that they address the resolved controller circuit
 with the right register and date serialization. These tests do exactly that,
 using a real discovery graph so the circuit resolution is exercised too.
 
-Reuses the homeassistant mock scaffolding from tests.test_coordinator.
+Uses the shared homeassistant mock scaffolding from tests._component_loader.
 """
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
 import sys
 from collections.abc import Callable
 from datetime import date
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests import test_coordinator as tc  # noqa: F401 — installs shared HA mocks
+from tests import test_coordinator as tc  # noqa: F401 — shared test helpers
 from tests.fake_ebusd import load_find_lines
 
-PROJECT_ROOT = Path(__file__).parents[1]
-COMPONENT_PATH = PROJECT_ROOT / "custom_components/vaillant_ebus"
-
 mock_homeassistant = sys.modules["homeassistant"]
-
-
-class _MockBaseEntity:
-    def async_write_ha_state(self) -> None:
-        pass
-
-    def _handle_coordinator_update(self) -> None:
-        pass
-
-    async def async_update(self) -> None:
-        pass
-
-    def __class_getitem__(cls, item):
-        return cls
-
-
-class _MockCoordinatorEntity(_MockBaseEntity):
-    def __init__(self, coordinator) -> None:
-        self.coordinator = coordinator
-
-
-date_pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("homeassistant.components.date", None))
-date_pkg.DateEntity = _MockBaseEntity
-sys.modules["homeassistant.components.date"] = date_pkg
-
-mock_homeassistant.helpers.update_coordinator.CoordinatorEntity = _MockCoordinatorEntity
-
-entity_platform = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("homeassistant.helpers.entity_platform", None)
-)
-entity_platform.AddEntitiesCallback = object
-sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
-
-DATE_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.date", COMPONENT_PATH / "date.py")
-assert DATE_SPEC and DATE_SPEC.loader
-DATE = importlib.util.module_from_spec(DATE_SPEC)
-sys.modules["vaillant_ebus.date"] = DATE
-DATE_SPEC.loader.exec_module(DATE)
+DATE = sys.modules["vaillant_ebus.date"]
+date_pkg = sys.modules["homeassistant.components.date"]
 
 EbusdHolidayEntity = DATE.EbusdHolidayEntity
 EbusdManualCoolingEntity = DATE.EbusdManualCoolingEntity

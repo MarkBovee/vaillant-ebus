@@ -5,8 +5,6 @@ multi-entry service dispatch."""
 from __future__ import annotations
 
 import asyncio
-import importlib.machinery
-import importlib.util
 import inspect
 import sys
 import tempfile
@@ -16,56 +14,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests import test_coordinator as tc  # noqa: F401 — installs shared HA mocks
-
-COMPONENT_PATH = Path(tc.COMPONENT_PATH)
-BACKEND_PATH = COMPONENT_PATH / "backend"
+from tests import test_coordinator as tc  # noqa: F401 — shared test helpers
 
 EBUS = sys.modules["vaillant_ebus.backend.ebus_service"]
 from vaillant_ebus.backend.ebus_service import EbusService, WriteResult  # noqa: E402
 from vaillant_ebus.coordinator import VaillantCoordinator  # noqa: E402
 
-# --- bootstrap extras the integration __init__ needs on top of tc's stubs ---
-
-
-class _HomeAssistantError(Exception):
-    pass
-
-
-_ha_exceptions = MagicMock()
-_ha_exceptions.HomeAssistantError = _HomeAssistantError
-tc.sys.modules.setdefault("homeassistant.exceptions", _ha_exceptions)
-
-_ha_components = MagicMock()
-tc.sys.modules["homeassistant.components"] = _ha_components
-tc.sys.modules["homeassistant.components.persistent_notification"] = MagicMock()
-
-_const = tc.sys.modules["vaillant_ebus.const"]
-if not hasattr(_const, "PLATFORMS"):
-    _const.PLATFORMS = ("climate", "sensor", "select", "switch", "binary_sensor", "number", "button")
-if not hasattr(_const, "SENSITIVE_FIELDS"):
-    _const.SENSITIVE_FIELDS = frozenset()
-if not hasattr(_const, "INTEGRATION_VERSION"):
-    _const.INTEGRATION_VERSION = "1.7.0"
-
-# __init__.py imports voluptuous at module scope and builds the entry
-# selector with vol.Optional; CI does not install it, so stub the parts
-# used at import time (Schema/Required are only reached at runtime).
-_vol = MagicMock()
-tc.sys.modules.setdefault("voluptuous", _vol)
-
-DUMP_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.dump_service", COMPONENT_PATH / "dump_service.py")
-assert DUMP_SPEC and DUMP_SPEC.loader
-DUMP = importlib.util.module_from_spec(DUMP_SPEC)
-sys.modules["vaillant_ebus.dump_service"] = DUMP
-DUMP_SPEC.loader.exec_module(DUMP)
-
-INIT_SPEC = importlib.util.spec_from_file_location("vaillant_ebus.__init__", COMPONENT_PATH / "__init__.py")
-assert INIT_SPEC and INIT_SPEC.loader
-INIT = importlib.util.module_from_spec(INIT_SPEC)
-sys.modules["vaillant_ebus.integration_init"] = INIT
-INIT_SPEC.loader.exec_module(INIT)
-
+DUMP = sys.modules["vaillant_ebus.dump_service"]
+INIT = sys.modules["vaillant_ebus.integration_init"]
+_ha_components = sys.modules["homeassistant.components"]
 HomeAssistantError = INIT.HomeAssistantError
 
 
