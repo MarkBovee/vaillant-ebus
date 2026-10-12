@@ -464,3 +464,119 @@ def test_zone_away_switch_is_off_when_start_is_unset_and_end_is_missing() -> Non
 
     c.data["ebusd"] = {}
     assert AwayModeSwitch(c, _entry(), "z1").is_on is None
+
+
+# Intent: build a real coordinator (zone discovery, register presence) over a community capture, with writes mocked.
+# Why: the away switch picks its zones from the discovery graph, so a hand-made stub would hide the zone rules.
+def _discovered_coordinator(fixture: str, tmp_path) -> tc.VaillantCoordinator:
+    graph = tc.DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture))
+    coordinator = tc.VaillantCoordinator(tc._hass(str(tmp_path)), tc._entry())
+    coordinator._graph = graph
+    coordinator._refresh_find_keys()
+    coordinator.data = {"ebusd": _ebusd_data_from_graph(graph)}
+    coordinator.ebus = MagicMock()
+    coordinator.async_write_registers = AsyncMock(return_value=True)
+    return coordinator
+
+
+ISSUE186_FIXTURE = "community/hmux0_sw0406_issue186_2026-10-11_143454_discovery.yaml"
+SINGLE_ZONE_FIXTURE = "community/flexotherm_issue102_2026-09-12_161841_discovery.yaml"
+
+
+# Intent: turning away mode on writes the holiday period of every live zone and the DHW holiday once.
+# Why: issue #186 - on a two-zone system the switch only covered zone 1 and left zone 2 heating normally.
+async def test_issue186_away_switch_turn_on_writes_every_live_zone(tmp_path) -> None:
+    coordinator = _discovered_coordinator(ISSUE186_FIXTURE, tmp_path)
+    switch = AwayModeSwitch(coordinator, _entry(), "z1")
+
+    await switch.async_turn_on()
+
+    (writes,), _ = coordinator.async_write_registers.await_args
+    names = [(circuit, name) for circuit, name, _value in writes]
+    assert names == [
+        ("ctlv2", "Z1HolidayStartPeriod"),
+        ("ctlv2", "Z1HolidayEndPeriod"),
+        ("ctlv2", "Z2HolidayStartPeriod"),
+        ("ctlv2", "Z2HolidayEndPeriod"),
+        ("ctlv2", "HwcHolidayStartPeriod"),
+        ("ctlv2", "HwcHolidayEndPeriod"),
+        ("ctlv2", "Z1HolidayTemp"),
+        ("ctlv2", "Z2HolidayTemp"),
+    ]
+    values = {name: value for _circuit, name, value in writes}
+    assert values["Z1HolidayEndPeriod"] == values["Z2HolidayEndPeriod"] == "01.01.2099"
+    assert values["Z1HolidayStartPeriod"] == values["Z2HolidayStartPeriod"] == values["HwcHolidayStartPeriod"]
+    # Each zone keeps its own configured holiday temperature.
+    assert (values["Z1HolidayTemp"], values["Z2HolidayTemp"]) == ("15", "15")
+
+
+# Intent: turning away mode off resets the holiday period of every live zone and the DHW holiday.
+# Why: a partial reset would leave zone 2 in away mode after the user switched the system back.
+async def test_issue186_away_switch_turn_off_resets_every_live_zone(tmp_path) -> None:
+    coordinator = _discovered_coordinator(ISSUE186_FIXTURE, tmp_path)
+    switch = AwayModeSwitch(coordinator, _entry(), "z1")
+
+    await switch.async_turn_off()
+
+    (writes,), _ = coordinator.async_write_registers.await_args
+    assert writes == [
+        ("ctlv2", "Z1HolidayStartPeriod", "01.01.2015"),
+        ("ctlv2", "Z1HolidayEndPeriod", "01.01.2015"),
+        ("ctlv2", "Z2HolidayStartPeriod", "01.01.2015"),
+        ("ctlv2", "Z2HolidayEndPeriod", "01.01.2015"),
+        ("ctlv2", "HwcHolidayStartPeriod", "01.01.2015"),
+        ("ctlv2", "HwcHolidayEndPeriod", "01.01.2015"),
+        ("ctlv2", "Z1HolidayTemp", "15"),
+        ("ctlv2", "Z2HolidayTemp", "15"),
+    ]
+
+
+# Intent: the placeholder third zone of the capture never receives a holiday write.
+# Why: Z3 reports no room temperature (circuit type inactive); writing to it would target hardware that is not there.
+async def test_issue186_away_switch_skips_placeholder_zone(tmp_path) -> None:
+    coordinator = _discovered_coordinator(ISSUE186_FIXTURE, tmp_path)
+    assert "z3" in coordinator.zone_circuits()
+
+    await AwayModeSwitch(coordinator, _entry(), "z1").async_turn_on()
+
+    (writes,), _ = coordinator.async_write_registers.await_args
+    assert not [name for _circuit, name, _value in writes if name.startswith("Z3")]
+
+
+# Intent: a single-zone system keeps exactly the write set it had before the change.
+# Why: the all-zones rule must not alter the behaviour of installations that only have zone 1.
+async def test_away_switch_single_zone_writes_are_unchanged(tmp_path) -> None:
+    coordinator = _discovered_coordinator(SINGLE_ZONE_FIXTURE, tmp_path)
+    controller = coordinator.heating_circuit
+    assert list(coordinator.zone_circuits()) == ["z1"]
+
+    await AwayModeSwitch(coordinator, _entry(), "z1").async_turn_on()
+
+    (writes,), _ = coordinator.async_write_registers.await_args
+    assert [(name) for _circuit, name, _value in writes] == [
+        "Z1HolidayStartPeriod",
+        "Z1HolidayEndPeriod",
+        "HwcHolidayStartPeriod",
+        "HwcHolidayEndPeriod",
+        "Z1HolidayTemp",
+    ]
+    assert {circuit for circuit, _name, _value in writes} == {controller}
+
+
+# Intent: the switch reads on only when every live zone has an active holiday window.
+# Why: if the app put zone 1 on holiday and zone 2 is not, the system is not away; turning on completes the set.
+def test_issue186_away_switch_is_on_only_when_every_live_zone_is_away(tmp_path) -> None:
+    coordinator = _discovered_coordinator(ISSUE186_FIXTURE, tmp_path)
+    switch = AwayModeSwitch(coordinator, _entry(), "z1")
+    data = coordinator.data["ebusd"]
+
+    data["ctlv2.Z1HolidayStartPeriod.value"] = "01.01.2020"
+    data["ctlv2.Z1HolidayEndPeriod.value"] = "01.01.2099"
+    assert switch.is_on is False  # zone 2 still holds the unset date 01.01.2015
+
+    data["ctlv2.Z2HolidayStartPeriod.value"] = "01.01.2020"
+    data["ctlv2.Z2HolidayEndPeriod.value"] = "01.01.2099"
+    assert switch.is_on is True
+
+    data.pop("ctlv2.Z1HolidayStartPeriod.value")
+    assert switch.is_on is None  # the primary zone's missing data stays unknown, never coerced to a default

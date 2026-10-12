@@ -46,6 +46,24 @@ ISSUE161_STATE_CAPTURE_PROVENANCE = {
         "4b7da7a3cb4864f942ddfcae296d16fd8ffb1301f7ed96a6ed2335e68d099029",
     ),
 }
+# Release 1.11.2 captures are byte-for-byte copies of the attachments the reporters posted.
+RELEASE_1112_CAPTURE_PROVENANCE = {
+    "community/hmux0_sw0407_issue175_2026-10-09_115534_discovery.yaml": (
+        "https://github.com/user-attachments/files/33245155/discovery_dump_2026-10-09_115534.yaml",
+        "722e144c07f73096f5d390d8843b0ce9efaa18691500e7503da411fa93b9e2af",
+        "MF=Vaillant;ID=HMUX0;SW=0407;HW=0504",
+    ),
+    "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml": (
+        "https://github.com/user-attachments/files/33214639/discovery_dump_2026-10-08_184332.yaml",
+        "06abd1e941f038d4e232a0c80b265e6636971c57ee443dddcd625bd0300b6058",
+        "MF=Vaillant;ID=HMUX0;SW=0406;HW=0504",
+    ),
+    "community/hmux0_sw0406_issue186_2026-10-11_143454_discovery.yaml": (
+        "https://github.com/user-attachments/files/33303149/discovery_dump_2026-10-11_143454_bereinigt.yaml",
+        "9192fb99f4766bc3b85955c0601cf97807772c40e4c9c98ddb5b2d327df281d1",
+        "MF=Vaillant;ID=HMUX0;SW=0406;HW=0504",
+    ),
+}
 NEW_CAPTURE_PROVENANCE = {
     "community/arotherm_pro7_issue101_2026-09-15_203102_discovery.yaml": (
         "https://github.com/user-attachments/files/32255148/discovery_dump_2026-09-15_203102Whisper.switch.no.heat.yaml",
@@ -290,3 +308,53 @@ def test_new_capture_provenance_matches_downloaded_attachment(fixture: str, expe
 
     assert metadata["source"] == source
     assert metadata["source_sha256"] == source_sha256
+
+
+# Intent: the 1.11.2 captures remain byte-for-byte copies of the attached dumps and keep their HMUX0 scan identity.
+# Why: the SW0406/SW0407 evidence (config provenance, telegram rows) depends on the original scan, find and grab data.
+@pytest.mark.parametrize(("fixture", "expected"), RELEASE_1112_CAPTURE_PROVENANCE.items())
+def test_release_1112_captures_match_source_digests(fixture: str, expected: tuple[str, str, str]) -> None:
+    source_url, expected_sha256, expected_scan = expected
+    dump = load_discovery_dump(fixture)
+
+    assert source_url.startswith("https://github.com/user-attachments/files/")
+    assert hashlib.sha256((FIXTURES_DIR / fixture).read_bytes()).hexdigest() == expected_sha256
+    assert dump["metadata"]["ebusd_info"]["loaded_configs"]["08"]["scanned"] == expected_scan
+    assert dump["raw_find_lines"]
+
+
+# Intent: the compressor-run capture keeps the raw grab rows and the exact candidate telegrams behind release 1.11.2.
+# Why: Status01, Status00 and B512/030f0001 are only justified by these payloads; a trimmed copy would mislead.
+def test_issue175_capture_keeps_candidate_telegrams() -> None:
+    dump = load_discovery_dump("community/hmux0_sw0407_issue175_2026-10-09_115534_discovery.yaml")
+    rows = {item["request"]: item["resp"] for item in dump["unknown_telegrams"]}
+
+    assert dump["metadata"]["grab_status"] == "continued"
+    assert len(dump["raw_find_lines"]) == 504 and len(dump["unknown_telegrams"]) == 26
+    assert rows["1008b5110101"] == "093b38620dff5d01003a"
+    assert rows["f108b5110101"] == "093b38620dff5d01003a"
+    assert rows["1076b5110101"] == "093c38620dff5d00003a"
+    assert rows["1008b5110100"] == "09d901140c040900000c"
+    assert rows["f108b5110100"] == "09da01140c040900000c"
+    assert rows["1076b512030f0001"] == "07e90200e00114ff"
+
+
+# Intent: list the `hmux0` rows of a dump's raw find output.
+# Why: the number of rows shows whether ebusd loaded a full 08.hmux0.csv or only the energy counters.
+def _hmux0_find_rows(dump: dict) -> list[str]:
+    return [line for line in dump["raw_find_lines"] if line.startswith("hmux0 ")]
+
+
+# Intent: the two SW0406 captures keep the config provenance that tells a default ebusd setup from a full hmux0 CSV.
+# Why: issues #185/#188 hinge on address 08 having no usable 08.hmux0.csv; the loaded_configs record is the proof.
+def test_sw0406_captures_keep_hmux0_config_provenance() -> None:
+    stock = load_discovery_dump("community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml")
+    full_csv = load_discovery_dump("community/hmux0_issue171_2026-10-03_094933_discovery.yaml")
+    local = load_discovery_dump("community/hmux0_sw0406_issue186_2026-10-11_143454_discovery.yaml")
+
+    assert "loaded" not in stock["metadata"]["ebusd_info"]["loaded_configs"]["08"]
+    assert full_csv["metadata"]["ebusd_info"]["loaded_configs"]["08"]["loaded"] == ["vaillant/08.hmux0.csv"]
+    assert local["metadata"]["ebusd_info"]["loaded_configs"]["08"]["loaded"] == ["vaillant/08.hmux0.csv"]
+    assert len(_hmux0_find_rows(stock)) == 9
+    assert len(_hmux0_find_rows(full_csv)) == 91
+    assert any(line.startswith("hmu YieldHcDay = 17.7") for line in local["raw_find_lines"])

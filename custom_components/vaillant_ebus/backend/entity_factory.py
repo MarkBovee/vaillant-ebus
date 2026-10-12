@@ -7,7 +7,15 @@ import re
 from copy import copy
 from typing import Any
 
-from .mapping import ELOBLOCK_GAS_REGISTERS, REGISTER_MAP, get_meta, is_field_key, multi_field_fields, split_multi_field
+from .mapping import (
+    ELOBLOCK_GAS_REGISTERS,
+    REGISTER_MAP,
+    get_meta,
+    is_field_key,
+    multi_field_fields,
+    secondary_zone_setting_number,
+    split_multi_field,
+)
 from .models import (
     DeviceGraph,
     DeviceNode,
@@ -187,6 +195,21 @@ def _heating_circuit_inactive(graph: DeviceGraph, circuit: str, number: str) -> 
     return value is not None and value.strip().casefold() == "inactive"
 
 
+# Intent: report whether zone N currently reports a real room temperature.
+# Why: the controller keeps static defaults for a zone that is not installed (issue #186, Z3); only a live room
+# temperature proves the zone exists, so writable settings must not appear for a placeholder zone.
+def _zone_reports_room_temperature(graph: DeviceGraph, circuit: str, zone_number: int) -> bool:
+    expected = f"{circuit}.Z{zone_number}RoomTemp".casefold()
+    value = next((raw for key, raw in graph.raw_registers.items() if key.casefold() == expected), None)
+    return value is not None and not is_no_data_value(value)
+
+
+# Intent: give a placeholder zone's setting the empty metadata it had before zone templating.
+# Why: the zone keeps showing its raw value as a plain sensor, exactly as in 1.11.1, without a write control.
+def _placeholder_zone_meta() -> RegisterMeta:
+    return RegisterMeta()
+
+
 def _is_eloblock(graph: DeviceGraph) -> bool:
     """Identify the confirmed eloBLOCK VE 28 BAI hardware."""
     for key, raw in graph.raw_registers.items():
@@ -311,6 +334,13 @@ class EntityFactoryService:
                 if is_field_key(rk):
                     continue
                 base_meta = copy(get_meta(circuit, name))
+                zone_setting_number = secondary_zone_setting_number(name)
+                if (
+                    zone_setting_number is not None
+                    and base_meta.writable
+                    and not _zone_reports_room_temperature(graph, circuit, zone_setting_number)
+                ):
+                    base_meta = _placeholder_zone_meta()
                 if (
                     name_lower == "hc1roomtempswitchon"
                     and controller is not None

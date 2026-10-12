@@ -53,4 +53,18 @@ hmu.HcElecConsDay:
   divisor: 0.001
 ```
 
+Things to know when you write overrides:
+
+- Use the circuit name that ebusd reports on your bus. The same controller is `ctlv3` with the standard ebusd
+  configuration and `ctlv2` when a local configuration renames it, so the key is `ctlv3.Z2OpMode` in one setup and
+  `ctlv2.Z2OpMode` in the other. Changing the ebusd configuration also changes the entity unique IDs, which creates
+  duplicate `_2` entities until the old ones are removed.
+- A changed `options` list for an entity that already exists only takes effect after a full Home Assistant restart.
+  Reloading the integration or calling `vaillant_ebus.rediscover` is not enough.
+- The `Yield` sensors of the heat pump report the environmental yield (the heat taken from the air or ground). The
+  heat that was produced is the yield plus the electricity used, so a COP that you calculate as yield divided by
+  electricity comes out about 1 too low.
+- When you change a heating circuit setting in the myVAILLANT app, the internet gateway writes all circuit settings
+  from its own copy. This can silently undo values that you wrote through this integration.
+
 Reload after changes: **Settings → Devices & Services → Vaillant eBUS → Reload**.

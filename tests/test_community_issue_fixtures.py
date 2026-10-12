@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from tests.fake_ebusd import FIXTURES_DIR, load_discovery_dump, load_find_lines
-from tests.test_entity_factory import DiscoveryService, EntityFactoryService
+from tests.test_entity_factory import MAPPING, DiscoveryService, EntityFactoryService
 
 
 # Intent: the derived Energy Manager State honours a real cooling capture.
@@ -836,3 +836,78 @@ def test_issue152_room_temp_threshold_is_unitless_before_the_first_text_reading(
     entities = {e.key: e for e in EntityFactoryService().generate(DiscoveryService.build_device_graph(lines))}
 
     assert entities["bass.Hc1RoomTempSwitchOn.value"].meta.unit == ""
+
+
+ISSUE186_FIXTURE = "community/hmux0_sw0406_issue186_2026-10-11_143454_discovery.yaml"
+
+
+# Intent: build the entity descriptions of the issue #186 capture, optionally under the stock ebusd controller name.
+# Why: the reporter's local ebusd config names the CTLV3 controller `ctlv2`; the stock config names it `ctlv3`.
+def _issue186_entities(controller_circuit: str = "ctlv2") -> dict[str, object]:
+    lines = [
+        line.replace("ctlv2 ", f"{controller_circuit} ", 1) if line.startswith("ctlv2 ") else line
+        for line in load_find_lines(ISSUE186_FIXTURE)
+    ]
+    graph = DiscoveryService.build_device_graph(lines)
+    return {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+
+# Intent: the HcN auto-off select offers exactly the values ebusd accepts for the register.
+# Why: issue #187 - ebusd defines `0=eco;1=night`; the offered `comfort` made every write fail with
+#      "ERR: invalid numeric argument", and the captures only ever show `eco` and `night`.
+@pytest.mark.parametrize("controller_circuit", ["ctlv2", "ctlv3"])
+def test_issue187_auto_off_mode_offers_the_values_ebusd_accepts(controller_circuit: str) -> None:
+    entities = _issue186_entities(controller_circuit)
+
+    for circuit_number in (1, 2):
+        entity = entities[f"{controller_circuit}.Hc{circuit_number}AutoOffMode.value"]
+        assert entity.entity_type == "select"
+        assert entity.meta.options == ["eco", "night"]
+    # The metadata for the inactive third circuit follows the same value list.
+    for circuit_number in (1, 2, 3):
+        assert MAPPING.get_meta("ctlv2", f"Hc{circuit_number}AutoOffMode").options == ["eco", "night"]
+
+
+# Intent: the live second zone exposes the same writable settings as the first zone.
+# Why: issue #186 - Z2OpMode, Z2NightTemp, Z2QuickVeto* and Z2HolidayTemp had values but only read-only sensors.
+@pytest.mark.parametrize("controller_circuit", ["ctlv2", "ctlv3"])
+def test_issue186_zone2_settings_are_writable_entities(controller_circuit: str) -> None:
+    entities = _issue186_entities(controller_circuit)
+    prefix = f"{controller_circuit}.Z2"
+
+    mode = entities[f"{prefix}OpMode.value"]
+    assert (mode.entity_type, mode.meta.writable) == ("select", True)
+    assert mode.meta.options == ["day", "night", "auto", "off"]
+    for name in ("NightTemp", "QuickVetoTemp", "HolidayTemp"):
+        number = entities[f"{prefix}{name}.value"]
+        assert (number.entity_type, number.meta.writable, number.meta.unit) == ("number", True, "°C"), name
+        assert (number.meta.min_value, number.meta.max_value, number.meta.step) == (5, 30, 0.5), name
+    duration = entities[f"{prefix}QuickVetoDuration.value"]
+    assert (duration.entity_type, duration.meta.writable) == ("number", True)
+    for name in ("OpMode", "NightTemp", "QuickVetoTemp", "QuickVetoDuration", "HolidayTemp"):
+        assert entities[f"{prefix}{name}.value"].device_circuit == "z2"
+
+
+# Intent: the first zone keeps its existing writable settings next to the new second-zone ones.
+# Why: generating zone metadata from the Z1 entries must not change what Z1 users already have.
+def test_issue186_zone1_settings_keep_their_metadata() -> None:
+    entities = _issue186_entities()
+
+    assert entities["ctlv2.Z1OpMode.value"].meta.options == ["day", "night", "auto", "off"]
+    assert entities["ctlv2.Z1NightTemp.value"].meta.friendly_name == "Night Temperature (Z1)"
+    assert entities["ctlv2.Z2NightTemp.value"].meta.friendly_name == "Night Temperature (Z2)"
+    assert entities["ctlv2.Z2OpMode.value"].meta.friendly_name == "Operation Mode (Z2)"
+
+
+# Intent: a zone without a live room temperature gets no writable settings.
+# Why: issue #186 dump - Z3 is a placeholder (`Z3RoomTemp` empty, circuit type inactive); a writable control for
+#      hardware that is not installed would be a ghost entity.
+def test_issue186_placeholder_zone3_stays_read_only() -> None:
+    entities = _issue186_entities()
+
+    zone3 = {key: entity for key, entity in entities.items() if key.startswith("ctlv2.Z3")}
+    assert zone3, "the placeholder zone keeps its existing read-only sensors"
+    controls = [
+        key for key, entity in zone3.items() if entity.meta.writable or entity.entity_type in {"select", "number"}
+    ]
+    assert not controls

@@ -1,5 +1,54 @@
 # Changelog
 
+## 1.11.2 - 2026-10-12
+
+### Fixed
+
+- Writing the HC1/HC2/HC3 auto-off mode failed with `ERR: invalid numeric argument`. The select offered `eco` and
+  `comfort`, but ebusd only knows `0=eco;1=night`, and every capture so far shows `eco` or `night`. The select now
+  offers `eco` and `night` (issue #187, thanks to the reporter for the log and the working override).
+- The settings of the second and third zone were read-only sensors with raw names (issue #186). Zone 2 and 3 now get
+  the same controls as zone 1 when ebusd reports them: operation mode, night temperature, quick veto temperature and
+  duration, holiday temperature, and the holiday and quick veto dates. A zone only gets these controls while it
+  reports a room temperature, so a placeholder zone (for example an unused zone 3) keeps its read-only values and
+  gets no controls. The old read-only sensors of an existing installation become unavailable once the controls
+  appear; remove them with "Purge stale entities" in the integration options.
+- Heat pump with firmware SW0406 on a default ebusd configuration (issues #185 and #188). When ebusd has no
+  `08.hmux0.csv` that lists registers for this unit, only the nine energy counters were visible. The integration now
+  defines the registers that the captures show this unit answers: yield and COP (day, month, total, heating and hot
+  water), the precise flow and return temperature, compressor speed, building pump speed and the compressor runtime
+  and starts for heating and hot water. The compressor counters are off by default. If ebusd already lists other
+  heat pump registers of its own (a full `08.hmux0.csv`), nothing is defined, so nothing is duplicated.
+
+### Changed
+
+- The Away Mode switch now covers every zone that reports a room temperature, not only the first zone (issue #186).
+  Turning it on writes the holiday period of each of those zones and of the hot water; turning it off resets all of
+  them. It reads `on` only when every such zone is on holiday, so a zone that you set to holiday in the myVAILLANT app
+  alone does not make the whole system look away. A system with one zone behaves exactly as before.
+- HMUX0 firmware SW0407 (issue #175): the integration now decodes the controller status telegrams `B511/01`
+  (flow, return, outside, hot water and storage temperature, pump state) and `B511/00` (flow temperature, compressor
+  and heating state, defrost) from the bus traffic. This adds no bus traffic. In the capture, five values match the
+  display of the unit (flow 29.6, return 28.3, outside 13.4, storage 46.5, setpoint 29.0).
+- The hydraulic station VWZIO SW0500 gets "Station Storage Temperature (assumed)" and "Flow Temperature After Backup
+  Heater (assumed)" from the telegram `B512/030f0001`. They are off by default, because the capture shows one state
+  only (46.56 and 30.0 against 46.5 and 30.0 on the display).
+- Documentation: override keys must use the circuit name ebusd reports (`ctlv3` or `ctlv2`), a changed `options`
+  list needs a Home Assistant restart, the yield sensors are environmental yield, and the myVAILLANT app can
+  overwrite settings that you wrote through this integration.
+
+### Not changed
+
+- E7000 and E7Z00 controllers (discussion 31): the two local CSV files load, but they define no messages, so ebusd
+  gives the integration nothing to build zones from. Upstream pull request 623 is the route for that.
+- `hmu` against `hmux0` energy values and `LiveMonitorCurrentConsumedPower = 0.0` in issue #188 come from a local
+  ebusd configuration that copies the generic heat pump CSV. They are not integration bugs.
+- The electrical power register of HMUX0 SW0406 is not defined: the value in the capture (27.0) does not match the
+  846 W that the reporter compared with the cloud, so the unit is unclear.
+- The status "compressor modulation" and "compressor power" that SW0407 now decodes read 12 where the display shows
+  6.4 %. Both come from the shared Status00 layout and are unverified for this firmware; please compare once more.
+- Zone 2 entities that became unavailable on a BASS3 system (issue #152) need a fresh discovery dump from 1.11.2.
+
 ## 1.11.1 - 2026-10-07
 
 ### Fixed

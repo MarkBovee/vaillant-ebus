@@ -328,9 +328,9 @@ async def test_coordinator_cache_seed_creates_active_z2_entities() -> None:
         await coordinator._async_seed_entities_from_cache()
 
         z2_entities = [entity for entity in coordinator.entities if entity.name.startswith("Z2")]
+        # Z2OpMode is a writable select since 1.11.2 (issue #186): it waits for the authoritative graph.
         assert {entity.name for entity in z2_entities} == {
             "Z2RoomTemp",
-            "Z2OpMode",
             "Z2ActualRoomTempDesired",
         }
         assert {entity.device_circuit for entity in z2_entities} == {"z2"}
@@ -1186,6 +1186,7 @@ async def test_issue161_passive_definition_ids_match_captured_requests() -> None
         "hmux0_issue161_2026-09-30_132044_discovery.yaml",
         "hmux0_issue161_2026-09-30_154054_discovery.yaml",
         "hmux0_issue161_2026-09-30_161313_discovery.yaml",
+        "hmux0_sw0407_issue175_2026-10-09_115534_discovery.yaml",
     )
     for name in names:
         dump = load_discovery_dump(f"community/{name}")
@@ -1210,7 +1211,11 @@ async def test_issue161_passive_definition_ids_match_captured_requests() -> None
         for fields in passive:
             qq, zz, pbsb, message_id = fields[4], fields[5], fields[6], fields[7]
             request = f"{qq}{zz}{pbsb}{len(message_id) // 2:02x}{message_id}".casefold()
-            assert request in captured, (fields[2], request)
+            if qq:
+                assert request in captured, (fields[2], request)
+            else:
+                # A blank source address matches any master (ebusd message definition docs): one capture row is enough.
+                assert any(row.endswith(request) for row in captured), (fields[2], request)
 
 
 # Intent: the active B509 definitions for SW0302/SW0303 build requests that ebusd's own labelled captures contain.
@@ -3091,20 +3096,24 @@ async def test_hmux0_runtime_definitions_use_issue99_fixture_metadata() -> None:
         assert any(",hmux0,RunDataElPowerConsumption," in definition for definition in hmux0_defs)
 
 
-# A future HMUX0 firmware (pro7 capture: SW0406/HW0504) must not receive the
-# SW0303-gated yield/COP definitions or the incompatible HMU-only layouts.
+# A future HMUX0 firmware (the pro7 capture re-labelled SW0501/HW0504) must not receive the
+# SW0303/SW0406-gated yield/COP definitions or the incompatible HMU-only layouts.
 # The shared b516 energy family remains available.
-# Intent: a future HMUX0 firmware keeps the shared b516 energy family but not the SW0303-gated yield/COP definitions.
-# Why: protects firmware-scoped gating so incompatible layouts are not sent to newer hardware.
+# Intent: a future HMUX0 firmware keeps the shared b516 energy family but not the SW0303/SW0406 yield/COP definitions.
+# Why: protects firmware-scoped gating so incompatible layouts are not sent to newer hardware (SW0406 itself has
+#      evidence since issue #188 and is covered by the issue #185 tests).
 async def test_hmux0_other_firmware_gets_scan_metadata_without_yield_definitions() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
-        graph = DISCOVERY.DiscoveryService.build_device_graph(
-            load_find_lines("community/arotherm_pro7_quiet_off_idle_discovery.yaml")
-        )
+        lines = [
+            line.replace(";HMUX0;0406;", ";HMUX0;0501;")
+            for line in load_find_lines("community/arotherm_pro7_quiet_off_idle_discovery.yaml")
+        ]
+        graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
         hmu = graph.nodes.get("hmu")
         assert hmu is not None
         assert hmu.device_type == DeviceType.HEAT_PUMP
         assert hmu.scan_type == ""
+        assert graph.nodes["hmux0"].scan_sw == "0501"
 
         c = VaillantCoordinator(_hass(tmpdir), _entry())
         c.ebus = MagicMock(spec=EbusService)
@@ -6397,3 +6406,220 @@ def test_cache_only_heat_pump_energy_rows_survive_without_boiler_only_proof(line
     graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
 
     assert COORDINATOR._is_heat_pump_only_cache_register("bass.StatElectricEnergySum", graph) is False
+
+
+ISSUE175_FIXTURE = "community/hmux0_sw0407_issue175_2026-10-09_115534_discovery.yaml"
+
+
+# Intent: decode a captured response payload with the field list of an ebusd `define` string.
+# Why: matching the request id alone does not prove offsets, scaling or signedness; the decode must hit the display.
+def _decode_definition_fields(fields: str, payload: bytes) -> dict[str, object]:
+    columns = fields.split(",")
+    decoded: dict[str, object] = {}
+    offset = 0
+    for index in range(0, len(columns), 6):
+        name, _part, kind, divisor_or_values = columns[index : index + 4]
+        if kind.startswith("IGN:"):
+            offset += int(kind.split(":")[1])
+            continue
+        if kind in {"D1C", "UCH", "percent1"}:
+            raw, offset = payload[offset], offset + 1
+            value: object = None if kind == "D1C" and raw == 0xFF else (raw / 2 if kind == "D1C" else raw)
+        elif kind == "D2B":
+            raw, offset = int.from_bytes(payload[offset : offset + 2], "little", signed=True), offset + 2
+            value = raw / 256
+        elif kind == "D2C":
+            raw, offset = int.from_bytes(payload[offset : offset + 2], "little", signed=True), offset + 2
+            value = raw / 16
+        else:
+            raise AssertionError(f"unsupported field type {kind} in {fields}")
+        if kind == "UCH" and "=" in divisor_or_values:
+            value = dict(item.split("=") for item in divisor_or_values.split(";")).get(str(value), value)
+        elif kind == "UCH" and divisor_or_values.isdigit():
+            value = raw / int(divisor_or_values)
+        decoded[name] = value
+    return decoded
+
+
+# Intent: run the runtime definition pass for a fixture and return the definitions ebusd would receive.
+# Why: the passive SW0407 and VWZIO definitions are a pure function of the discovered scan identity.
+async def _runtime_definitions_for(fixture: str) -> dict[str, str]:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator._graph = graph
+
+        await coordinator._define_custom_registers()
+
+        return {
+            f"{fields[0]}.{fields[1]}.{fields[2]}": call.args[0]
+            for call in coordinator.ebus.define_register.await_args_list
+            if (fields := call.args[0].split(","))
+        }
+
+
+# Intent: HMUX0 SW0407/HW0504 gets passive Status01/Status00 definitions and the VWZIO its B512 temperatures.
+# Why: issue #175 - flow and return temperature were only visible on the display; the compressor-run capture shows
+#      the controller and gateway already polling these telegrams, so decoding them costs no bus traffic.
+async def test_issue175_sw0407_defines_passive_status_registers_that_match_the_capture() -> None:
+    definitions = await _runtime_definitions_for(ISSUE175_FIXTURE)
+    dump = load_discovery_dump(ISSUE175_FIXTURE)
+    responses = {row["request"]: row["resp"] for row in dump["unknown_telegrams"]}
+
+    status01 = definitions["u.hmux0.Status01"].split(",", 8)
+    status00 = definitions["u.hmux0.Status00"].split(",", 8)
+    station = definitions["u.vwzio.StationTemperatures"].split(",", 8)
+    # Blank source address: ebusd then matches the controller's 10 s polling and the gateway's slower polling alike.
+    assert status01[:8] == ["u", "hmux0", "Status01", "Status01", "", "08", "B511", "01"]
+    assert status00[:8] == ["u", "hmux0", "Status00", "Status00", "", "08", "B511", "00"]
+    assert station[:8] == ["u", "vwzio", "StationTemperatures", "StationTemperatures", "", "76", "B512", "0f0001"]
+
+    # Every definition reproduces a request that the capture shows on the bus (the ebusd id excludes the length byte).
+    for fields in (status01, status00, station):
+        suffix = f"{fields[5]}{fields[6]}{len(fields[7]) // 2:02x}{fields[7]}".casefold()
+        assert any(request.endswith(suffix) for request in responses), fields[2]
+
+    # Decoded payloads hit the display values the reporter photographed (flow 29.6, return 28.3, outside 13.4,
+    # storage 46.5, setpoint 29.0; flow after backup heater 30.0).
+    controller = bytes.fromhex(responses["1008b5110101"])[1:]
+    values = _decode_definition_fields(status01[8], controller)
+    assert (values["temp"], values["temp_1"], values["temp_4"]) == (29.5, 28.0, 46.5)
+    assert abs(values["temp_2"] - 13.38) < 0.01 and values["temp_3"] is None and values["pumpstate"] == "on"
+    status = _decode_definition_fields(status00[8], bytes.fromhex(responses["1008b5110100"])[1:])
+    assert (status["supplytemp"], status["compressorstate"], status["heatingstate"]) == (29.5625, "heating", "heating")
+    assert status["defrost"] == "inactive"
+    heater = _decode_definition_fields(station[8], bytes.fromhex(responses["1076b512030f0001"])[1:])
+    assert (heater["storagetemp"], heater["flowtemp"]) == (46.5625, 30.0)
+
+
+# Intent: the passive HMUX0 definitions exist only for SW0407/HW0504, the VWZIO one only for SW0500/HW0504.
+# Why: SW0406, SW0303 and a bus without that VWZIO must stay untouched; the layouts have no evidence there.
+@pytest.mark.parametrize(
+    ("fixture", "expect_station"),
+    [
+        ("community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml", False),  # VWZIO SW0406
+        ("community/hmux0_issue171_2026-10-03_094933_discovery.yaml", True),  # HMUX0 SW0406 + VWZIO SW0500
+        ("community/hmux0_issue99_2026-09-10_173229.yaml", False),
+        ("community/flexotherm_issue102_2026-09-12_161841_discovery.yaml", False),
+    ],
+)
+async def test_issue175_passive_status_definitions_stay_hardware_gated(fixture: str, expect_station: bool) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+
+    assert not [key for key in definitions if key.startswith("u.") and key.split(".")[2] in {"Status01", "Status00"}]
+    assert ("u.vwzio.StationTemperatures" in definitions) is expect_station
+
+
+# Intent: the new passive registers turn into the expected entities, with the station temperatures off by default.
+# Why: a strong assumption from a single state ships disabled and unavailable until the register reports a value.
+def test_issue175_passive_status_registers_create_entities() -> None:
+    lines = load_find_lines(ISSUE175_FIXTURE, after=True) + [
+        "hmux0 Status01 = 29.5;28.0;13.379;-;46.5;on",
+        "hmux0 Status00 = 29.5625;2.0;12;heating;heating;0;inactive;12",
+        "vwzio StationTemperatures = 46.5625;30.0",
+    ]
+    graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    flow = entities["hmux0.Status01.temp"]
+    assert (flow.meta.unit, flow.meta.device_class, flow.enabled_by_default) == ("°C", "temperature", True)
+    assert entities["hmux0.Status01.temp_1"].meta.friendly_name == "Return Temperature"
+    assert entities["hmux0.Status00.supplytemp"].meta.device_class == "temperature"
+    station_flow = entities["vwzio.StationTemperatures.flowtemp"]
+    assert (station_flow.meta.unit, station_flow.enabled_by_default) == ("°C", False)
+    assert entities["vwzio.StationTemperatures.storagetemp"].enabled_by_default is False
+
+
+SW0406_RUNTIME_NAMES = frozenset(
+    {
+        "RunDataFlowTemp",
+        "RunDataReturnTemp",
+        "RunDataCompressorSpeed",
+        "RunDataBuildingCPumpPower",
+        "YieldHc",
+        "YieldHcDay",
+        "YieldHcMonth",
+        "YieldHwc",
+        "YieldHwcDay",
+        "YieldHwcMonth",
+        "CopHc",
+        "CopHcMonth",
+        "CopHwc",
+        "CopHwcMonth",
+        "CompressorHc",
+        "CompressorHwc",
+    }
+)
+
+
+# Intent: an HMUX0 SW0406/HW0504 bus whose ebusd has no hmux0 configuration gets the evidenced runtime registers.
+# Why: issues #185/#188 - a default ebusd exposes only the nine energy counters, so COP, yield, compressor starts and
+#      the precise flow/return temperatures were missing although the unit answers them (proven in the #188 capture).
+async def test_issue185_sw0406_without_hmux0_config_defines_runtime_registers() -> None:
+    stock = "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    definitions = await _runtime_definitions_for(stock)
+    sw0303 = await _runtime_definitions_for("community/hmux0_issue99_2026-09-10_173229.yaml")
+
+    defined = {key.split(".", 2)[2]: value for key, value in definitions.items() if key.startswith("r.hmux0.")}
+    assert SW0406_RUNTIME_NAMES <= set(defined)
+    # The shared B509/B51A layouts are the ones already confirmed on SW0303; only the counters are new.
+    for name in SW0406_RUNTIME_NAMES - {"CompressorHc", "CompressorHwc"}:
+        assert defined[name] == sw0303[f"r.hmux0.{name}"], name
+    assert defined["CompressorHc"].startswith("r,hmux0,CompressorHc,CompressorHc,31,08,B511,1801,")
+    assert defined["CompressorHwc"].startswith("r,hmux0,CompressorHwc,CompressorHwc,31,08,B511,1802,")
+    # Not evidenced on SW0406: the power draw (unit unresolved, #188) and the registers that answered ERR.
+    assert not {"RunDataElPowerConsumption", "Status00", "RunDataStatuscode"} & set(defined)
+
+
+# Intent: a SW0406 unit whose ebusd already supplies hmux0 registers (full 08.hmux0.csv) gets nothing defined.
+# Why: a runtime define on top of the CSV would duplicate registers (issue #171 bus has 91 hmux0 rows and works).
+async def test_issue185_sw0406_with_hmux0_csv_gets_no_runtime_registers() -> None:
+    definitions = await _runtime_definitions_for("community/hmux0_issue171_2026-10-03_094933_discovery.yaml")
+
+    defined = {key.split(".", 2)[2] for key in definitions if key.startswith("r.hmux0.")}
+    assert not defined & SW0406_RUNTIME_NAMES
+
+
+# Intent: other HMUX0 firmware and a local config that copies the hmu CSV never receive the SW0406 definitions.
+# Why: the SW0406 layouts have no evidence elsewhere, and the #188 local config already lists `hmu` registers.
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "community/hmux0_sw0407_issue175_2026-10-09_115534_discovery.yaml",
+        "community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml",
+        "community/hmux0_sw0406_issue186_2026-10-11_143454_discovery.yaml",
+        "community/flexotherm_issue102_2026-09-12_161841_discovery.yaml",
+    ],
+)
+async def test_issue185_sw0406_definitions_stay_hardware_gated(fixture: str) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+
+    assert not [key for key in definitions if key.startswith("r.hmux0.CompressorH")]
+    assert not [key for key in definitions if key.startswith("r.hmux0.CopH")]
+
+
+# Intent: the SW0406 compressor counters are read with the energy poll although their entities are off by default.
+# Why: plain `r` messages are never polled by ebusd and their metadata is disabled, so no other pass reads them.
+async def test_issue185_sw0406_compressor_counters_are_read_with_the_energy_poll() -> None:
+    fixture = "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture))
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator.ebus.read_register = AsyncMock(return_value="2880;126")
+        coordinator._graph = graph
+        coordinator._refresh_find_keys()
+
+        await coordinator._define_custom_registers()
+        coordinator.ebus.read_register.reset_mock()
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+
+        actual = {call.args[:2] for call in coordinator.ebus.read_register.await_args_list}
+        assert {("hmux0", "CompressorHc"), ("hmux0", "CompressorHwc")} <= actual
+        # The shared yield/COP/temperature registers are read through the existing map-driven pass.
+        assert {("hmux0", "YieldHcDay"), ("hmux0", "CopHc"), ("hmux0", "RunDataFlowTemp")} <= actual

@@ -170,6 +170,34 @@ def _today_str() -> str:
     return date.today().strftime("%d.%m.%Y")
 
 
+AWAY_ZONE_REGISTERS = ("HolidayStartPeriod", "HolidayEndPeriod", "HolidayTemp")
+
+
+# Intent: report whether a zone currently reports a real room temperature.
+# Why: a placeholder zone keeps static defaults, so only a live room temperature proves the zone is installed.
+def _zone_has_room_temperature(coordinator: VaillantCoordinator, controller: str, zone: str) -> bool:
+    value = get_register_value(coordinator, controller, f"{zone.upper()}RoomTemp")
+    return value is not None and not is_no_data_value(value)
+
+
+# Intent: list the zones whose holiday period the away switch reads and writes, primary zone first.
+# Why: issue #186 - away mode must cover every live zone, but never a placeholder zone or one whose holiday registers
+# were not discovered; the primary zone stays unconditional so single-zone systems behave exactly as before.
+def _away_zones(coordinator: VaillantCoordinator, primary_zone: str) -> list[str]:
+    controller = coordinator.heating_circuit
+    if controller is None:
+        return []
+    others = [
+        zone
+        for zone, circuit in coordinator.zone_circuits().items()
+        if zone != primary_zone
+        and circuit.casefold() == controller.casefold()
+        and all(coordinator.has_zone_register(controller, zone, register) for register in AWAY_ZONE_REGISTERS)
+        and _zone_has_room_temperature(coordinator, controller, zone)
+    ]
+    return [primary_zone, *sorted(others, key=lambda zone: int(zone[1:]) if zone[1:].isdigit() else 0)]
+
+
 class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     # Initialize away mode switch with unique ID
     def __init__(
@@ -184,53 +212,63 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         self._attr_name = "Away Mode"
         self._attr_icon = "mdi:exit-run"
         self._zone = zone
-        self._zn = zone.upper()
         self._attr_device_info = coordinator.get_device_info(zone)
 
     @property
     def is_on(self) -> bool | None:
-        # True when holiday start/end dates contain today
+        # True when every live zone's holiday start/end dates contain today
         circuit = self.coordinator.heating_circuit
-        if circuit is None:
+        zones = _away_zones(self.coordinator, self._zone)
+        if circuit is None or not zones:
             return None
-        start = get_register_value(self.coordinator, circuit, f"{self._zn}HolidayStartPeriod")
-        end = get_register_value(self.coordinator, circuit, f"{self._zn}HolidayEndPeriod")
-        # An explicit "unset" start date already proves away mode is off, even when the end register is unreadable.
-        if start in UNSET_DATES:
-            return False
-        if start is None or end is None:
-            return None
-        return _is_holiday_active(start, end)
+        active: list[bool] = []
+        for index, zone in enumerate(zones):
+            start = get_register_value(self.coordinator, circuit, f"{zone.upper()}HolidayStartPeriod")
+            end = get_register_value(self.coordinator, circuit, f"{zone.upper()}HolidayEndPeriod")
+            # An explicit "unset" start date already proves away mode is off, even when the end register is unreadable.
+            if start in UNSET_DATES:
+                active.append(False)
+                continue
+            if start is None or end is None:
+                if index == 0:
+                    return None  # the primary zone decides unknown; another zone without data just is not away
+                active.append(False)
+                continue
+            active.append(_is_holiday_active(start, end))
+        return all(active)
 
-    # Set holiday dates from today to far future, enable away mode
+    # Set holiday dates from today to far future for every live zone and the DHW, enable away mode
     async def async_turn_on(self, **kwargs: Any) -> None:
         circuit = self.coordinator.heating_circuit
-        if not self.coordinator.ebus or circuit is None:
+        zones = _away_zones(self.coordinator, self._zone)
+        if not self.coordinator.ebus or circuit is None or not zones:
             return
         today = _today_str()
-        holiday_temp = get_register_value(self.coordinator, circuit, f"{self._zn}HolidayTemp") or "15"
-        writes = [
-            (circuit, f"{self._zn}HolidayStartPeriod", today),
-            (circuit, f"{self._zn}HolidayEndPeriod", FAR_FUTURE),
-            (circuit, "HwcHolidayStartPeriod", today),
-            (circuit, "HwcHolidayEndPeriod", FAR_FUTURE),
-        ]
-        if holiday_temp:
-            writes.append((circuit, f"{self._zn}HolidayTemp", holiday_temp))
+        writes: list[tuple[str, str, str]] = []
+        for zone in zones:
+            writes.append((circuit, f"{zone.upper()}HolidayStartPeriod", today))
+            writes.append((circuit, f"{zone.upper()}HolidayEndPeriod", FAR_FUTURE))
+        writes.append((circuit, "HwcHolidayStartPeriod", today))
+        writes.append((circuit, "HwcHolidayEndPeriod", FAR_FUTURE))
+        for zone in zones:
+            # Each zone keeps its own configured holiday temperature; 15 only when the register has no value.
+            holiday_temp = get_register_value(self.coordinator, circuit, f"{zone.upper()}HolidayTemp") or "15"
+            writes.append((circuit, f"{zone.upper()}HolidayTemp", holiday_temp))
         await self.coordinator.async_write_registers(writes)
 
-    # Reset holiday dates to unset, disable away mode
+    # Reset holiday dates to unset for every live zone and the DHW, disable away mode
     async def async_turn_off(self, **kwargs: Any) -> None:
         circuit = self.coordinator.heating_circuit
-        if not self.coordinator.ebus or circuit is None:
+        zones = _away_zones(self.coordinator, self._zone)
+        if not self.coordinator.ebus or circuit is None or not zones:
             return
-        writes = [
-            (circuit, f"{self._zn}HolidayStartPeriod", UNSET_DATE),
-            (circuit, f"{self._zn}HolidayEndPeriod", UNSET_DATE),
-            (circuit, "HwcHolidayStartPeriod", UNSET_DATE),
-            (circuit, "HwcHolidayEndPeriod", UNSET_DATE),
-            (circuit, f"{self._zn}HolidayTemp", "15"),
-        ]
+        writes: list[tuple[str, str, str]] = []
+        for zone in zones:
+            writes.append((circuit, f"{zone.upper()}HolidayStartPeriod", UNSET_DATE))
+            writes.append((circuit, f"{zone.upper()}HolidayEndPeriod", UNSET_DATE))
+        writes.append((circuit, "HwcHolidayStartPeriod", UNSET_DATE))
+        writes.append((circuit, "HwcHolidayEndPeriod", UNSET_DATE))
+        writes.extend((circuit, f"{zone.upper()}HolidayTemp", "15") for zone in zones)
         await self.coordinator.async_write_registers(writes)
 
 
