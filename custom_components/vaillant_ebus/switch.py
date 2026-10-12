@@ -198,6 +198,19 @@ def _away_zones(coordinator: VaillantCoordinator, primary_zone: str) -> list[str
     return [primary_zone, *sorted(others, key=lambda zone: int(zone[1:]) if zone[1:].isdigit() else 0)]
 
 
+# Intent: report whether one zone is on holiday: True, False, or None when its dates cannot be read.
+# Why: an explicit "unset" start date proves the zone is not away even when the end register is unreadable, but a
+# missing or no-data register is unknown and must never be coerced into "not away" (issue #186 audit).
+def _zone_away_state(coordinator: VaillantCoordinator, controller: str, zone: str) -> bool | None:
+    start = get_register_value(coordinator, controller, f"{zone.upper()}HolidayStartPeriod")
+    end = get_register_value(coordinator, controller, f"{zone.upper()}HolidayEndPeriod")
+    if start in UNSET_DATES:
+        return False
+    if start is None or end is None or is_no_data_value(start) or is_no_data_value(end):
+        return None
+    return _is_holiday_active(start, end)
+
+
 class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
     # Initialize away mode switch with unique ID
     def __init__(
@@ -216,26 +229,18 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        # True when every live zone's holiday start/end dates contain today
+        # True when every live zone is on holiday; one zone that is provably not away makes it off, and unreadable
+        # data stays unknown unless another zone already proves the system is not away.
         circuit = self.coordinator.heating_circuit
         zones = _away_zones(self.coordinator, self._zone)
         if circuit is None or not zones:
             return None
-        active: list[bool] = []
-        for index, zone in enumerate(zones):
-            start = get_register_value(self.coordinator, circuit, f"{zone.upper()}HolidayStartPeriod")
-            end = get_register_value(self.coordinator, circuit, f"{zone.upper()}HolidayEndPeriod")
-            # An explicit "unset" start date already proves away mode is off, even when the end register is unreadable.
-            if start in UNSET_DATES:
-                active.append(False)
-                continue
-            if start is None or end is None:
-                if index == 0:
-                    return None  # the primary zone decides unknown; another zone without data just is not away
-                active.append(False)
-                continue
-            active.append(_is_holiday_active(start, end))
-        return all(active)
+        states = [_zone_away_state(self.coordinator, circuit, zone) for zone in zones]
+        if False in states:
+            return False
+        if None in states:
+            return None
+        return True
 
     # Set holiday dates from today to far future for every live zone and the DHW, enable away mode
     async def async_turn_on(self, **kwargs: Any) -> None:

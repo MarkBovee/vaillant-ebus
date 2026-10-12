@@ -580,3 +580,25 @@ def test_issue186_away_switch_is_on_only_when_every_live_zone_is_away(tmp_path) 
 
     data.pop("ctlv2.Z1HolidayStartPeriod.value")
     assert switch.is_on is None  # the primary zone's missing data stays unknown, never coerced to a default
+
+
+# Intent: unreadable holiday data of a second zone keeps the switch unknown instead of reading off.
+# Why: audit of 1.11.2 - missing data is not "not away"; only an explicit unset date or a past window proves off.
+def test_issue186_away_switch_keeps_unreadable_second_zone_unknown(tmp_path) -> None:
+    coordinator = _discovered_coordinator(ISSUE186_FIXTURE, tmp_path)
+    switch = AwayModeSwitch(coordinator, _entry(), "z1")
+    data = coordinator.data["ebusd"]
+    data["ctlv2.Z1HolidayStartPeriod.value"] = "01.01.2020"
+    data["ctlv2.Z1HolidayEndPeriod.value"] = "01.01.2099"
+
+    data["ctlv2.Z2HolidayStartPeriod.value"] = "no data stored"
+    data["ctlv2.Z2HolidayEndPeriod.value"] = "no data stored"
+    assert switch.is_on is None  # not a date, not the unset sentinel
+
+    data.pop("ctlv2.Z2HolidayStartPeriod.value")
+    data.pop("ctlv2.Z2HolidayEndPeriod.value")
+    assert switch.is_on is None  # absent registers are unknown too
+
+    # A zone that is provably not away still decides, even next to an unreadable one.
+    data["ctlv2.Z2HolidayStartPeriod.value"] = "01.01.2015"
+    assert switch.is_on is False
