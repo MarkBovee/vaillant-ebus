@@ -38,6 +38,7 @@ from .backend.mapping import (
     hmux0_owner_scan,
     hmux0_precise_temperature_owner,
     hmux0_sw0303_owner,
+    hmux0_sw0406_owner,
     hmux0_sw0407_circuit,
     is_field_key,
     metadata_circuits,
@@ -99,6 +100,91 @@ VWZ_STATUS01_FIELDS = (
     "temp,,D1C,,,,temp_1,,D1C,,,,temp_2,,D2B,,,,temp_3,,D1C,,,,temp_4,,D1C,,,,"
     "pumpstate,,UCH,0=off;1=on;2=overrun;4=hwc,,"
 )
+
+# Intent: field layout of the HMUX0 B511/00 compressor status block (upstream issues #249/#522/#687, PR #330).
+# Why: the active SW0303 read and the passive SW0407 decode share one layout so both fill the same entity fields.
+HMUX0_STATUS00_FIELDS = (
+    "supplytemp,,D2C,,°C,,waterpressure,,UCH,10,bar,,"
+    "compressormodulation,,UCH,,%,,compressorstate,,UCH,0=off;1=heating_prerun;"
+    "4=heating;5=heating_overrun;24=hot_water;110=defrosting,,,"
+    "heatingstate,,UCH,8=off;9=heating,,,field6,,UCH,,,,"
+    "defrost,,UCH,0=inactive;32=active,,,compressorpower,,percent1,,%,HMUX0 Status00"
+)
+
+# Intent: HMUX0 SW0407/HW0504 telegrams that both the controller (0x10, about every 10 s) and the gateway (0xf1) poll.
+# Why: issue #175 capture - a blank source address lets one passive definition decode either sender; the Status01
+# layout matches five display values (flow, return, outside, storage, setpoint) and Status00 matches flow and state.
+HMUX0_SW0407_ANY_MASTER_REGISTERS = (
+    ("Status01", "B511", "01", VWZ_STATUS01_FIELDS),
+    ("Status00", "B511", "00", HMUX0_STATUS00_FIELDS),
+)
+
+# Intent: VWZIO SW0500/HW0504 B512/030f0001 passive temperatures (strong assumption, single captured state).
+# Why: issue #175 capture - D2C bytes 0-1 read 46.56 degC (display storage 46.5) and bytes 3-4 read 30.0 degC
+# (display flow after the backup heater 30.0); the other bytes stay ignored until a second state explains them.
+VWZIO_SW0500_ANY_MASTER_REGISTERS = (
+    (
+        "StationTemperatures",
+        "B512",
+        "0f0001",
+        "storagetemp,,D2C,,°C,,ign1,,IGN:1,,,,flowtemp,,D2C,,°C,,ign2,,IGN:2,,,",
+    ),
+)
+
+
+# Intent: runtime definitions of the HMUX0 precise flow/return temperatures and the yield/COP statistics.
+# Why: ebusd's own CSV lacks them for SW0303 (issue #171) and for a SW0406 bus without an hmux0 configuration (#185);
+# upstream PR #496 defines flow as ext 0xfc/0x08 next to return (0x06/0x09), both tempv (1/16 degC).
+def _hmux0_precise_and_yield_definitions(circuit: str) -> list[str]:
+    return [
+        f"r,{circuit},RunDataFlowTemp,RunDataFlowTemp,31,08,B509,540200fc08"
+        ",value,,IGN:4,,,,value,,D2C,,°C,HMUX0 flow temperature",
+        f"r,{circuit},RunDataReturnTemp,RunDataReturnTemp,31,08,B509,5402000609"
+        ",value,,IGN:4,,,,value,,D2C,,°C,HMUX0 return temperature",
+        f"r,{circuit},YieldHc,YieldHc,31,08,B51A,05ff3210,value,,IGN:3,,,,value,,UIN,,kWh,HMUX0 heating yield",
+        f"r,{circuit},YieldHcDay,YieldHcDay,31,08,B51A,05ff3200"
+        ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 heating yield today",
+        f"r,{circuit},YieldHcMonth,YieldHcMonth,31,08,B51A,05ff320e"
+        ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 heating yield this month",
+        f"r,{circuit},YieldHwc,YieldHwc,31,08,B51A,05ff3216,value,,IGN:3,,,,value,,UIN,,kWh,HMUX0 DHW yield",
+        f"r,{circuit},YieldHwcDay,YieldHwcDay,31,08,B51A,05ff3202"
+        ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 DHW yield today",
+        f"r,{circuit},YieldHwcMonth,YieldHwcMonth,31,08,B51A,05ff3212"
+        ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 DHW yield this month",
+        f"r,{circuit},CopHc,CopHc,31,08,B51A,05ff3211,value,,IGN:3,,,,value,,UIN,10,,HMUX0 heating COP",
+        f"r,{circuit},CopHcMonth,CopHcMonth,31,08,B51A,05ff320f"
+        ",value,,IGN:3,,,,value,,UIN,10,,HMUX0 heating COP this month",
+        f"r,{circuit},CopHwc,CopHwc,31,08,B51A,05ff3217,value,,IGN:3,,,,value,,UIN,10,,HMUX0 DHW COP",
+        f"r,{circuit},CopHwcMonth,CopHwcMonth,31,08,B51A,05ff3213"
+        ",value,,IGN:3,,,,value,,UIN,10,,HMUX0 DHW COP this month",
+    ]
+
+
+# Intent: runtime definitions of the HMUX0 B509 compressor speed and building-circuit pump power.
+# Why: community captures (issues #99/#161/#185) read both on HW0504 firmware; the ids exclude the length byte.
+def _hmux0_b509_monitor_definitions(circuit: str) -> list[str]:
+    return [
+        f"r,{circuit},RunDataCompressorSpeed,RunDataCompressorSpeed,31,08,B509,5402000d0a"
+        ",value,,IGN:4,,,,value,,EXP,,rps,HMUX0 compressor speed",
+        f"r,{circuit},RunDataBuildingCPumpPower,RunDataBuildingCPumpPower,31,08,B509,540200c509"
+        ",value,,IGN:4,,,,value,,EXP,,%,HMUX0 building circuit pump power",
+    ]
+
+
+# Intent: runtime definitions of the HMUX0 compressor runtime/start counters for heating and DHW.
+# Why: B511 data 1801/1802 carry the same layout the SW0407 captures show passively (upstream 08.hmu.tsp); on SW0406
+# the #188 capture reads them as `RunStatsCompressorHc = 2880;126`. The ebusd id excludes the length byte.
+def _hmux0_compressor_counter_definitions(circuit: str) -> list[str]:
+    fields = "ign,,IGN:1,,,,runtime,,ULG,,min,,cycles,,ULG"
+    return [
+        f"r,{circuit},CompressorHc,CompressorHc,31,08,B511,1801,{fields}",
+        f"r,{circuit},CompressorHwc,CompressorHwc,31,08,B511,1802,{fields}",
+    ]
+
+
+# Intent: HMUX0 compressor runtime/start counters that are defined as plain `r` messages on SW0406.
+# Why: ebusd never polls plain `r` messages and their entities are off by default, so the energy poll re-reads them.
+HMUX0_COMPRESSOR_COUNTER_NAMES = frozenset({"CompressorHc", "CompressorHwc"})
 
 # Intent: register names of the HMUX0 precise (1/16 degC) temperatures that need an explicit active read.
 HMUX0_PRECISE_TEMPERATURE_NAMES = ("RunDataFlowTemp", "RunDataReturnTemp")
@@ -1446,12 +1532,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             # HMUX0 HW0504 community capture: upstream issue #249 / PR #330
             # identifies B511/00 as the multi-field compressor status block.
             # Unsupported variants return an empty response and remain filtered.
-            "r,hmu,Status00,Status00,31,8,B511,00"
-            ",supplytemp,,D2C,,°C,,waterpressure,,UCH,10,bar,,"
-            "compressormodulation,,UCH,,%,,compressorstate,,UCH,0=off;1=heating_prerun;"
-            "4=heating;5=heating_overrun;24=hot_water;110=defrosting,,,"
-            "heatingstate,,UCH,8=off;9=heating,,,field6,,UCH,,,,"
-            "defrost,,UCH,0=inactive;32=active,,,compressorpower,,percent1,,%,HMUX0 Status00",
+            "r,hmu,Status00,Status00,31,8,B511,00," + HMUX0_STATUS00_FIELDS,
             # HMUX0 HW0504 community capture: upstream issue #522 identifies
             # B509/540200/5b0d as diagnostic electrical power in watts.
             # This is additive; absent hardware returns no data.
@@ -1665,49 +1746,21 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if is_hmux0_0303_0504:
             circuit = hmux0_sw0303_circuit
             assert circuit is not None
-            defines.extend(
-                [
-                    # Upstream ebusd-configuration PR #496 (merged) defines flow as ext 0xfc/0x08 next to
-                    # return (0x06/0x09); both decode as tempv (1/16 degC), confirmed live in issue #171.
-                    f"r,{circuit},RunDataFlowTemp,RunDataFlowTemp,31,08,B509,540200fc08"
-                    ",value,,IGN:4,,,,value,,D2C,,°C,HMUX0 flow temperature",
-                    f"r,{circuit},RunDataReturnTemp,RunDataReturnTemp,31,08,B509,5402000609"
-                    ",value,,IGN:4,,,,value,,D2C,,°C,HMUX0 return temperature",
-                    f"r,{circuit},YieldHc,YieldHc,31,08,B51A,05ff3210"
-                    ",value,,IGN:3,,,,value,,UIN,,kWh,HMUX0 heating yield",
-                    f"r,{circuit},YieldHcDay,YieldHcDay,31,08,B51A,05ff3200"
-                    ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 heating yield today",
-                    f"r,{circuit},YieldHcMonth,YieldHcMonth,31,08,B51A,05ff320e"
-                    ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 heating yield this month",
-                    f"r,{circuit},YieldHwc,YieldHwc,31,08,B51A,05ff3216"
-                    ",value,,IGN:3,,,,value,,UIN,,kWh,HMUX0 DHW yield",
-                    f"r,{circuit},YieldHwcDay,YieldHwcDay,31,08,B51A,05ff3202"
-                    ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 DHW yield today",
-                    f"r,{circuit},YieldHwcMonth,YieldHwcMonth,31,08,B51A,05ff3212"
-                    ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 DHW yield this month",
-                    f"r,{circuit},CopHc,CopHc,31,08,B51A,05ff3211,value,,IGN:3,,,,value,,UIN,10,,HMUX0 heating COP",
-                    f"r,{circuit},CopHcMonth,CopHcMonth,31,08,B51A,05ff320f"
-                    ",value,,IGN:3,,,,value,,UIN,10,,HMUX0 heating COP this month",
-                    f"r,{circuit},CopHwc,CopHwc,31,08,B51A,05ff3217,value,,IGN:3,,,,value,,UIN,10,,HMUX0 DHW COP",
-                    f"r,{circuit},CopHwcMonth,CopHwcMonth,31,08,B51A,05ff3213"
-                    ",value,,IGN:3,,,,value,,UIN,10,,HMUX0 DHW COP this month",
-                ]
-            )
+            defines.extend(_hmux0_precise_and_yield_definitions(circuit))
         if is_hmux0_b509_0504:
             assert heat_pump is not None
-            circuit = heat_pump.circuit
-            defines.extend(
-                [
-                    f"r,{circuit},RunDataCompressorSpeed,RunDataCompressorSpeed,31,08,B509,5402000d0a"
-                    ",value,,IGN:4,,,,value,,EXP,,rps,HMUX0 compressor speed",
-                    f"r,{circuit},RunDataBuildingCPumpPower,RunDataBuildingCPumpPower,31,08,B509,540200c509"
-                    ",value,,IGN:4,,,,value,,EXP,,%,HMUX0 building circuit pump power",
-                ]
-            )
+            defines.extend(_hmux0_b509_monitor_definitions(heat_pump.circuit))
+        hmux0_sw0406_circuit = hmux0_sw0406_owner(self._graph)
+        if hmux0_sw0406_circuit is not None:
+            defines.extend(self._hmux0_sw0406_definitions(hmux0_sw0406_circuit, defines))
         if hmux0_sw0407_owner is not None:
             defines.extend(
                 f"u,{hmux0_sw0407_owner},{name},{name},f1,08,{message_id},{subaddress},{fields}"
                 for name, message_id, subaddress, fields in HMUX0_SW0407_PASSIVE_REGISTERS
+            )
+            defines.extend(
+                f"u,{hmux0_sw0407_owner},{name},{name},,08,{message_id},{subaddress},{fields}"
+                for name, message_id, subaddress, fields in HMUX0_SW0407_ANY_MASTER_REGISTERS
             )
         if is_vwzio_0500_0504 and vwzio is not None:
             # The dump captures the gateway's passive B516/14 station-power frame.
@@ -1729,6 +1782,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 f"u,{vwzio.circuit},HeaterYieldHwcTotal,HeaterYieldHwcTotal,f1,76,B516,1000ffff49040000"
                 ",ign,,IGN:7,,,,value,,EXP,,Wh,Backup heater DHW heat total (assumed)"
             )
+            defines.extend(
+                f"u,{vwzio.circuit},{name},{name},,76,{message_id},{subaddress},{fields}"
+                for name, message_id, subaddress, fields in VWZIO_SW0500_ANY_MASTER_REGISTERS
+            )
             # Status01's active field layout is documented for VWZIO HW5103, not this HW0504 scan.
             defines = [
                 definition
@@ -1736,7 +1793,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 if not (definition.startswith(("r,vwz,Status01,", "r,vwzio,Status01,")))
             ]
         if not is_hmux0_0303_0504:
-            defines = [definition for definition in defines if ",Status00," not in definition]
+            # Only the active SW0303 read is gated here; the passive SW0407 decode is added by its own firmware gate.
+            defines = [
+                definition for definition in defines if not (definition.startswith("r,") and ",Status00," in definition)
+            ]
         if not is_hmux0_b509_0504:
             defines = [
                 definition
@@ -1808,6 +1868,33 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 unavailable,
                 len(defines),
             )
+
+    # Intent: runtime definitions for a SW0406/HW0504 bus whose ebusd supplies no hmux0 registers of its own.
+    # Why: issues #185/#188 - a default ebusd config lists only the registers this integration defined itself, so the
+    # evidenced yield, COP, temperature and compressor-counter registers must be defined at runtime. When ebusd lists
+    # any other hmux0 register its CSV is loaded (issue #171), so defining the same names would duplicate them.
+    def _hmux0_sw0406_definitions(self, circuit: str, defines: list[str]) -> list[str]:
+        if self._graph is None:
+            return []
+        candidates = [
+            *_hmux0_precise_and_yield_definitions(circuit),
+            *_hmux0_b509_monitor_definitions(circuit),
+            *_hmux0_compressor_counter_definitions(circuit),
+        ]
+        own_names = {
+            parts[2].casefold()
+            for definition in (*defines, *candidates)
+            if len(parts := definition.split(",", 3)) >= 3 and parts[1].casefold() == circuit.casefold()
+        }
+        heat_pump_circuits = {
+            node.circuit.casefold() for node in self._graph.nodes.values() if node.device_type == DeviceType.HEAT_PUMP
+        }
+        for key in (*self._graph.raw_registers, *self._graph.placeholder_registers):
+            key_circuit, _, key_name = key.partition(".")
+            # A copied hmu CSV (issue #188) lists its registers under `hmu`, not the scanned circuit: also counts.
+            if key_circuit.casefold() in heat_pump_circuits and key_name.split(".")[0].casefold() not in own_names:
+                return []
+        return candidates
 
     # Intent: avoid cache I/O and state publication after teardown begins.
     # Why: an in-flight poll may reach this helper after unload is requested.
@@ -2196,7 +2283,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 access, circuit, name, _, _, _, message = definition.split(",", 7)[:7]
                 if (
                     access == "r"
-                    and message == "B516"
+                    and (message == "B516" or (message == "B511" and name in HMUX0_COMPRESSOR_COUNTER_NAMES))
                     and any(node_key.casefold() == circuit.casefold() for node_key in self._graph.nodes)
                 ):
                     _add(circuit, name)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 
 from .models import DeviceGraph, DeviceNode, RegisterMeta, ScanIdentity, is_controller_circuit, is_heat_pump_circuit
@@ -71,7 +72,7 @@ HMUX0_SW0407_ENVYIELD_REGISTERS: frozenset[str] = frozenset(
     }
 )
 VWZIO_SW0500_FALLBACK_BLOCKLIST: frozenset[str] = frozenset(
-    {"PowerConsumptionVwz", "RunStatsImmersionHeaterHwc", "HeaterYieldHwcTotal", "Status01"}
+    {"PowerConsumptionVwz", "RunStatsImmersionHeaterHwc", "HeaterYieldHwcTotal", "Status01", "StationTemperatures"}
 )
 VWZIO_SW0500_FALLBACK_NAMES: frozenset[str] = frozenset(item.casefold() for item in VWZIO_SW0500_FALLBACK_BLOCKLIST)
 
@@ -183,6 +184,12 @@ def _hmux0_owner_for_sw(graph: DeviceGraph | None, sw_versions: frozenset[str]) 
 # Why: ebusd's own CSV lacks the SW0303 RunData definitions, so only this revision needs a runtime `define`.
 def hmux0_sw0303_owner(graph: DeviceGraph | None) -> str | None:
     return _hmux0_owner_for_sw(graph, frozenset({"0303"}))
+
+
+# Intent: allow SW0406/HW0504 runtime definitions only for a complete, unique, current HMUX0 scan.
+# Why: the #188 capture proves these layouts on SW0406/HW0504 only; ebusd supplies them itself when its hmux0 CSV loads.
+def hmux0_sw0406_owner(graph: DeviceGraph | None) -> str | None:
+    return _hmux0_owner_for_sw(graph, frozenset({"0406"}))
 
 
 # Intent: allow active RunDataFlowTemp/RunDataReturnTemp reads only for HMUX0 revisions with evidenced layout.
@@ -324,6 +331,8 @@ MULTI_FIELD_FIELDS: dict[str, list[str]] = {
     # layout on address 0x76; the fields are parsed the same way.
     "vwz.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
     "vwzio.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
+    # VWZIO SW0500/HW0504 passive B512/030f0001 (issue #175 capture); the ignored bytes produce no value.
+    "vwzio.StationTemperatures": ["storagetemp", "flowtemp"],
     "hmu.Status00": [
         "supplytemp",
         "waterpressure",
@@ -1616,7 +1625,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Auto Off Mode (HC1)",
         icon="mdi:thermostat-auto",
         writable=True,
-        options=["eco", "comfort"],
+        options=["eco", "night"],
         entity_type="select",
         entity_category="config",
     ),
@@ -1728,7 +1737,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Auto Off Mode (HC2)",
         icon="mdi:thermostat-auto",
         writable=True,
-        options=["eco", "comfort"],
+        options=["eco", "night"],
         entity_type="select",
         entity_category="config",
     ),
@@ -1836,7 +1845,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
         friendly_name="Auto Off Mode (HC3)",
         icon="mdi:thermostat-auto",
         writable=True,
-        options=["eco", "comfort"],
+        options=["eco", "night"],
         entity_type="select",
         entity_category="config",
     ),
@@ -2597,6 +2606,55 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     ),
 }
 
+# Intent: the Z1 settings that every further zone offers with the same metadata (issue #186).
+# Why: ebusd exposes `Z2*`/`Z3*` under the same names and layout as `Z1*`; hard-coding only Z1 left a live second zone
+# with read-only raw sensors. DayTemp and RoomTemp keep their own explicit entries above.
+SECONDARY_ZONE_SETTING_NAMES: tuple[str, ...] = (
+    "OpMode",
+    "NightTemp",
+    "QuickVetoTemp",
+    "QuickVetoDuration",
+    "HolidayTemp",
+    "SFMode",
+    "HolidayStartPeriod",
+    "HolidayEndPeriod",
+    "QuickVetoEndDate",
+    "QuickVetoEndTime",
+)
+SECONDARY_ZONE_NUMBERS: tuple[int, ...] = (2, 3)
+
+
+# Intent: copy a Z1 metadata entry for another zone, renaming the zone suffix of its label.
+# Why: the label carries "(Z1)" only where the first zone's entity name needs it; other labels stay generic.
+def _zone_metadata_from_first_zone(meta: RegisterMeta, zone_number: int) -> RegisterMeta:
+    zone_meta = replace(meta, options=list(meta.options) if meta.options else None)
+    zone_meta.friendly_name = meta.friendly_name.replace("(Z1)", f"(Z{zone_number})")
+    return zone_meta
+
+
+# Intent: add the Z2/Z3 settings next to the explicit entries, never replacing an existing entry.
+# Why: entity existence still comes from discovery; this only supplies metadata for registers ebusd reports.
+for _zone_number in SECONDARY_ZONE_NUMBERS:
+    for _setting in SECONDARY_ZONE_SETTING_NAMES:
+        _first_zone_meta = REGISTER_MAP.get(f"ctlv2.Z1{_setting}")
+        if _first_zone_meta is not None:
+            REGISTER_MAP.setdefault(
+                f"ctlv2.Z{_zone_number}{_setting}", _zone_metadata_from_first_zone(_first_zone_meta, _zone_number)
+            )
+del _zone_number, _setting, _first_zone_meta
+
+
+# Intent: return the zone number when a register is one of the shared secondary-zone settings, else None.
+# Why: the entity factory restricts these writable settings to zones that report a live room temperature.
+def secondary_zone_setting_number(name: str) -> int | None:
+    lowered = name.casefold()
+    for zone_number in SECONDARY_ZONE_NUMBERS:
+        for setting in SECONDARY_ZONE_SETTING_NAMES:
+            if lowered == f"z{zone_number}{setting}".casefold():
+                return zone_number
+    return None
+
+
 # VWZIO/VWZ Hydraulikstation Status01 (upstream PR #598) reuses the HMU layout.
 # Give it explicit metadata so the outside/storage fields are enabled here: the
 # shared HMU entries disable those because a heat pump exposes them elsewhere.
@@ -2627,6 +2685,31 @@ for _vwz_circuit in ("vwz", "vwzio"):
         }
     )
 del _vwz_circuit
+
+
+# VWZIO SW0500/HW0504 passive station temperatures (strong assumption from one captured state, issue #175): off by
+# default, unavailable until the gateway or controller sends the telegram, and named as assumed.
+REGISTER_MAP.update(
+    {
+        "vwzio.StationTemperatures": RegisterMeta(
+            friendly_name="Station Temperatures", icon="mdi:information", entity_category="diagnostic", enabled=False
+        ),
+        "vwzio.StationTemperatures.storagetemp": RegisterMeta(
+            friendly_name="Station Storage Temperature (assumed)",
+            device_class="temperature",
+            unit="°C",
+            state_class="measurement",
+            enabled=False,
+        ),
+        "vwzio.StationTemperatures.flowtemp": RegisterMeta(
+            friendly_name="Flow Temperature After Backup Heater (assumed)",
+            device_class="temperature",
+            unit="°C",
+            state_class="measurement",
+            enabled=False,
+        ),
+    }
+)
 
 
 # Encode the W/V/QQ date bytes of the b516 energy-statistics API (upstream
