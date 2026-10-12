@@ -25,7 +25,8 @@
 - The Away Mode switch now covers every zone that reports a room temperature, not only the first zone (issue #186).
   Turning it on writes the holiday period of each of those zones and of the hot water; turning it off resets all of
   them. It reads `on` only when every such zone is on holiday, so a zone that you set to holiday in the myVAILLANT app
-  alone does not make the whole system look away. A system with one zone behaves exactly as before.
+  alone does not make the whole system look away. Holiday dates that cannot be read keep the switch `unknown`
+  (a zone with an explicit "not set" date still makes it `off`). A system with one zone behaves as before.
 - HMUX0 firmware SW0407 (issue #175): the integration now decodes the controller status telegrams `B511/01`
   (flow, return, outside, hot water and storage temperature, pump state) and `B511/00` (flow temperature, compressor
   and heating state, defrost) from the bus traffic. This adds no bus traffic. In the capture, five values match the
