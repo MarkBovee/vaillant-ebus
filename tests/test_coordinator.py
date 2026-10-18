@@ -6574,7 +6574,7 @@ async def test_issue185_sw0406_without_hmux0_config_defines_runtime_registers() 
         assert defined[name] == sw0303[f"r.hmux0.{name}"], name
     assert defined["CompressorHc"].startswith("r,hmux0,CompressorHc,CompressorHc,31,08,B511,1801,")
     assert defined["CompressorHwc"].startswith("r,hmux0,CompressorHwc,CompressorHwc,31,08,B511,1802,")
-    # Not evidenced on SW0406: the power draw (unit unresolved, #188) and the registers that answered ERR.
+    # Not defined as active reads on SW0406: the power draw (passive only, #188) and the registers that answered ERR.
     assert not {"RunDataElPowerConsumption", "Status00", "RunDataStatuscode"} & set(defined)
 
 
@@ -6746,3 +6746,42 @@ async def test_stale_entities_issue_follows_the_registry() -> None:
         await c._async_refresh_stale_entities_issue()
 
         repairs_stub.async_dismiss_stale_entities.assert_awaited_once()
+
+
+# Intent: a SW0406 bus without hmux0 registers of its own decodes the gateway power frame passively.
+# Why: issue #188 - the gateway polls `B509 5402005b0d` and the answer `09 51 70 44` is 961.27 W while the unit runs;
+#      the reporter read 33.2 W idle and 1341.4 W under load from the same register, so layout and unit are proven.
+async def test_issue188_sw0406_decodes_the_gateway_power_frame_passively() -> None:
+    definitions = await _runtime_definitions_for(
+        "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    )
+    dump = load_discovery_dump("community/hmux0_sw0406_issue188_2026-10-13_092007_discovery.yaml")
+    responses = {row["request"]: row["resp"] for row in dump["labeled_telegrams"]}
+
+    power = definitions["u.hmux0.RunDataElPowerConsumption"].split(",", 8)
+    # A passive definition listens to the gateway frame, so it needs the gateway as source and costs no bus traffic.
+    assert power[:4] == ["u", "hmux0", "RunDataElPowerConsumption", "RunDataElPowerConsumption"]
+    assert power[4:8] == ["f1", "08", "B509", "5402005b0d"]
+    request = f"{power[4]}{power[5]}{power[6]}{len(power[7]) // 2:02x}{power[7]}".casefold()
+    assert request in responses
+    watts = _decode_definition_fields(power[8], bytes.fromhex(responses[request])[1:])["value"]
+    assert abs(watts - 961.27) < 0.01
+    # The active read stays undefined: only the observed gateway frame is evidence for the layout.
+    assert "r.hmux0.RunDataElPowerConsumption" not in definitions
+
+
+# Intent: the passive power definition stays hardware-gated like the other SW0406 runtime registers.
+# Why: a full 08.hmux0.csv already lists the register, and other firmware has its own evidence or none.
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "community/hmux0_issue171_2026-10-03_094933_discovery.yaml",
+        "community/hmux0_sw0406_issue186_2026-10-11_143454_discovery.yaml",
+        "community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml",
+        "community/flexotherm_issue102_2026-09-12_161841_discovery.yaml",
+    ],
+)
+async def test_issue188_sw0406_power_definition_stays_hardware_gated(fixture: str) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+
+    assert "u.hmux0.RunDataElPowerConsumption" not in definitions

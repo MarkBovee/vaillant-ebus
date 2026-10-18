@@ -185,6 +185,17 @@ def _hmux0_compressor_counter_definitions(circuit: str) -> list[str]:
     ]
 
 
+# Intent: passive definition of the electrical power frame that the myVAILLANT gateway polls from the heat pump.
+# Why: issue #188 - the SW0406 answer to `B509 5402005b0d` is a 4-byte float in watts (33.2 idle, 1341.4 running,
+# 961.27 in the gateway frame), the same layout the SW0407 passive set uses. Passive means it only decodes the
+# gateway frame and sends nothing, so it stays unavailable until that frame is seen.
+def _hmux0_passive_power_definition(circuit: str) -> str:
+    name, message_id, subaddress, fields = next(
+        item for item in HMUX0_SW0407_PASSIVE_REGISTERS if item[0] == "RunDataElPowerConsumption"
+    )
+    return f"u,{circuit},{name},{name},f1,08,{message_id},{subaddress},{fields}"
+
+
 # Intent: HMUX0 compressor runtime/start counters that are defined as plain `r` messages on SW0406.
 # Why: ebusd never polls plain `r` messages and their entities are off by default, so the energy poll re-reads them.
 HMUX0_COMPRESSOR_COUNTER_NAMES = frozenset({"CompressorHc", "CompressorHwc"})
@@ -1909,6 +1920,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             *_hmux0_precise_and_yield_definitions(circuit, float_temperatures=True),
             *_hmux0_b509_monitor_definitions(circuit),
             *_hmux0_compressor_counter_definitions(circuit),
+            _hmux0_passive_power_definition(circuit),
         ]
         own_names = {
             parts[2].casefold()
