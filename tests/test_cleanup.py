@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import enum
 import sys
 from types import SimpleNamespace
 from typing import Any
@@ -117,6 +118,36 @@ def test_customized_orphans_are_kept_and_reported() -> None:
     }
 
 
+class _ComputedName(enum.Enum):
+    """Stand-in for Home Assistant's `COMPUTED_NAME` alias sentinel, which is a truthy enum member."""
+
+    SINGLETON = 0
+
+
+# Intent: the default alias Home Assistant gives every entity is not a user customisation; an alias the user typed is.
+# Why: since Home Assistant 2026.10 each registry row holds the "use the entity name" alias as a sentinel (null on disk,
+#      an enum member in memory). Counting it made every row look customised, so the live system offered nothing to
+#      purge for its 127 restored rows. Only a non-blank alias text is user data.
+def test_default_computed_name_alias_is_not_a_customisation() -> None:
+    default = _ComputedName.SINGLETON
+    rows = [
+        _row("sensor.default_alias", "a", aliases=[default]),
+        _row("sensor.null_alias", "b", aliases=[None]),
+        _row("sensor.blank_alias", "c", aliases=["  "]),
+        _row("sensor.typed_alias", "d", aliases=[default, "Zone two"]),
+    ]
+    states = _states({row.entity_id: RESTORED for row in rows})
+
+    report = CLEANUP.find_orphans(_registry(rows), states, ENTRY_ID, DOMAIN, set())
+
+    assert [item.entity_id for item in report.orphans] == [
+        "sensor.default_alias",
+        "sensor.null_alias",
+        "sensor.blank_alias",
+    ]
+    assert [item.entity_id for item in report.kept_customized] == ["sensor.typed_alias"]
+
+
 # Intent: rows the integration disabled are orphans only when the current discovery does not generate them.
 # Why: entities disabled by default (compressor counters) are generated and must stay; stale alias rows are not.
 # Rows the user disabled are never touched.
@@ -172,12 +203,13 @@ def test_remove_orphans_removes_empty_devices_only() -> None:
     ]
     registry = _registry(rows)
     devices = MagicMock()
-    devices.devices = {
-        "dev-zone2": SimpleNamespace(config_entries={ENTRY_ID}, identifiers={(DOMAIN, "z2")}),
-        "dev-zone1": SimpleNamespace(config_entries={ENTRY_ID}, identifiers={(DOMAIN, "z1")}),
-        "dev-foreign": SimpleNamespace(config_entries={"entry-2"}, identifiers={(DOMAIN, "z9")}),
-        "dev-other-domain": SimpleNamespace(config_entries={ENTRY_ID}, identifiers={("other", "x")}),
-    }
+    # Home Assistant 2026.10 wants the registry iterated for its device entries, not used as an id mapping.
+    devices.devices = [
+        SimpleNamespace(id="dev-zone2", config_entries={ENTRY_ID}, identifiers={(DOMAIN, "z2")}),
+        SimpleNamespace(id="dev-zone1", config_entries={ENTRY_ID}, identifiers={(DOMAIN, "z1")}),
+        SimpleNamespace(id="dev-foreign", config_entries={"entry-2"}, identifiers={(DOMAIN, "z9")}),
+        SimpleNamespace(id="dev-other-domain", config_entries={ENTRY_ID}, identifiers={("other", "x")}),
+    ]
 
     result = CLEANUP.remove_orphans(
         registry, devices, ENTRY_ID, DOMAIN, ["sensor.zone_2_a", "sensor.zone_2_b", "sensor.zone_1_orphan"]
@@ -194,14 +226,22 @@ def test_remove_orphans_keeps_a_device_the_user_customised() -> None:
     rows = [_row("sensor.a", "a", device_id="dev-renamed"), _row("sensor.b", "b", device_id="dev-labelled")]
     registry = _registry(rows)
     devices = MagicMock()
-    devices.devices = {
-        "dev-renamed": SimpleNamespace(
-            config_entries={ENTRY_ID}, identifiers={(DOMAIN, "z2")}, name_by_user="Guest room", labels=set()
+    devices.devices = [
+        SimpleNamespace(
+            id="dev-renamed",
+            config_entries={ENTRY_ID},
+            identifiers={(DOMAIN, "z2")},
+            name_by_user="Guest room",
+            labels=set(),
         ),
-        "dev-labelled": SimpleNamespace(
-            config_entries={ENTRY_ID}, identifiers={(DOMAIN, "z3")}, name_by_user=None, labels={"keep"}
+        SimpleNamespace(
+            id="dev-labelled",
+            config_entries={ENTRY_ID},
+            identifiers={(DOMAIN, "z3")},
+            name_by_user=None,
+            labels={"keep"},
         ),
-    }
+    ]
 
     result = CLEANUP.remove_orphans(registry, devices, ENTRY_ID, DOMAIN, ["sensor.a", "sensor.b"])
 
@@ -267,7 +307,7 @@ REPAIRS = _component_loader._exec_source("vaillant_ebus.repairs_real", _componen
 def _flow(rows: list[SimpleNamespace], connected: bool = True) -> tuple[Any, MagicMock, MagicMock]:
     registry = _registry(rows)
     devices = MagicMock()
-    devices.devices = {}
+    devices.devices = []
     sys.modules["homeassistant.helpers.entity_registry"].async_get = MagicMock(return_value=registry)
     sys.modules["homeassistant.helpers.device_registry"].async_get = MagicMock(return_value=devices)
     flow = REPAIRS.StaleEntitiesRepairFlow(ENTRY_ID)

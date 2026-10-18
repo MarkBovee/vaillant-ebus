@@ -48,6 +48,14 @@ def _marker(value: Any) -> str | None:
     return str(getattr(value, "value", value)).casefold()
 
 
+# Intent: report whether one alias is text the user typed.
+# Why: Home Assistant 2026.10 gives every registry row a default alias, the sentinel "use the entity name" (null on
+# disk, a truthy enum member in memory). Treating it as user data made every row look customised, so nothing was
+# ever offered for removal. Only a non-blank string is a customisation.
+def _is_user_alias(alias: Any) -> bool:
+    return isinstance(alias, str) and bool(alias.strip())
+
+
 # Intent: report whether the user changed an entity registry entry by hand.
 # Why: a renamed, re-iconed, relabelled or area-assigned entity carries user data that cleanup must not delete.
 def _is_customized(entry: Any) -> bool:
@@ -57,7 +65,7 @@ def _is_customized(entry: Any) -> bool:
         or getattr(entry, "icon", None)
         or getattr(entry, "area_id", None)
         or getattr(entry, "labels", None)
-        or any(alias for alias in aliases)
+        or any(_is_user_alias(alias) for alias in aliases)
         or _marker(getattr(entry, "hidden_by", None)) == "user"
     )
 
@@ -148,15 +156,16 @@ def remove_orphans(
         removed += 1
     devices_with_entities = {entry.device_id for entry in registry.entities.values() if entry.device_id}
     removed_devices = 0
-    for device_id, device in list(device_registry.devices.items()):
+    # Iterating the registry yields device entries; using it as an id mapping is deprecated since HA 2026.10.
+    for device in list(device_registry.devices):
         if (
             entry_id in device.config_entries
             and any(identifier[0] == domain for identifier in device.identifiers)
-            and device_id not in devices_with_entities
+            and device.id not in devices_with_entities
             and not getattr(device, "name_by_user", None)
             and not getattr(device, "labels", None)
         ):
-            device_registry.async_remove_device(device_id)
+            device_registry.async_remove_device(device.id)
             removed_devices += 1
     return RemovalResult(entities=removed, devices=removed_devices)
 
