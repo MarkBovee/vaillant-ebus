@@ -6,10 +6,11 @@ import asyncio
 import logging
 import time
 from collections import deque
+from collections.abc import Callable
 from typing import TypedDict
 
 from .discovery_service import has_usable_find_records
-from .models import SendResult, WriteResult
+from .models import SendResult, WriteResult, is_no_data_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,12 +29,103 @@ WRITE_VERIFY_RETRY_DELAY = 0.25
 
 EBUSD_STATUS_SUFFIXES = (";ok", ";err", ";inv", ";too_small", ";too_big", ";nan", ";unknown")
 
+# Intent: texts of the ebusd answers that prove the adapter or the bus could not carry a request.
+# Why: issue #193 - a stuck adapter answers every bus read with `arbitration lost` or `read timeout`. Local answers
+# such as `element not found`, `invalid position` or `no data stored` cost no bus time and say nothing about it.
+BUS_ERROR_MARKERS = ("arbitration lost", "read timeout", "no signal")
+# Consecutive bus errors, over at least this many circuits, that pause the active reads.
+BUS_ERROR_TRIP_COUNT = 4
+BUS_ERROR_MIN_CIRCUITS = 2
+# Pause after the first trip; every failed probe doubles it up to the maximum.
+BUS_ERROR_BASE_COOLDOWN = 60.0
+BUS_ERROR_MAX_COOLDOWN = 600.0
+
 
 class CommandLogEntry(TypedDict):
     cmd: str
     data: str
     error: str | None
     duration_ms: int
+
+
+# Intent: tell a bus-level ebusd error from a local one in a read answer.
+# Why: only bus-level errors say something about the adapter; they feed the BusErrorGuard (issue #193).
+def is_bus_error(response: str | None) -> bool:
+    if not response:
+        return False
+    text = response.strip().casefold()
+    return text.startswith("err:") and any(marker in text for marker in BUS_ERROR_MARKERS)
+
+
+# Intent: pause the active reads while the adapter or bus cannot carry requests, and probe before resuming.
+# Why: issue #193 - a stuck adapter failed every bus read, and the integration repeated its whole read set every cycle,
+# which kept the adapter busy. The pause needs bus errors on at least two circuits, so one slave that stops answering
+# never blocks reads to the others. A value breaks the run (cached answers can do so too, which only delays a trip);
+# local errors and missing values are neutral. After the pause the next read is a probe: a value closes the guard, a
+# bus error pauses again for twice as long. A reconnect calls reset().
+class BusErrorGuard:
+    # Create a closed guard; the clock is injectable so tests can move time by hand.
+    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+        self._clock = clock
+        self._run: list[str] = []
+        self._cooldown = BUS_ERROR_BASE_COOLDOWN
+        self._pause_seconds = 0.0
+        self._paused_until: float | None = None
+        self._probing = False
+        self._trips = 0
+
+    # Report whether an active read may be sent now; the first call after the pause starts the probe.
+    def allow(self) -> bool:
+        if self._paused_until is None:
+            return True
+        if self._clock() < self._paused_until:
+            return False
+        self._paused_until = None
+        self._probing = True
+        return True
+
+    # Record one read answer. Returns True when this answer paused the active reads.
+    def observe(self, circuit: str, response: str | None) -> bool:
+        if is_bus_error(response):
+            self._run.append(circuit.casefold())
+            enough_errors = len(self._run) >= BUS_ERROR_TRIP_COUNT and len(set(self._run)) >= BUS_ERROR_MIN_CIRCUITS
+            if self._probing or enough_errors:
+                self._trip()
+                return True
+            return False
+        if response is not None and not is_no_data_value(response):
+            self._run.clear()
+            if self._probing:
+                self._probing = False
+                self._cooldown = BUS_ERROR_BASE_COOLDOWN
+        return False
+
+    # Pause the active reads and double the next pause.
+    def _trip(self) -> None:
+        self._pause_seconds = self._cooldown
+        self._paused_until = self._clock() + self._cooldown
+        self._cooldown = min(self._cooldown * 2, BUS_ERROR_MAX_COOLDOWN)
+        self._run.clear()
+        self._probing = False
+        self._trips += 1
+
+    # Forget everything, for example after a reconnect or a requested rediscovery.
+    def reset(self) -> None:
+        self._run.clear()
+        self._cooldown = BUS_ERROR_BASE_COOLDOWN
+        self._pause_seconds = 0.0
+        self._paused_until = None
+        self._probing = False
+
+    # Current state for logs and diagnostics.
+    def snapshot(self) -> dict[str, float | int | bool]:
+        paused = self._paused_until is not None and self._clock() < self._paused_until
+        return {
+            "paused": paused,
+            "pause_seconds": self._pause_seconds,
+            "consecutive_bus_errors": len(self._run),
+            "trips": self._trips,
+        }
 
 
 # Strip ebusd read status suffix from value (e.g. "23.50;ok" -> "23.50")

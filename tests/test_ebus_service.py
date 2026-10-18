@@ -1096,3 +1096,115 @@ async def test_reconnect_guard_single_flight(monkeypatch) -> None:
     assert len(skipped) == 1, "concurrent caller must be told its reconnect was skipped"
     assert calls["n"] == 1
     assert s._reconnecting is False
+
+
+BusErrorGuard = EBUS.BusErrorGuard
+
+
+# Build a guard whose clock the test advances by hand.
+def _guard() -> tuple[BusErrorGuard, list[float]]:
+    now = [1000.0]
+    return BusErrorGuard(clock=lambda: now[0]), now
+
+
+# Intent: only the ebusd answers that prove the adapter or bus could not carry a request count as bus errors.
+# Why: issue #193 - a stuck adapter answers with arbitration or timeout errors; unknown elements, bad positions and
+#      no-data replies cost no bus time and say nothing about the adapter.
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        ("ERR: read timeout", True),
+        ("ERR: arbitration lost", True),
+        ("ERR: no signal", True),
+        ("err: Read Timeout", True),
+        ("ERR: element not found", False),
+        ("ERR: invalid position", False),
+        ("no data stored", False),
+        ("23.5", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_is_bus_error_matches_only_bus_level_errors(response: str | None, expected: bool) -> None:
+    assert EBUS.is_bus_error(response) is expected
+
+
+# Intent: four consecutive bus errors across two circuits pause active reads for the cool-down.
+# Why: issue #193 - every send failed on both the pump (08) and the controller (15), and the integration kept
+#      repeating its whole read set each cycle, which keeps a stuck adapter busy.
+def test_guard_trips_after_consecutive_bus_errors_on_two_circuits() -> None:
+    guard, now = _guard()
+
+    assert [guard.observe(circuit, "ERR: read timeout") for circuit in ("hmux0", "hmux0", "ctlv3", "hmux0")] == [
+        False,
+        False,
+        False,
+        True,
+    ]
+    assert guard.allow() is False
+    now[0] += EBUS.BUS_ERROR_BASE_COOLDOWN + 1
+    assert guard.allow() is True
+
+
+# Intent: a single circuit that stops answering never pauses reads to the other circuits.
+# Why: an offline slave (for example a removed VR_71) times out on its own; the bus is fine for everything else.
+def test_guard_never_trips_for_a_single_silent_circuit() -> None:
+    guard, _ = _guard()
+
+    assert not any(guard.observe("vr_71", "ERR: read timeout") for _ in range(25))
+    assert guard.allow() is True
+
+
+# Intent: a value breaks the error run, while local errors and missing values leave it alone.
+# Why: a register that returns data proves the bus carried a request; `element not found` proves nothing either way.
+def test_guard_value_resets_the_run_and_local_errors_are_neutral() -> None:
+    guard, _ = _guard()
+
+    for circuit in ("hmux0", "ctlv3", "hmux0"):
+        guard.observe(circuit, "ERR: arbitration lost")
+    guard.observe("ctlv3", "ERR: element not found")
+    guard.observe("ctlv3", None)
+    assert guard.observe("hmux0", "ERR: arbitration lost") is True
+
+    guard.reset()
+    for circuit in ("hmux0", "ctlv3", "hmux0"):
+        guard.observe(circuit, "ERR: arbitration lost")
+    guard.observe("ctlv3", "21.5")
+    assert guard.observe("hmux0", "ERR: arbitration lost") is False
+    assert guard.allow() is True
+
+
+# Intent: a failed probe after the cool-down doubles the pause, a value closes the guard and restores the base pause.
+# Why: a stuck adapter only clears when it is reset, so probing must get rarer; a recovered bus must resume at once.
+def test_guard_probe_failure_doubles_the_cooldown_and_a_value_closes_it() -> None:
+    guard, now = _guard()
+    for circuit in ("hmux0", "ctlv3", "hmux0", "ctlv3"):
+        guard.observe(circuit, "ERR: read timeout")
+    now[0] += EBUS.BUS_ERROR_BASE_COOLDOWN + 1
+    assert guard.allow() is True
+
+    assert guard.observe("hmux0", "ERR: read timeout") is True
+    now[0] += EBUS.BUS_ERROR_BASE_COOLDOWN + 1
+    assert guard.allow() is False
+    now[0] += EBUS.BUS_ERROR_BASE_COOLDOWN
+    assert guard.allow() is True
+
+    assert guard.observe("hmux0", "33.4") is False
+    for circuit in ("hmux0", "ctlv3", "hmux0", "ctlv3"):
+        guard.observe(circuit, "ERR: read timeout")
+    now[0] += EBUS.BUS_ERROR_BASE_COOLDOWN + 1
+    assert guard.allow() is True
+
+
+# Intent: a reconnect clears the guard so a replugged adapter is used again at once.
+# Why: the stuck state ends when the adapter is reset; waiting out an old cool-down would hide the recovery.
+def test_guard_reset_clears_the_pause() -> None:
+    guard, _ = _guard()
+    for circuit in ("hmux0", "ctlv3", "hmux0", "ctlv3"):
+        guard.observe(circuit, "ERR: read timeout")
+    assert guard.allow() is False
+
+    guard.reset()
+
+    assert guard.allow() is True
+    assert guard.snapshot()["paused"] is False

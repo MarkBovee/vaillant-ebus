@@ -6654,3 +6654,47 @@ async def test_issue185_sw0406_compressor_counters_are_read_with_the_energy_poll
         assert {("hmux0", "CompressorHc"), ("hmux0", "CompressorHwc")} <= actual
         # The shared yield/COP/temperature registers are read through the existing map-driven pass.
         assert {("hmux0", "YieldHcDay"), ("hmux0", "CopHc"), ("hmux0", "RunDataFlowTemp")} <= actual
+
+
+# Intent: a stuck adapter stops the fallback cycle after repeated bus errors, stays quiet during the cool-down and
+#         resumes with the next cycle once the cool-down is over.
+# Why: issue #193 - 113 of 113 bus reads failed and the integration repeated the whole set every cycle, which keeps
+#      a stuck adapter busy; a healthy bus must still get every read.
+async def test_issue193_stuck_adapter_pauses_the_fallback_cycle_and_resumes_after_the_cooldown() -> None:
+    fixture = "community/hmux0_issue171_2026-10-03_094933_discovery.yaml"
+    clock = [1000.0]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture))
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator._graph = graph
+        coordinator._refresh_find_keys()
+        coordinator._bus_guard = EBUS.BusErrorGuard(clock=lambda: clock[0])
+        await coordinator._define_custom_registers()
+
+        async def _stuck(circuit: str, name: str, **kwargs: object) -> str:
+            return "ERR: arbitration lost"
+
+        # The first healthy cycle adds registers to the graph, so the second one is the steady-state control.
+        coordinator.ebus.read_register = AsyncMock(return_value="21.5")
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        coordinator.ebus.read_register = AsyncMock(return_value="21.5")
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        healthy_reads = coordinator.ebus.read_register.await_count
+        assert len({call.args[0] for call in coordinator.ebus.read_register.await_args_list}) >= 2
+
+        coordinator.ebus.read_register = AsyncMock(side_effect=_stuck)
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        assert EBUS.BUS_ERROR_TRIP_COUNT <= coordinator.ebus.read_register.await_count < healthy_reads
+        assert coordinator._bus_guard.allow() is False
+
+        coordinator.ebus.read_register = AsyncMock(side_effect=_stuck)
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        assert coordinator.ebus.read_register.await_count == 0
+
+        clock[0] += EBUS.BUS_ERROR_BASE_COOLDOWN + 1
+        coordinator.ebus.read_register = AsyncMock(return_value="21.5")
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        assert coordinator.ebus.read_register.await_count == healthy_reads

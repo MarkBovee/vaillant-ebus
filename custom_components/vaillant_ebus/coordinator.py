@@ -25,7 +25,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from . import repairs
 from .backend.analysis_service import AnalysisResult, AnalysisService
 from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService, node_has_live_data
-from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, EbusService
+from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, BusErrorGuard, EbusService
 from .backend.entity_factory import EntityDescription, EntityFactoryService
 from .backend.mapping import (
     HMUX0_SW0407_ENVYIELD_REGISTERS,
@@ -602,6 +602,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self._analysis_scheduled = False
         self._last_placeholder_poll = datetime.min
         self._last_energy_poll = datetime.min
+        # Pauses the cyclic active reads while the adapter fails every bus request (issue #193).
+        self._bus_guard = BusErrorGuard()
         self._runtime_definitions: dict[str, str] = {}
         # (circuit, name) pairs whose runtime definition was withheld because the owner cannot answer it.
         # Rebuilt by every `_define_custom_registers` run, which follows each connect and reconnect. It must survive
@@ -1356,6 +1358,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self.ebus = None
         self._ebusd_connected = False
         self._started = False
+        self._bus_guard.reset()
         if self._stopped or self._unload_requested:
             return
         await self.async_request_refresh()
@@ -2215,6 +2218,11 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # Why: its circuit ownership may no longer match the devices currently on the bus.
         if getattr(self.ebus, "last_find_usable", None) is False:
             return
+        # Intent: send no active read while the bus guard is paused after repeated bus errors.
+        # Why: a stuck adapter fails every request, and repeating the whole read set each cycle keeps it busy.
+        if not self._bus_guard.allow():
+            _LOGGER.debug("Fallback read skipped: active reads are paused after repeated ebusd bus errors")
+            return
         graph_keys = self._last_find_keys
 
         # Intent: resolve metadata for a discovered source circuit without changing its owner.
@@ -2373,10 +2381,20 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 return
             key = f"{circuit}.{name}"
             register_key = _mapping_key(self.registers, key) or key
+            if not self._bus_guard.allow():
+                continue
             try:
                 value = await self.ebus.read_register(circuit, name, raise_transport_errors=True)
                 if self._stopped or self._unload_requested:
                     return
+                if self._bus_guard.observe(circuit, value):
+                    _LOGGER.warning(
+                        "Pausing active ebusd reads for %d s after repeated bus errors (last: %s on %s). "
+                        "If the adapter is stuck, resetting it clears the error; cached values stay available",
+                        self._bus_guard.snapshot()["pause_seconds"],
+                        value,
+                        key,
+                    )
                 was_new = register_key not in self.registers
                 value = _usable_register_value(register_key, value)
                 if value and (value.startswith("or:") or "read [-" in value):
@@ -2695,6 +2713,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     if self._stopped or self._unload_requested:
                         return {"ebusd": await self._async_values_from_registers()}
                     if reconnected:
+                        self._bus_guard.reset()
                         self._runtime_definitions.clear()
                         self._last_energy_poll = datetime.min
                         ebus = self.ebus
