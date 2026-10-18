@@ -10,6 +10,8 @@ MODELS = load_backend("models")
 PROFILES = load_backend("hardware_profiles")
 
 
+# Intent: build a device node that carries a scan identity, HMUX0 SW0407 by default.
+# Why: each gate case changes only the field it is about.
 def _node(
     circuit: str = "hmux0",
     device_type: str = "HEAT_PUMP",
@@ -28,10 +30,14 @@ def _node(
     )
 
 
+# Intent: build one scan identity row, complete by default.
+# Why: each uniqueness case changes only the field it is about.
 def _row(address: str = "scan.08", scan_type: str = "HMUX0", sw: str = "0407", hw: str = "0504", complete: bool = True):
     return MODELS.ScanIdentity(address=address, scan_type=scan_type, scan_sw=sw, scan_hw=hw, complete=complete)
 
 
+# Intent: build a device graph from nodes and scan rows.
+# Why: the uniqueness check reads only the scan rows, so nothing else is needed.
 def _graph(nodes: list, rows: list) -> object:
     return MODELS.DeviceGraph(
         nodes={n.circuit: n for n in nodes}, raw_registers={}, placeholder_registers=set(), scan_identities=tuple(rows)

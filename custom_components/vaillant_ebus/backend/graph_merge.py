@@ -88,7 +88,8 @@ def merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> Devic
     )
 
 
-# Append entity descriptions without duplicating keys already present.
+# Intent: append new entity descriptions and update the ones that already exist, without duplicating keys.
+# Why: cache-seeded entities are already registered with HA; a live description must update them in place.
 def merge_entities(
     existing: list[EntityDescription],
     additions: list[EntityDescription],

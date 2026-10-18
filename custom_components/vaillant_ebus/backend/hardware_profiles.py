@@ -26,6 +26,8 @@ class HardwareProfile:
     prefix_match: bool = False
     evidence: str = ""
 
+    # Intent: decide whether one scan identity (type, firmware, hardware) falls under this profile.
+    # Why: every hardware gate shares this check, so a new revision is a table entry, never a literal comparison.
     def matches_scan(self, scan_type: str, scan_sw: str, scan_hw: str) -> bool:
         """Return whether a scan identity (type, firmware, hardware) is covered by this profile."""
         kind = scan_type.casefold()

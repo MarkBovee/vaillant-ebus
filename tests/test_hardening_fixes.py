@@ -738,6 +738,8 @@ _FULL_RUN = ["grab", "grab result all", "grab stop"]
 _TELEGRAM = "f108b509055402008813 / 0e020188136400ffffffffffffffff = 1"
 
 
+# Intent: the dump grab raises the matching error for every unusable reply and sends only the expected commands.
+# Why: an unconfirmed grab would otherwise export a dump of a bus that was never recorded.
 @pytest.mark.parametrize(
     ("replies", "error", "match", "commands"),
     [
@@ -781,6 +783,8 @@ async def test_async_grab_lifecycle_rejections(
 ) -> None:
     seen: list[str] = []
 
+    # Intent: stand in for the ebusd grab command: record it, then return or raise the scripted reply.
+    # Why: the rejection cases need a reply per command without a real ebusd connection.
     async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
         seen.append(command)
         reply = replies.get(command, _GRAB_OK[command])
@@ -808,6 +812,8 @@ async def test_async_grab_accepts_empty_or_valid_telegram_result(
 ) -> None:
     seen: list[str] = []
 
+    # Intent: stand in for the ebusd grab command: record it, then return the scripted result lines.
+    # Why: the accept cases need a valid acknowledgement per command without a real ebusd connection.
     async def _grab_cmd(host, port, command, ensure_active=None, on_grab_started=None):
         seen.append(command)
         return result_lines if command == "grab result all" else _GRAB_OK[command]

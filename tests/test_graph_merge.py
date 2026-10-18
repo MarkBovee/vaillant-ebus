@@ -12,10 +12,14 @@ FACTORY = load_backend("entity_factory")
 DeviceType = MODELS.DeviceType
 
 
+# Intent: build a device node for the merge tests, a heat pump unless told otherwise.
+# Why: most merge cases care about registers and scan rows, not the device type.
 def _node(circuit: str, device_type=DeviceType.HEAT_PUMP, **kwargs) -> object:
     return MODELS.DeviceNode(circuit=circuit, device_type=device_type, **kwargs)
 
 
+# Intent: build a device graph from nodes, raw registers, placeholders, error registers and scan rows.
+# Why: each merge case then states only the parts it is about.
 def _graph(nodes: list, raw: dict | None = None, placeholders=(), errors=(), scans=()) -> object:
     return MODELS.DeviceGraph(
         nodes={n.circuit: n for n in nodes},
@@ -167,6 +171,8 @@ def test_merge_recomputes_node_has_data() -> None:
     )
 
 
+# Intent: build an entity description for one register name and circuit.
+# Why: the merge tests compare descriptions, not discovery output.
 def _entity(unique_name: str, name: str = "n", circuit: str = "hmu") -> object:
     register = MODELS.EbusdRegister(circuit=circuit, name=unique_name, fields=["value"], value={"value": "1"})
     return FACTORY.EntityDescription(circuit, unique_name, "value", MODELS.RegisterMeta(), register)

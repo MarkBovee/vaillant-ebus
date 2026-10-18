@@ -23,6 +23,8 @@ from collections.abc import Callable, Mapping, Sequence
 REQUIRED_CHECKS: tuple[str, ...] = ("validate", "validate-hacs")
 
 
+# Intent: reduce the check runs of one commit to pass, fail or pending for the required checks.
+# Why: a missing or unfinished check must wait; only a finished check that is not a success fails at once.
 def evaluate(check_runs: Sequence[Mapping[str, object]], required: Sequence[str] = REQUIRED_CHECKS) -> tuple[str, str]:
     """Return ``(state, detail)`` where state is ``pass``, ``fail`` or ``pending``."""
     by_name: dict[str, Mapping[str, object]] = {}
@@ -41,6 +43,8 @@ def evaluate(check_runs: Sequence[Mapping[str, object]], required: Sequence[str]
     return "pass", "all required checks succeeded"
 
 
+# Intent: read all check runs of one commit through the `gh` CLI.
+# Why: the gate needs the real result for the tagged commit, not the state of a branch.
 def _fetch_check_runs(repo: str, sha: str) -> list[dict[str, object]]:
     out = subprocess.run(
         ["gh", "api", f"repos/{repo}/commits/{sha}/check-runs", "--paginate", "--jq", ".check_runs[]"],
@@ -51,6 +55,8 @@ def _fetch_check_runs(repo: str, sha: str) -> list[dict[str, object]]:
     return [json.loads(line) for line in out.splitlines() if line.strip()]
 
 
+# Intent: poll the check runs until the gate passes, fails or the timeout ends.
+# Why: hassfest and HACS run in other workflows and can finish after the tag push; sleep and clock are replaceable.
 def wait_for_gate(
     fetch: Callable[[], Sequence[Mapping[str, object]]],
     timeout: float,
@@ -70,6 +76,8 @@ def wait_for_gate(
         sleep(interval)
 
 
+# Intent: parse the arguments, run the gate and turn its result into the exit code.
+# Why: the release job stops on a non-zero exit before it builds the zip.
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo")

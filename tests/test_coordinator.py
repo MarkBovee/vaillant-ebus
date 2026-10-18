@@ -698,7 +698,7 @@ async def test_issue161_vwzio_definition_and_fallback_require_scan_address_76(
 
 # Intent: stale station scan identity cannot survive a later graph with no station node or ambiguous scans.
 # Why: a cached prior 0x76 address is not current authority for definitions against the live bus.
-def testmerge_device_graphs_replaces_current_vwzio_scan_authority() -> None:
+def test_merge_device_graphs_replaces_current_vwzio_scan_authority() -> None:
     previous = DISCOVERY.DiscoveryService.build_device_graph(
         [
             "scan.76 = MF=Vaillant;ID=VWZIO;SW=0500;HW=0504",

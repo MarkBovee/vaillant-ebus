@@ -18,19 +18,27 @@ HMUX0_SW0406 = "community/hmux0_issue171_2026-10-03_094933_discovery.yaml"
 FLEXOTHERM = "community/flexotherm_discovery.yaml"
 
 
+# Intent: build the device graph of a fixture from its post-define find lines.
+# Why: the planner decides on the state after the integration's own define pass.
 def _graph(fixture: str) -> object:
     return DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
 
 
+# Intent: run the fallback planner on a graph, with a resolver that returns the circuit the graph really has.
+# Why: tests need the planner's decision for a fixture without Home Assistant or a coordinator.
 def _plan(graph: object, definitions: dict[str, str] | None = None, **kwargs: object) -> list[tuple[str, str]]:
     find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
 
+    # Intent: resolve a circuit name to the node the graph actually holds.
+    # Why: it mirrors the coordinator's alias resolution, so the test never assumes a literal circuit.
     def resolve(circuit: str) -> str | None:
         return next((node for node in graph.nodes if node.casefold() == circuit.casefold()), None)
 
     return PLANNER.plan_fallback_reads(graph, find_keys, definitions or {}, resolve, MAPPING.REGISTER_MAP, **kwargs)
 
 
+# Intent: copy a graph with the HMUX0 node and its scan row set to one firmware revision.
+# Why: the gate test needs one capture under several revisions without hand-editing a fixture.
 def _with_hmux0_firmware(graph: object, sw: str) -> object:
     """Return a copy of the graph whose HMUX0 node and scan row both report firmware ``sw``."""
     nodes = dict(graph.nodes)
@@ -115,6 +123,8 @@ def test_skip_reads_and_error_registers_are_excluded() -> None:
 def test_fallback_candidate_uses_discovered_owner_and_role() -> None:
     graph = _graph(HMUX0_SW0406)
 
+    # Intent: resolve a circuit name to the node the graph actually holds.
+    # Why: it mirrors the coordinator's alias resolution, so the test never assumes a literal circuit.
     def resolve(circuit: str) -> str | None:
         return next((node for node in graph.nodes if node.casefold() == circuit.casefold()), None)
 
@@ -128,14 +138,20 @@ def test_fallback_candidate_uses_discovered_owner_and_role() -> None:
     assert PLANNER.fallback_candidate(None, resolve, "hmu", "Status00") is None
 
 
+# Intent: build a small device graph from the given nodes and registers.
+# Why: gate tests force one branch at a time and do not need a whole capture.
 def _mini_graph(nodes: dict[str, object], raw: dict[str, str] | None = None, placeholders: set[str] | None = None):
     return MODELS.DeviceGraph(nodes=nodes, raw_registers=raw or {}, placeholder_registers=placeholders or set())
 
 
+# Intent: build a device node of the given type for a mini graph.
+# Why: it keeps the mini graphs in the tests short.
 def _node(circuit: str, device_type: object, **kwargs: object) -> object:
     return MODELS.DeviceNode(circuit=circuit, device_type=device_type, **kwargs)
 
 
+# Intent: run the planner on a mini graph; unless told otherwise the resolver knows no circuit.
+# Why: it shows what the planner does when the coordinator cannot resolve an alias.
 def _plan_mini(graph: object, resolve=None, **kwargs: object) -> list[tuple[str, str]]:
     find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
     return PLANNER.plan_fallback_reads(
@@ -211,6 +227,8 @@ def test_map_driven_flow_temp_read_is_firmware_gated(sw: str, expected: bool) ->
         placeholder_registers={k for k in graph.placeholder_registers if not k.casefold().endswith(".rundataflowtemp")},
     )
 
+    # Intent: map the `hmu` alias and `hmux0` to the HMUX0 node and nothing else.
+    # Why: the explicit read must follow the discovered owner, not a literal alias.
     def resolve(circuit: str) -> str | None:
         return "hmux0" if circuit.casefold() in {"hmu", "hmux0"} else None
 

@@ -65,6 +65,8 @@ def find_mutants(tree: ast.AST) -> list[Mutant]:
     return mutants
 
 
+# Intent: swap one child node in a syntax tree for another, wherever it hangs.
+# Why: the `not` mutant replaces a node by its operand, and ast has no helper for that.
 def _replace_child(tree: ast.AST, old: ast.AST, new: ast.AST) -> None:
     for parent in ast.walk(tree):
         for name, value in ast.iter_fields(parent):
@@ -97,6 +99,8 @@ def apply_mutant(tree: ast.AST, mutant: Mutant) -> str:
     return ast.unparse(clone)
 
 
+# Intent: run pytest for the chosen tests and report whether all of them passed.
+# Why: a mutant survives only when the tests stay green; a hanging mutant counts as caught.
 def _tests_pass(pytest_args: list[str]) -> bool:
     command = [sys.executable, "-m", "pytest", "-q", "-x", "--tb=no", "-p", "no:cacheprovider", *pytest_args]
     try:
@@ -118,6 +122,8 @@ def run(target: Path, pytest_args: list[str]) -> Iterator[tuple[Mutant, bool]]:
         target.write_text(original)
 
 
+# Intent: read the target file and the test selection, print the surviving mutants and a summary line.
+# Why: survivors point at conditions no test constrains; the exit code is 1 when any survived.
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
