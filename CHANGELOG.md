@@ -10,6 +10,11 @@
   Vaillant eBUS entities". Open it to see the first names and the count; nothing is removed until you select Submit.
   Devices left without entities are removed with them. Entities you renamed, hid, labelled or put in an area are kept,
   and so are devices you renamed or labelled. Nothing is checked while ebusd is not connected.
+- The same repair also lists enabled entities that have no data and that a new installation would not switch on, for
+  example sensors for hardware you do not have (storage temperatures, solar yield) and service or test registers.
+  Older releases created them as enabled, and Home Assistant never changes an enabled entity by itself. After you
+  select Submit they are switched off, not deleted, and each one switches on again by itself when its register
+  returns a value. Entities you renamed, hid, labelled or put in an area are left alone.
 - "Purge stale entities" in the integration options uses the same check and the same preview.
 
 ### Changed

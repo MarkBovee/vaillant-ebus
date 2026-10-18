@@ -36,6 +36,12 @@ shows "Stale Vaillant eBUS entities". Open it to see how many there are and the 
 you select **Submit**. The same list is available under **Settings → Devices & services → Vaillant eBUS → Configure →
 Purge Stale Entities**. Entities you renamed, hid, labelled or placed in an area are kept.
 
+The same repair also lists enabled entities that have no data and that a new installation would not switch on, for
+example sensors for hardware you do not have (storage temperatures, solar yield) and service or test registers. Older
+releases created them as enabled, and Home Assistant never changes an enabled entity by itself. After you select
+**Submit** they are switched off, not deleted, and each one switches on again by itself when its register returns a
+value.
+
 Zones that the controller reports as `inactive` (heating circuits 2 and 3 on many systems) get no entities at all. The
 `Circuit Type` sensor of such a circuit is on the controller device. If your system does use that zone, set
 `enabled: true` for its registers in `entities.yaml`.

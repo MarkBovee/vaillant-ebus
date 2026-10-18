@@ -58,7 +58,7 @@ custom_components/vaillant_ebus/
 ├── calendar.py         # Read-only schedule entities
 ├── datetime.py         # Datetime entities
 ├── diagnostics.py      # HA diagnostics provider
-├── cleanup.py          # Finds and removes stale registry entities (options purge and the stale_entities repair)
+├── cleanup.py          # Finds stale registry entities to remove and enabled entities without data to switch off (options purge, repair)
 ├── repairs.py          # Repair issues and their fix flows
 ├── backend/
 │   ├── ebus_service.py # EbusService — asyncio TCP transport
