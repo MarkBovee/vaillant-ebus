@@ -133,7 +133,8 @@ def stale_report(
 
 
 # Intent: remove the given registry entities, then the devices of this config entry that have no entity left.
-# Why: an empty zone or solar device would otherwise stay in the device list after its entities are gone.
+# Why: an empty zone or solar device would otherwise stay in the device list after its entities are gone. A device the
+# user renamed or labelled stays, because that is user data like a renamed entity.
 def remove_orphans(
     registry: Any,
     device_registry: Any,
@@ -152,6 +153,8 @@ def remove_orphans(
             entry_id in device.config_entries
             and any(identifier[0] == domain for identifier in device.identifiers)
             and device_id not in devices_with_entities
+            and not getattr(device, "name_by_user", None)
+            and not getattr(device, "labels", None)
         ):
             device_registry.async_remove_device(device_id)
             removed_devices += 1

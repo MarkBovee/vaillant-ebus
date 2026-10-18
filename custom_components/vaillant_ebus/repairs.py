@@ -44,15 +44,18 @@ async def async_create_fix_flow(
 class StaleEntitiesRepairFlow(RepairsFlow):
     """Preview and remove the stale Vaillant eBUS registry entities."""
 
-    # Remember which config entry the issue belongs to.
+    # Intent: remember which config entry the issue belongs to.
+    # Why: the flow recomputes the stale entities of exactly that entry at each step.
     def __init__(self, entry_id: str) -> None:
         self._entry_id = entry_id
 
-    # Start at the confirmation step, which shows the preview.
+    # Intent: start at the confirmation step, which shows the preview.
+    # Why: the repair has one decision only, so there is no separate first screen.
     async def async_step_init(self, user_input: dict[str, str] | None = None) -> FlowResult:
         return await self.async_step_confirm()
 
-    # Show the preview; on submit remove the listed orphans and finish, which clears the issue.
+    # Intent: show the preview; on submit remove the listed orphans and finish, which clears the issue.
+    # Why: nothing may be removed before the user submits, and the list must be true at that moment.
     async def async_step_confirm(self, user_input: dict[str, str] | None = None) -> FlowResult:
         coordinator = self.hass.data.get(DOMAIN, {}).get(self._entry_id)
         registry = entity_registry.async_get(self.hass)
@@ -110,6 +113,8 @@ async def async_dismiss_detection_incomplete(hass: HomeAssistant) -> None:
     ir.async_delete_issue(hass, DOMAIN, ISSUE_DETECTION_INCOMPLETE)
 
 
+# Intent: create or update the repair issue that lists the stale entities.
+# Why: the issue carries the entry id for the fix flow and the count and names for the text.
 async def async_create_stale_entities(hass: HomeAssistant, entry_id: str, count: int, preview: str, kept: int) -> None:
     """Create or update the repair issue that lists stale entities for removal."""
     ir.async_create_issue(
@@ -124,6 +129,8 @@ async def async_create_stale_entities(hass: HomeAssistant, entry_id: str, count:
     )
 
 
+# Intent: remove the stale entities repair issue.
+# Why: once nothing is stale the repair must not stay open.
 async def async_dismiss_stale_entities(hass: HomeAssistant) -> None:
     """Remove the stale entities repair issue once nothing is stale."""
     ir.async_delete_issue(hass, DOMAIN, ISSUE_STALE_ENTITIES)

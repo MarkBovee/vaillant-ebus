@@ -49,6 +49,7 @@ def _entities(lines: list[str], overrides: dict[str, dict] | None = None) -> dic
 
 
 # Intent: registers of a numbered zone or heating circuit, by key.
+# Why: the assertions compare the whole set of a zone, not single names.
 def _zone_keys(entities: dict, prefix: str) -> list[str]:
     return sorted(key for key, entity in entities.items() if re.match(rf"^{prefix}(?!\d)", entity.name, re.IGNORECASE))
 

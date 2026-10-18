@@ -6674,6 +6674,8 @@ async def test_issue193_stuck_adapter_pauses_the_fallback_cycle_and_resumes_afte
         coordinator._bus_guard = EBUS.BusErrorGuard(clock=lambda: clock[0])
         await coordinator._define_custom_registers()
 
+        # Intent: answer every read like an adapter that cannot send.
+        # Why: the stuck state of issue #193 fails each bus read with an arbitration error.
         async def _stuck(circuit: str, name: str, **kwargs: object) -> str:
             return "ERR: arbitration lost"
 

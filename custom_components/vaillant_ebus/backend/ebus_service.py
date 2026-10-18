@@ -64,7 +64,8 @@ def is_bus_error(response: str | None) -> bool:
 # local errors and missing values are neutral. After the pause the next read is a probe: a value closes the guard, a
 # bus error pauses again for twice as long. A reconnect calls reset().
 class BusErrorGuard:
-    # Create a closed guard; the clock is injectable so tests can move time by hand.
+    # Intent: create a closed guard whose clock can be replaced.
+    # Why: tests must move time by hand instead of waiting for the real pause.
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
         self._run: list[str] = []
@@ -74,7 +75,8 @@ class BusErrorGuard:
         self._probing = False
         self._trips = 0
 
-    # Report whether an active read may be sent now; the first call after the pause starts the probe.
+    # Intent: report whether an active read may be sent now; the first call after the pause starts the probe.
+    # Why: the loop that reads registers asks before every read, so a pause ends exactly once.
     def allow(self) -> bool:
         if self._paused_until is None:
             return True
@@ -84,7 +86,8 @@ class BusErrorGuard:
         self._probing = True
         return True
 
-    # Record one read answer. Returns True when this answer paused the active reads.
+    # Intent: record one read answer and return True when it paused the active reads.
+    # Why: the guard only learns about the bus from the answers of the reads it gates.
     def observe(self, circuit: str, response: str | None) -> bool:
         if is_bus_error(response):
             self._run.append(circuit.casefold())
@@ -100,7 +103,8 @@ class BusErrorGuard:
                 self._cooldown = BUS_ERROR_BASE_COOLDOWN
         return False
 
-    # Pause the active reads and double the next pause.
+    # Intent: pause the active reads and double the next pause.
+    # Why: a stuck adapter only clears when it is reset, so probing must get rarer while it keeps failing.
     def _trip(self) -> None:
         self._pause_seconds = self._cooldown
         self._paused_until = self._clock() + self._cooldown
@@ -109,7 +113,8 @@ class BusErrorGuard:
         self._probing = False
         self._trips += 1
 
-    # Forget everything, for example after a reconnect or a requested rediscovery.
+    # Intent: forget the run, the pause and the probe state.
+    # Why: a reconnect or a requested rediscovery may mean the adapter was replugged, so old errors do not count.
     def reset(self) -> None:
         self._run.clear()
         self._cooldown = BUS_ERROR_BASE_COOLDOWN
@@ -117,7 +122,8 @@ class BusErrorGuard:
         self._paused_until = None
         self._probing = False
 
-    # Current state for logs and diagnostics.
+    # Intent: return the guard state as plain values.
+    # Why: the pause log line and tests read the pause length and the counters without touching private state.
     def snapshot(self) -> dict[str, float | int | bool]:
         paused = self._paused_until is not None and self._clock() < self._paused_until
         return {

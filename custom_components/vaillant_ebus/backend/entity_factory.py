@@ -256,12 +256,14 @@ def ghost_solar_circuits(graph: DeviceGraph) -> frozenset[str]:
 
 
 # Intent: return the zone or heating-circuit number of a zone node circuit such as `z2` or `hc3`, or None.
+# Why: zone devices are matched to the declared-unused numbers by this number.
 def _zone_node_number(circuit: str) -> int | None:
     digits = re.sub(r"^\D+", "", circuit)
     return int(digits) if digits.isdigit() else None
 
 
 # Intent: return the lower-cased circuit part of a `circuit.name` register key.
+# Why: circuit names are compared case-insensitively everywhere in the graph.
 def _circuit_of(register_key: str) -> str:
     return register_key.partition(".")[0].casefold()
 

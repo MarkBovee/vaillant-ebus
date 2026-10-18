@@ -8,8 +8,8 @@
   after the integration stopped providing them; they show as "unavailable" and never go away by themselves. About
   fifteen minutes after start the integration checks for them and, if it finds any, shows a repair called "Stale
   Vaillant eBUS entities". Open it to see the first names and the count; nothing is removed until you select Submit.
-  Devices left without entities are removed with them. Entities you renamed, hid, labelled or put in an area are kept.
-  Nothing is checked while ebusd is not connected.
+  Devices left without entities are removed with them. Entities you renamed, hid, labelled or put in an area are kept,
+  and so are devices you renamed or labelled. Nothing is checked while ebusd is not connected.
 - "Purge stale entities" in the integration options uses the same check and the same preview.
 
 ### Changed
@@ -18,8 +18,8 @@
   a holiday date while no holiday is set, and it did not find the leftovers described above. It now removes only
   entities that nothing provides any more.
 - A heating circuit that the controller itself reports as `inactive` (circuits 2 and 3 on many systems) no longer gets
-  any zone entities. The controller answers fixed default values for zones that do not exist, such as a day
-  temperature of 21.0 or holiday dates in 2015, and those looked like real data. On one test system that made two
+  zone sensors, settings or controls. The controller answers fixed default values for zones that do not exist, such as
+  a day temperature of 21.0 or holiday dates in 2015, and those looked like real data. On one test system that made two
   extra zone devices with about 80 entities. The `Circuit Type` sensor of such a circuit now sits on the controller
   device, so you can still see why the zone is missing. This rule does not apply to zone 1, a circuit whose type cannot
   be read is never hidden, and a zone that reports a room temperature is kept. To bring a hidden register back, set

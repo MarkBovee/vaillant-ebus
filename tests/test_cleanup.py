@@ -187,6 +187,28 @@ def test_remove_orphans_removes_empty_devices_only() -> None:
     devices.async_remove_device.assert_called_once_with("dev-zone2")
 
 
+# Intent: an empty device that the user renamed or labelled is kept when its entities are removed.
+# Why: the audit of release 1.12.0 - the changelog promises to keep what the user customised, and a device name or
+#      label is user data just like an entity name.
+def test_remove_orphans_keeps_a_device_the_user_customised() -> None:
+    rows = [_row("sensor.a", "a", device_id="dev-renamed"), _row("sensor.b", "b", device_id="dev-labelled")]
+    registry = _registry(rows)
+    devices = MagicMock()
+    devices.devices = {
+        "dev-renamed": SimpleNamespace(
+            config_entries={ENTRY_ID}, identifiers={(DOMAIN, "z2")}, name_by_user="Guest room", labels=set()
+        ),
+        "dev-labelled": SimpleNamespace(
+            config_entries={ENTRY_ID}, identifiers={(DOMAIN, "z3")}, name_by_user=None, labels={"keep"}
+        ),
+    }
+
+    result = CLEANUP.remove_orphans(registry, devices, ENTRY_ID, DOMAIN, ["sensor.a", "sensor.b"])
+
+    assert (result.entities, result.devices) == (2, 0)
+    devices.async_remove_device.assert_not_called()
+
+
 # Intent: the confirmation text names the first orphans and counts the rest.
 # Why: a user can only confirm a removal after seeing what goes; a list of eighty rows would not fit a dialog.
 def test_preview_text_names_the_first_orphans_and_counts_the_rest() -> None:

@@ -1068,7 +1068,8 @@ async def test_reconnect_guard_single_flight(monkeypatch) -> None:
 BusErrorGuard = EBUS.BusErrorGuard
 
 
-# Build a guard whose clock the test advances by hand.
+# Intent: build a guard whose clock the test advances by hand.
+# Why: the pause is measured in seconds and tests must not wait for it.
 def _guard() -> tuple[BusErrorGuard, list[float]]:
     now = [1000.0]
     return BusErrorGuard(clock=lambda: now[0]), now
