@@ -5,9 +5,9 @@
     python tools/validate.py --quick    # skip pytest
     python tools/validate.py --tests-only -k issue171
 
-On Windows a few tests fail for environment reasons only (CRLF checkout changes fixture digests, the bash-based
-search tool tests, one timing test). They are listed in ``tools/known_env_failures.txt`` and ignored there; any other
-failure fails the run. On Linux/macOS the baseline is not applied.
+On Windows tests that fail for environment reasons only (for example CRLF checkout changes to fixture digests or
+the bash-based search tool tests) are listed in ``tools/known_env_failures.txt`` and ignored there; any other
+failure fails the run. The list is empty at the moment. On Linux/macOS the baseline is not applied.
 """
 
 from __future__ import annotations

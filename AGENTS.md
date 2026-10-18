@@ -400,8 +400,8 @@ python3 -m compileall -f custom_components/vaillant_ebus/
 
 - The line limit is 120 characters (`ruff` E501), comments included. Every function and test needs an `# Intent:` and a
   `# Why:` comment above it.
-- On Windows only `tests/test_ebus_service.py::test_multiline_response_trickling_hits_total_deadline` can fail
-  occasionally (timer resolution). `.gitattributes` keeps `tests/fixtures/**` byte-exact (`-text`), so the fixture
+- `tools/known_env_failures.txt` is empty: the timer-resolution test that used to fail on Windows was removed in
+  1.12.0. `.gitattributes` keeps `tests/fixtures/**` byte-exact (`-text`), so the fixture
   digests match without CRLF changes; `tests/test_search_upstream.py` needs `jq` and is skipped without it. A clone made
   before `.gitattributes` existed needs its fixtures re-checked out (delete the CRLF files, then `git checkout -- tests/fixtures`).
   Record the baseline before a change and compare; do not "fix" failures by editing fixtures.

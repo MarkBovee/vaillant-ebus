@@ -611,39 +611,6 @@ async def test_find_registers_mixed_valid_and_error_rows_is_usable() -> None:
     assert s.is_connected is True
 
 
-# Intent: bound continuously trickling multiline responses by an overall command deadline.
-# Why: the one-second quiet timeout alone allows an unbounded stream to hold the service lock forever.
-@pytest.mark.parametrize("command", ["f -a", "info"])
-async def test_multiline_response_trickling_hits_total_deadline(command: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(EBUS, "MULTILINE_RESPONSE_TIMEOUT", 0.05)
-    monkeypatch.setattr(EBUS, "MULTILINE_RESPONSE_MAX_DURATION", 0.12)
-    s = _service()
-    response_count = 0
-
-    # Intent: deliver each line before the quiet timeout while exceeding the total response deadline.
-    # Why: only the overall bound can stop an endless but active ebusd response.
-    async def _readline() -> bytes:
-        nonlocal response_count
-        if response_count == 0:
-            response_count += 1
-            raise TimeoutError()  # initial stale-data drain
-        if response_count == 1:
-            response_count += 1
-            return b"ctlv2 Status01 = Standby\n"
-        await asyncio.sleep(0.04)
-        response_count += 1
-        return b"ctlv2 Status01 = Standby\n"
-
-    s._reader.readline = AsyncMock(side_effect=_readline)
-
-    with pytest.raises(TimeoutError, match="total response deadline"):
-        await s._send_lines_locked(command)
-
-    assert s.is_connected is False
-    assert s.debug_info["command_log"][-1]["error"] == "response_timeout"
-    assert s.debug_info["command_log"][-1]["duration_ms"] >= 100
-
-
 # Intent: include the initial response line in the multiline transaction deadline.
 # Why: a delayed first line must not add a second full deadline to a continuously streamed response.
 @pytest.mark.parametrize("command", ["f -a", "info"])

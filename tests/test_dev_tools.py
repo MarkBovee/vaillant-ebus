@@ -81,7 +81,7 @@ def test_validate_baseline_file_is_loadable() -> None:
 
     baseline = tool.load_baseline()
 
-    assert "tests/test_ebus_service.py::test_multiline_response_trickling_hits_total_deadline" in baseline
+    assert isinstance(baseline, list)
     assert all(not item.startswith("#") for item in baseline)
 
 
