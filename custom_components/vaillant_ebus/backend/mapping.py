@@ -156,9 +156,11 @@ def hmux0_owner_scan(graph: DeviceGraph | None) -> tuple[str, ScanIdentity] | No
     return node.circuit, scan
 
 
-# Intent: HMUX0 firmware revisions (with HW0504) whose B509 RunDataFlowTemp/RunDataReturnTemp use the 1/16 degC layout.
-# Why: SW0303 was confirmed live (issue #171) and SW0406 answers the same layout (27.3125 read on SW0406/HW0504);
-# other HMUX0 revisions returned absurd decodes (issue #99), so they stay out until they have their own evidence.
+# Intent: HMUX0 firmware revisions (with HW0504) whose B509 RunDataFlowTemp/RunDataReturnTemp are read actively.
+# Why: SW0303 was confirmed live (issue #171, 1/16 degC layout); SW0406 answers the same ids as a 4-byte float
+# (issue #188), which the SW0406 runtime definition decodes as `EXP` and ebusd's own CSV does too. Reading the float
+# with the 1/16 layout gave 27.3125, `-` or 0.00. Other HMUX0 revisions returned absurd decodes (issue #99), so they
+# stay out until they have their own evidence.
 HMUX0_PRECISE_TEMPERATURE_SW_VERSIONS: frozenset[str] = frozenset({"0303", "0406"})
 
 
@@ -1662,6 +1664,8 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "ctlv2.Hc1MixerMovement": RegisterMeta(
         friendly_name="Mixer Movement (HC1)",
         icon="mdi:valve",
+        unit="%",
+        state_class="measurement",
     ),
     # HC2
     "ctlv2.Hc2ActualFlowTempDesired": RegisterMeta(
@@ -1770,6 +1774,8 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "ctlv2.Hc2MixerMovement": RegisterMeta(
         friendly_name="Mixer Movement (HC2)",
         icon="mdi:valve",
+        unit="%",
+        state_class="measurement",
     ),
     # HC3
     "ctlv2.Hc3ActualFlowTempDesired": RegisterMeta(
@@ -1878,6 +1884,8 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     "ctlv2.Hc3MixerMovement": RegisterMeta(
         friendly_name="Mixer Movement (HC3)",
         icon="mdi:valve",
+        unit="%",
+        state_class="measurement",
     ),
     # DHW
     "ctlv2.HwcTempDesired": RegisterMeta(

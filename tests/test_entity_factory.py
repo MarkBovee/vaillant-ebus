@@ -1397,3 +1397,23 @@ def test_zero_one_classification_keeps_flags_and_switches() -> None:
     assert classify("YieldTotal", False) == "sensor"
     assert classify("SummerModeActive", False) == "binary_sensor"
     assert classify("YieldTotal", True) == "switch"
+
+
+# Intent: the HC1-HC3 mixer movement is a signed percent measurement, not a text sensor.
+# Why: issue #190 - without a unit and state_class Home Assistant records no long-term statistics for it.
+@pytest.mark.parametrize("circuit_number", [1, 2, 3])
+def test_issue190_mixer_movement_metadata_is_a_percent_measurement(circuit_number: int) -> None:
+    meta = REGISTER_MAP[f"ctlv2.Hc{circuit_number}MixerMovement"]
+
+    assert (meta.unit, meta.state_class) == ("%", "measurement")
+
+
+# Intent: discovered mixer circuits expose their movement with the percent unit and keep the negative closing value.
+# Why: issue #190 - the register reports -100 while a mixer is closed during setback, so the value must stay as read.
+def test_issue190_discovered_mixer_movement_entities_keep_the_signed_value() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_ecotec_discovery.yaml"))
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    for key in ("ctlv2.Hc1MixerMovement.value", "ctlv2.Hc2MixerMovement.value"):
+        assert (entities[key].meta.unit, entities[key].meta.state_class) == ("%", "measurement"), key
+        assert entities[key].raw_value == "-100", key

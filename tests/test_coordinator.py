@@ -6431,6 +6431,9 @@ def _decode_definition_fields(fields: str, payload: bytes) -> dict[str, object]:
         elif kind == "D2C":
             raw, offset = int.from_bytes(payload[offset : offset + 2], "little", signed=True), offset + 2
             value = raw / 16
+        elif kind == "EXP":
+            value, offset = struct.unpack("<f", payload[offset : offset + 4])[0], offset + 4
+            raw = value
         else:
             raise AssertionError(f"unsupported field type {kind} in {fields}")
         if kind == "UCH" and "=" in divisor_or_values:
@@ -6565,13 +6568,41 @@ async def test_issue185_sw0406_without_hmux0_config_defines_runtime_registers() 
 
     defined = {key.split(".", 2)[2]: value for key, value in definitions.items() if key.startswith("r.hmux0.")}
     assert SW0406_RUNTIME_NAMES <= set(defined)
-    # The shared B509/B51A layouts are the ones already confirmed on SW0303; only the counters are new.
-    for name in SW0406_RUNTIME_NAMES - {"CompressorHc", "CompressorHwc"}:
+    # The shared B509/B51A layouts are the ones already confirmed on SW0303; only the counters are new, and the
+    # precise temperatures differ: SW0406 answers a 4-byte float where SW0303 answers 1/16 degC (issue #188).
+    for name in SW0406_RUNTIME_NAMES - {"CompressorHc", "CompressorHwc", "RunDataFlowTemp", "RunDataReturnTemp"}:
         assert defined[name] == sw0303[f"r.hmux0.{name}"], name
     assert defined["CompressorHc"].startswith("r,hmux0,CompressorHc,CompressorHc,31,08,B511,1801,")
     assert defined["CompressorHwc"].startswith("r,hmux0,CompressorHwc,CompressorHwc,31,08,B511,1802,")
     # Not evidenced on SW0406: the power draw (unit unresolved, #188) and the registers that answered ERR.
     assert not {"RunDataElPowerConsumption", "Status00", "RunDataStatuscode"} & set(defined)
+
+
+# Intent: the SW0406 flow and return temperature definitions decode the captured 4-byte float answers.
+# Why: issue #188 - SW0406 answers `00 80 05 42` and `00 00 ec 41`; the 1/16 degC layout of SW0303 read `-` and 0.0.
+async def test_issue188_sw0406_precise_temperatures_decode_the_float_telegrams() -> None:
+    # The #188 dump was taken after the integration had defined its registers, so a fresh stock-config bus of the same
+    # SW0406/HW0504 scan (issue #185) drives the define pass and the #188 dump supplies the telegrams that prove it.
+    definitions = await _runtime_definitions_for(
+        "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    )
+    sw0303 = await _runtime_definitions_for("community/hmux0_issue99_2026-09-10_173229.yaml")
+    dump = load_discovery_dump("community/hmux0_sw0406_issue188_2026-10-13_092007_discovery.yaml")
+    responses = {row["request"]: row["resp"] for row in dump["labeled_telegrams"]}
+
+    flow = definitions["r.hmux0.RunDataFlowTemp"].split(",", 8)
+    returned = definitions["r.hmux0.RunDataReturnTemp"].split(",", 8)
+    # Every definition reproduces a request that the capture shows on the bus (the ebusd id excludes the length byte).
+    for fields in (flow, returned):
+        request = f"{fields[4]}{fields[5]}{fields[6]}{len(fields[7]) // 2:02x}{fields[7]}".casefold()
+        assert request in responses, fields[2]
+    flow_payload = bytes.fromhex(responses["3108b50905540200fc08"])[1:]
+    return_payload = bytes.fromhex(responses["3108b509055402000609"])[1:]
+    assert _decode_definition_fields(flow[8], flow_payload)["value"] == 33.375
+    assert _decode_definition_fields(returned[8], return_payload)["value"] == 29.5
+    # SW0303 keeps the 1/16 degC layout that was confirmed live (issue #171).
+    assert ",D2C," in sw0303["r.hmux0.RunDataFlowTemp"]
+    assert ",D2C," in sw0303["r.hmux0.RunDataReturnTemp"]
 
 
 # Intent: a SW0406 unit whose ebusd already supplies hmux0 registers (full 08.hmux0.csv) gets nothing defined.

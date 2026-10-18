@@ -134,13 +134,16 @@ VWZIO_SW0500_ANY_MASTER_REGISTERS = (
 
 # Intent: runtime definitions of the HMUX0 precise flow/return temperatures and the yield/COP statistics.
 # Why: ebusd's own CSV lacks them for SW0303 (issue #171) and for a SW0406 bus without an hmux0 configuration (#185);
-# upstream PR #496 defines flow as ext 0xfc/0x08 next to return (0x06/0x09), both tempv (1/16 degC).
-def _hmux0_precise_and_yield_definitions(circuit: str) -> list[str]:
+# upstream PR #496 defines flow as ext 0xfc/0x08 next to return (0x06/0x09). SW0303 answers tempv (1/16 degC, `D2C`),
+# SW0406 answers the same ids with a 4-byte float (`EXP`, issue #188: `00 80 05 42` is 33.375 degC), so the caller
+# picks the layout with `float_temperatures`.
+def _hmux0_precise_and_yield_definitions(circuit: str, float_temperatures: bool = False) -> list[str]:
+    temperature_type = "EXP" if float_temperatures else "D2C"
     return [
         f"r,{circuit},RunDataFlowTemp,RunDataFlowTemp,31,08,B509,540200fc08"
-        ",value,,IGN:4,,,,value,,D2C,,°C,HMUX0 flow temperature",
+        f",value,,IGN:4,,,,value,,{temperature_type},,°C,HMUX0 flow temperature",
         f"r,{circuit},RunDataReturnTemp,RunDataReturnTemp,31,08,B509,5402000609"
-        ",value,,IGN:4,,,,value,,D2C,,°C,HMUX0 return temperature",
+        f",value,,IGN:4,,,,value,,{temperature_type},,°C,HMUX0 return temperature",
         f"r,{circuit},YieldHc,YieldHc,31,08,B51A,05ff3210,value,,IGN:3,,,,value,,UIN,,kWh,HMUX0 heating yield",
         f"r,{circuit},YieldHcDay,YieldHcDay,31,08,B51A,05ff3200"
         ",value,,IGN:3,,,,value,,UIN,10,kWh,HMUX0 heating yield today",
@@ -1877,7 +1880,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if self._graph is None:
             return []
         candidates = [
-            *_hmux0_precise_and_yield_definitions(circuit),
+            *_hmux0_precise_and_yield_definitions(circuit, float_temperatures=True),
             *_hmux0_b509_monitor_definitions(circuit),
             *_hmux0_compressor_counter_definitions(circuit),
         ]
