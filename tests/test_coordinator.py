@@ -6750,6 +6750,54 @@ async def test_stale_entities_issue_follows_the_registry() -> None:
         repairs_stub.async_dismiss_stale_entities.assert_awaited_once()
 
 
+# Intent: the periodic check also raises the issue when only enabled entities without data are left to switch off.
+# Why: the owner's 40 legacy rows are not orphans; without this the repair would never offer to switch them off.
+async def test_stale_entities_issue_is_raised_for_entities_without_data() -> None:
+    from homeassistant.helpers import entity_registry
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.entities = [
+            types.SimpleNamespace(unique_id="ebusd_ctlv2_hwcstoragetemptop", enabled_by_default=False),
+            types.SimpleNamespace(unique_id="ebusd_hmu_flowtemp", enabled_by_default=True),
+        ]
+        row = types.SimpleNamespace(
+            entity_id="sensor.storage_top",
+            unique_id="entry-1_ebusd_ctlv2_hwcstoragetemptop",
+            platform="vaillant_ebus",
+            device_id=None,
+            disabled_by=None,
+            hidden_by=None,
+            name=None,
+            icon=None,
+            area_id=None,
+            labels=set(),
+            aliases=[],
+        )
+        registry = MagicMock()
+        registry.entities.get_entries_for_config_entry_id.side_effect = lambda _id: [row]
+        entity_registry.async_get = MagicMock(return_value=registry)
+        repairs_stub = sys.modules["vaillant_ebus.repairs"]
+        repairs_stub.async_create_stale_entities.reset_mock()
+        repairs_stub.async_dismiss_stale_entities.reset_mock()
+        hass.states.get = MagicMock(
+            return_value=types.SimpleNamespace(state="unknown", attributes={"friendly_name": "Storage Temp (Top)"})
+        )
+
+        await c._async_refresh_stale_entities_issue()
+
+        repairs_stub.async_create_stale_entities.assert_awaited_once()
+        args = repairs_stub.async_create_stale_entities.await_args.args
+        assert args[1:3] == ("entry-1", 0)
+        assert args[5] == 1 and "sensor.storage_top" in args[6]
+        repairs_stub.async_dismiss_stale_entities.assert_not_awaited()
+
+
 # Intent: a SW0406 bus without hmux0 registers of its own decodes the gateway power frame passively.
 # Why: issue #188 - the gateway polls `B509 5402005b0d` and the answer `09 51 70 44` is 961.27 W while the unit runs;
 #      the reporter read 33.2 W idle and 1341.4 W under load from the same register, so layout and unit are proven.

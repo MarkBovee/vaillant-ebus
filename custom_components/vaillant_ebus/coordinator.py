@@ -1051,9 +1051,11 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if not self._stopped:
                 self._schedule_analysis()
 
-    # Intent: raise or clear the repair issue that lists registry entities no entity provides any more.
+    # Intent: raise or clear the repair issue that lists registry entities no entity provides any more, and enabled
+    # entities without data that the discovery switches off by default.
     # Why: the old purge was hidden in the options and missed them; a repair with a preview and a confirmation is the
-    # way they get removed. The report is refused while ebusd is disconnected, so a restart never raises it by mistake.
+    # way they get removed or switched off. The report is refused while ebusd is disconnected, so a restart never
+    # raises it by mistake.
     async def _async_refresh_stale_entities_issue(self) -> None:
         if self._stopped or self._unload_requested:
             return
@@ -1062,13 +1064,15 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         )
         if report is None:
             return
-        if report.orphans:
+        if report.orphans or report.dormant:
             await repairs.async_create_stale_entities(
                 self.hass,
                 self._entry.entry_id,
                 len(report.orphans),
                 cleanup.preview_text(report.orphans),
                 len(report.kept_customized),
+                len(report.dormant),
+                cleanup.preview_text(report.dormant),
             )
         else:
             await repairs.async_dismiss_stale_entities(self.hass)

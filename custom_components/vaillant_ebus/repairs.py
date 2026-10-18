@@ -10,6 +10,7 @@ from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 
 from . import cleanup
 from .const import DOMAIN
@@ -38,9 +39,10 @@ async def async_create_fix_flow(
     return ConfirmRepairFlow()
 
 
-# Intent: show the registry entities that nothing provides any more and remove them after one confirmation.
+# Intent: show the registry entities that nothing provides any more and the enabled entities without data, then remove
+# the first and switch off the second after one confirmation.
 # Why: the owner's 86 restored entities stayed invisible; the list is recomputed at each step so the user confirms what
-# is true now, and nothing is removed while ebusd is disconnected or before the user submits.
+# is true now, and nothing changes while ebusd is disconnected or before the user submits.
 class StaleEntitiesRepairFlow(RepairsFlow):
     """Preview and remove the stale Vaillant eBUS registry entities."""
 
@@ -62,20 +64,27 @@ class StaleEntitiesRepairFlow(RepairsFlow):
         report = cleanup.stale_report(registry, self.hass.states, self._entry_id, DOMAIN, coordinator)
         if report is None:
             return self.async_abort(reason="cleanup_unavailable")
-        if not report.orphans:
+        if not report.orphans and not report.dormant:
             return self.async_create_entry(data={})
         if user_input is not None:
-            result = cleanup.remove_orphans(
-                registry,
-                device_registry.async_get(self.hass),
-                self._entry_id,
-                DOMAIN,
-                [item.entity_id for item in report.orphans],
+            removed = cleanup.RemovalResult(entities=0, devices=0)
+            if report.orphans:
+                removed = cleanup.remove_orphans(
+                    registry,
+                    device_registry.async_get(self.hass),
+                    self._entry_id,
+                    DOMAIN,
+                    [item.entity_id for item in report.orphans],
+                )
+            switched_off = cleanup.disable_dormant(
+                registry, [item.entity_id for item in report.dormant], RegistryEntryDisabler.INTEGRATION
             )
             _LOGGER.info(
-                "Removed %d stale Vaillant eBUS entities and %d empty devices (%d customised entities kept)",
-                result.entities,
-                result.devices,
+                "Removed %d stale Vaillant eBUS entities and %d empty devices, switched off %d entities without data "
+                "(%d customised entities kept)",
+                removed.entities,
+                removed.devices,
+                switched_off,
                 len(report.kept_customized),
             )
             return self.async_create_entry(data={})
@@ -85,6 +94,8 @@ class StaleEntitiesRepairFlow(RepairsFlow):
             description_placeholders={
                 "count": str(len(report.orphans)),
                 "entities": cleanup.preview_text(report.orphans),
+                "dormant_count": str(len(report.dormant)),
+                "dormant": cleanup.preview_text(report.dormant),
                 "kept": str(len(report.kept_customized)),
             },
         )
@@ -103,20 +114,32 @@ async def async_create_ebusd_unreachable(hass: HomeAssistant) -> None:
     )
 
 
+# Intent: remove the ebusd-unreachable repair issue.
+# Why: once ebusd answers again the repair must not stay open.
 async def async_dismiss_ebusd_unreachable(hass: HomeAssistant) -> None:
     """Dismiss the ebusd unreachable repair issue."""
     ir.async_delete_issue(hass, DOMAIN, ISSUE_EBUSD_UNREACHABLE)
 
 
+# Intent: remove the detection-incomplete repair issue.
+# Why: a successful discovery makes the stale detection warning untrue.
 async def async_dismiss_detection_incomplete(hass: HomeAssistant) -> None:
     """Remove stale detection issues after a successful discovery."""
     ir.async_delete_issue(hass, DOMAIN, ISSUE_DETECTION_INCOMPLETE)
 
 
-# Intent: create or update the repair issue that lists the stale entities.
-# Why: the issue carries the entry id for the fix flow and the count and names for the text.
-async def async_create_stale_entities(hass: HomeAssistant, entry_id: str, count: int, preview: str, kept: int) -> None:
-    """Create or update the repair issue that lists stale entities for removal."""
+# Intent: create or update the repair issue that lists the stale entities and the entities without data.
+# Why: the issue carries the entry id for the fix flow and the counts and names for the text.
+async def async_create_stale_entities(
+    hass: HomeAssistant,
+    entry_id: str,
+    count: int,
+    preview: str,
+    kept: int,
+    dormant_count: int = 0,
+    dormant_preview: str = "",
+) -> None:
+    """Create or update the repair issue that lists stale entities for removal and dormant ones to switch off."""
     ir.async_create_issue(
         hass,
         DOMAIN,
@@ -124,7 +147,13 @@ async def async_create_stale_entities(hass: HomeAssistant, entry_id: str, count:
         is_fixable=True,
         severity=ir.IssueSeverity.WARNING,
         translation_key=ISSUE_STALE_ENTITIES,
-        translation_placeholders={"count": str(count), "entities": preview, "kept": str(kept)},
+        translation_placeholders={
+            "count": str(count),
+            "entities": preview,
+            "dormant_count": str(dormant_count),
+            "dormant": dormant_preview,
+            "kept": str(kept),
+        },
         data={"entry_id": entry_id},
     )
 

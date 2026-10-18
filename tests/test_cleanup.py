@@ -304,16 +304,24 @@ REPAIRS = _component_loader._exec_source("vaillant_ebus.repairs_real", _componen
 
 # Intent: wire a repairs flow with the Home Assistant calls it makes, returning the registries it should use.
 # Why: the base class is a stub in the unit tests, so the flow show-form, create-entry and abort calls are mocks.
-def _flow(rows: list[SimpleNamespace], connected: bool = True) -> tuple[Any, MagicMock, MagicMock]:
+def _flow(
+    rows: list[SimpleNamespace],
+    connected: bool = True,
+    states: dict[str, tuple[str, dict[str, object]]] | None = None,
+    entities: list[SimpleNamespace] | None = None,
+) -> tuple[Any, MagicMock, MagicMock]:
     registry = _registry(rows)
     devices = MagicMock()
     devices.devices = []
     sys.modules["homeassistant.helpers.entity_registry"].async_get = MagicMock(return_value=registry)
     sys.modules["homeassistant.helpers.device_registry"].async_get = MagicMock(return_value=devices)
     flow = REPAIRS.StaleEntitiesRepairFlow(ENTRY_ID)
+    coordinator = _coordinator(connected=connected)
+    if entities is not None:
+        coordinator.entities = entities
     flow.hass = SimpleNamespace(
-        data={DOMAIN: {ENTRY_ID: _coordinator(connected=connected)}},
-        states=_states({row.entity_id: RESTORED for row in rows}),
+        data={DOMAIN: {ENTRY_ID: coordinator}},
+        states=_states(states if states is not None else {row.entity_id: RESTORED for row in rows}),
     )
     flow.async_show_form = MagicMock(return_value={"type": "form"})
     flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
@@ -364,3 +372,161 @@ async def test_fix_flow_aborts_without_a_connection() -> None:
 
     assert result == {"type": "abort"}
     registry.async_remove.assert_not_called()
+
+
+UNKNOWN = ("unknown", {"friendly_name": "Storage Temp (Top)"})
+
+
+# Intent: build a generated entity description stand-in with the two fields the dormant check reads.
+# Why: the discovery's own "off by default" verdict and the live `unknown` state decide whether a row is dormant.
+def _description(unique_id: str, enabled_by_default: bool = False) -> SimpleNamespace:
+    return SimpleNamespace(unique_id=unique_id, enabled_by_default=enabled_by_default)
+
+
+# Intent: an enabled row is dormant when its live entity has no value and the discovery would not switch it on.
+# Why: older releases created sensors for hardware that is not there (storage temperatures) and for service registers
+#      as enabled; Home Assistant never changes an enabled row, so the owner still saw 40 entities that stay unknown.
+def test_find_dormant_lists_enabled_rows_without_data_that_discovery_switches_off() -> None:
+    rows = [
+        _row("sensor.storage_top", "ebusd_ctlv2_hwcstoragetemptop"),
+        _row("sensor.storage_bottom", "ebusd_ctlv2_HwcStorageTempBottom"),
+        _row("sensor.switched_on_by_user", "ebusd_hmu_compressorhc_runtime"),
+        _row("sensor.default_on", "ebusd_hmu_flowtemp"),
+        _row("date.holiday", "z1holidaystartperiod"),
+        _row("sensor.already_off", "ebusd_ctlv2_systemflowtemp", disabled_by="integration"),
+        _row("sensor.renamed", "ebusd_vwz_testhwctemp", name="My test sensor"),
+        _row("sensor.restored", "ebusd_ctlv2_hcstoragetemptop"),
+    ]
+    states = _states(
+        {
+            "sensor.storage_top": UNKNOWN,
+            "sensor.storage_bottom": UNKNOWN,
+            "sensor.switched_on_by_user": ("12.0", {}),
+            "sensor.default_on": UNKNOWN,
+            "date.holiday": UNKNOWN,
+            "sensor.renamed": UNKNOWN,
+            "sensor.restored": RESTORED,
+        }
+    )
+    switched_off = {
+        f"{ENTRY_ID}_{name}".casefold()
+        for name in (
+            "ebusd_ctlv2_hwcstoragetemptop",
+            "ebusd_ctlv2_hwcstoragetempbottom",
+            "ebusd_hmu_compressorhc_runtime",
+            "ebusd_ctlv2_systemflowtemp",
+            "ebusd_vwz_testhwctemp",
+            "ebusd_ctlv2_hcstoragetemptop",
+        )
+    }
+
+    dormant, kept = CLEANUP.find_dormant(_registry(rows), states, ENTRY_ID, DOMAIN, switched_off)
+
+    assert [item.entity_id for item in dormant] == ["sensor.storage_top", "sensor.storage_bottom"]
+    assert [item.entity_id for item in kept] == ["sensor.renamed"]
+
+
+# Intent: the report lists dormant entities next to the orphans, and leaves out entities that have a value or a default.
+# Why: the repair and the options purge show one preview; a row with a value or an enabled default is live.
+def test_stale_report_lists_dormant_entities_next_to_orphans() -> None:
+    rows = [
+        _row("sensor.gone", "ebusd_hmu_gone"),
+        _row("sensor.storage_top", "ebusd_ctlv2_hwcstoragetemptop"),
+        _row("sensor.flow", "ebusd_hmu_flowtemp"),
+        _row("sensor.has_value", "ebusd_hmu_hasvalue"),  # switched on by the user and now reporting
+        _row("sensor.renamed", "ebusd_vwz_testhwctemp", name="Mine"),
+    ]
+    states = _states(
+        {
+            "sensor.gone": RESTORED,
+            "sensor.storage_top": UNKNOWN,
+            "sensor.flow": UNKNOWN,
+            "sensor.has_value": ("12.0", {}),
+            "sensor.renamed": UNKNOWN,
+        }
+    )
+    coordinator = _coordinator()
+    coordinator.entities = [
+        _description("ebusd_ctlv2_hwcstoragetemptop"),
+        _description("ebusd_hmu_flowtemp", enabled_by_default=True),
+        _description("ebusd_hmu_hasvalue"),
+        _description("ebusd_vwz_testhwctemp"),
+    ]
+
+    report = CLEANUP.stale_report(_registry(rows), states, ENTRY_ID, DOMAIN, coordinator)
+
+    assert [item.entity_id for item in report.orphans] == ["sensor.gone"]
+    assert [item.entity_id for item in report.dormant] == ["sensor.storage_top"]
+    assert [item.entity_id for item in report.kept_customized] == ["sensor.renamed"]
+
+
+# Intent: switching the dormant rows off marks them as disabled by the integration and counts them.
+# Why: only an integration-disabled row is switched on again by the analysis when its register returns a value.
+def test_disable_dormant_switches_rows_off_by_the_integration() -> None:
+    registry = MagicMock()
+
+    count = CLEANUP.disable_dormant(registry, ["sensor.a", "sensor.b"], "integration")
+
+    assert count == 2
+    assert [(call.args, call.kwargs) for call in registry.async_update_entity.call_args_list] == [
+        (("sensor.a",), {"disabled_by": "integration"}),
+        (("sensor.b",), {"disabled_by": "integration"}),
+    ]
+
+
+DORMANT_ROWS = [_row("sensor.gone", "ebusd_hmu_gone"), _row("sensor.storage_top", "ebusd_ctlv2_hwcstoragetemptop")]
+DORMANT_STATES = {"sensor.gone": RESTORED, "sensor.storage_top": UNKNOWN}
+DORMANT_ENTITIES = [_description("ebusd_ctlv2_hwcstoragetemptop"), _description("ebusd_hmu_generated0", True)]
+
+
+# Intent: the first step of the fix flow shows both lists and changes nothing.
+# Why: the user decides after seeing which entities go and which are switched off.
+async def test_fix_flow_preview_lists_dormant_entities_too() -> None:
+    flow, registry, _ = _flow(DORMANT_ROWS, states=DORMANT_STATES, entities=DORMANT_ENTITIES)
+
+    result = await flow.async_step_init()
+
+    assert result == {"type": "form"}
+    placeholders = flow.async_show_form.call_args.kwargs["description_placeholders"]
+    assert placeholders["count"] == "1" and "sensor.gone" in placeholders["entities"]
+    assert placeholders["dormant_count"] == "1" and "sensor.storage_top" in placeholders["dormant"]
+    registry.async_remove.assert_not_called()
+    registry.async_update_entity.assert_not_called()
+
+
+# Intent: confirming removes the orphans and switches the dormant entities off, then finishes the flow.
+# Why: one confirmation covers the whole preview; the dormant rows are switched off, never deleted.
+async def test_fix_flow_confirm_switches_dormant_off_and_removes_orphans() -> None:
+    flow, registry, _ = _flow(DORMANT_ROWS, states=DORMANT_STATES, entities=DORMANT_ENTITIES)
+
+    result = await flow.async_step_confirm({})
+
+    assert result == {"type": "create_entry"}
+    assert [call.args[0] for call in registry.async_remove.call_args_list] == ["sensor.gone"]
+    registry.async_update_entity.assert_called_once_with("sensor.storage_top", disabled_by="integration")
+
+
+# Intent: with dormant entities only, the flow still shows the preview and removes no registry row.
+# Why: the repair must not close itself while something is left to switch off, and must not delete live rows.
+async def test_fix_flow_with_only_dormant_entities_shows_the_form_and_removes_nothing() -> None:
+    rows = [DORMANT_ROWS[1]]
+    flow, registry, _ = _flow(rows, states={"sensor.storage_top": UNKNOWN}, entities=DORMANT_ENTITIES)
+
+    shown = await flow.async_step_confirm()
+    done = await flow.async_step_confirm({})
+
+    assert shown == {"type": "form"} and done == {"type": "create_entry"}
+    registry.async_remove.assert_not_called()
+    registry.async_update_entity.assert_called_once_with("sensor.storage_top", disabled_by="integration")
+
+
+# Intent: the flow finishes at once when nothing is stale and nothing is dormant.
+# Why: the issue is cleared as soon as it has nothing left to show.
+async def test_fix_flow_finishes_when_nothing_is_left() -> None:
+    flow, registry, _ = _flow([_row("sensor.fine", "ebusd_hmu_generated0")], states={"sensor.fine": ("5", {})})
+
+    result = await flow.async_step_confirm()
+
+    assert result == {"type": "create_entry"}
+    registry.async_remove.assert_not_called()
+    registry.async_update_entity.assert_not_called()

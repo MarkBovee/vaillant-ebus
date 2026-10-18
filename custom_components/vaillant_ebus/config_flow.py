@@ -12,6 +12,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry, entity_registry
+from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 
 from . import cleanup
 from .const import (
@@ -195,6 +196,9 @@ class VaillantOptionsFlow(OptionsFlow):
             menu_options=["settings", "purge_entities", "rediscover", "export_dump"],
         )
 
+    # Intent: preview, then remove stale registry entities and switch off enabled entities without data.
+    # Why: one confirmation covers both lists; nothing is changed before the user ticks the box, and the report is
+    # refused while ebusd is not connected.
     async def async_step_purge_entities(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Remove registry entities that no entity provides any more, after a preview and a confirmation."""
         entry_id = self._config_entry.entry_id
@@ -208,27 +212,36 @@ class VaillantOptionsFlow(OptionsFlow):
         if user_input is not None:
             if not user_input.get("confirm"):
                 return self.async_abort(reason="purge_not_confirmed")
-            result = cleanup.remove_orphans(
-                registry,
-                device_registry.async_get(self.hass),
-                entry_id,
-                DOMAIN,
-                [item.entity_id for item in report.orphans],
+            removed = cleanup.RemovalResult(entities=0, devices=0)
+            if report.orphans:
+                removed = cleanup.remove_orphans(
+                    registry,
+                    device_registry.async_get(self.hass),
+                    entry_id,
+                    DOMAIN,
+                    [item.entity_id for item in report.orphans],
+                )
+            switched_off = cleanup.disable_dormant(
+                registry, [item.entity_id for item in report.dormant], RegistryEntryDisabler.INTEGRATION
             )
             _LOGGER.info(
-                "Purged %d orphaned Vaillant eBUS entities and %d empty devices (%d customised entities kept)",
-                result.entities,
-                result.devices,
+                "Purged %d orphaned Vaillant eBUS entities and %d empty devices, switched off %d entities without data "
+                "(%d customised entities kept)",
+                removed.entities,
+                removed.devices,
+                switched_off,
                 len(report.kept_customized),
             )
             return self.async_abort(reason="entities_purged")
-        if not report.orphans:
+        if not report.orphans and not report.dormant:
             return self.async_abort(reason="nothing_to_purge")
         return self.async_show_form(
             step_id="purge_entities",
             description_placeholders={
                 "count": str(len(report.orphans)),
                 "entities": cleanup.preview_text(report.orphans),
+                "dormant_count": str(len(report.dormant)),
+                "dormant": cleanup.preview_text(report.dormant),
                 "kept": str(len(report.kept_customized)),
             },
             data_schema=vol.Schema({vol.Required("confirm", default=False): cv.boolean}),

@@ -26,10 +26,11 @@ class OrphanEntity:
 
 @dataclass(frozen=True)
 class OrphanReport:
-    """Orphans that may be removed, and orphans that are kept because the user customised them."""
+    """Orphans that may be removed, rows that are kept because the user customised them, and dormant rows."""
 
     orphans: tuple[OrphanEntity, ...]
     kept_customized: tuple[OrphanEntity, ...]
+    dormant: tuple[OrphanEntity, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -122,7 +123,37 @@ def find_orphans(
     return OrphanReport(orphans=tuple(orphans), kept_customized=tuple(kept))
 
 
-# Intent: build the orphan report for one config entry, or refuse when the report would not be trustworthy.
+# Intent: list enabled registry entries whose live entity has no value and that the current discovery switches off.
+# Why: older releases created sensors for hardware that is not there (storage temperatures) and for service registers as
+# enabled. Home Assistant never changes an enabled row, and the integration leaves enabled rows of default-off entities
+# alone, so they stay `unknown` for ever. `switched_off_unique_ids` holds the casefolded unique ids of the generated
+# descriptions that are off by default; hand-built entities and default-on entities are not in it, so an unset
+# holiday date or a live sensor is never listed, and the live state must be `unknown`, so a row that has a value is
+# never listed. Returns the dormant rows and the customised rows that are kept.
+def find_dormant(
+    registry: Any,
+    states: Any,
+    entry_id: str,
+    domain: str,
+    switched_off_unique_ids: Collection[str],
+) -> tuple[tuple[OrphanEntity, ...], tuple[OrphanEntity, ...]]:
+    dormant: list[OrphanEntity] = []
+    kept: list[OrphanEntity] = []
+    for entry in registry.entities.get_entries_for_config_entry_id(entry_id):
+        if entry.platform != domain or _marker(getattr(entry, "disabled_by", None)) is not None:
+            continue
+        if str(entry.unique_id).casefold() not in switched_off_unique_ids:
+            continue
+        state = states.get(entry.entity_id)
+        if state is None or state.state != "unknown":
+            continue
+        label = state.attributes.get("friendly_name") or entry.entity_id
+        item = OrphanEntity(entity_id=entry.entity_id, unique_id=entry.unique_id, label=str(label))
+        (kept if _is_customized(entry) else dormant).append(item)
+    return tuple(dormant), tuple(kept)
+
+
+# Intent: build the cleanup report for one config entry, or refuse when the report would not be trustworthy.
 # Why: before ebusd is connected and entities are generated, every registry row looks orphaned; removing rows then
 # would delete live entities. The generated unique ids carry the config entry prefix Home Assistant puts on them.
 def stale_report(
@@ -137,7 +168,25 @@ def stale_report(
     if not coordinator.entities:
         return None
     generated = {f"{entry_id}_{entity.unique_id}" for entity in coordinator.entities}
-    return find_orphans(registry, states, entry_id, domain, generated)
+    switched_off = {
+        f"{entry_id}_{entity.unique_id}".casefold()
+        for entity in coordinator.entities
+        if getattr(entity, "enabled_by_default", True) is False
+    }
+    report = find_orphans(registry, states, entry_id, domain, generated)
+    dormant, kept = find_dormant(registry, states, entry_id, domain, switched_off)
+    return OrphanReport(orphans=report.orphans, kept_customized=(*report.kept_customized, *kept), dormant=dormant)
+
+
+# Intent: switch the given entity registry rows off as disabled by the integration and return how many were changed.
+# Why: only a row the integration disabled is switched on again by the analysis when its register returns a value; the
+# caller passes the Home Assistant disabler so this module needs no Home Assistant import.
+def disable_dormant(registry: Any, entity_ids: Iterable[str], disabler: Any) -> int:
+    switched = 0
+    for entity_id in entity_ids:
+        registry.async_update_entity(entity_id, disabled_by=disabler)
+        switched += 1
+    return switched
 
 
 # Intent: remove the given registry entities, then the devices of this config entry that have no entity left.
@@ -173,6 +222,8 @@ def remove_orphans(
 # Intent: describe a few orphans in one text block for the confirmation step.
 # Why: the user confirms a removal only when the names are visible; a long list is cut with a count of the rest.
 def preview_text(orphans: Collection[OrphanEntity], limit: int = PREVIEW_LIMIT) -> str:
+    if not orphans:
+        return "- none"
     shown = [f"- {item.label} ({item.entity_id})" for item in list(orphans)[:limit]]
     if len(orphans) > limit:
         shown.append(f"- ... and {len(orphans) - limit} more")
