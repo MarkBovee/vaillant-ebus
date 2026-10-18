@@ -22,7 +22,7 @@ from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from . import repairs
+from . import cleanup, repairs
 from .backend.analysis_service import AnalysisResult, AnalysisService
 from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService, node_has_live_data
 from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, BusErrorGuard, EbusService
@@ -1303,11 +1303,34 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         try:
             if self.ebus and self.ebus.is_connected:
                 await self._analyze_live_registers()
+                await self._async_refresh_stale_entities_issue()
         except Exception:
             _LOGGER.warning("Background register analysis failed", exc_info=True)
         finally:
             if not self._stopped:
                 self._schedule_analysis()
+
+    # Intent: raise or clear the repair issue that lists registry entities no entity provides any more.
+    # Why: the old purge was hidden in the options and missed them; a repair with a preview and a confirmation is the
+    # way they get removed. The report is refused while ebusd is disconnected, so a restart never raises it by mistake.
+    async def _async_refresh_stale_entities_issue(self) -> None:
+        if self._stopped or self._unload_requested:
+            return
+        report = cleanup.stale_report(
+            entity_registry.async_get(self.hass), self.hass.states, self._entry.entry_id, DOMAIN, self
+        )
+        if report is None:
+            return
+        if report.orphans:
+            await repairs.async_create_stale_entities(
+                self.hass,
+                self._entry.entry_id,
+                len(report.orphans),
+                cleanup.preview_text(report.orphans),
+                len(report.kept_customized),
+            )
+        else:
+            await repairs.async_dismiss_stale_entities(self.hass)
 
     # Analyze registers that went live since the last tick, discover + enable.
     async def _analyze_live_registers(self) -> None:

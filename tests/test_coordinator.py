@@ -6698,3 +6698,51 @@ async def test_issue193_stuck_adapter_pauses_the_fallback_cycle_and_resumes_afte
         coordinator.ebus.read_register = AsyncMock(return_value="21.5")
         await coordinator._fallback_read(include_placeholders=True, include_energy=True)
         assert coordinator.ebus.read_register.await_count == healthy_reads
+
+
+# Intent: the periodic check raises one stale-entities issue when orphans exist and clears it when none are left.
+# Why: the owner has 86 restored entities that stayed invisible; a repair with a confirmation is how they get removed.
+async def test_stale_entities_issue_follows_the_registry() -> None:
+    from homeassistant.helpers import entity_registry
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.entities = [MagicMock(unique_id="ebusd_hmu_flowtemp")]
+        row = types.SimpleNamespace(
+            entity_id="sensor.gone",
+            unique_id="entry-1_ebusd_hmu_gone",
+            platform="vaillant_ebus",
+            device_id=None,
+            disabled_by=None,
+            hidden_by=None,
+            name=None,
+            icon=None,
+            area_id=None,
+            labels=set(),
+            aliases=set(),
+        )
+        registry = MagicMock()
+        registry.entities.get_entries_for_config_entry_id.side_effect = lambda _id: [row]
+        entity_registry.async_get = MagicMock(return_value=registry)
+        repairs_stub = sys.modules["vaillant_ebus.repairs"]
+        repairs_stub.async_create_stale_entities.reset_mock()
+        repairs_stub.async_dismiss_stale_entities.reset_mock()
+        restored = types.SimpleNamespace(state="unavailable", attributes={"restored": True, "friendly_name": "Gone"})
+        hass.states.get = MagicMock(return_value=restored)
+
+        await c._async_refresh_stale_entities_issue()
+
+        repairs_stub.async_create_stale_entities.assert_awaited_once()
+        args = repairs_stub.async_create_stale_entities.await_args.args
+        assert args[1:3] == ("entry-1", 1) and "sensor.gone" in args[3]
+        repairs_stub.async_dismiss_stale_entities.assert_not_awaited()
+
+        hass.states.get = MagicMock(return_value=types.SimpleNamespace(state="23.5", attributes={}))
+        await c._async_refresh_stale_entities_issue()
+
+        repairs_stub.async_dismiss_stale_entities.assert_awaited_once()

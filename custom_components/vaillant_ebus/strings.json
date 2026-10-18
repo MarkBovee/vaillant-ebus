@@ -57,9 +57,9 @@
       },
       "purge_entities": {
         "title": "Purge Stale Entities",
-        "description": "This will remove {count} Vaillant eBUS entities currently unknown or belonging to devices no longer present in current discovery, plus empty Vaillant eBUS devices.",
+        "description": "This will remove {count} Vaillant eBUS entities that no entity provides any more (for example a zone or register the controller no longer reports), and Vaillant eBUS devices left without entities.\n\n{entities}\n\nEntities that you renamed, hid, labelled or assigned to an area are kept ({kept}).",
         "data": {
-          "confirm": "I understand that stale entity registry entries will be removed"
+          "confirm": "I understand that these entity registry entries will be removed"
         }
       },
       "rediscover": {
@@ -73,12 +73,13 @@
     "abort": {
       "export_started": "Discovery dump export started. The YAML file is written in the background — a notification will appear when it is ready.",
       "changes_saved": "Settings saved and applied — the integration is reloading.",
-      "entities_purged": "Stale entity registry entries were removed.",
+      "entities_purged": "The stale entity registry entries were removed.",
       "purge_not_confirmed": "Stale entities were not removed.",
       "purge_unavailable": "Purge was refused because active discovery data is unavailable.",
       "rediscover_started": "eBUS rediscovery started. Entities will reappear as discovery completes.",
       "rediscover_unavailable": "Rediscovery was refused because the integration is not loaded.",
-      "rediscover_not_confirmed": "eBUS rediscovery was not started."
+      "rediscover_not_confirmed": "eBUS rediscovery was not started.",
+      "nothing_to_purge": "There are no stale entities to remove."
     }
   }
 }

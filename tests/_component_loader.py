@@ -460,6 +460,8 @@ def _register_repairs() -> None:
     repairs_module.async_dismiss_ebusd_unreachable = AsyncMock()
     repairs_module.async_create_ebusd_unreachable = AsyncMock()
     repairs_module.async_dismiss_detection_incomplete = AsyncMock()
+    repairs_module.async_create_stale_entities = AsyncMock()
+    repairs_module.async_dismiss_stale_entities = AsyncMock()
     sys.modules["vaillant_ebus.repairs"] = repairs_module
 
 
@@ -473,6 +475,7 @@ def _load_backend() -> None:
 # Intent: execute the coordinator once, after the backend, const, and repairs stubs exist.
 # Why: the coordinator imports all three when it loads and is the base for every platform test.
 def _load_coordinator() -> None:
+    _exec_source("vaillant_ebus.cleanup", COMPONENT_PATH / "cleanup.py")
     _exec_source("vaillant_ebus.coordinator", COMPONENT_PATH / "coordinator.py")
 
 
