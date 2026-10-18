@@ -189,15 +189,17 @@ def disable_dormant(registry: Any, entity_ids: Iterable[str], disabler: Any) -> 
     return switched
 
 
-# Intent: remove the given registry entities, then the devices of this config entry that have no entity left.
+# Intent: remove the given registry entities, then those devices of this config entry that have no entity left.
 # Why: an empty zone or solar device would otherwise stay in the device list after its entities are gone. A device the
-# user renamed or labelled stays, because that is user data like a renamed entity.
+# user renamed or labelled stays, because that is user data like a renamed entity. The caller passes the device entries
+# of this config entry (Home Assistant's `async_entries_for_config_entry`), because iterating the registry yields ids on
+# older versions and reading `DeviceEntry.config_entries` is deprecated since 2026.10.
 def remove_orphans(
     registry: Any,
     device_registry: Any,
-    entry_id: str,
     domain: str,
     entity_ids: Iterable[str],
+    devices: Iterable[Any],
 ) -> RemovalResult:
     removed = 0
     for entity_id in entity_ids:
@@ -205,11 +207,9 @@ def remove_orphans(
         removed += 1
     devices_with_entities = {entry.device_id for entry in registry.entities.values() if entry.device_id}
     removed_devices = 0
-    # Iterating the registry yields device entries; using it as an id mapping is deprecated since HA 2026.10.
-    for device in list(device_registry.devices):
+    for device in list(devices):
         if (
-            entry_id in device.config_entries
-            and any(identifier[0] == domain for identifier in device.identifiers)
+            any(identifier[0] == domain for identifier in device.identifiers)
             and device.id not in devices_with_entities
             and not getattr(device, "name_by_user", None)
             and not getattr(device, "labels", None)

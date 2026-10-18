@@ -214,12 +214,13 @@ class VaillantOptionsFlow(OptionsFlow):
                 return self.async_abort(reason="purge_not_confirmed")
             removed = cleanup.RemovalResult(entities=0, devices=0)
             if report.orphans:
+                devices = device_registry.async_get(self.hass)
                 removed = cleanup.remove_orphans(
                     registry,
-                    device_registry.async_get(self.hass),
-                    entry_id,
+                    devices,
                     DOMAIN,
                     [item.entity_id for item in report.orphans],
+                    device_registry.async_entries_for_config_entry(devices, entry_id),
                 )
             switched_off = cleanup.disable_dormant(
                 registry, [item.entity_id for item in report.dormant], RegistryEntryDisabler.INTEGRATION

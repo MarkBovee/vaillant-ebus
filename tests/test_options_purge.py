@@ -60,9 +60,9 @@ def _options_flow(
 ) -> tuple[Any, MagicMock]:
     registry = _registry(rows)
     devices = MagicMock()
-    devices.devices = []
     sys.modules["homeassistant.helpers.entity_registry"].async_get = MagicMock(return_value=registry)
     sys.modules["homeassistant.helpers.device_registry"].async_get = MagicMock(return_value=devices)
+    sys.modules["homeassistant.helpers.device_registry"].async_entries_for_config_entry = MagicMock(return_value=[])
     flow = CONFIG_FLOW.VaillantOptionsFlow(SimpleNamespace(entry_id=ENTRY_ID))
     coordinator = _coordinator(connected=connected)
     if entities is not None:

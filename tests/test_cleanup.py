@@ -202,21 +202,22 @@ def test_remove_orphans_removes_empty_devices_only() -> None:
         _row("sensor.zone_1_orphan", "d", device_id="dev-zone1"),
     ]
     registry = _registry(rows)
-    devices = MagicMock()
-    # Home Assistant 2026.10 wants the registry iterated for its device entries, not used as an id mapping.
-    devices.devices = [
-        SimpleNamespace(id="dev-zone2", config_entries={ENTRY_ID}, identifiers={(DOMAIN, "z2")}),
-        SimpleNamespace(id="dev-zone1", config_entries={ENTRY_ID}, identifiers={(DOMAIN, "z1")}),
-        SimpleNamespace(id="dev-foreign", config_entries={"entry-2"}, identifiers={(DOMAIN, "z9")}),
-        SimpleNamespace(id="dev-other-domain", config_entries={ENTRY_ID}, identifiers={("other", "x")}),
+    device_registry = MagicMock()
+    # The caller hands in the device entries of this config entry (Home Assistant's `async_entries_for_config_entry`),
+    # because the registry's `devices` mapping and `DeviceEntry.config_entries` are deprecated or differ per version.
+    # These stand-ins have no `config_entries` attribute on purpose.
+    devices = [
+        SimpleNamespace(id="dev-zone2", identifiers={(DOMAIN, "z2")}),
+        SimpleNamespace(id="dev-zone1", identifiers={(DOMAIN, "z1")}),
+        SimpleNamespace(id="dev-other-domain", identifiers={("other", "x")}),
     ]
 
     result = CLEANUP.remove_orphans(
-        registry, devices, ENTRY_ID, DOMAIN, ["sensor.zone_2_a", "sensor.zone_2_b", "sensor.zone_1_orphan"]
+        registry, device_registry, DOMAIN, ["sensor.zone_2_a", "sensor.zone_2_b", "sensor.zone_1_orphan"], devices
     )
 
     assert (result.entities, result.devices) == (3, 1)
-    devices.async_remove_device.assert_called_once_with("dev-zone2")
+    device_registry.async_remove_device.assert_called_once_with("dev-zone2")
 
 
 # Intent: an empty device that the user renamed or labelled is kept when its entities are removed.
@@ -225,28 +226,16 @@ def test_remove_orphans_removes_empty_devices_only() -> None:
 def test_remove_orphans_keeps_a_device_the_user_customised() -> None:
     rows = [_row("sensor.a", "a", device_id="dev-renamed"), _row("sensor.b", "b", device_id="dev-labelled")]
     registry = _registry(rows)
-    devices = MagicMock()
-    devices.devices = [
-        SimpleNamespace(
-            id="dev-renamed",
-            config_entries={ENTRY_ID},
-            identifiers={(DOMAIN, "z2")},
-            name_by_user="Guest room",
-            labels=set(),
-        ),
-        SimpleNamespace(
-            id="dev-labelled",
-            config_entries={ENTRY_ID},
-            identifiers={(DOMAIN, "z3")},
-            name_by_user=None,
-            labels={"keep"},
-        ),
+    device_registry = MagicMock()
+    devices = [
+        SimpleNamespace(id="dev-renamed", identifiers={(DOMAIN, "z2")}, name_by_user="Guest room", labels=set()),
+        SimpleNamespace(id="dev-labelled", identifiers={(DOMAIN, "z3")}, name_by_user=None, labels={"keep"}),
     ]
 
-    result = CLEANUP.remove_orphans(registry, devices, ENTRY_ID, DOMAIN, ["sensor.a", "sensor.b"])
+    result = CLEANUP.remove_orphans(registry, device_registry, DOMAIN, ["sensor.a", "sensor.b"], devices)
 
     assert (result.entities, result.devices) == (2, 0)
-    devices.async_remove_device.assert_not_called()
+    device_registry.async_remove_device.assert_not_called()
 
 
 # Intent: the confirmation text names the first orphans and counts the rest.
@@ -312,9 +301,9 @@ def _flow(
 ) -> tuple[Any, MagicMock, MagicMock]:
     registry = _registry(rows)
     devices = MagicMock()
-    devices.devices = []
     sys.modules["homeassistant.helpers.entity_registry"].async_get = MagicMock(return_value=registry)
     sys.modules["homeassistant.helpers.device_registry"].async_get = MagicMock(return_value=devices)
+    sys.modules["homeassistant.helpers.device_registry"].async_entries_for_config_entry = MagicMock(return_value=[])
     flow = REPAIRS.StaleEntitiesRepairFlow(ENTRY_ID)
     coordinator = _coordinator(connected=connected)
     if entities is not None:
@@ -361,6 +350,20 @@ async def test_fix_flow_removes_the_orphans_on_confirm() -> None:
 
     assert result == {"type": "create_entry"}
     assert [call.args[0] for call in registry.async_remove.call_args_list] == ["sensor.gone", "sensor.gone2"]
+
+
+# Intent: confirming also removes the device left empty, found through Home Assistant's per-entry device lookup.
+# Why: the lookup works on every Home Assistant version, while iterating the registry returns ids on older ones and
+#      reading `config_entries` is deprecated since 2026.10; a Zone 2 device without entities must not stay behind.
+async def test_fix_flow_removes_the_device_that_is_left_empty() -> None:
+    flow, _, devices = _flow([_row("sensor.gone", "ebusd_hmu_gone", device_id="dev-zone2")])
+    lookup = sys.modules["homeassistant.helpers.device_registry"].async_entries_for_config_entry
+    lookup.return_value = [SimpleNamespace(id="dev-zone2", identifiers={(DOMAIN, "z2")})]
+
+    await flow.async_step_confirm({})
+
+    lookup.assert_called_once_with(devices, ENTRY_ID)
+    devices.async_remove_device.assert_called_once_with("dev-zone2")
 
 
 # Intent: the flow aborts instead of removing anything when ebusd is not connected.
