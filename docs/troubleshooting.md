@@ -26,6 +26,20 @@ If it persists:
 - Check the eBUS adapter (network cable, power to the adapter)
 - Verify ebusd logs for errors: **Settings → Add-ons → ebusd → Logs**
 
+## Leftover entities after an update or a changed setup
+
+Home Assistant keeps the entities of a zone or register that the integration no longer provides. They stay as
+"unavailable" and the entity list can grow with entries that never get a value.
+
+About fifteen minutes after start the integration looks for them. When it finds any, **Settings → System → Repairs**
+shows "Stale Vaillant eBUS entities". Open it to see how many there are and the first names; nothing is removed until
+you select **Submit**. The same list is available under **Settings → Devices & services → Vaillant eBUS → Configure →
+Purge Stale Entities**. Entities you renamed, hid, labelled or placed in an area are kept.
+
+Zones that the controller reports as `inactive` (heating circuits 2 and 3 on many systems) get no entities at all. The
+`Circuit Type` sensor of such a circuit is on the controller device. If your system does use that zone, set
+`enabled: true` for its registers in `entities.yaml`.
+
 ## All heat pump registers show "unavailable" or "no data stored"
 
 This is normal when the compressor is idle — summer mode, no heating or DHW demand. Registers that depend on the compressor (energy counters, flow temperatures, COP) only return data during active cycles.
