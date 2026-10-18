@@ -13,95 +13,28 @@ permissions:
   contents: read
 
 jobs:
-  ci:
-    if: github.ref_type == 'branch' || github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.14"
-
-      - name: Install dependencies
-        run: pip install ruff==0.16.4 mypy==1.15.0 pytest pytest-asyncio pyyaml types-cryptography
-
-      - name: Version check
-        run: python tools/version.py check
-
-      - name: Lint
-        run: ruff check .
-
-      - name: Validate YAML
-        run: python -c "import pathlib, yaml; [yaml.safe_load(path.read_text()) for pattern in ('*.yml', '*.yaml') for path in pathlib.Path('.').rglob(pattern)]"
-
-      - name: Format check
-        run: ruff format --check custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py custom_components/vaillant_ebus/backend/entity_factory.py custom_components/vaillant_ebus/backend/mapping.py custom_components/vaillant_ebus/coordinator.py custom_components/vaillant_ebus/dump_service.py
-
-      - name: Type check
-        run: mypy --strict --follow-imports=skip custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py
-
-      - name: Test
-        run: pytest -q tests/
-
-      - name: Compile
-        run: python3 -m compileall -f custom_components/vaillant_ebus/
-
-      - name: Diff check
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git diff --check "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}"
-          else
-            git diff --check HEAD^ HEAD
-          fi
+  checks:
+    uses: ./.github/workflows/checks.yml
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
+    needs: checks
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      checks: read
 
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.14"
 
-      - name: Install dependencies
-        run: pip install ruff==0.16.4 mypy==1.15.0 pytest pytest-asyncio pyyaml types-cryptography
-
-      - name: Version check
-        run: python tools/version.py check
-
-      - name: Lint
-        run: ruff check .
-
-      - name: Validate YAML
-        run: python -c "import pathlib, yaml; [yaml.safe_load(path.read_text()) for pattern in ('*.yml', '*.yaml') for path in pathlib.Path('.').rglob(pattern)]"
-
-      - name: Format check
-        run: ruff format --check custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py custom_components/vaillant_ebus/backend/entity_factory.py custom_components/vaillant_ebus/backend/mapping.py custom_components/vaillant_ebus/coordinator.py custom_components/vaillant_ebus/dump_service.py
-
-      - name: Type check
-        run: mypy --strict --follow-imports=skip custom_components/vaillant_ebus/backend/grab_parser.py custom_components/vaillant_ebus/backend/dump_analysis.py custom_components/vaillant_ebus/backend/discovery_service.py custom_components/vaillant_ebus/backend/models.py custom_components/vaillant_ebus/backend/ebus_service.py
-
-      - name: Test
-        run: pytest -q tests/
-
-      - name: Compile
-        run: python3 -m compileall -f custom_components/vaillant_ebus/
-
-      - name: Diff check
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git diff --check "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}"
-          else
-            git diff --check HEAD^ HEAD
-          fi
+      # A tag pushed before hassfest/HACS finished published a broken release in 1.10.5.
+      # Wait for those two checks on this exact commit and refuse to release unless both passed.
+      - name: Release gate (hassfest and HACS must be green on this commit)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release_gate.py "${{ github.repository }}" "${{ github.sha }}"
 
       - name: Build release zip
         run: |

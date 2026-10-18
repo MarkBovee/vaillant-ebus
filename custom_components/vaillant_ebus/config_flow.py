@@ -336,9 +336,7 @@ class VaillantOptionsFlow(OptionsFlow):
                 grab_duration = user_input.get("grab_duration", 10)
                 from .dump_service import async_export_discovery_dump
 
-                self.hass.async_create_task(
-                    async_export_discovery_dump(self.hass, coordinator, grab_duration)
-                )
+                self.hass.async_create_task(async_export_discovery_dump(self.hass, coordinator, grab_duration))
             return self.async_abort(reason="export_started")
 
         return self.async_show_form(
