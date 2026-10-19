@@ -1,62 +1,83 @@
 # Changelog
 
-## 1.12.0 - 2026-10-18
+## 1.12.0 - 2026-10-19
 
-### Added
+This is a cleanup release. Home Assistant never forgets an entity on its own: after a zone, a register or a firmware
+changes, the old entities stay behind as "unavailable", and older versions of this integration also created sensors for
+hardware you do not have. 1.12.0 stops creating that clutter and gives you a safe way to clear what is already there.
 
-- Leftover entities can now be cleaned up. Home Assistant keeps the entities of a zone, a register or an older release
-  after the integration stopped providing them; they show as "unavailable" and never go away by themselves. About
-  fifteen minutes after start the integration checks for them and, if it finds any, shows a repair called "Stale
-  Vaillant eBUS entities". Open it to see the first names and the count; nothing is removed until you select Submit.
-  Devices left without entities are removed with them. Entities you renamed, hid, labelled or put in an area are kept,
-  and so are devices you renamed or labelled. Nothing is checked while ebusd is not connected.
-- The same repair also lists enabled entities that have no data and that a new installation would not switch on, for
-  example sensors for hardware you do not have (storage temperatures, solar yield) and service or test registers.
-  Older releases created them as enabled, and Home Assistant never changes an enabled entity by itself. After you
-  select Submit they are switched off, not deleted, and each one switches on again by itself when its register
-  returns a value. Entities you renamed, hid, labelled or put in an area are left alone. Sensors that only fill when
-  the myVAILLANT gateway sends a frame (for example the compressor and heater counters) are never offered, because
-  they stay empty for a long time. Limit: a sensor you switched on yourself that is not one of those, and that has no
-  data, is still listed. The preview shows its name before you select Submit; to keep it, do not submit, or give it
-  a name or an area first. The check also waits until the first discovery after a start has finished.
-- "Purge stale entities" in the integration options uses the same check and the same preview.
+### Fewer wrong zones, devices and sensors
 
-### Changed
+- **Unused heating circuits get no entities.** When the controller itself reports a circuit as `inactive` (circuits 2
+  and 3 on many systems), the integration no longer creates zone sensors, settings or controls for it. The controller
+  answers fixed default values for zones that do not exist, such as a day temperature of 21.0 or holiday dates in
+  2015, and those looked like real data. On one test system that was two extra zone devices with about 80 entities.
+  The `Circuit Type` sensor of such a circuit now sits on the controller device, so you can still see why the zone is
+  missing. Zone 1 is never hidden, a circuit whose type cannot be read is never hidden, and a zone that reports a room
+  temperature is kept. To bring a hidden register back, set `enabled: true` for it in `entities.yaml`.
+- **No phantom solar controller.** The controller also answers at the solar address. If none of those registers has a
+  value and the firmware numbers equal those of the heating controller, the integration now treats it as an echo and
+  creates nothing. A real solar module has its own numbers and answers its registers, so it keeps working.
 
-- "Purge stale entities" used to delete every entity whose state was `unknown`. That also removed live entities, such as
-  a holiday date while no holiday is set, and it did not find the leftovers described above. It now removes only
-  entities that nothing provides any more.
-- A heating circuit that the controller itself reports as `inactive` (circuits 2 and 3 on many systems) no longer gets
-  zone sensors, settings or controls. The controller answers fixed default values for zones that do not exist, such as
-  a day temperature of 21.0 or holiday dates in 2015, and those looked like real data. On one test system that made two
-  extra zone devices with about 80 entities. The `Circuit Type` sensor of such a circuit now sits on the controller
-  device, so you can still see why the zone is missing. This rule does not apply to zone 1, a circuit whose type cannot
-  be read is never hidden, and a zone that reports a room temperature is kept. To bring a hidden register back, set
-  `enabled: true` for it in `entities.yaml`.
-- The "solar controller" that the controller answers for at the solar address no longer creates entities when none of its
-  registers has a value and its firmware numbers equal those of the heating controller. A real solar module has its own
-  numbers and answers its registers, so it keeps working. Its remaining entities from older releases show up in the
-  repair described above.
-- When the eBUS adapter stops carrying requests, the integration now pauses its active reads. Four bus errors in a row
-  (`arbitration lost` or `read timeout`) on at least two different circuits pause them for a minute; the next read is a
-  test, and the pause doubles up to ten minutes while it keeps failing. One device that stops answering never pauses
-  the others. Before this, a stuck adapter got the whole read set again every cycle (issue #193). A reconnect or a
-  rediscovery starts clean. This was built from the report and has not been tried on a stuck adapter yet.
-- Heat pump firmware SW0406: the electrical power now shows up as soon as the myVAILLANT gateway asks for it
-  (issue #188). The integration only listens to that answer and sends nothing. It stays unavailable until the
-  gateway has asked once.
-- The minimum Home Assistant version is now 2026.3 (it said 2025.1 before). The integration is written for Python 3.14,
-  and Home Assistant 2026.3 is the first release that runs on it. Older versions could not load it in practice; only
-  the stated version was wrong, nothing changes for you if you already run 2026.3 or newer.
+### Clearing out what is already there
+
+- **A new repair: "Stale Vaillant eBUS entities".** About fifteen minutes after start the integration compares Home
+  Assistant's registry with what it finds on the bus. If something is left over, the repair shows the count and the
+  first names. Nothing changes until you select **Submit**. It covers two kinds of leftovers:
+  - Entities that nothing provides any more, for example from a zone or a register the controller no longer reports,
+    or from an older release. Submit removes them, and any Vaillant eBUS device that is left without entities.
+  - Enabled entities that have no data and that a new installation would not switch on, such as storage temperatures
+    or solar yield on a system without them, and service or test registers. Older releases created these as enabled,
+    and Home Assistant does not change an enabled entity by itself. Submit switches them off but does not delete them;
+    each one switches on again when its register returns a value. Home Assistant then reloads the integration once,
+    about 30 seconds after the last entity came back.
+- **Your own choices are kept.** Entities you renamed, hid, labelled or put in an area are never removed or switched
+  off, and neither are devices you renamed or labelled. Nothing is checked while ebusd is not connected or before the
+  first discovery after a start has finished.
+- **Sensors that fill slowly are left alone.** Sensors that only fill when the myVAILLANT gateway sends a frame, such
+  as the compressor and heater counters, are never offered, because they stay empty for a long time. One limit
+  remains: a sensor you switched on yourself that is not one of those, and that has no data, is still listed. The
+  preview shows its name before you submit. To keep it, do not submit, or give it a name or an area first.
+- **"Purge stale entities" in the options is safer.** It used to delete every entity whose state was `unknown`, which
+  also removed live entities, for example a holiday date while no holiday is set. It now uses the same check and the
+  same preview as the repair, and removes only entities that nothing provides any more.
+
+**After you update:** restart Home Assistant. Entities of zones that are now hidden show as "unavailable" until you
+confirm the repair; they are not switched off first. Open **Settings → Repairs**, read the list, and select Submit.
+The same list is under **Settings → Devices & services → Vaillant eBUS → Configure → Purge Stale Entities**.
+
+### Also new
+
+- **Heat pump firmware SW0406:** the electrical power shows up as soon as the myVAILLANT gateway asks for it
+  (issue #188). The integration only listens to that answer and sends nothing, so the value stays unavailable until
+  the gateway has asked once.
+- **A stuck eBUS adapter no longer gets hammered.** After four bus errors in a row (`arbitration lost` or
+  `read timeout`) on at least two different circuits, the integration pauses its active reads for a minute. The next
+  read is a test, and the pause doubles up to ten minutes while it keeps failing. One device that stops answering
+  never pauses the others, and a reconnect or a rediscovery starts clean (issue #193). This was built from the report
+  and has not been tried on a stuck adapter yet.
 
 ### Fixed
 
-- Heat pump firmware SW0406 without an ebusd configuration for the heat pump: the flow and return temperature were wrong
-  or missing, because this firmware answers with a different number format than SW0303 (issue #188). SW0303 is not
-  changed. If you ran 1.11.2 on SW0406, restart Home Assistant after the update; if the old values stay, restart ebusd
-  once, because ebusd may keep the earlier definition until then.
-- Mixer movement of the heating circuits now has the unit `%` and is recorded as a measurement, so Home Assistant draws
-  a line instead of coloured bars (issue #190). The value is a signed percentage; -100 means the mixer is closed.
+- **SW0406 flow and return temperature** were wrong or missing when ebusd has no configuration for the heat pump,
+  because this firmware answers with a different number format than SW0303 (issue #188). SW0303 is not changed. If you
+  ran 1.11.2 on SW0406, restart Home Assistant after the update; if the old values stay, restart ebusd once, because
+  ebusd may keep the earlier definition until then.
+- **Mixer movement** of the heating circuits now has the unit `%` and is recorded as a measurement, so Home Assistant
+  draws a line instead of coloured bars (issue #190). The value is a signed percentage; -100 means the mixer is
+  closed.
+
+### Requirements
+
+- The minimum Home Assistant version is now 2026.3 (the files said 2025.1 before). The integration is written for
+  Python 3.14, and 2026.3 is the first Home Assistant release that runs on it. If you already run 2026.3 or newer,
+  nothing changes for you.
+
+### Under the hood
+
+- The code is split into smaller modules (runtime definitions, fallback read planning, graph merging, a table of
+  firmware gates, and the register map in themed files) with more tests around them. No change in behaviour is
+  intended. Release checks now also require hassfest and HACS validation to be green before a tag publishes.
 
 ### Not changed
 
@@ -65,8 +86,6 @@
 - The heating state of the zone and the hot water (issues #191 and #192) is not changed in this release.
 - The pause between the definitions the integration sends at startup (issue #193) is not changed yet; it needs a test
   with the reporter's setup.
-- Existing entities of unused zones are not switched off first. After the update and a restart they show as
-  "unavailable" until you confirm the repair.
 
 ## 1.11.2 - 2026-10-12
 
