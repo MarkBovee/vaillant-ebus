@@ -218,10 +218,11 @@ class EbusdTankPresentSensor(CoordinatorEntity[VaillantCoordinator], BinarySenso
 
 
 class EbusdDhwHeatingSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntity):
-    """Derived DHW heating state of a heat pump: on while the compressor or immersion heater charges the cylinder.
+    """Derived DHW heating state of a heat pump: on while it is in hot water mode.
 
-    A Home Assistant water heater has no heating or idle state, so this reads the heat pump status code
-    (``RunDataStatuscode``) of the discovered heat pump circuit and is attached to the logical DHW device.
+    A Home Assistant water heater has no heating or idle state, so this derives the state from the status fields of
+    the discovered heat pump circuit (``RunDataStatuscode``, ``Status00``, ``Status01``, ``Status07``) and is attached
+    to the logical DHW device.
     """
 
     _attr_has_entity_name = True

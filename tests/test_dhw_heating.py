@@ -25,8 +25,8 @@ from vaillant_ebus.binary_sensor import EbusdDhwHeatingSensor  # noqa: E402
 derive_dhw_heating = MODELS.derive_dhw_heating
 
 
-# Intent: the compressor or the immersion heater charging the cylinder is on; every other known status is off.
-# Why: only a status that heats the cylinder may switch the sensor on; prerun and postrun move no heat into it.
+# Intent: the hot water modes (compressor, immersion heater, pump pre- and overrun) are on; every other status is off.
+# Why: the sensor shares the heat pump's operating-state logic; a blocked or switched-off hot water heater is not on.
 @pytest.mark.parametrize(
     ("status", "expected"),
     [
@@ -35,8 +35,10 @@ derive_dhw_heating = MODELS.derive_dhw_heating
         ("HWC_Compressor_Active", True),
         ("standby", False),
         ("heat_compressor_active", False),
-        ("dhw_pump_prerun", False),
-        ("dhw_pump_postrun", False),
+        ("dhw_pump_prerun", True),
+        ("dhw_pump_postrun", True),
+        ("dhw_compressor_blocked", False),
+        ("dhw_immersion_heater_off", False),
         ("defrost", False),
     ],
 )
@@ -45,12 +47,42 @@ def test_derive_dhw_heating_maps_status_strings(status: str, expected: bool) -> 
 
 
 # Intent: a missing, sentinel or redacted status and a missing circuit stay unknown, never off.
-# Why: unavailable data is not "not heating"; a dump redacts RunDataStatuscode and ebusd answers no data stored.
-@pytest.mark.parametrize("raw", [None, "no data stored", "-", "", "<redacted>"])
+# Why: unavailable data is not "not heating"; ebusd answers no data stored while the compressor is idle.
+@pytest.mark.parametrize("raw", [None, "no data stored", "-", ""])
 def test_derive_dhw_heating_is_unknown_without_a_usable_status(raw: str | None) -> None:
     values = {} if raw is None else {"hmu.RunDataStatuscode.value": raw}
     assert derive_dhw_heating(values, "hmu") is None
     assert derive_dhw_heating({"hmu.RunDataStatuscode.value": "hwc_compressor_active"}, None) is None
+
+
+# Intent: the translated status labels the coordinator stores give the same answer as the raw ebusd strings.
+# Why: the coordinator rewrites RunDataStatuscode through COMPRESSOR_STATUS_LABELS before it fills the data, so the live
+# sensor sees "Active (DHW)", not hwc_compressor_active; feeding only raw strings missed that (audit of 1.12.1).
+@pytest.mark.parametrize("raw", sorted(MODELS.COMPRESSOR_STATUS_LABELS))
+def test_derive_dhw_heating_reads_the_label_the_coordinator_stores(raw: str) -> None:
+    label = MODELS.COMPRESSOR_STATUS_LABELS[raw]
+
+    assert derive_dhw_heating({"hmu.RunDataStatuscode.value": label}, "hmu") is derive_dhw_heating(
+        {"hmu.RunDataStatuscode.value": raw}, "hmu"
+    )
+    assert derive_dhw_heating({"hmu.RunDataStatuscode.value": "Active (DHW)"}, "hmu") is True
+    assert derive_dhw_heating({"hmu.RunDataStatuscode.value": "Shutdown (Heating)"}, "hmu") is False
+
+
+# Intent: units that keep RunDataStatuscode at 0 during hot water demand report it through other fields.
+# Why: HMU00/CTLV3 units show the 3-way valve position in Status01.pumpstate (hwc) or the Status00/Status07 bits, so
+# a status of 0 alone must neither read "off" while charging nor be trusted when it is the only signal.
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        ({"hmu.RunDataStatuscode.value": "0", "hmu.Status01.pumpstate": "hwc"}, True),
+        ({"hmu.RunDataStatuscode.value": "0", "hmu.Status00.compressorstate": "hot_water"}, True),
+        ({"hmu.RunDataStatuscode.value": "0", "hmu.Status01.pumpstate": "off"}, False),
+        ({"hmu.RunDataStatuscode.value": "0"}, None),
+    ],
+)
+def test_derive_dhw_heating_uses_the_other_hot_water_signals(values: dict[str, str], expected: bool | None) -> None:
+    assert derive_dhw_heating(values, "hmu") is expected
 
 
 # Intent: the lookup follows the discovered heat pump circuit and ignores the status of another circuit.

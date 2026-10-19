@@ -388,26 +388,28 @@ def derive_tank_presence(values: Mapping[str, str | None], dhw_circuit: str | No
     return None
 
 
-# Heat pump status strings in which the compressor or the immersion heater heats the hot water cylinder. Prerun and
-# postrun only move the pump, so they are "not heating" for the DHW heating sensor.
-DHW_HEATING_STATUS_STRINGS: frozenset[str] = frozenset({"hwc_compressor_active", "hwc_immersion_heater_active"})
+# Status fields that can report hot water demand on units where RunDataStatuscode stays at 0 (HMU00/CTLV3).
+_DHW_SIGNAL_FIELDS = ("Status00.compressorstate", "Status01.pumpstate", "Status07.heatermain_b7_warmwater")
 
 
-# Intent: derive whether the heat pump is heating the hot water cylinder from its status code.
-# Why: issue #191 - a water heater entity has no heating state, so a binary sensor reads RunDataStatuscode of the
-# discovered heat pump circuit. A missing or sentinel status is unknown, never off, so unavailable data is not
-# reported as "not heating".
+# Intent: derive whether the heat pump is in hot water mode (charging the cylinder) from its status fields.
+# Why: issue #191 - a water heater entity has no heating state, so a binary sensor reuses the operating-state logic,
+# which also reads Status00, Status01.pumpstate and Status07 for units whose RunDataStatuscode stays at 0 during hot
+# water demand. A blocked or switched-off hot water heater is not on. No usable status is unknown, never off, and a
+# bare status of 0 without any other signal is unknown because such a unit may be charging without saying so.
 def derive_dhw_heating(values: Mapping[str, str | None], heat_pump_circuit: str | None) -> bool | None:
-    if not heat_pump_circuit:
+    state = derive_operating_state(values, heat_pump_circuit)
+    if state is None:
         return None
-    expected = f"{heat_pump_circuit}.RunDataStatuscode.value".casefold()
-    raw = next((value for key, value in values.items() if key.casefold() == expected), None)
-    if raw is None:
+    status = _clean(_value_lookup(values, f"{heat_pump_circuit}.RunDataStatuscode.value"))
+    if "blocked" in status or status.endswith("_off"):
+        return False
+    has_other_signal = any(
+        _clean(_value_lookup(values, f"{heat_pump_circuit}.{field}")) for field in _DHW_SIGNAL_FIELDS
+    )
+    if state == OPERATING_STATE_STANDBY and status == "0" and not has_other_signal:
         return None
-    status = str(raw).strip().lower()
-    if not status or is_no_data_value(status) or status in {"-", "<redacted>"}:
-        return None
-    return status in DHW_HEATING_STATUS_STRINGS
+    return state == OPERATING_STATE_DHW
 
 
 # VWZ hydraulic-module scan TYPEs split the heat-pump product lines. The

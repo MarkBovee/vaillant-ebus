@@ -7,11 +7,13 @@ wrong.
 
 ### New
 
-- **"DHW Heating" binary sensor for heat pumps (issue #191).** It is on while the heat pump status shows the
-  compressor or the immersion heater charging the hot water cylinder, and off in every other known state (standby,
-  heating, cooling, defrost, and the pump pre- and overrun for hot water). A missing status stays `unknown`. It
-  appears on the hot water device only where the heat pump status register is discovered, so a gas boiler such as a
-  BASS3 gets no sensor; its charging state needs a register that nobody has captured yet.
+- **"DHW Heating" binary sensor for heat pumps (issue #191).** It is on while the heat pump is in hot water mode:
+  the compressor or the immersion heater charges the cylinder, including the pump pre- and overrun. It reuses the logic
+  of the operating-state sensor, so units that keep the status code at 0 during hot water demand (HMU00 with CTLV3)
+  report it through the valve position and the status bits. It is off in every other state, including a blocked or
+  switched-off hot water heater, and `unknown` without data. It appears on the hot water device only where the heat
+  pump status is discovered, so a gas boiler such as a BASS3 gets no sensor; its charging state needs a register
+  that nobody has captured yet. Only the compressor state has been compared with the sensor on a real system so far.
 
 ### Fixed
 

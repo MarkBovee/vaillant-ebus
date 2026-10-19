@@ -6,7 +6,9 @@ import re
 
 # Fragments that identify a secret anywhere in a register name (for example SerialNumber, KeyCodeforConfigMenu,
 # Installer1). Each is long enough that it does not occur inside an ordinary word.
-SENSITIVE_FIELDS: frozenset[str] = frozenset({"serial", "keycode", "installer", "password", "secret", "token"})
+SENSITIVE_FIELDS: frozenset[str] = frozenset(
+    {"serial", "keycode", "installer", "password", "secret", "token", "pincode", "passcode"}
+)
 
 # Short fragments that count only as a whole CamelCase word (PinCode, but not Statuscode or Mapping).
 SENSITIVE_WORDS: frozenset[str] = frozenset({"bc", "code", "pin"})

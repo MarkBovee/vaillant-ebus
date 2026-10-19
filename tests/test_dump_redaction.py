@@ -32,7 +32,18 @@ def test_dump_keeps_values_of_registers_that_only_contain_a_sensitive_fragment(n
 # Why: narrowing the match must not leak the real secrets that the redaction exists for.
 @pytest.mark.parametrize(
     "name",
-    ["SerialNumber", "KeyCodeforConfigMenu", "Installer1", "Installer2", "PinCode", "Password", "ApiToken", "Secret"],
+    [
+        "SerialNumber",
+        "KeyCodeforConfigMenu",
+        "Installer1",
+        "Installer2",
+        "PinCode",
+        "Pincode",
+        "Passcode",
+        "Password",
+        "ApiToken",
+        "Secret",
+    ],
 )
 def test_dump_still_redacts_sensitive_register_names(name: str) -> None:
     assert DUMP._redact("1234", name) == "<redacted>"
