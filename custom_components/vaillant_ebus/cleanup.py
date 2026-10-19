@@ -156,6 +156,10 @@ def find_dormant(
 # Intent: build the cleanup report for one config entry, or refuse when the report would not be trustworthy.
 # Why: before ebusd is connected and entities are generated, every registry row looks orphaned; removing rows then
 # would delete live entities. The generated unique ids carry the config entry prefix Home Assistant puts on them.
+# `discovery_ready` also excludes the window where entities come from the cache and no live discovery has run yet, in
+# which a cached `unknown` state would look like a register without data. Registers the integration defined itself
+# (passive definitions) are never offered as dormant: they have no value until the gateway sends the frame, a user may
+# have switched them on on purpose, and the coordinator leaves them alone for the same reason.
 def stale_report(
     registry: Any,
     states: Any,
@@ -165,13 +169,15 @@ def stale_report(
 ) -> OrphanReport | None:
     if coordinator is None or coordinator.ebus is None or not coordinator.ebus.is_connected:
         return None
-    if not coordinator.entities:
+    if not coordinator.discovery_ready or not coordinator.entities:
         return None
     generated = {f"{entry_id}_{entity.unique_id}" for entity in coordinator.entities}
+    runtime_defined = coordinator.runtime_defined_key_folds()
     switched_off = {
         f"{entry_id}_{entity.unique_id}".casefold()
         for entity in coordinator.entities
         if getattr(entity, "enabled_by_default", True) is False
+        and f"{getattr(entity, 'circuit', '')}.{getattr(entity, 'name', '')}".casefold() not in runtime_defined
     }
     report = find_orphans(registry, states, entry_id, domain, generated)
     dormant, kept = find_dormant(registry, states, entry_id, domain, switched_off)
@@ -180,10 +186,15 @@ def stale_report(
 
 # Intent: switch the given entity registry rows off as disabled by the integration and return how many were changed.
 # Why: only a row the integration disabled is switched on again by the analysis when its register returns a value; the
-# caller passes the Home Assistant disabler so this module needs no Home Assistant import.
+# caller passes the Home Assistant disabler so this module needs no Home Assistant import. Each row is read again, so a
+# row that was removed, switched off or customised after the report was built is left as it is.
 def disable_dormant(registry: Any, entity_ids: Iterable[str], disabler: Any) -> int:
     switched = 0
     for entity_id in entity_ids:
+        entry = registry.async_get(entity_id)
+        # The report was built a moment ago; skip a row that was removed, switched off or customised since then.
+        if entry is None or _marker(getattr(entry, "disabled_by", None)) is not None or _is_customized(entry):
+            continue
         registry.async_update_entity(entity_id, disabled_by=disabler)
         switched += 1
     return switched

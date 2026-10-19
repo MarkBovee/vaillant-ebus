@@ -81,5 +81,32 @@
       "rediscover_not_confirmed": "eBUS rediscovery was not started.",
       "nothing_to_purge": "There are no stale entities to remove and no entities to switch off."
     }
+  },
+  "issues": {
+    "ebusd_unreachable": {
+      "title": "ebusd is unreachable",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "ebusd is unreachable",
+            "description": "The integration cannot reach the ebusd daemon. Start ebusd and check the connection settings, then select Submit to dismiss this repair. The integration checks ebusd again and shows the repair again if it is still unreachable."
+          }
+        }
+      }
+    },
+    "stale_entities": {
+      "title": "Stale Vaillant eBUS entities",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Remove stale entities",
+            "description": "{count} Vaillant eBUS entities exist in Home Assistant that the integration no longer provides, for example from a zone or register the controller no longer reports. Submit removes them, and any Vaillant eBUS device left empty.\n\n{entities}\n\nAlso, {dormant_count} enabled entities have no data and a new installation would not switch them on, for example a sensor for hardware you do not have. Submit also switches them off. They are not deleted, and each one switches on again by itself when its register returns a value.\n\n{dormant}\n\nEntities that you renamed, hid, labelled or assigned to an area are kept ({kept}). Nothing changes before you select Submit."
+          }
+        },
+        "abort": {
+          "cleanup_unavailable": "The integration is not connected to ebusd right now, so nothing was removed. Try again when ebusd is reachable."
+        }
+      }
+    }
   }
 }

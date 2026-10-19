@@ -40,7 +40,10 @@ The same repair also lists enabled entities that have no data and that a new ins
 example sensors for hardware you do not have (storage temperatures, solar yield) and service or test registers. Older
 releases created them as enabled, and Home Assistant never changes an enabled entity by itself. After you select
 **Submit** they are switched off, not deleted, and each one switches on again by itself when its register returns a
-value.
+value. Home Assistant then reloads the integration once, about 30 seconds after the last entity was switched on.
+Sensors that only fill when the myVAILLANT gateway sends a frame (compressor and heater counters, power consumption)
+are never offered. A sensor you switched on yourself that is not one of those, and that has no data, is still listed:
+check the names in the preview before you select **Submit**. To keep one, give it a name or an area first.
 
 Zones that the controller reports as `inactive` (heating circuits 2 and 3 on many systems) get no entities at all. The
 `Circuit Type` sensor of such a circuit is on the controller device. If your system does use that zone, set

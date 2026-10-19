@@ -44,6 +44,7 @@ def _registry(rows: list[SimpleNamespace]) -> MagicMock:
     registry.entities.get_entries_for_config_entry_id.side_effect = lambda entry_id: list(by_id.values())
     registry.entities.values.side_effect = lambda: list(by_id.values())
     registry.async_remove.side_effect = lambda entity_id: by_id.pop(entity_id)
+    registry.async_get.side_effect = by_id.get
     return registry
 
 
@@ -185,9 +186,7 @@ def test_disabled_hand_built_entities_are_not_orphans() -> None:
 def test_legacy_helper_rows_are_always_orphans() -> None:
     rows = [_row("sensor.helper", "ebusd_hmu_tmpb516montheven")]
 
-    report = CLEANUP.find_orphans(
-        _registry(rows), _states({"sensor.helper": ("unknown", {})}), ENTRY_ID, DOMAIN, set()
-    )
+    report = CLEANUP.find_orphans(_registry(rows), _states({"sensor.helper": ("unknown", {})}), ENTRY_ID, DOMAIN, set())
 
     assert [item.entity_id for item in report.orphans] == ["sensor.helper"]
 
@@ -255,9 +254,13 @@ def test_preview_text_names_the_first_orphans_and_counts_the_rest() -> None:
 
 # Intent: build a coordinator stand-in with the three attributes the report needs.
 # Why: the stale-entity report is only trustworthy while ebusd is connected and entities have been generated.
-def _coordinator(connected: bool = True, entities: int = 1) -> SimpleNamespace:
+def _coordinator(
+    connected: bool = True, entities: int = 1, discovery_ready: bool = True, runtime_defined: set[str] | None = None
+) -> SimpleNamespace:
     return SimpleNamespace(
         ebus=SimpleNamespace(is_connected=connected),
+        discovery_ready=discovery_ready,
+        runtime_defined_key_folds=lambda: set(runtime_defined or ()),
         entities=[SimpleNamespace(unique_id=f"ebusd_hmu_generated{number}") for number in range(entities)],
     )
 
@@ -382,8 +385,10 @@ UNKNOWN = ("unknown", {"friendly_name": "Storage Temp (Top)"})
 
 # Intent: build a generated entity description stand-in with the two fields the dormant check reads.
 # Why: the discovery's own "off by default" verdict and the live `unknown` state decide whether a row is dormant.
-def _description(unique_id: str, enabled_by_default: bool = False) -> SimpleNamespace:
-    return SimpleNamespace(unique_id=unique_id, enabled_by_default=enabled_by_default)
+def _description(
+    unique_id: str, enabled_by_default: bool = False, circuit: str = "", name: str = ""
+) -> SimpleNamespace:
+    return SimpleNamespace(unique_id=unique_id, enabled_by_default=enabled_by_default, circuit=circuit, name=name)
 
 
 # Intent: an enabled row is dormant when its live entity has no value and the discovery would not switch it on.
@@ -467,6 +472,8 @@ def test_stale_report_lists_dormant_entities_next_to_orphans() -> None:
 # Why: only an integration-disabled row is switched on again by the analysis when its register returns a value.
 def test_disable_dormant_switches_rows_off_by_the_integration() -> None:
     registry = MagicMock()
+    rows = {"sensor.a": _row("sensor.a", "a"), "sensor.b": _row("sensor.b", "b")}
+    registry.async_get.side_effect = rows.get
 
     count = CLEANUP.disable_dormant(registry, ["sensor.a", "sensor.b"], "integration")
 
@@ -475,6 +482,54 @@ def test_disable_dormant_switches_rows_off_by_the_integration() -> None:
         (("sensor.a",), {"disabled_by": "integration"}),
         (("sensor.b",), {"disabled_by": "integration"}),
     ]
+
+
+# Intent: a row that changed between the report and the submit is left alone when the rows are switched off.
+# Why: the user may rename, switch off or delete an entity while the confirmation is open; that choice wins.
+def test_disable_dormant_skips_rows_that_changed_since_the_report() -> None:
+    registry = MagicMock()
+    rows = {
+        "sensor.kept": _row("sensor.kept", "kept"),
+        "sensor.renamed": _row("sensor.renamed", "renamed", name="Mine"),
+        "sensor.user_off": _row("sensor.user_off", "user_off", disabled_by="user"),
+    }
+    registry.async_get.side_effect = rows.get
+
+    count = CLEANUP.disable_dormant(
+        registry, ["sensor.kept", "sensor.renamed", "sensor.user_off", "sensor.gone"], "integration"
+    )
+
+    assert count == 1
+    registry.async_update_entity.assert_called_once_with("sensor.kept", disabled_by="integration")
+
+
+# Intent: an entity of a register the integration defined itself is never offered as dormant, even without data.
+# Why: a user may have switched on a passive default-off sensor such as a compressor counter on purpose; it stays
+# `unknown` until the gateway sends the frame, so a one-click Submit would undo that choice (audit P1).
+def test_stale_report_never_lists_runtime_defined_registers_as_dormant() -> None:
+    rows = [
+        _row("sensor.passive_counter", "ebusd_hmu_compressorhc"),
+        _row("sensor.storage_top", "ebusd_ctlv2_hwcstoragetemptop"),
+    ]
+    states = _states({"sensor.passive_counter": UNKNOWN, "sensor.storage_top": UNKNOWN})
+    coordinator = _coordinator(runtime_defined={"hmu.compressorhc"})
+    coordinator.entities = [
+        _description("ebusd_hmu_compressorhc", circuit="hmu", name="CompressorHc"),
+        _description("ebusd_ctlv2_hwcstoragetemptop", circuit="ctlv2", name="HwcStorageTempTop"),
+    ]
+
+    report = CLEANUP.stale_report(_registry(rows), states, ENTRY_ID, DOMAIN, coordinator)
+
+    assert [item.entity_id for item in report.dormant] == ["sensor.storage_top"]
+
+
+# Intent: the report is refused until the live discovery has finished.
+# Why: right after a start the entities come from the cache; a cached `unknown` state is not a register without data.
+def test_stale_report_is_refused_before_the_live_discovery_finished() -> None:
+    registry = _registry([_row("sensor.storage_top", "ebusd_ctlv2_hwcstoragetemptop")])
+    states = _states({"sensor.storage_top": UNKNOWN})
+
+    assert CLEANUP.stale_report(registry, states, ENTRY_ID, DOMAIN, _coordinator(discovery_ready=False)) is None
 
 
 DORMANT_ROWS = [_row("sensor.gone", "ebusd_hmu_gone"), _row("sensor.storage_top", "ebusd_ctlv2_hwcstoragetemptop")]

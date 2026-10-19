@@ -102,7 +102,7 @@
         "step": {
           "confirm": {
             "title": "Remove stale entities",
-            "description": "{count} Vaillant eBUS entities exist in Home Assistant that the integration no longer provides, for example from a zone or register the controller no longer reports. Select Submit to remove them and any Vaillant eBUS device left empty.\n\n{entities}\n\nAlso, {dormant_count} enabled entities have no data and a new installation would not switch them on, for example a sensor for hardware you do not have. Select Submit to switch them off. They are not deleted, and each one switches on again by itself when its register returns a value.\n\n{dormant}\n\nEntities that you renamed, hid, labelled or assigned to an area are kept ({kept}). Nothing changes before you select Submit."
+            "description": "{count} Vaillant eBUS entities exist in Home Assistant that the integration no longer provides, for example from a zone or register the controller no longer reports. Submit removes them, and any Vaillant eBUS device left empty.\n\n{entities}\n\nAlso, {dormant_count} enabled entities have no data and a new installation would not switch them on, for example a sensor for hardware you do not have. Submit also switches them off. They are not deleted, and each one switches on again by itself when its register returns a value.\n\n{dormant}\n\nEntities that you renamed, hid, labelled or assigned to an area are kept ({kept}). Nothing changes before you select Submit."
           }
         },
         "abort": {

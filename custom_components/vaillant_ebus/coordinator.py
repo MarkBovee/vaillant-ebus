@@ -808,7 +808,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             # Why: `define` can drop the cached value, so a post-define find lists them as no-data placeholders
             # or omits them until the next telegram or read; pruning them disabled user-enabled entities (#175)
             # and, once the fallback read re-enabled them, made Home Assistant reload the entry in a loop (#171).
-            runtime_defined_key_folds = self._runtime_defined_key_folds()
+            runtime_defined_key_folds = self.runtime_defined_key_folds()
             stale = [
                 rk
                 for rk in self.registers
@@ -1150,7 +1150,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
 
     # Intent: casefolded `circuit.name` keys of the registers this integration defined on the current bus.
     # Why: discovery pruning and no-data disabling must leave these alone while ebusd has no value for them.
-    def _runtime_defined_key_folds(self) -> set[str]:
+    def runtime_defined_key_folds(self) -> set[str]:
         return {
             f"{parts[1]}.{parts[2]}".casefold()
             for definition_key in self._runtime_definitions
@@ -1168,7 +1168,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     def _disable_no_data_registry_entities(self, descriptions: list[EntityDescription]) -> None:
         registry = entity_registry.async_get(self.hass)
         disabled = 0
-        runtime_defined = self._runtime_defined_key_folds()
+        runtime_defined = self.runtime_defined_key_folds()
         controller = self._graph.heating_controller_result().node if self._graph is not None else None
         for description in descriptions:
             if (

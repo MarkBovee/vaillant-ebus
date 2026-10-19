@@ -14,7 +14,11 @@
   example sensors for hardware you do not have (storage temperatures, solar yield) and service or test registers.
   Older releases created them as enabled, and Home Assistant never changes an enabled entity by itself. After you
   select Submit they are switched off, not deleted, and each one switches on again by itself when its register
-  returns a value. Entities you renamed, hid, labelled or put in an area are left alone.
+  returns a value. Entities you renamed, hid, labelled or put in an area are left alone. Sensors that only fill when
+  the myVAILLANT gateway sends a frame (for example the compressor and heater counters) are never offered, because
+  they stay empty for a long time. Limit: a sensor you switched on yourself that is not one of those, and that has no
+  data, is still listed. The preview shows its name before you select Submit; to keep it, do not submit, or give it
+  a name or an area first. The check also waits until the first discovery after a start has finished.
 - "Purge stale entities" in the integration options uses the same check and the same preview.
 
 ### Changed

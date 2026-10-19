@@ -6714,6 +6714,8 @@ async def test_stale_entities_issue_follows_the_registry() -> None:
         c = VaillantCoordinator(hass, entry)
         c.ebus = MagicMock(spec=EbusService)
         c.ebus.is_connected = True
+        c._ebusd_connected = True
+        c._graph = types.SimpleNamespace(nodes={"hmu": object()})  # live discovery finished
         c.entities = [MagicMock(unique_id="ebusd_hmu_flowtemp")]
         row = types.SimpleNamespace(
             entity_id="sensor.gone",
@@ -6762,6 +6764,8 @@ async def test_stale_entities_issue_is_raised_for_entities_without_data() -> Non
         c = VaillantCoordinator(hass, entry)
         c.ebus = MagicMock(spec=EbusService)
         c.ebus.is_connected = True
+        c._ebusd_connected = True
+        c._graph = types.SimpleNamespace(nodes={"hmu": object()})  # live discovery finished
         c.entities = [
             types.SimpleNamespace(unique_id="ebusd_ctlv2_hwcstoragetemptop", enabled_by_default=False),
             types.SimpleNamespace(unique_id="ebusd_hmu_flowtemp", enabled_by_default=True),
