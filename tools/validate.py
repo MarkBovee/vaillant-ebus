@@ -5,9 +5,9 @@
     python tools/validate.py --quick    # skip pytest
     python tools/validate.py --tests-only -k issue171
 
-On Windows a few tests fail for environment reasons only (CRLF checkout changes fixture digests, the bash-based
-search tool tests, one timing test). They are listed in ``tools/known_env_failures.txt`` and ignored there; any other
-failure fails the run. On Linux/macOS the baseline is not applied.
+On Windows tests that fail for environment reasons only (for example CRLF checkout changes to fixture digests or
+the bash-based search tool tests) are listed in ``tools/known_env_failures.txt`` and ignored there; any other
+failure fails the run. The list is empty at the moment. On Linux/macOS the baseline is not applied.
 """
 
 from __future__ import annotations
@@ -20,26 +20,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE_FILE = ROOT / "tools" / "known_env_failures.txt"
-# Keep in sync with the "Format check" and "Type check" steps of .github/workflows/ci.yml.
-FORMAT_FILES = (
-    "grab_parser.py",
-    "dump_analysis.py",
-    "discovery_service.py",
-    "models.py",
-    "ebus_service.py",
-    "entity_factory.py",
-    "mapping.py",
-)
-BACKEND = "custom_components/vaillant_ebus/backend/"
-FORMAT_TARGETS = [
-    *(BACKEND + name for name in FORMAT_FILES),
-    "custom_components/vaillant_ebus/coordinator.py",
-    "custom_components/vaillant_ebus/dump_service.py",
-]
-MYPY_TARGETS = [
-    BACKEND + name
-    for name in ("grab_parser.py", "dump_analysis.py", "discovery_service.py", "models.py", "ebus_service.py")
-]
+# Keep in sync with the "Format check" and "Type check" steps of .github/workflows/checks.yml.
+FORMAT_TARGETS = ["custom_components"]
+MYPY_TARGETS = ["custom_components/vaillant_ebus/backend"]
 
 
 # Intent: pick the repository virtualenv interpreter for the current OS, falling back to the running Python.
@@ -113,7 +96,7 @@ def main() -> int:
 
     if not args.tests_only:
         run_step("ruff check", [python, "-m", "ruff", "check", "."], results)
-        run_step("ruff format (scoped)", [python, "-m", "ruff", "format", "--check", *FORMAT_TARGETS], results)
+        run_step("ruff format", [python, "-m", "ruff", "format", "--check", *FORMAT_TARGETS], results)
         run_step("mypy --strict", [python, "-m", "mypy", "--strict", "--follow-imports=skip", *MYPY_TARGETS], results)
         run_step("version", [python, "tools/version.py", "check"], results)
         run_step("translations (hassfest rules)", [python, "tools/check_translations.py"], results)

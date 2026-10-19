@@ -85,7 +85,7 @@ The normal data flow is: connect to ebusd, discover the device graph, define any
 
 ## Prerequisites
 
-- Home Assistant 2025.1+
+- Home Assistant 2026.3+ (the first release that runs on Python 3.14, which this integration needs)
 - C6 eBUS adapter connected to your Vaillant heat pump
 - ebusd running as HA addon
 

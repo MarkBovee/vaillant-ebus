@@ -64,6 +64,14 @@ RELEASE_1112_CAPTURE_PROVENANCE = {
         "MF=Vaillant;ID=HMUX0;SW=0406;HW=0504",
     ),
 }
+# Release 1.12.0 captures are byte-for-byte copies of the attachments the reporters posted.
+RELEASE_1120_CAPTURE_PROVENANCE = {
+    "community/hmux0_sw0406_issue188_2026-10-13_092007_discovery.yaml": (
+        "https://github.com/user-attachments/files/33372709/discovery_dump_2026-10-13_092007_bereinigt.yaml",
+        "fbe9d12562c57595e1077ceff5313ec3aea29b63ecf2aff1366c6843681cdd7a",
+        "MF=Vaillant;ID=HMUX0;SW=0406;HW=0504",
+    ),
+}
 NEW_CAPTURE_PROVENANCE = {
     "community/arotherm_pro7_issue101_2026-09-15_203102_discovery.yaml": (
         "https://github.com/user-attachments/files/32255148/discovery_dump_2026-09-15_203102Whisper.switch.no.heat.yaml",
@@ -321,6 +329,34 @@ def test_release_1112_captures_match_source_digests(fixture: str, expected: tupl
     assert hashlib.sha256((FIXTURES_DIR / fixture).read_bytes()).hexdigest() == expected_sha256
     assert dump["metadata"]["ebusd_info"]["loaded_configs"]["08"]["scanned"] == expected_scan
     assert dump["raw_find_lines"]
+
+
+# Intent: the 1.12.0 captures remain byte-for-byte copies of the attached dumps and keep their HMUX0 scan identity.
+# Why: the SW0406 float layout of the flow and return temperature is only proven by the original telegram rows.
+@pytest.mark.parametrize(("fixture", "expected"), RELEASE_1120_CAPTURE_PROVENANCE.items())
+def test_release_1120_captures_match_source_digests(fixture: str, expected: tuple[str, str, str]) -> None:
+    source_url, expected_sha256, expected_scan = expected
+    dump = load_discovery_dump(fixture)
+
+    assert source_url.startswith("https://github.com/user-attachments/files/")
+    assert hashlib.sha256((FIXTURES_DIR / fixture).read_bytes()).hexdigest() == expected_sha256
+    assert dump["metadata"]["ebusd_info"]["loaded_configs"]["08"]["scanned"] == expected_scan
+    assert dump["raw_find_lines"]
+
+
+# Intent: the SW0406 stock-config capture keeps the three telegrams that prove the 4-byte float layout (issue #188).
+# Why: the flow and return temperature answer `00 80 05 42` and `00 00 ec 41`; a trimmed dump would hide the evidence.
+def test_issue188_capture_keeps_float_temperature_and_power_telegrams() -> None:
+    dump = load_discovery_dump("community/hmux0_sw0406_issue188_2026-10-13_092007_discovery.yaml")
+    rows = {item["request"]: item["resp"] for item in dump["labeled_telegrams"]}
+
+    assert dump["metadata"]["grab_status"] == "continued"
+    assert dump["metadata"]["integration_version"] == "1.11.2"
+    assert "loaded" not in dump["metadata"]["ebusd_info"]["loaded_configs"]["08"]
+    assert rows["3108b50905540200fc08"] == "080201fc0800800542"
+    assert rows["3108b509055402000609"] == "08020106090000ec41"
+    assert rows["f108b509055402005b0d"] == "0802015b0d09517044"
+    assert "hmux0 RunDataFlowTemp = -" in dump["raw_find_lines"]
 
 
 # Intent: the compressor-run capture keeps the raw grab rows and the exact candidate telegrams behind release 1.11.2.

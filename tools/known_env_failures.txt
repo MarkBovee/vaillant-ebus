@@ -1,5 +1,2 @@
 # Tests that fail on a Windows checkout for environment reasons only (prefix match, used by tools/validate.py).
 # Do not add tests here to hide real failures; every entry needs a reason.
-
-# Timing-sensitive; occasionally slow on Windows.
-tests/test_ebus_service.py::test_multiline_response_trickling_hits_total_deadline

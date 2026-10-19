@@ -26,6 +26,39 @@ If it persists:
 - Check the eBUS adapter (network cable, power to the adapter)
 - Verify ebusd logs for errors: **Settings → Add-ons → ebusd → Logs**
 
+## Leftover entities after an update or a changed setup
+
+Home Assistant keeps the entities of a zone or register that the integration no longer provides. They stay as
+"unavailable" and the entity list can grow with entries that never get a value.
+
+About fifteen minutes after start the integration looks for them. When it finds any, **Settings → System → Repairs**
+shows "Stale Vaillant eBUS entities". Open it to see how many there are and the first names; nothing is removed until
+you select **Submit**. The same list is available under **Settings → Devices & services → Vaillant eBUS → Configure →
+Purge Stale Entities**. Entities you renamed, hid, labelled or placed in an area are kept.
+
+The same repair also lists enabled entities that have no data and that a new installation would not switch on, for
+example sensors for hardware you do not have (storage temperatures, solar yield) and service or test registers. Older
+releases created them as enabled, and Home Assistant never changes an enabled entity by itself. After you select
+**Submit** they are switched off, not deleted, and each one switches on again by itself when its register returns a
+value. Home Assistant then reloads the integration once, about 30 seconds after the last entity was switched on.
+Sensors that only fill when the myVAILLANT gateway sends a frame (compressor and heater counters, power consumption)
+are never offered. A sensor you switched on yourself that is not one of those, and that has no data, is still listed:
+check the names in the preview before you select **Submit**. To keep one, give it a name or an area first.
+
+Zones that the controller reports as `inactive` (heating circuits 2 and 3 on many systems) get no entities at all. The
+`Circuit Type` sensor of such a circuit is on the controller device. If your system does use that zone, set
+`enabled: true` for its registers in `entities.yaml`.
+
+## Electricity totals only grow in steps of 1 kWh
+
+On some heat pumps the "Heating / DHW / Cooling Electricity Total" sensors move in steps of 1000 Wh. The heat pump
+itself reports whole kilowatt hours there; other units report finer values. The integration shows what ebusd gives and
+does not round or invent decimals.
+
+The "Heating / DHW / Cooling Electricity Today" sensors usually count in finer steps and reset every day. All three can be
+added to the Energy dashboard: pick them as the electricity source, and Home Assistant adds up the days. The totals stay
+useful as a long-term check against your meter.
+
 ## All heat pump registers show "unavailable" or "no data stored"
 
 This is normal when the compressor is idle — summer mode, no heating or DHW demand. Registers that depend on the compressor (energy counters, flow temperatures, COP) only return data during active cycles.

@@ -13,7 +13,7 @@ Find, load and dissect discovery dumps to back register/feature claims with evid
 
 ## Role
 
-You are the analysis hub for Vaillant eBUS data dumps. You collect evidence, and draw no conclusions without evidence. Community data from someone else's hardware **can never be verified live** — the fixture is the correctness gate (see AGENTS.md "Community Data").
+You are the analysis hub for Vaillant eBUS data dumps. You collect evidence, and draw no conclusions without evidence. Community data from someone else's hardware **can never be verified live** — the fixture is the correctness gate (see docs/register-discovery.md "Community Data").
 
 ## Workflow
 

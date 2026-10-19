@@ -710,7 +710,7 @@ def test_merge_device_graphs_replaces_current_vwzio_scan_authority() -> None:
     missing = DISCOVERY.DiscoveryService.build_device_graph(
         ["scan.15 = MF=Vaillant;ID=CTLV2;SW=0514;HW=1104", "ctlv2 Z1OpMode = auto"]
     )
-    merged_missing = COORDINATOR._merge_device_graphs(previous, missing)
+    merged_missing = COORDINATOR.merge_device_graphs(previous, missing)
     assert "vwzio" in merged_missing.nodes
     assert [(scan.address, scan.scan_type) for scan in merged_missing.scan_identities] == [("scan.15", "CTLV2")]
     assert MAPPING.vwzio_sw0500_circuit(merged_missing) is None
@@ -722,7 +722,7 @@ def test_merge_device_graphs_replaces_current_vwzio_scan_authority() -> None:
             "vwzio Status01 = no data stored",
         ]
     )
-    merged_conflict = COORDINATOR._merge_device_graphs(previous, conflict)
+    merged_conflict = COORDINATOR.merge_device_graphs(previous, conflict)
     assert MAPPING.vwzio_sw0500_circuit(merged_conflict) is None
 
 
@@ -1534,7 +1534,7 @@ async def test_non_hmux0_hmu_return_temp_fallback_remains_available() -> None:
 
 
 # Intent: a scan-less refresh cannot authorize retained HMUX0 definitions or ReturnTemp polling.
-# Why: `_merge_device_graphs` retains topology for presentation, but scan authority must expire immediately.
+# Why: `merge_device_graphs` retains topology for presentation, but scan authority must expire immediately.
 async def test_scanless_hmux0_refresh_clears_runtime_owner_authority() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         initial = DISCOVERY.DiscoveryService.build_device_graph(
@@ -1546,7 +1546,7 @@ async def test_scanless_hmux0_refresh_clears_runtime_owner_authority() -> None:
         coordinator.ebus.is_connected = True
         coordinator.ebus.define_register = AsyncMock(return_value="done")
         coordinator.ebus.read_register = AsyncMock(return_value=None)
-        coordinator._graph = COORDINATOR._merge_device_graphs(initial, refreshed)
+        coordinator._graph = COORDINATOR.merge_device_graphs(initial, refreshed)
         coordinator._last_find_keys = set()
 
         await coordinator._define_custom_registers()
@@ -3710,7 +3710,7 @@ def test_merge_delayed_error_placeholder_replaces_existing_raw_value() -> None:
         error_registers={key},
     )
 
-    merged = COORDINATOR._merge_device_graphs(existing, discovered)
+    merged = COORDINATOR.merge_device_graphs(existing, discovered)
 
     assert key not in merged.raw_registers
     assert key in merged.placeholder_registers
@@ -3734,7 +3734,7 @@ def test_merge_delayed_partial_find_recomputes_node_data_from_merged_raw() -> No
         ]
     )
 
-    merged = COORDINATOR._merge_device_graphs(existing, discovered)
+    merged = COORDINATOR.merge_device_graphs(existing, discovered)
 
     assert merged.raw_registers["ctlv3.Z1RoomTemp"] == "20.5"
     assert merged.nodes["z1"].has_data is True
@@ -6431,6 +6431,9 @@ def _decode_definition_fields(fields: str, payload: bytes) -> dict[str, object]:
         elif kind == "D2C":
             raw, offset = int.from_bytes(payload[offset : offset + 2], "little", signed=True), offset + 2
             value = raw / 16
+        elif kind == "EXP":
+            value, offset = struct.unpack("<f", payload[offset : offset + 4])[0], offset + 4
+            raw = value
         else:
             raise AssertionError(f"unsupported field type {kind} in {fields}")
         if kind == "UCH" and "=" in divisor_or_values:
@@ -6565,13 +6568,41 @@ async def test_issue185_sw0406_without_hmux0_config_defines_runtime_registers() 
 
     defined = {key.split(".", 2)[2]: value for key, value in definitions.items() if key.startswith("r.hmux0.")}
     assert SW0406_RUNTIME_NAMES <= set(defined)
-    # The shared B509/B51A layouts are the ones already confirmed on SW0303; only the counters are new.
-    for name in SW0406_RUNTIME_NAMES - {"CompressorHc", "CompressorHwc"}:
+    # The shared B509/B51A layouts are the ones already confirmed on SW0303; only the counters are new, and the
+    # precise temperatures differ: SW0406 answers a 4-byte float where SW0303 answers 1/16 degC (issue #188).
+    for name in SW0406_RUNTIME_NAMES - {"CompressorHc", "CompressorHwc", "RunDataFlowTemp", "RunDataReturnTemp"}:
         assert defined[name] == sw0303[f"r.hmux0.{name}"], name
     assert defined["CompressorHc"].startswith("r,hmux0,CompressorHc,CompressorHc,31,08,B511,1801,")
     assert defined["CompressorHwc"].startswith("r,hmux0,CompressorHwc,CompressorHwc,31,08,B511,1802,")
-    # Not evidenced on SW0406: the power draw (unit unresolved, #188) and the registers that answered ERR.
+    # Not defined as active reads on SW0406: the power draw (passive only, #188) and the registers that answered ERR.
     assert not {"RunDataElPowerConsumption", "Status00", "RunDataStatuscode"} & set(defined)
+
+
+# Intent: the SW0406 flow and return temperature definitions decode the captured 4-byte float answers.
+# Why: issue #188 - SW0406 answers `00 80 05 42` and `00 00 ec 41`; the 1/16 degC layout of SW0303 read `-` and 0.0.
+async def test_issue188_sw0406_precise_temperatures_decode_the_float_telegrams() -> None:
+    # The #188 dump was taken after the integration had defined its registers, so a fresh stock-config bus of the same
+    # SW0406/HW0504 scan (issue #185) drives the define pass and the #188 dump supplies the telegrams that prove it.
+    definitions = await _runtime_definitions_for(
+        "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    )
+    sw0303 = await _runtime_definitions_for("community/hmux0_issue99_2026-09-10_173229.yaml")
+    dump = load_discovery_dump("community/hmux0_sw0406_issue188_2026-10-13_092007_discovery.yaml")
+    responses = {row["request"]: row["resp"] for row in dump["labeled_telegrams"]}
+
+    flow = definitions["r.hmux0.RunDataFlowTemp"].split(",", 8)
+    returned = definitions["r.hmux0.RunDataReturnTemp"].split(",", 8)
+    # Every definition reproduces a request that the capture shows on the bus (the ebusd id excludes the length byte).
+    for fields in (flow, returned):
+        request = f"{fields[4]}{fields[5]}{fields[6]}{len(fields[7]) // 2:02x}{fields[7]}".casefold()
+        assert request in responses, fields[2]
+    flow_payload = bytes.fromhex(responses["3108b50905540200fc08"])[1:]
+    return_payload = bytes.fromhex(responses["3108b509055402000609"])[1:]
+    assert _decode_definition_fields(flow[8], flow_payload)["value"] == 33.375
+    assert _decode_definition_fields(returned[8], return_payload)["value"] == 29.5
+    # SW0303 keeps the 1/16 degC layout that was confirmed live (issue #171).
+    assert ",D2C," in sw0303["r.hmux0.RunDataFlowTemp"]
+    assert ",D2C," in sw0303["r.hmux0.RunDataReturnTemp"]
 
 
 # Intent: a SW0406 unit whose ebusd already supplies hmux0 registers (full 08.hmux0.csv) gets nothing defined.
@@ -6623,3 +6654,188 @@ async def test_issue185_sw0406_compressor_counters_are_read_with_the_energy_poll
         assert {("hmux0", "CompressorHc"), ("hmux0", "CompressorHwc")} <= actual
         # The shared yield/COP/temperature registers are read through the existing map-driven pass.
         assert {("hmux0", "YieldHcDay"), ("hmux0", "CopHc"), ("hmux0", "RunDataFlowTemp")} <= actual
+
+
+# Intent: a stuck adapter stops the fallback cycle after repeated bus errors, stays quiet during the cool-down and
+#         resumes with the next cycle once the cool-down is over.
+# Why: issue #193 - 113 of 113 bus reads failed and the integration repeated the whole set every cycle, which keeps
+#      a stuck adapter busy; a healthy bus must still get every read.
+async def test_issue193_stuck_adapter_pauses_the_fallback_cycle_and_resumes_after_the_cooldown() -> None:
+    fixture = "community/hmux0_issue171_2026-10-03_094933_discovery.yaml"
+    clock = [1000.0]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture))
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator._graph = graph
+        coordinator._refresh_find_keys()
+        coordinator._bus_guard = EBUS.BusErrorGuard(clock=lambda: clock[0])
+        await coordinator._define_custom_registers()
+
+        # Intent: answer every read like an adapter that cannot send.
+        # Why: the stuck state of issue #193 fails each bus read with an arbitration error.
+        async def _stuck(circuit: str, name: str, **kwargs: object) -> str:
+            return "ERR: arbitration lost"
+
+        # The first healthy cycle adds registers to the graph, so the second one is the steady-state control.
+        coordinator.ebus.read_register = AsyncMock(return_value="21.5")
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        coordinator.ebus.read_register = AsyncMock(return_value="21.5")
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        healthy_reads = coordinator.ebus.read_register.await_count
+        assert len({call.args[0] for call in coordinator.ebus.read_register.await_args_list}) >= 2
+
+        coordinator.ebus.read_register = AsyncMock(side_effect=_stuck)
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        assert EBUS.BUS_ERROR_TRIP_COUNT <= coordinator.ebus.read_register.await_count < healthy_reads
+        assert coordinator._bus_guard.allow() is False
+
+        coordinator.ebus.read_register = AsyncMock(side_effect=_stuck)
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        assert coordinator.ebus.read_register.await_count == 0
+
+        clock[0] += EBUS.BUS_ERROR_BASE_COOLDOWN + 1
+        coordinator.ebus.read_register = AsyncMock(return_value="21.5")
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        assert coordinator.ebus.read_register.await_count == healthy_reads
+
+
+# Intent: the periodic check raises one stale-entities issue when orphans exist and clears it when none are left.
+# Why: the owner has 86 restored entities that stayed invisible; a repair with a confirmation is how they get removed.
+async def test_stale_entities_issue_follows_the_registry() -> None:
+    from homeassistant.helpers import entity_registry
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c._ebusd_connected = True
+        c._graph = types.SimpleNamespace(nodes={"hmu": object()})  # live discovery finished
+        c.entities = [MagicMock(unique_id="ebusd_hmu_flowtemp")]
+        row = types.SimpleNamespace(
+            entity_id="sensor.gone",
+            unique_id="entry-1_ebusd_hmu_gone",
+            platform="vaillant_ebus",
+            device_id=None,
+            disabled_by=None,
+            hidden_by=None,
+            name=None,
+            icon=None,
+            area_id=None,
+            labels=set(),
+            aliases=set(),
+        )
+        registry = MagicMock()
+        registry.entities.get_entries_for_config_entry_id.side_effect = lambda _id: [row]
+        entity_registry.async_get = MagicMock(return_value=registry)
+        repairs_stub = sys.modules["vaillant_ebus.repairs"]
+        repairs_stub.async_create_stale_entities.reset_mock()
+        repairs_stub.async_dismiss_stale_entities.reset_mock()
+        restored = types.SimpleNamespace(state="unavailable", attributes={"restored": True, "friendly_name": "Gone"})
+        hass.states.get = MagicMock(return_value=restored)
+
+        await c._async_refresh_stale_entities_issue()
+
+        repairs_stub.async_create_stale_entities.assert_awaited_once()
+        args = repairs_stub.async_create_stale_entities.await_args.args
+        assert args[1:3] == ("entry-1", 1) and "sensor.gone" in args[3]
+        repairs_stub.async_dismiss_stale_entities.assert_not_awaited()
+
+        hass.states.get = MagicMock(return_value=types.SimpleNamespace(state="23.5", attributes={}))
+        await c._async_refresh_stale_entities_issue()
+
+        repairs_stub.async_dismiss_stale_entities.assert_awaited_once()
+
+
+# Intent: the periodic check also raises the issue when only enabled entities without data are left to switch off.
+# Why: the owner's 40 legacy rows are not orphans; without this the repair would never offer to switch them off.
+async def test_stale_entities_issue_is_raised_for_entities_without_data() -> None:
+    from homeassistant.helpers import entity_registry
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c._ebusd_connected = True
+        c._graph = types.SimpleNamespace(nodes={"hmu": object()})  # live discovery finished
+        c.entities = [
+            types.SimpleNamespace(unique_id="ebusd_ctlv2_hwcstoragetemptop", enabled_by_default=False),
+            types.SimpleNamespace(unique_id="ebusd_hmu_flowtemp", enabled_by_default=True),
+        ]
+        row = types.SimpleNamespace(
+            entity_id="sensor.storage_top",
+            unique_id="entry-1_ebusd_ctlv2_hwcstoragetemptop",
+            platform="vaillant_ebus",
+            device_id=None,
+            disabled_by=None,
+            hidden_by=None,
+            name=None,
+            icon=None,
+            area_id=None,
+            labels=set(),
+            aliases=[],
+        )
+        registry = MagicMock()
+        registry.entities.get_entries_for_config_entry_id.side_effect = lambda _id: [row]
+        entity_registry.async_get = MagicMock(return_value=registry)
+        repairs_stub = sys.modules["vaillant_ebus.repairs"]
+        repairs_stub.async_create_stale_entities.reset_mock()
+        repairs_stub.async_dismiss_stale_entities.reset_mock()
+        hass.states.get = MagicMock(
+            return_value=types.SimpleNamespace(state="unknown", attributes={"friendly_name": "Storage Temp (Top)"})
+        )
+
+        await c._async_refresh_stale_entities_issue()
+
+        repairs_stub.async_create_stale_entities.assert_awaited_once()
+        args = repairs_stub.async_create_stale_entities.await_args.args
+        assert args[1:3] == ("entry-1", 0)
+        assert args[5] == 1 and "sensor.storage_top" in args[6]
+        repairs_stub.async_dismiss_stale_entities.assert_not_awaited()
+
+
+# Intent: a SW0406 bus without hmux0 registers of its own decodes the gateway power frame passively.
+# Why: issue #188 - the gateway polls `B509 5402005b0d` and the answer `09 51 70 44` is 961.27 W while the unit runs;
+#      the reporter read 33.2 W idle and 1341.4 W under load from the same register, so layout and unit are proven.
+async def test_issue188_sw0406_decodes_the_gateway_power_frame_passively() -> None:
+    definitions = await _runtime_definitions_for(
+        "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    )
+    dump = load_discovery_dump("community/hmux0_sw0406_issue188_2026-10-13_092007_discovery.yaml")
+    responses = {row["request"]: row["resp"] for row in dump["labeled_telegrams"]}
+
+    power = definitions["u.hmux0.RunDataElPowerConsumption"].split(",", 8)
+    # A passive definition listens to the gateway frame, so it needs the gateway as source and costs no bus traffic.
+    assert power[:4] == ["u", "hmux0", "RunDataElPowerConsumption", "RunDataElPowerConsumption"]
+    assert power[4:8] == ["f1", "08", "B509", "5402005b0d"]
+    request = f"{power[4]}{power[5]}{power[6]}{len(power[7]) // 2:02x}{power[7]}".casefold()
+    assert request in responses
+    watts = _decode_definition_fields(power[8], bytes.fromhex(responses[request])[1:])["value"]
+    assert abs(watts - 961.27) < 0.01
+    # The active read stays undefined: only the observed gateway frame is evidence for the layout.
+    assert "r.hmux0.RunDataElPowerConsumption" not in definitions
+
+
+# Intent: the passive power definition stays hardware-gated like the other SW0406 runtime registers.
+# Why: a full 08.hmux0.csv already lists the register, and other firmware has its own evidence or none.
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "community/hmux0_issue171_2026-10-03_094933_discovery.yaml",
+        "community/hmux0_sw0406_issue186_2026-10-11_143454_discovery.yaml",
+        "community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml",
+        "community/flexotherm_issue102_2026-09-12_161841_discovery.yaml",
+    ],
+)
+async def test_issue188_sw0406_power_definition_stays_hardware_gated(fixture: str) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+
+    assert "u.hmux0.RunDataElPowerConsumption" not in definitions

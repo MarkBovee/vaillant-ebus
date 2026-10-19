@@ -195,6 +195,79 @@ def _heating_circuit_inactive(graph: DeviceGraph, circuit: str, number: str) -> 
     return value is not None and value.strip().casefold() == "inactive"
 
 
+_CIRCUIT_TYPE_KEY = re.compile(r"^([^.]+)\.Hc(\d+)CircuitType$", re.IGNORECASE)
+
+# The ebusd circuit of the solar controller configuration (ec.sol.sc.csv).
+SOLAR_CIRCUIT = "sc"
+
+
+# Intent: list the (circuit, number) pairs of secondary heating circuits that the controller itself declares unused.
+# Why: ebusd and the controller answer static defaults for zones that are not installed (day temperature 21.0, holiday
+# dates 2015), so their registers look live and created about 40 entities for two zones that do not exist (the owner's
+# HA, issue #152). Only `HcNCircuitType = inactive` is evidence. Zone 1 is never declared unused, an unreadable
+# type never is, and a zone that reports a room temperature is kept because contradictory evidence must fail safe.
+def declared_unused_zones(graph: DeviceGraph) -> frozenset[tuple[str, int]]:
+    unused: set[tuple[str, int]] = set()
+    for key, raw in graph.raw_registers.items():
+        match = _CIRCUIT_TYPE_KEY.match(key)
+        if match is None or int(match.group(2)) < 2:
+            continue
+        circuit, number = match.group(1), int(match.group(2))
+        if raw is None or raw.strip().casefold() != "inactive":
+            continue
+        if _zone_reports_room_temperature(graph, circuit, number):
+            continue
+        unused.add((circuit.casefold(), number))
+    return frozenset(unused)
+
+
+# Intent: list the zone numbers that every reporting controller declares unused.
+# Why: zone devices are shared by number across controllers, so a number is unused only when none of them uses it.
+def _unused_zone_numbers(graph: DeviceGraph) -> frozenset[int]:
+    declared = declared_unused_zones(graph)
+    in_use = {
+        int(match.group(2))
+        for key in graph.raw_registers
+        if (match := _CIRCUIT_TYPE_KEY.match(key)) and (match.group(1).casefold(), int(match.group(2))) not in declared
+    }
+    return frozenset({number for _, number in declared} - in_use)
+
+
+# Intent: list the solar-controller circuits that only mirror the heating controller.
+# Why: in all 14 captures with a scan of address `ec` the "solar controller" has the same SW and HW as the heating
+# controller and every `sc` row reads `no data stored`; the controller answers at the solar address. A real solar module
+# has its own identity and answers its registers, so either difference keeps the circuit.
+def ghost_solar_circuits(graph: DeviceGraph) -> frozenset[str]:
+    all_keys = (*graph.raw_registers, *graph.placeholder_registers)
+    solar_keys = [key for key in all_keys if _circuit_of(key) == SOLAR_CIRCUIT]
+    if not solar_keys:
+        return frozenset()
+    if any(key in graph.raw_registers and not is_no_data_value(graph.raw_registers[key]) for key in solar_keys):
+        return frozenset()
+    controller = graph.heating_controller_result().node
+    scans = [identity for identity in graph.scan_identities if identity.scan_type.upper().startswith("SOL")]
+    if controller is None or not controller.scan_sw or not scans:
+        return frozenset()
+    mirrored = all(
+        identity.complete and (identity.scan_sw, identity.scan_hw) == (controller.scan_sw, controller.scan_hw)
+        for identity in scans
+    )
+    return frozenset({SOLAR_CIRCUIT}) if mirrored else frozenset()
+
+
+# Intent: return the zone or heating-circuit number of a zone node circuit such as `z2` or `hc3`, or None.
+# Why: zone devices are matched to the declared-unused numbers by this number.
+def _zone_node_number(circuit: str) -> int | None:
+    digits = re.sub(r"^\D+", "", circuit)
+    return int(digits) if digits.isdigit() else None
+
+
+# Intent: return the lower-cased circuit part of a `circuit.name` register key.
+# Why: circuit names are compared case-insensitively everywhere in the graph.
+def _circuit_of(register_key: str) -> str:
+    return register_key.partition(".")[0].casefold()
+
+
 # Intent: report whether zone N currently reports a real room temperature.
 # Why: the controller keeps static defaults for a zone that is not installed (issue #186, Z3); only a live room
 # temperature proves the zone exists, so writable settings must not appear for a placeholder zone.
@@ -261,8 +334,14 @@ def _redistribute_device_assignments(
     graph: DeviceGraph,
     yaml_overrides: dict[str, dict[str, Any]],
 ) -> list[EntityDescription]:
+    # A zone the controller declares unused keeps no zone device, so its circuit type lands on the controller device.
+    unused_numbers = _unused_zone_numbers(graph)
     active_zones = {
-        node.circuit for node in graph.nodes.values() if node.device_type == DeviceType.ZONE and node.has_data
+        node.circuit
+        for node in graph.nodes.values()
+        if node.device_type == DeviceType.ZONE
+        and node.has_data
+        and _zone_node_number(node.circuit) not in unused_numbers
     }
     redistributed: list[EntityDescription] = []
 
@@ -310,6 +389,8 @@ class EntityFactoryService:
         seen: set[str] = set()
         entities: list[EntityDescription] = []
         controller = graph.heating_controller_result().node
+        unused_zones = declared_unused_zones(graph)
+        ghost_solar = ghost_solar_circuits(graph)
 
         reg_to_node: dict[str, DeviceNode] = {}
         for node in graph.nodes.values():
@@ -376,6 +457,18 @@ class EntityFactoryService:
                     continue
 
                 override = overrides.get(rk) or {}
+                # Intent: skip registers of devices and zones that the bus proves unused; `enabled: true` overrides win.
+                # Why: a mirrored solar controller and zones the controller declares inactive only add dead entities.
+                if override.get("enabled") is not True:
+                    if circuit.casefold() in ghost_solar:
+                        continue
+                    unused_match = re.match(r"^(?:Z|Hc)(\d+)", name, re.IGNORECASE)
+                    if (
+                        unused_match
+                        and not name_lower.endswith("circuittype")
+                        and (circuit.casefold(), int(unused_match.group(1))) in unused_zones
+                    ):
+                        continue
                 keep_ctlv2_sensor = (
                     name_lower == "hc1roomtempswitchon"
                     and controller is not None

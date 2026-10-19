@@ -899,15 +899,11 @@ def test_issue186_zone1_settings_keep_their_metadata() -> None:
     assert entities["ctlv2.Z2OpMode.value"].meta.friendly_name == "Operation Mode (Z2)"
 
 
-# Intent: a zone without a live room temperature gets no writable settings.
-# Why: issue #186 dump - Z3 is a placeholder (`Z3RoomTemp` empty, circuit type inactive); a writable control for
-#      hardware that is not installed would be a ghost entity.
-def test_issue186_placeholder_zone3_stays_read_only() -> None:
+# Intent: a zone the controller declares unused gets neither settings nor read-only placeholder sensors.
+# Why: issue #186 dump - Z3 is a placeholder (`Z3RoomTemp` empty, circuit type inactive). Release 1.11.2 kept its raw
+#      read-only sensors; release 1.12.0 drops them because static defaults are not evidence of a zone.
+def test_issue186_declared_unused_zone3_creates_no_entities() -> None:
     entities = _issue186_entities()
 
-    zone3 = {key: entity for key, entity in entities.items() if key.startswith("ctlv2.Z3")}
-    assert zone3, "the placeholder zone keeps its existing read-only sensors"
-    controls = [
-        key for key, entity in zone3.items() if entity.meta.writable or entity.entity_type in {"select", "number"}
-    ]
-    assert not controls
+    assert not [key for key in entities if key.startswith("ctlv2.Z3")]
+    assert "ctlv2.Hc3CircuitType.value" in entities
