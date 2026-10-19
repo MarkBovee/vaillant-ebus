@@ -60,8 +60,30 @@ def _is_user_alias(alias: Any) -> bool:
     return isinstance(alias, str) and bool(alias.strip())
 
 
+# Option keys the integration or Home Assistant fill in on their own; everything else under `sensor` is a user choice.
+_DEFAULT_SENSOR_OPTION_KEYS = frozenset({"suggested_display_precision", "suggested_unit_of_measurement"})
+
+
+# Intent: report whether the registry `options` hold a choice the user made, not the defaults of a new row.
+# Why: since Home Assistant 2026.10 every row carries `sensor.suggested_display_precision` and
+# `conversation.should_expose: False`; a unit or display precision override or an Assist exposure is user data.
+def _has_user_options(options: Any) -> bool:
+    if not isinstance(options, dict):
+        return False
+    conversation = options.get("conversation")
+    if isinstance(conversation, dict) and conversation.get("should_expose") is True:
+        return True
+    for domain, domain_options in options.items():
+        if domain == "conversation" or not isinstance(domain_options, dict):
+            continue
+        if any(key not in _DEFAULT_SENSOR_OPTION_KEYS for key in domain_options):
+            return True
+    return False
+
+
 # Intent: report whether the user changed an entity registry entry by hand.
-# Why: a renamed, re-iconed, relabelled or area-assigned entity carries user data that cleanup must not delete.
+# Why: a renamed, re-iconed, relabelled, categorised or area-assigned entity, a device class, unit or display override
+# and an Assist exposure carry user data that cleanup must not delete.
 def _is_customized(entry: Any) -> bool:
     aliases = getattr(entry, "aliases", None) or ()
     return bool(
@@ -69,6 +91,9 @@ def _is_customized(entry: Any) -> bool:
         or getattr(entry, "icon", None)
         or getattr(entry, "area_id", None)
         or getattr(entry, "labels", None)
+        or getattr(entry, "categories", None)
+        or getattr(entry, "device_class", None)
+        or _has_user_options(getattr(entry, "options", None))
         or any(_is_user_alias(alias) for alias in aliases)
         or _marker(getattr(entry, "hidden_by", None)) == "user"
     )
