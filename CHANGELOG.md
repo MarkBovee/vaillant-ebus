@@ -41,6 +41,9 @@
 - Heat pump firmware SW0406: the electrical power now shows up as soon as the myVAILLANT gateway asks for it
   (issue #188). The integration only listens to that answer and sends nothing. It stays unavailable until the
   gateway has asked once.
+- The minimum Home Assistant version is now 2026.3 (it said 2025.1 before). The integration is written for Python 3.14,
+  and Home Assistant 2026.3 is the first release that runs on it. Older versions could not load it in practice; only
+  the stated version was wrong, nothing changes for you if you already run 2026.3 or newer.
 
 ### Fixed
 

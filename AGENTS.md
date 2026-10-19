@@ -255,7 +255,7 @@ rules, YAML, compileall, `git diff --check`, pytest) and, on Windows, compares f
 narrow it. The individual commands below remain the reference.
 
 Use the repository virtualenv: `.venv/bin/<tool>` on Linux/macOS, `.venv/Scripts/<tool>` on Windows. Create it with
-`python -m venv .venv && .venv/Scripts/python -m pip install pytest pytest-asyncio pyyaml voluptuous ruff paramiko`
+`python -m venv .venv && .venv/Scripts/python -m pip install pytest pytest-asyncio pyyaml voluptuous ruff==0.16.4 mypy==1.15.0 types-cryptography paramiko`
 (`paramiko` is only for `tools/deploy_ha.py`).
 
 ```bash
