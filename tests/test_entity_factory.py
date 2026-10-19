@@ -651,14 +651,14 @@ class TestResolveDeviceCircuit:
     def test_sub_device_with_data_returns_own(self) -> None:
         graph = _build_graph()
         node = graph.nodes["z1"]
-        assert _resolve_device_circuit("ctlv2.Z1DayTemp", node, graph) == "z1"
+        assert _resolve_device_circuit("ctlv3.Z1DayTemp", node, graph) == "z1"
 
     # Intent: _resolve_device_circuit falls back to the parent circuit when the sub-device has no data.
     # Why: avoids routing no-data registers to a non-existent zone device.
     def test_sub_device_without_data_returns_parent(self) -> None:
         graph = _build_graph({"z1_has_data": False})
         node = graph.nodes["z1"]
-        assert _resolve_device_circuit("ctlv2.Z1DayTemp", node, graph) == "ctlv2"
+        assert _resolve_device_circuit("ctlv3.Z1DayTemp", node, graph) == "ctlv2"
 
     # Intent: _resolve_device_circuit returns a top-level node's own circuit.
     # Why: top-level devices such as hmu must not be reassigned to a parent.
@@ -690,7 +690,7 @@ class TestResolveDeviceCircuit:
         graph = _build_graph()
         node = graph.nodes["z1"]
         node.parent = None
-        assert _resolve_device_circuit("ctlv2.Z1DayTemp", node, graph) == "z1"
+        assert _resolve_device_circuit("ctlv3.Z1DayTemp", node, graph) == "z1"
 
 
 # =============================================================================
@@ -1430,3 +1430,25 @@ def test_eev_position_has_no_unit_but_neighbours_keep_theirs() -> None:
 
     assert entities["hmu.RunDataEEVPositionAbs.value"].meta.unit == ""
     assert entities["hmu.RunDataFan1Speed.value"].meta.unit == "rpm"
+
+
+# Intent: zone name, zone mapping, valve status, controller clock and yield registers get readable names and sit in the
+# diagnostic category, for the first and the second zone alike.
+# Why: the owner's registry showed Z1Name1, Z1RoomZoneMapping, YieldTotal and Time as raw register names in the main
+# entity list (backlog C2); a second zone must not fall back to the raw name again.
+@pytest.mark.parametrize(
+    ("key", "name"),
+    [
+        ("ctlv3.Z1Name1.value", "Zone Name"),
+        ("ctlv3.Z2Name1.value", "Zone Name"),
+        ("ctlv3.Z1RoomZoneMapping.value", "Room Zone Mapping"),
+        ("ctlv3.Z2RoomZoneMapping.value", "Room Zone Mapping"),
+        ("ctlv3.Time.value", "Controller Time"),
+    ],
+)
+def test_zone_and_clock_registers_have_readable_diagnostic_entities(key: str, name: str) -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_plus_2zone_discovery.yaml"))
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    assert entities[key].meta.friendly_name == name
+    assert entities[key].meta.entity_category == "diagnostic"

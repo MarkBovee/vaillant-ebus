@@ -405,6 +405,13 @@ SECONDARY_ZONE_SETTING_NAMES: tuple[str, ...] = (
     "HolidayEndPeriod",
     "QuickVetoEndDate",
     "QuickVetoEndTime",
+    "Name1",
+    "Name2",
+    "Shortname",
+    "RoomZoneMapping",
+    "ValveStatus",
+    "BankHolidayStartPeriod",
+    "BankHolidayEndPeriod",
 )
 SECONDARY_ZONE_NUMBERS: tuple[int, ...] = (2, 3)
 
