@@ -252,7 +252,7 @@ def test_preview_text_names_the_first_orphans_and_counts_the_rest() -> None:
     ]
 
 
-# Intent: build a coordinator stand-in with the three attributes the report needs.
+# Intent: build a coordinator stand-in with the attributes the report needs.
 # Why: the stale-entity report is only trustworthy while ebusd is connected and entities have been generated.
 def _coordinator(
     connected: bool = True, entities: int = 1, discovery_ready: bool = True, runtime_defined: set[str] | None = None
@@ -383,7 +383,7 @@ async def test_fix_flow_aborts_without_a_connection() -> None:
 UNKNOWN = ("unknown", {"friendly_name": "Storage Temp (Top)"})
 
 
-# Intent: build a generated entity description stand-in with the two fields the dormant check reads.
+# Intent: build a generated entity description stand-in with the fields the dormant check reads.
 # Why: the discovery's own "off by default" verdict and the live `unknown` state decide whether a row is dormant.
 def _description(
     unique_id: str, enabled_by_default: bool = False, circuit: str = "", name: str = ""

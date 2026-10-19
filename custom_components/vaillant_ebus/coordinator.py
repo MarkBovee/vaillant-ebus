@@ -1184,8 +1184,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             # Intent: never flip the registry state of a register the integration defined itself.
             # Why: passive definitions legitimately have no value until the next telegram, and every disabled_by
             # change makes Home Assistant reload the whole entry (issues #171, #175).
-            description_key = f"{getattr(description, 'circuit', '')}.{getattr(description, 'name', '')}".casefold()
-            if description_key in runtime_defined:
+            if cleanup.register_key_fold(description) in runtime_defined:
                 continue
             # Only the integration may manage (re-disable) entries it already
             # disabled; a user-disabled entry is never touched.

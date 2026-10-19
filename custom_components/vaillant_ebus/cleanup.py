@@ -6,9 +6,12 @@ imports and the options flow and the repairs flow can share them.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from typing import Any
+
+_LOGGER = logging.getLogger(__name__)
 
 # Registry rows of internal helper entities that earlier releases created and no release provides any more.
 LEGACY_HELPER_SUFFIXES = ("_tmpb516montheven",)
@@ -153,6 +156,12 @@ def find_dormant(
     return tuple(dormant), tuple(kept)
 
 
+# Intent: build the casefolded `circuit.name` key of an entity description, the key of its parent register.
+# Why: the runtime-defined register set, the no-data disabling and the cleanup report must agree on one key format.
+def register_key_fold(description: Any) -> str:
+    return f"{getattr(description, 'circuit', '')}.{getattr(description, 'name', '')}".casefold()
+
+
 # Intent: build the cleanup report for one config entry, or refuse when the report would not be trustworthy.
 # Why: before ebusd is connected and entities are generated, every registry row looks orphaned; removing rows then
 # would delete live entities. The generated unique ids carry the config entry prefix Home Assistant puts on them.
@@ -176,8 +185,7 @@ def stale_report(
     switched_off = {
         f"{entry_id}_{entity.unique_id}".casefold()
         for entity in coordinator.entities
-        if getattr(entity, "enabled_by_default", True) is False
-        and f"{getattr(entity, 'circuit', '')}.{getattr(entity, 'name', '')}".casefold() not in runtime_defined
+        if getattr(entity, "enabled_by_default", True) is False and register_key_fold(entity) not in runtime_defined
     }
     report = find_orphans(registry, states, entry_id, domain, generated)
     dormant, kept = find_dormant(registry, states, entry_id, domain, switched_off)
@@ -196,6 +204,7 @@ def disable_dormant(registry: Any, entity_ids: Iterable[str], disabler: Any) -> 
         if entry is None or _marker(getattr(entry, "disabled_by", None)) is not None or _is_customized(entry):
             continue
         registry.async_update_entity(entity_id, disabled_by=disabler)
+        _LOGGER.debug("Switched off %s because its register has no data", entity_id)
         switched += 1
     return switched
 
