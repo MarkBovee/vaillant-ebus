@@ -523,10 +523,17 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
 
     # Whether a controller-owned register exists on the discovered controller circuit.
     def has_controller_register(self, name: str) -> bool:
-        if self._graph is None or not self._last_find_keys:
-            return False
-        circuit = self.heating_circuit
-        if circuit is None:
+        return self._graph_lists_register(self.heating_circuit, name)
+
+    # Intent: report whether the discovered heat pump circuit lists a register in the discovery graph.
+    # Why: derived heat pump entities (DHW heating) need a backing register on the circuit that owns it.
+    def has_heat_pump_register(self, name: str) -> bool:
+        return self._graph_lists_register(self.heat_pump_circuit, name)
+
+    # Intent: shared lookup of "circuit.name" among the raw and placeholder registers of the graph, ignoring case.
+    # Why: one capability check for the controller and the heat pump instead of two copies.
+    def _graph_lists_register(self, circuit: str | None, name: str) -> bool:
+        if self._graph is None or not self._last_find_keys or circuit is None:
             return False
         key = f"{circuit}.{name}"
         if key in self._graph.raw_registers or key in self._graph.placeholder_registers:

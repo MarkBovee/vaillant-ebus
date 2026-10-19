@@ -388,6 +388,28 @@ def derive_tank_presence(values: Mapping[str, str | None], dhw_circuit: str | No
     return None
 
 
+# Heat pump status strings in which the compressor or the immersion heater heats the hot water cylinder. Prerun and
+# postrun only move the pump, so they are "not heating" for the DHW heating sensor.
+DHW_HEATING_STATUS_STRINGS: frozenset[str] = frozenset({"hwc_compressor_active", "hwc_immersion_heater_active"})
+
+
+# Intent: derive whether the heat pump is heating the hot water cylinder from its status code.
+# Why: issue #191 - a water heater entity has no heating state, so a binary sensor reads RunDataStatuscode of the
+# discovered heat pump circuit. A missing or sentinel status is unknown, never off, so unavailable data is not
+# reported as "not heating".
+def derive_dhw_heating(values: Mapping[str, str | None], heat_pump_circuit: str | None) -> bool | None:
+    if not heat_pump_circuit:
+        return None
+    expected = f"{heat_pump_circuit}.RunDataStatuscode.value".casefold()
+    raw = next((value for key, value in values.items() if key.casefold() == expected), None)
+    if raw is None:
+        return None
+    status = str(raw).strip().lower()
+    if not status or is_no_data_value(status) or status in {"-", "<redacted>"}:
+        return None
+    return status in DHW_HEATING_STATUS_STRINGS
+
+
 # VWZ hydraulic-module scan TYPEs split the heat-pump product lines. The
 # flexoTHERM (hybrid) and aroTHERM/Pro (split) families both share the bare
 # ``hmu`` circuit, so the scan identity of the VWZ module and/or the heat-pump

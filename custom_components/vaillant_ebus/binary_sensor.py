@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .backend.entity_factory import EntityDescription
-from .backend.models import derive_tank_presence, is_no_data_value
+from .backend.models import derive_dhw_heating, derive_tank_presence, is_no_data_value
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator, get_register_value
 
@@ -54,6 +54,21 @@ async def async_setup_entry(
 
     _ensure_tank_entity()
     coordinator.register_post_discovery_callback(_ensure_tank_entity)
+    dhw_heating_added = False
+
+    # Intent: add the DHW heating sensor only where the heat pump status register is discovered.
+    # Why: gas boilers have no such register, and a derived entity without a backing register is a ghost.
+    def _ensure_dhw_heating_entity() -> None:
+        nonlocal dhw_heating_added
+        if dhw_heating_added or not coordinator.discovery_ready:
+            return
+        if not coordinator.has_heat_pump_register("RunDataStatuscode"):
+            return
+        async_add_entities([EbusdDhwHeatingSensor(coordinator, entry)])
+        dhw_heating_added = True
+
+    _ensure_dhw_heating_entity()
+    coordinator.register_post_discovery_callback(_ensure_dhw_heating_entity)
     added_fixed = False
 
     # Intent: add connection and fault sensors once a heat-pump owner exists.
@@ -199,4 +214,34 @@ class EbusdTankPresentSensor(CoordinatorEntity[VaillantCoordinator], BinarySenso
         # Always tracked with the coordinator update so a missing storage-temp
         # register surfaces as a genuine "unknown" state rather than being
         # conflated with either a connected (on) or absent (off) tank.
+        return self.coordinator.last_update_success
+
+
+class EbusdDhwHeatingSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntity):
+    """Derived DHW heating state of a heat pump: on while the compressor or immersion heater charges the cylinder.
+
+    A Home Assistant water heater has no heating or idle state, so this reads the heat pump status code
+    (``RunDataStatuscode``) of the discovered heat pump circuit and is attached to the logical DHW device.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "DHW Heating"
+    _attr_icon = "mdi:water-boiler"
+    _attr_device_class = BinarySensorDeviceClass.HEAT
+
+    # Intent: build the sensor with a stable unique id on the logical DHW device.
+    # Why: the id must not look like a generated register id, so cleanup never treats it as an orphan.
+    def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_dhw_heating"
+        self._attr_device_info = coordinator.get_device_info("dhw")
+
+    @property
+    def is_on(self) -> bool | None:
+        data = (self.coordinator.data or {}).get("ebusd", {})
+        return derive_dhw_heating(data, self.coordinator.heat_pump_circuit)
+
+    @property
+    def available(self) -> bool:
+        # Tracks the coordinator so a missing status surfaces as unknown, not as unavailable or off.
         return self.coordinator.last_update_success
