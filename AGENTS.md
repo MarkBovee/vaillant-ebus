@@ -212,6 +212,10 @@ Hard-won facts from the 1.10.x line. Read these before touching `_define_custom_
 | `tools/hardware_matrix.py` | Which hardware variants the community fixtures cover (also in the CI step summary). |
 | `tools/mutation_check.py` | Mutation check of one source file against chosen tests; survivors show missing or weak tests (use on small pure modules). |
 | `tools/release_gate.py` | Release-job gate: hassfest and HACS must be green on the tagged commit. |
+| `tools/check_comments.py` | Functions a diff adds or changes without the required `# Intent:` and `# Why:` comments (`validate.py` does not check this; run it before a review). |
+| `tools/ast_compare.py` | Proof that a change is comment-only: compares the syntax trees of the working tree with a git ref. |
+| `tools/differential.py` | Behaviour-equality harness: dumps the runtime defines, withheld set, planned reads, entities and `REGISTER_MAP` for every community fixture. Two trees decide the same when the dumps are identical (use `PYTHONHASHSEED=0`). |
+| `tools/ha_snapshot.py` | Read-only snapshots of the owner's HA host: registry rows, newest discovery dump, and the deployed files against a git ref. Use it to copy the live registry shape into test fakes. |
 
 Shell notes for agents: on Windows with Git Bash, never pass multi-line Python with backslashes, quotes or `$` through an
 inline heredoc. Write a script file (a scratch directory is fine) and run it. Check `git status` before and after bulk
