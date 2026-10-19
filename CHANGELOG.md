@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.12.1 - 2026-10-19
+
+A small release that adds a hot water heating state for heat pumps and fixes two things that made evidence and units
+wrong.
+
+### New
+
+- **"DHW Heating" binary sensor for heat pumps (issue #191).** It is on while the heat pump status shows the
+  compressor or the immersion heater charging the hot water cylinder, and off in every other known state (standby,
+  heating, cooling, defrost, and the pump pre- and overrun for hot water). A missing status stays `unknown`. It
+  appears on the hot water device only where the heat pump status register is discovered, so a gas boiler such as a
+  BASS3 gets no sensor; its charging state needs a register that nobody has captured yet.
+
+### Fixed
+
+- **The discovery dump hid more than it should.** The redaction matched short fragments inside register names, so
+  `RunDataStatuscode` (the compressor mode), `Z<N>RoomZoneMapping` and `SourceTempInput` showed as `<redacted>` in
+  every dump. Serial numbers, key codes, installer data, passwords and tokens are still hidden; short fragments such
+  as `code` and `pin` now count only as whole words (`PinCode`).
+- **EEV Position no longer claims `%`.** The register is a plain number in an unspecified scale upstream (values such
+  as 195 and 250 are normal), so the unit is left out until the evidence gives one.
+- **Developer tool:** `tools/fetch_attachments.py` no longer crashes on Windows when an issue contains emoji or
+  umlauts.
+
+### Not changed on purpose
+
+- A zone climate keeps showing "heating" while the heat pump charges hot water. The heat pump interrupts the zone and
+  returns to it afterwards, and the controller keeps the heating program active, so the state is correct (issue #192).
+
 ## 1.12.0 - 2026-10-19
 
 This is a cleanup release. Home Assistant never forgets an entity on its own: after a zone, a register or a firmware
