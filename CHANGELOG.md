@@ -15,7 +15,9 @@ wrong.
   pump status is discovered, so a gas boiler such as a BASS3 gets no sensor; its charging state needs a register
   that nobody has captured yet. Only the compressor state has been compared with the sensor on a real system so far.
   The water heater entity carries the same state as a `heating` attribute (true or false), because Home Assistant
-  gives a water heater no heating state of its own; it is left out where the sensor does not exist.
+  gives a water heater no heating state of its own; it is left out where the sensor does not exist. The more-info
+  dialog of a water heater shows no extra attributes, so read the attribute under Developer tools, in a template, or
+  on a tile card (`state_content: [state, current_temperature, heating]`); the binary sensor works in any card.
 
 ### Fixed
 
