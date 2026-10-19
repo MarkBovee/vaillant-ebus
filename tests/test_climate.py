@@ -781,6 +781,29 @@ async def test_hvac_action_falls_back_to_zone_pump_status() -> None:
         assert z2.hvac_action == HVACAction.HEATING
 
 
+# Intent: an active zone program keeps the heating action while the compressor temporarily serves hot water.
+# Why: the heat pump switches the circuit to hot water until the cylinder is ready and then returns to the zone, so
+# an active HcNStatus is still "heating" for the program (owner's flexoTHERM: Hc1Status 1, Hc1PumpStatus 0 during
+# DHW charging); issue #192 must not be "fixed" by reporting idle here.
+@pytest.mark.parametrize("pump", ["0", "1"])
+async def test_hvac_action_stays_heating_while_the_compressor_charges_hot_water(pump: str) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(
+            tmpdir,
+            _graph_two_zone(),
+            data={
+                "ebusd": {
+                    "hmu.RunDataStatuscode.value": "hwc_compressor_active",
+                    "ctlv2.Hc2Status.value": "1",
+                    "ctlv2.Hc2PumpStatus.value": pump,
+                    "ctlv2.Z2OpMode.value": "auto",
+                }
+            },
+        )
+        z2 = EbusdClimate(coordinator, _entry(), "z2", "ctlv2")
+        assert z2.hvac_action == HVACAction.HEATING
+
+
 # Intent: manual cooling keeps the shared date register and writes the zone op mode.
 # Why: pins manual cooling to the shared ManualCoolingEndDate plus the zone's own OpMode write.
 async def test_zone2_manual_cooling_uses_shared_date() -> None:
