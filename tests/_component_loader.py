@@ -26,6 +26,7 @@ BACKEND_PATH = COMPONENT_PATH / "backend"
 # Backend modules in dependency order: each entry may import only the modules above it.
 BACKEND_MODULES = (
     "models",
+    "redaction",
     "mapping",
     "grab_parser",
     "ebus_service",
@@ -436,7 +437,6 @@ def _register_const() -> None:
         },
         "HA_TO_EBUSD_HVAC": {"off": "off", "auto": "auto", "heat": "day"},
         "PLATFORMS": ("climate", "sensor", "select", "switch", "binary_sensor", "number", "button"),
-        "SENSITIVE_FIELDS": frozenset(),
         "INTEGRATION_VERSION": "1.7.0",
     }
     for attr, value in values.items():

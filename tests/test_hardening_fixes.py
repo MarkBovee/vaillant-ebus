@@ -2315,7 +2315,6 @@ async def test_dump_exports_to_same_ebusd_endpoint_are_serialized(monkeypatch: p
 # Intent: _redact replaces sensitive register names with a placeholder and leaves others untouched.
 # Why: protects serial-like secrets from appearing in exported dumps.
 def test_dump_redacts_sensitive_register_names() -> None:
-    DUMP.SENSITIVE_FIELDS = {"serial"}
     assert DUMP._redact("secret-value", "SerialNumber") == "<redacted>"
     assert DUMP._redact("normal-value", "Status") == "normal-value"
 

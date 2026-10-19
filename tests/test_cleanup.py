@@ -149,6 +149,35 @@ def test_default_computed_name_alias_is_not_a_customisation() -> None:
     assert [item.entity_id for item in report.kept_customized] == ["sensor.typed_alias"]
 
 
+# Intent: the default options and categories of a live registry row are no customisation; a category, a user unit or
+# display precision, a device class override or an Assist exposure the user switched on are.
+# Why: since Home Assistant 2026.10 every row of the owner's system carries `options` with the integration's suggested
+# display precision and `conversation.should_expose: False`; counting those would keep every row, while user choices in
+# the same place (backlog C7) are user data that a cleanup must not delete.
+def test_user_choices_in_options_and_categories_are_customisations_but_defaults_are_not() -> None:
+    default_options = {"sensor": {"suggested_display_precision": 0}, "conversation": {"should_expose": False}}
+    rows = [
+        _row("sensor.default", "a", options=default_options, categories={}, device_class=None),
+        _row("sensor.categorised", "b", options=default_options, categories={"scope": "cat1"}, device_class=None),
+        _row("sensor.exposed", "c", options={"conversation": {"should_expose": True}}, categories={}),
+        _row("sensor.precision", "d", options={"sensor": {"display_precision": 2}}, categories={}),
+        _row("sensor.unit", "e", options={"sensor": {"unit_of_measurement": "kWh"}}, categories={}),
+        _row("sensor.class", "f", options=default_options, categories={}, device_class="energy"),
+    ]
+    states = _states({row.entity_id: RESTORED for row in rows})
+
+    report = CLEANUP.find_orphans(_registry(rows), states, ENTRY_ID, DOMAIN, set())
+
+    assert [item.entity_id for item in report.orphans] == ["sensor.default"]
+    assert {item.entity_id for item in report.kept_customized} == {
+        "sensor.categorised",
+        "sensor.exposed",
+        "sensor.precision",
+        "sensor.unit",
+        "sensor.class",
+    }
+
+
 # Intent: rows the integration disabled are orphans only when the current discovery does not generate them.
 # Why: entities disabled by default (compressor counters) are generated and must stay; stale alias rows are not.
 # Rows the user disabled are never touched.

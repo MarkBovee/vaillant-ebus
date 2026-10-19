@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -169,3 +172,24 @@ def test_mutation_tool_generates_distinct_valid_mutants() -> None:
     assert len(mutated) == len(mutants)
     assert all(ast.parse(text) for text in mutated)
     assert ast.unparse(tree) not in mutated
+
+
+# Intent: every gh call of fetch_attachments decodes its output as UTF-8, for issues and discussions alike.
+# Why: on Windows text=True alone decodes with cp1252 and crashed on the emoji and umlauts in issue comments.
+@pytest.mark.parametrize("discussion", [False, True])
+def test_fetch_attachments_decodes_gh_output_as_utf8(discussion: bool, monkeypatch) -> None:
+    tool = load_tool("fetch_attachments")
+    calls: list[dict] = []
+
+    # Intent: record the keyword arguments of every gh call and return a canned answer.
+    # Why: the test asserts on how gh is called, not on a real gh process.
+    def fake_run(command, **kwargs):
+        calls.append(kwargs)
+        stdout = '{"owner": {"login": "o"}, "name": "n"}' if command[:3] == ["gh", "repo", "view"] else "ok"
+        return subprocess.CompletedProcess(command, 0, stdout=stdout)
+
+    monkeypatch.setattr(tool.subprocess, "run", fake_run)
+
+    tool.collect_text(1, discussion)
+
+    assert calls and all(call.get("encoding") == "utf-8" for call in calls)

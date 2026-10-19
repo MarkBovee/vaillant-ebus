@@ -34,7 +34,8 @@ from .backend.mapping import (
     vwzio_sw0500_circuit,
 )
 from .backend.models import HMUX0_PRECISE_TEMPERATURE_REGISTERS, DeviceGraph, is_no_data_value
-from .const import DOMAIN, INTEGRATION_VERSION, SENSITIVE_FIELDS
+from .backend.redaction import is_sensitive_register_name
+from .const import DOMAIN, INTEGRATION_VERSION
 from .coordinator import VaillantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -177,8 +178,7 @@ def _fallback_read_skip_keys(graph: DeviceGraph | None, runtime_definitions: lis
 def _redact(value: str | None, name: str) -> str | None:
     if value is None:
         return None
-    name_lower = name.lower()
-    if any(substr in name_lower for substr in SENSITIVE_FIELDS):
+    if is_sensitive_register_name(name):
         return "<redacted>"
     return value
 

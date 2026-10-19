@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.12.1 - 2026-10-19
+
+A small release that adds a hot water heating state for heat pumps and fixes two things that made evidence and units
+wrong.
+
+### New
+
+- **"DHW Heating" binary sensor for heat pumps (issue #191).** It is on while the heat pump is in hot water mode:
+  the compressor or the immersion heater charges the cylinder, including the pump pre- and overrun. It reuses the logic
+  of the operating-state sensor, so units that keep the status code at 0 during hot water demand (HMU00 with CTLV3)
+  report it through the valve position and the status bits. It is off in every other state, including a blocked or
+  switched-off hot water heater, and `unknown` without data or with an undecoded numeric status. It appears on the hot water device only where the heat
+  pump status is discovered, so a gas boiler such as a BASS3 gets no sensor; its charging state needs a register
+  that nobody has captured yet. Only the compressor state has been compared with the sensor on a real system so far.
+  The water heater entity carries the same state as a `heating` attribute (true or false), because Home Assistant
+  gives a water heater no heating state of its own; it is left out where the sensor does not exist. The more-info
+  dialog of a water heater shows no extra attributes, so read the attribute under Developer tools, in a template, or
+  on a tile card (`state_content: [state, current_temperature, heating]`); the binary sensor works in any card.
+
+### Fixed
+
+- **The discovery dump hid more than it should.** The redaction matched short fragments inside register names, so
+  `RunDataStatuscode` (the compressor mode), `Z<N>RoomZoneMapping` and `SourceTempInput` showed as `<redacted>` in
+  every dump. Serial numbers, key codes, installer data, passwords and tokens are still hidden; short fragments such
+  as `code` and `pin` now count only as whole words (`PinCode`).
+- **Readable names for zone and clock registers.** `Z1Name1`, `Z1RoomZoneMapping`, `Z1ValveStatus`, the bank holiday
+  periods and the controller `Time` showed their raw register names in the main entity list. They now have plain names
+  ("Zone Name", "Room Zone Mapping", "Valve Status", "Controller Time") and sit in the diagnostic category, for every
+  zone. The controller only sends its clock now and then, and ebusd shows the last value it saw, so "Controller Time"
+  can be up to about half an hour behind; that is how the bus works, not a wrong clock. The controller `YieldTotal`
+  gets a name and no unit, because the unit is not proven for that circuit.
+- **Cleanup respects more of your own settings.** Besides name, icon, area, labels, aliases and hiding, a category,
+  a device class or unit override, a display precision and an Assist exposure you set on an entity now count as your
+  own choice, so the repair and the purge keep that entity.
+- **The dump also hides phone numbers and contact names** (`PhoneNumber`, `ContactName`), which were never hidden.
+- **EEV Position no longer claims `%`.** The register is a plain number in an unspecified scale upstream (values such
+  as 195 and 250 are normal), so the unit is left out until the evidence gives one.
+- **Developer tool:** `tools/fetch_attachments.py` no longer crashes on Windows when an issue contains emoji or
+  umlauts.
+
+### Not changed on purpose
+
+- A zone climate keeps showing "heating" while the heat pump charges hot water. The heat pump interrupts the zone and
+  returns to it afterwards, and the controller keeps the heating program active, so the state is correct (issue #192).
+
 ## 1.12.0 - 2026-10-19
 
 This is a cleanup release. Home Assistant never forgets an entity on its own: after a zone, a register or a firmware

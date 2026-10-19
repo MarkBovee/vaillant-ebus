@@ -892,6 +892,63 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
         icon="mdi:calendar",
         entity_category="diagnostic",
     ),
+    # The controller sends its clock on the bus only now and then and ebusd shows the last value it saw, so this
+    # reading can be up to about half an hour old (two samples on the owner's system, 29 and 31 minutes behind).
+    "ctlv2.Time": RegisterMeta(
+        friendly_name="Controller Time",
+        icon="mdi:clock-outline",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Z1Name1": RegisterMeta(
+        friendly_name="Zone Name",
+        icon="mdi:tag-text-outline",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Z1Name2": RegisterMeta(
+        friendly_name="Zone Name (Part 2)",
+        icon="mdi:tag-text-outline",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Z1Shortname": RegisterMeta(
+        friendly_name="Zone Short Name",
+        icon="mdi:tag-text-outline",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Z1RoomZoneMapping": RegisterMeta(
+        friendly_name="Room Zone Mapping",
+        icon="mdi:vector-link",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Z1ValveStatus": RegisterMeta(
+        friendly_name="Valve Status",
+        icon="mdi:valve",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Z1BankHolidayStartPeriod": RegisterMeta(
+        friendly_name="Bank Holiday Start",
+        icon="mdi:calendar-start",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Z1BankHolidayEndPeriod": RegisterMeta(
+        friendly_name="Bank Holiday End",
+        icon="mdi:calendar-end",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    # The unit of the controller yield counter is not proven for this circuit (ctlv3 shows kWh), so no unit is claimed.
+    "ctlv2.YieldTotal": RegisterMeta(
+        friendly_name="Yield Total",
+        icon="mdi:counter",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
     "ctlv2.FrostOverRideTime": RegisterMeta(
         friendly_name="Frost Override Time",
         icon="mdi:snowflake",
