@@ -14,6 +14,8 @@ wrong.
   switched-off hot water heater, and `unknown` without data or with an undecoded numeric status. It appears on the hot water device only where the heat
   pump status is discovered, so a gas boiler such as a BASS3 gets no sensor; its charging state needs a register
   that nobody has captured yet. Only the compressor state has been compared with the sensor on a real system so far.
+  The water heater entity carries the same state as a `heating` attribute (true or false), because Home Assistant
+  gives a water heater no heating state of its own; it is left out where the sensor does not exist.
 
 ### Fixed
 

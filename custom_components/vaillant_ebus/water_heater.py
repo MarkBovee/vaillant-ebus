@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .backend.models import derive_dhw_heating
 from .const import CONF_AWAY_DURATION, DEFAULT_AWAY_DURATION, DOMAIN
 from .coordinator import VaillantCoordinator, get_register_value
 
@@ -125,6 +126,16 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
             return start <= now <= end
         except ValueError:
             return None
+
+    # Intent: expose whether the heat pump is charging the cylinder as the `heating` attribute.
+    # Why: a water heater entity has no heating state of its own (issue #191); the attribute shares the derivation of
+    # the "DHW Heating" binary sensor. It is left out without a usable heat pump status (gas boilers), because
+    # "not heating" would be a claim the data does not support.
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        data = (self.coordinator.data or {}).get("ebusd", {})
+        heating = derive_dhw_heating(data, self.coordinator.heat_pump_circuit)
+        return None if heating is None else {"heating": heating}
 
     # Current DHW storage temperature from HwcStorageTemp
     @property

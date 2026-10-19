@@ -21,6 +21,7 @@ DISCOVERY = sys.modules["vaillant_ebus.backend.discovery_service"]
 
 from vaillant_ebus import binary_sensor as binary_sensor_platform  # noqa: E402
 from vaillant_ebus.binary_sensor import EbusdDhwHeatingSensor  # noqa: E402
+from vaillant_ebus.water_heater import EbusdWaterHeater  # noqa: E402
 
 derive_dhw_heating = MODELS.derive_dhw_heating
 
@@ -150,3 +151,29 @@ async def test_setup_adds_the_dhw_heating_sensor_only_with_a_heat_pump_status(ha
         await binary_sensor_platform.async_setup_entry(hass, _entry(), lambda entities: added.extend(entities))
 
         assert sum(isinstance(entity, EbusdDhwHeatingSensor) for entity in added) == expected
+
+
+# Intent: the water heater carries a `heating` attribute that follows the same hot water state as the binary sensor.
+# Why: a Home Assistant water heater has no heating state of its own, so the attribute is where the owner (and the
+# reporter of issue #191) can read it next to the temperatures; the label the coordinator stores must work too.
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [("Active (DHW)", True), ("hwc_compressor_active", True), ("Standby", False), ("Shutdown (Heating)", False)],
+)
+def test_water_heater_heating_attribute_follows_the_hot_water_state(status: str, expected: bool) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, _graph_two_zone(), {"ebusd": {"hmu.RunDataStatuscode.value": status}})
+        water_heater = EbusdWaterHeater(coordinator, _entry())
+
+        assert water_heater.extra_state_attributes == {"heating": expected}
+
+
+# Intent: without a usable heat pump status the attribute is absent, not false.
+# Why: a gas boiler has no such register and "not heating" would be a claim the data does not support.
+@pytest.mark.parametrize("data", [{}, {"hmu.RunDataStatuscode.value": "no data stored"}])
+def test_water_heater_has_no_heating_attribute_without_a_status(data: dict[str, str]) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, _graph_two_zone(), {"ebusd": data})
+        water_heater = EbusdWaterHeater(coordinator, _entry())
+
+        assert not water_heater.extra_state_attributes
