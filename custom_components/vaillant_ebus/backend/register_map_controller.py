@@ -768,6 +768,17 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
         entity_type="select",
         entity_category="config",
     ),
+    # BASS3 controllers load the older ebusd CSV, which names this register `Z1OpModeCooling` and defines the enum as
+    # `0=off;1=auto;2=day;3=night` (issue #197). The TSP name above uses `manual` for the same byte value, so the
+    # options must stay separate: offering `manual` there would make every write fail on a CSV-based config.
+    "ctlv2.Z1OpModeCooling": RegisterMeta(
+        friendly_name="Cooling Operation Mode (Z1)",
+        icon="mdi:snowflake",
+        writable=True,
+        options=["off", "auto", "day", "night"],
+        entity_type="select",
+        entity_category="config",
+    ),
     "ctlv2.Z1CoolingManualTemp": RegisterMeta(
         friendly_name="Zone Cooling Manual Temp",
         device_class="temperature",

@@ -396,6 +396,7 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
 # with read-only raw sensors. DayTemp and RoomTemp keep their own explicit entries above.
 SECONDARY_ZONE_SETTING_NAMES: tuple[str, ...] = (
     "OpMode",
+    "OpModeCooling",
     "NightTemp",
     "QuickVetoTemp",
     "QuickVetoDuration",

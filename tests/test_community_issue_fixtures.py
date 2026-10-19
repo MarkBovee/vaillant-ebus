@@ -907,3 +907,63 @@ def test_issue186_declared_unused_zone3_creates_no_entities() -> None:
 
     assert not [key for key in entities if key.startswith("ctlv2.Z3")]
     assert "ctlv2.Hc3CircuitType.value" in entities
+
+
+ISSUE197_FIXTURE = "community/geniaset_bass3_discovery.yaml"
+
+
+# Intent: build the entity descriptions of the BASS3 capture, with chosen register lines replaced by live values.
+# Why: the capture only holds `no data stored`; a live zone needs a room temperature, which gates its writable settings.
+def _issue197_entities(replacements: dict[str, str] | None = None) -> dict[str, object]:
+    values = replacements or {}
+    lines = [
+        f"{line.split(' = ', 1)[0]} = {values[line.split(' = ', 1)[0]]}"
+        if line.split(" = ", 1)[0] in values
+        else line
+        for line in load_find_lines(ISSUE197_FIXTURE)
+    ]
+    graph = DiscoveryService.build_device_graph(lines)
+    return {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+
+# Intent: the BASS3 cooling mode is a writable select with the values its ebusd CSV defines.
+# Why: issue #197 - the CSV names the register `Z1OpModeCooling` (`0=off;1=auto;2=day;3=night`), so the
+#      `Z1CoolingOpMode` entry never matched and the mode showed as a read-only sensor.
+def test_issue197_bass3_cooling_mode_is_a_writable_select() -> None:
+    entities = _issue197_entities({"bass Z1OpModeCooling": "off"})
+
+    mode = entities["bass.Z1OpModeCooling.value"]
+    assert (mode.entity_type, mode.meta.writable) == ("select", True)
+    assert mode.meta.options == ["off", "auto", "day", "night"]
+    assert mode.meta.friendly_name == "Cooling Operation Mode (Z1)"
+
+
+# Intent: the TSP-named cooling mode keeps its own value list next to the CSV-named one.
+# Why: both names address the same byte, but `manual` is only valid under the TSP name; sharing one list would offer
+#      values that the other ebusd configuration rejects.
+def test_issue197_tsp_cooling_mode_options_are_unchanged() -> None:
+    assert MAPPING.get_meta("ctlv2", "Z1CoolingOpMode").options == ["off", "auto", "manual"]
+    assert MAPPING.get_meta("bass", "Z1OpModeCooling").options == ["off", "auto", "day", "night"]
+
+
+# Intent: a live second zone gets the same writable cooling mode, a placeholder zone stays a plain sensor.
+# Why: issue #197 shows Z2/Z3 under the same CSV names; the room-temperature gate from #186 must still apply.
+def test_issue197_second_zone_cooling_mode_follows_the_live_zone_gate() -> None:
+    placeholder = _issue197_entities({"bass Z2OpModeCooling": "off"})
+    live = _issue197_entities({"bass Z2OpModeCooling": "off", "bass Z2RoomTemp": "21.5"})
+
+    assert placeholder["bass.Z2OpModeCooling.value"].entity_type != "select"
+    zone2 = live["bass.Z2OpModeCooling.value"]
+    assert (zone2.entity_type, zone2.meta.writable) == ("select", True)
+    assert zone2.meta.options == ["off", "auto", "day", "night"]
+    assert zone2.meta.friendly_name == "Cooling Operation Mode (Z2)"
+
+
+# Intent: the new metadata creates no entity on a controller that does not report the CSV-named register.
+# Why: discovery stays the source of truth; REGISTER_MAP entries must be safe when the register is absent.
+def test_issue197_cooling_mode_entry_creates_nothing_when_register_is_absent() -> None:
+    lines = [line for line in load_find_lines(ISSUE197_FIXTURE) if "OpModeCooling" not in line]
+    graph = DiscoveryService.build_device_graph(lines)
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert not [key for key in keys if "OpModeCooling" in key]
