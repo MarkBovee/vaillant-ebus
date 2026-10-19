@@ -651,14 +651,14 @@ class TestResolveDeviceCircuit:
     def test_sub_device_with_data_returns_own(self) -> None:
         graph = _build_graph()
         node = graph.nodes["z1"]
-        assert _resolve_device_circuit("ctlv3.Z1DayTemp", node, graph) == "z1"
+        assert _resolve_device_circuit("ctlv2.Z1DayTemp", node, graph) == "z1"
 
     # Intent: _resolve_device_circuit falls back to the parent circuit when the sub-device has no data.
     # Why: avoids routing no-data registers to a non-existent zone device.
     def test_sub_device_without_data_returns_parent(self) -> None:
         graph = _build_graph({"z1_has_data": False})
         node = graph.nodes["z1"]
-        assert _resolve_device_circuit("ctlv3.Z1DayTemp", node, graph) == "ctlv2"
+        assert _resolve_device_circuit("ctlv2.Z1DayTemp", node, graph) == "ctlv2"
 
     # Intent: _resolve_device_circuit returns a top-level node's own circuit.
     # Why: top-level devices such as hmu must not be reassigned to a parent.
@@ -690,7 +690,7 @@ class TestResolveDeviceCircuit:
         graph = _build_graph()
         node = graph.nodes["z1"]
         node.parent = None
-        assert _resolve_device_circuit("ctlv3.Z1DayTemp", node, graph) == "z1"
+        assert _resolve_device_circuit("ctlv2.Z1DayTemp", node, graph) == "z1"
 
 
 # =============================================================================
@@ -1377,8 +1377,7 @@ def test_status_parent_override_enabled_wins_over_default_disable() -> None:
 
     default = {e.key: e for e in EntityFactoryService().generate(graph)}
     forced = {
-        e.key: e
-        for e in EntityFactoryService().generate(graph, yaml_overrides={"vwzio.Status01": {"enabled": True}})
+        e.key: e for e in EntityFactoryService().generate(graph, yaml_overrides={"vwzio.Status01": {"enabled": True}})
     }
 
     assert default["vwzio.Status01.value"].enabled_by_default is False
@@ -1423,32 +1422,52 @@ def test_issue190_discovered_mixer_movement_entities_keep_the_signed_value() -> 
 # Why: upstream defines RunDataEEVPositionAbs as a plain UIN "in different scale"; 195 shown as % claimed a unit
 # the evidence does not give (backlog C1), while the compressor speed is a real rps value and must stay.
 def test_eev_position_has_no_unit_but_neighbours_keep_theirs() -> None:
-    graph = DiscoveryService.build_device_graph(
-        load_find_lines("community/arotherm_basv_boost_off_discovery.yaml")
-    )
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_basv_boost_off_discovery.yaml"))
     entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
 
     assert entities["hmu.RunDataEEVPositionAbs.value"].meta.unit == ""
     assert entities["hmu.RunDataFan1Speed.value"].meta.unit == "rpm"
 
 
-# Intent: zone name, zone mapping, valve status, controller clock and yield registers get readable names and sit in the
-# diagnostic category, for the first and the second zone alike.
-# Why: the owner's registry showed Z1Name1, Z1RoomZoneMapping, YieldTotal and Time as raw register names in the main
-# entity list (backlog C2); a second zone must not fall back to the raw name again.
+# Intent: zone name, zone mapping and the controller clock get readable names and the diagnostic category once ebusd
+# returns a value for them.
+# Why: the owner's registry showed Z1Name1, Z1RoomZoneMapping and Time as raw register names in the main entity list
+# (backlog C2); the entities exist only with data because the new entries add no fallback read.
 @pytest.mark.parametrize(
     ("key", "name"),
     [
-        ("ctlv3.Z1Name1.value", "Zone Name"),
-        ("ctlv3.Z2Name1.value", "Zone Name"),
-        ("ctlv3.Z1RoomZoneMapping.value", "Room Zone Mapping"),
-        ("ctlv3.Z2RoomZoneMapping.value", "Room Zone Mapping"),
-        ("ctlv3.Time.value", "Controller Time"),
+        ("basv.Z1Name1.value", "Zone Name"),
+        ("basv.Z1RoomZoneMapping.value", "Room Zone Mapping"),
+        ("basv.Time.value", "Controller Time"),
     ],
 )
 def test_zone_and_clock_registers_have_readable_diagnostic_entities(key: str, name: str) -> None:
-    graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_plus_2zone_discovery.yaml"))
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_basv_boost_off_discovery.yaml"))
     entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
 
     assert entities[key].meta.friendly_name == name
     assert entities[key].meta.entity_category == "diagnostic"
+
+
+# Intent: the second and third zone share the readable name and the diagnostic category of the first zone.
+# Why: a further zone must not fall back to the raw register name again (issue #186 pattern).
+@pytest.mark.parametrize("zone", [2, 3])
+def test_secondary_zone_registers_copy_the_readable_metadata(zone: int) -> None:
+    assert REGISTER_MAP[f"ctlv2.Z{zone}Name1"].friendly_name == "Zone Name"
+    assert REGISTER_MAP[f"ctlv2.Z{zone}RoomZoneMapping"].entity_category == "diagnostic"
+
+
+# Intent: the readable zone and clock entries add no active read of their own.
+# Why: they only label registers that ebusd already lists; a fallback read of 23 more rarely changing registers would
+# load a fragile bus (issue #193) for no new data, and before this change these registers were never read actively.
+@pytest.mark.parametrize(
+    "key",
+    [
+        "ctlv2.Time",
+        "ctlv2.YieldTotal",
+        *(f"ctlv2.Z{zone}{name}" for zone in (1, 2, 3) for name in ("Name1", "Name2", "Shortname", "RoomZoneMapping")),
+        *(f"ctlv2.Z{zone}{name}" for zone in (1, 2, 3) for name in ("ValveStatus", "BankHolidayStartPeriod")),
+    ],
+)
+def test_readable_zone_and_clock_entries_do_not_add_fallback_reads(key: str) -> None:
+    assert REGISTER_MAP[key].fallback_read is False

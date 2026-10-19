@@ -7,7 +7,7 @@ imports and the options flow and the repairs flow can share them.
 from __future__ import annotations
 
 import logging
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -68,13 +68,13 @@ _DEFAULT_SENSOR_OPTION_KEYS = frozenset({"suggested_display_precision", "suggest
 # Why: since Home Assistant 2026.10 every row carries `sensor.suggested_display_precision` and
 # `conversation.should_expose: False`; a unit or display precision override or an Assist exposure is user data.
 def _has_user_options(options: Any) -> bool:
-    if not isinstance(options, dict):
+    if not isinstance(options, Mapping):
         return False
     conversation = options.get("conversation")
-    if isinstance(conversation, dict) and conversation.get("should_expose") is True:
+    if isinstance(conversation, Mapping) and conversation.get("should_expose") is True:
         return True
     for domain, domain_options in options.items():
-        if domain == "conversation" or not isinstance(domain_options, dict):
+        if domain == "conversation" or not isinstance(domain_options, Mapping):
             continue
         if any(key not in _DEFAULT_SENSOR_OPTION_KEYS for key in domain_options):
             return True
