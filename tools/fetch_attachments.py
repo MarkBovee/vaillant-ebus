@@ -56,42 +56,32 @@ def inside_fixtures(target: Path) -> bool:
     return True
 
 
+# Intent: run a gh command in the repository and return its stdout decoded as UTF-8.
+# Why: text=True alone decodes with the Windows ANSI code page (cp1252), which crashed on emoji and umlauts in comments.
+def run_gh(*args: str) -> str:
+    return subprocess.run(
+        ["gh", *args], capture_output=True, text=True, encoding="utf-8", check=True, cwd=ROOT
+    ).stdout
+
+
 # Intent: collect the text of an issue or discussion including comments and replies.
 # Why: attachments are usually posted in comments, not in the body.
 def collect_text(number: int, discussion: bool) -> str:
-    if discussion:
-        owner_repo = subprocess.run(
-            ["gh", "repo", "view", "--json", "owner,name"], capture_output=True, text=True, check=True, cwd=ROOT
-        )
-        info = json.loads(owner_repo.stdout)
-        query = subprocess.run(
-            [
-                "gh",
-                "api",
-                "graphql",
-                "-f",
-                f"query={DISCUSSION_QUERY}",
-                "-f",
-                f"owner={info['owner']['login']}",
-                "-f",
-                f"name={info['name']}",
-                "-F",
-                f"number={number}",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=ROOT,
-        )
-        return query.stdout
-    view = subprocess.run(
-        ["gh", "issue", "view", str(number), "--json", "body,comments"],
-        capture_output=True,
-        text=True,
-        check=True,
-        cwd=ROOT,
+    if not discussion:
+        return run_gh("issue", "view", str(number), "--json", "body,comments")
+    info = json.loads(run_gh("repo", "view", "--json", "owner,name"))
+    return run_gh(
+        "api",
+        "graphql",
+        "-f",
+        f"query={DISCUSSION_QUERY}",
+        "-f",
+        f"owner={info['owner']['login']}",
+        "-f",
+        f"name={info['name']}",
+        "-F",
+        f"number={number}",
     )
-    return view.stdout
 
 
 # Intent: download every attachment to the output directory and report duplicates of existing fixtures.
