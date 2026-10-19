@@ -22,7 +22,15 @@ REDACTION = load_backend("redaction")
 # (compressor mode, zone ownership) and are not secrets; the owner's dump showed all three as <redacted>.
 @pytest.mark.parametrize(
     "name",
-    ["RunDataStatuscode", "Z1RoomZoneMapping", "Z3RoomZoneMapping", "SourceTempInput", "Status01", "HwcOpMode"],
+    [
+        "RunDataStatuscode",
+        "Z1RoomZoneMapping",
+        "Z3RoomZoneMapping",
+        "SourceTempInput",
+        "Status01",
+        "HwcOpMode",
+        "FloorHeatingContact",
+    ],
 )
 def test_dump_keeps_values_of_registers_that_only_contain_a_sensitive_fragment(name: str) -> None:
     assert DUMP._redact("hwc_compressor_active", name) == "hwc_compressor_active"
@@ -43,6 +51,9 @@ def test_dump_keeps_values_of_registers_that_only_contain_a_sensitive_fragment(n
         "Password",
         "ApiToken",
         "Secret",
+        "PhoneNumber",
+        "PhoneNumber2",
+        "ContactName",
     ],
 )
 def test_dump_still_redacts_sensitive_register_names(name: str) -> None:

@@ -237,11 +237,15 @@ class EbusdDhwHeatingSensor(CoordinatorEntity[VaillantCoordinator], BinarySensor
         self._attr_unique_id = f"{entry.entry_id}_dhw_heating"
         self._attr_device_info = coordinator.get_device_info("dhw")
 
+    # Intent: report hot water mode from the heat pump status fields of the coordinator data.
+    # Why: None keeps missing data "unknown" instead of reporting "not heating".
     @property
     def is_on(self) -> bool | None:
         data = (self.coordinator.data or {}).get("ebusd", {})
         return derive_dhw_heating(data, self.coordinator.heat_pump_circuit)
 
+    # Intent: follow the coordinator update state.
+    # Why: a missing status must surface as unknown, not as unavailable.
     @property
     def available(self) -> bool:
         # Tracks the coordinator so a missing status surfaces as unknown, not as unavailable or off.

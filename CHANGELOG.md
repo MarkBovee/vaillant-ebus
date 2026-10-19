@@ -11,7 +11,7 @@ wrong.
   the compressor or the immersion heater charges the cylinder, including the pump pre- and overrun. It reuses the logic
   of the operating-state sensor, so units that keep the status code at 0 during hot water demand (HMU00 with CTLV3)
   report it through the valve position and the status bits. It is off in every other state, including a blocked or
-  switched-off hot water heater, and `unknown` without data. It appears on the hot water device only where the heat
+  switched-off hot water heater, and `unknown` without data or with an undecoded numeric status. It appears on the hot water device only where the heat
   pump status is discovered, so a gas boiler such as a BASS3 gets no sensor; its charging state needs a register
   that nobody has captured yet. Only the compressor state has been compared with the sensor on a real system so far.
 
@@ -21,6 +21,16 @@ wrong.
   `RunDataStatuscode` (the compressor mode), `Z<N>RoomZoneMapping` and `SourceTempInput` showed as `<redacted>` in
   every dump. Serial numbers, key codes, installer data, passwords and tokens are still hidden; short fragments such
   as `code` and `pin` now count only as whole words (`PinCode`).
+- **Readable names for zone and clock registers.** `Z1Name1`, `Z1RoomZoneMapping`, `Z1ValveStatus`, the bank holiday
+  periods and the controller `Time` showed their raw register names in the main entity list. They now have plain names
+  ("Zone Name", "Room Zone Mapping", "Valve Status", "Controller Time") and sit in the diagnostic category, for every
+  zone. The controller only sends its clock now and then, and ebusd shows the last value it saw, so "Controller Time"
+  can be up to about half an hour behind; that is how the bus works, not a wrong clock. The controller `YieldTotal`
+  gets a name and no unit, because the unit is not proven for that circuit.
+- **Cleanup respects more of your own settings.** Besides name, icon, area, labels, aliases and hiding, a category,
+  a device class or unit override, a display precision and an Assist exposure you set on an entity now count as your
+  own choice, so the repair and the purge keep that entity.
+- **The dump also hides phone numbers and contact names** (`PhoneNumber`, `ContactName`), which were never hidden.
 - **EEV Position no longer claims `%`.** The register is a plain number in an unspecified scale upstream (values such
   as 195 and 250 are normal), so the unit is left out until the evidence gives one.
 - **Developer tool:** `tools/fetch_attachments.py` no longer crashes on Windows when an issue contains emoji or

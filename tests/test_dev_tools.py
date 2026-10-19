@@ -181,6 +181,8 @@ def test_fetch_attachments_decodes_gh_output_as_utf8(discussion: bool, monkeypat
     tool = load_tool("fetch_attachments")
     calls: list[dict] = []
 
+    # Intent: record the keyword arguments of every gh call and return a canned answer.
+    # Why: the test asserts on how gh is called, not on a real gh process.
     def fake_run(command, **kwargs):
         calls.append(kwargs)
         stdout = '{"owner": {"login": "o"}, "name": "n"}' if command[:3] == ["gh", "repo", "view"] else "ok"

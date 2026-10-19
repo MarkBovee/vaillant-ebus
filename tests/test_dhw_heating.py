@@ -79,6 +79,7 @@ def test_derive_dhw_heating_reads_the_label_the_coordinator_stores(raw: str) -> 
         ({"hmu.RunDataStatuscode.value": "0", "hmu.Status00.compressorstate": "hot_water"}, True),
         ({"hmu.RunDataStatuscode.value": "0", "hmu.Status01.pumpstate": "off"}, False),
         ({"hmu.RunDataStatuscode.value": "0"}, None),
+        ({"hmu.RunDataStatuscode.value": "7"}, None),
     ],
 )
 def test_derive_dhw_heating_uses_the_other_hot_water_signals(values: dict[str, str], expected: bool | None) -> None:

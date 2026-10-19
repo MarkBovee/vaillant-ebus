@@ -396,7 +396,8 @@ _DHW_SIGNAL_FIELDS = ("Status00.compressorstate", "Status01.pumpstate", "Status0
 # Why: issue #191 - a water heater entity has no heating state, so a binary sensor reuses the operating-state logic,
 # which also reads Status00, Status01.pumpstate and Status07 for units whose RunDataStatuscode stays at 0 during hot
 # water demand. A blocked or switched-off hot water heater is not on. No usable status is unknown, never off, and a
-# bare status of 0 without any other signal is unknown because such a unit may be charging without saying so.
+# bare numeric status without any other signal is unknown because the code is not decoded here and such a unit may
+# be charging without saying so.
 def derive_dhw_heating(values: Mapping[str, str | None], heat_pump_circuit: str | None) -> bool | None:
     state = derive_operating_state(values, heat_pump_circuit)
     if state is None:
@@ -407,7 +408,7 @@ def derive_dhw_heating(values: Mapping[str, str | None], heat_pump_circuit: str 
     has_other_signal = any(
         _clean(_value_lookup(values, f"{heat_pump_circuit}.{field}")) for field in _DHW_SIGNAL_FIELDS
     )
-    if state == OPERATING_STATE_STANDBY and status == "0" and not has_other_signal:
+    if state == OPERATING_STATE_STANDBY and status.isdigit() and not has_other_signal:
         return None
     return state == OPERATING_STATE_DHW
 
