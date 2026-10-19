@@ -133,12 +133,10 @@ def test_b516_cooling_register_entities() -> None:
         "hmu.StatSolarEnergySumHwc.value",
     ):
         assert by_key[key].meta.state_class == "total_increasing"
-    for key in (
-        "hmu.CoolEnvYieldDay.value",
-        "hmu.CoolElecConsDay.value",
-    ):
-        assert by_key[key].meta.state_class != "total_increasing"
-    for key in ("hmu.HcElecConsDay.value", "hmu.HwcElecConsDay.value"):
+    assert by_key["hmu.CoolEnvYieldDay.value"].meta.state_class != "total_increasing"
+    # The electricity day counters are usually the finer ones (issue #194: the totals can move in whole kWh), so all
+    # three must be usable in the Energy dashboard, which needs a state class.
+    for key in ("hmu.CoolElecConsDay.value", "hmu.HcElecConsDay.value", "hmu.HwcElecConsDay.value"):
         assert by_key[key].meta.state_class == "total_increasing"
     assert by_key["ctlv3.YieldTotal.value"].meta.state_class == "total"
     assert by_key["ctlv3.YieldTotal.value"].meta.fallback_read is False

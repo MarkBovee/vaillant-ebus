@@ -67,6 +67,9 @@ The same list is under **Settings → Devices & services → Vaillant eBUS → C
   draws a line instead of coloured bars (issue #190). The value is a signed percentage; -100 means the mixer is
   closed.
 
+- **Cooling Electricity Today** now has a state class, like the heating and DHW counters, so you can pick it in
+  the Energy dashboard (issue #194). Home Assistant starts its statistics for this sensor from the update on.
+
 ### Requirements
 
 - The minimum Home Assistant version is now 2026.3 (the files said 2025.1 before). The integration is written for
@@ -82,7 +85,8 @@ The same list is under **Settings → Devices & services → Vaillant eBUS → C
 ### Not changed
 
 - The electricity totals that grow in steps of 1000 Wh (issue #194) come from the heat pump. Some units report whole
-  kilowatt hours only, others report finer values; the integration passes on what ebusd gives.
+  kilowatt hours only, others report finer values; the integration passes on what ebusd gives. The "Electricity
+  Today" sensors usually count finer; see the troubleshooting guide for how to use them.
 - The heating state of the zone and the hot water (issues #191 and #192) is not changed in this release.
 - The pause between the definitions the integration sends at startup (issue #193) is not changed yet; it needs a test
   with the reporter's setup.

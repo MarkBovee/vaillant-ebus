@@ -539,6 +539,7 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         friendly_name="Cooling Electricity Today",
         device_class="energy",
         unit="Wh",
+        state_class="total_increasing",
         icon="mdi:snowflake",
     ),
     "hmu.HcElecConsTotal": RegisterMeta(

@@ -49,6 +49,16 @@ Zones that the controller reports as `inactive` (heating circuits 2 and 3 on man
 `Circuit Type` sensor of such a circuit is on the controller device. If your system does use that zone, set
 `enabled: true` for its registers in `entities.yaml`.
 
+## Electricity totals only grow in steps of 1 kWh
+
+On some heat pumps the "Heating / DHW / Cooling Electricity Total" sensors move in steps of 1000 Wh. The heat pump
+itself reports whole kilowatt hours there; other units report finer values. The integration shows what ebusd gives and
+does not round or invent decimals.
+
+The "Heating / DHW / Cooling Electricity Today" sensors usually count in finer steps and reset every day. All three can be
+added to the Energy dashboard: pick them as the electricity source, and Home Assistant adds up the days. The totals stay
+useful as a long-term check against your meter.
+
 ## All heat pump registers show "unavailable" or "no data stored"
 
 This is normal when the compressor is idle — summer mode, no heating or DHW demand. Registers that depend on the compressor (energy counters, flow temperatures, COP) only return data during active cycles.
