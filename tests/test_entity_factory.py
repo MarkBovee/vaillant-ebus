@@ -1417,3 +1417,16 @@ def test_issue190_discovered_mixer_movement_entities_keep_the_signed_value() -> 
     for key in ("ctlv2.Hc1MixerMovement.value", "ctlv2.Hc2MixerMovement.value"):
         assert (entities[key].meta.unit, entities[key].meta.state_class) == ("%", "measurement"), key
         assert entities[key].raw_value == "-100", key
+
+
+# Intent: the EEV position carries no unit, and the neighbouring heat-pump measurements keep theirs.
+# Why: upstream defines RunDataEEVPositionAbs as a plain UIN "in different scale"; 195 shown as % claimed a unit
+# the evidence does not give (backlog C1), while the compressor speed is a real rps value and must stay.
+def test_eev_position_has_no_unit_but_neighbours_keep_theirs() -> None:
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/arotherm_basv_boost_off_discovery.yaml")
+    )
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    assert entities["hmu.RunDataEEVPositionAbs.value"].meta.unit == ""
+    assert entities["hmu.RunDataFan1Speed.value"].meta.unit == "rpm"

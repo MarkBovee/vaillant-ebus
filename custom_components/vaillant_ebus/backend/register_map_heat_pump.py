@@ -167,7 +167,6 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
     "hmu.RunDataEEVPositionAbs": RegisterMeta(
         friendly_name="EEV Position",
         icon="mdi:valve",
-        unit="%",
     ),
     "hmu.RunDataFan1Speed": RegisterMeta(
         friendly_name="Fan 1 Speed",
