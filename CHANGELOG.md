@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.12.2 - 2026-10-19
+
+A small fix for BASS3 controllers (for example the GeniaSet): the cooling mode can be changed from Home Assistant.
+
+### Fixed
+
+- **The cooling mode is a select on BASS3 controllers (issue #197).** The ebusd configuration that BASS3 controllers
+  load calls this register `Z1OpModeCooling`, while the integration only knew it as `Z1CoolingOpMode`. The names never
+  matched, so the cooling mode showed up as a plain read-only sensor. It is now a select with the values that
+  configuration accepts: `off`, `auto`, `day` and `night`. Other controllers that load the same older configuration
+  get it too. A second or third zone gets the same select, but only when that zone reports a real room temperature,
+  the same rule that already applies to its other settings.
+  The select for `Z1CoolingOpMode` on other controllers is unchanged and keeps `off`, `auto` and `manual`; the two
+  names appear to address the same value on the bus, but each configuration only accepts its own words. The reporter
+  confirmed a write of `day`; `auto` and `night` follow the configuration and were not tried on a real system.
+  If you worked around this with an `entities.yaml` override, you can remove it after the update.
+
+### Not changed on purpose
+
+- The cooling temperature that a VRC720f remote shows is still missing on that BASS3. The register the integration
+  calls "Zone Cooling Temperature" is a different one, and the configuration that BASS3 loads does not define the
+  register that probably holds the remote's value. It needs a test on the real hardware first (issue #197).
+
 ## 1.12.1 - 2026-10-19
 
 A small release that adds a hot water heating state for heat pumps and fixes two things that made evidence and units
