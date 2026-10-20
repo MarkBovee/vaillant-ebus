@@ -9,14 +9,15 @@ pause start sooner and stay in place.
 
 - **A stuck adapter now gets a handful of reads before the pause starts, not dozens (issue #193).** The pause waits
   for failed reads on two different circuits. The integration read its registers one circuit after another, so on
-  the reporter's bus (heat pump, controller and hydraulic station) about 77 reads went to the heat pump before the
+  a bus with a heat pump, a controller and a hydraulic station about 77 reads went to the heat pump before the
   controller was asked even once. The reads now take the circuits in turn. Nothing is added or left out, so a
   healthy bus gets the same reads as before.
-- **A reconnect no longer cancels a running pause.** When ebusd answered too slowly, the integration dropped the
-  connection and reconnected, and that also reset the pause: it started again at 60 seconds, the runtime
-  definitions went out again and so did the whole read set. The adapter hangs on ebusd, not on the integration, so a
-  new connection tells us nothing about it. The pause now runs to its end. If you reset the adapter or restart ebusd
-  while it runs, the integration can take up to ten minutes to read again; **Rediscover eBUS** ends the pause at once.
+- **A reconnect no longer cancels a running pause.** In the code, a read that ebusd answers too slowly drops the
+  connection and reconnects, and that reconnect also reset the pause: it started again at 60 seconds and the whole
+  read set went out again. The adapter hangs on ebusd, not on the integration, so a new connection tells us nothing
+  about it. The pause now runs to its end. Only the active register reads stay paused; the runtime definitions are
+  still sent after a reconnect. If you reset the adapter or restart ebusd while the pause runs, the integration can
+  take up to ten minutes to read again; **Rediscover eBUS** ends the pause at once.
 
 ### Not solved yet
 
