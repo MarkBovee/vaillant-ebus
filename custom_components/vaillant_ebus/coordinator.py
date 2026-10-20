@@ -10,6 +10,7 @@ import re
 import tempfile
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
+from functools import partial
 from typing import Any, TypedDict
 
 import yaml
@@ -112,9 +113,30 @@ def _register_values(register_key: str, raw: str | None) -> dict[str, str | None
     return split_multi_field(register_key, raw)
 
 
+# Intent: delete a staged file, ignoring one that is already gone.
+# Why: staging files are removed from the executor so the unlink never blocks the event loop.
+def remove_staged_file(staged_path: str, label: str) -> None:
+    try:
+        os.unlink(staged_path)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        _LOGGER.warning("Failed to remove %s staging file: %s", label, exc)
+
+
+# Intent: remove a staged file through the executor, falling back to a direct delete during shutdown.
+# Why: the executor refuses new jobs once Home Assistant is stopping, and a leftover staging file is worse than one
+# short unlink at that point.
+def schedule_staged_file_removal(hass: HomeAssistant, staged_path: str, label: str) -> None:
+    try:
+        asyncio.ensure_future(hass.async_add_executor_job(remove_staged_file, staged_path, label))
+    except RuntimeError:
+        remove_staged_file(staged_path, label)
+
+
 # Intent: discard a staged cache after its executor finishes if its caller was cancelled.
-# Why: the temporary path is returned only when the executor job completes.
-def _discard_cancelled_cache_write(future: asyncio.Future[str]) -> None:
+# Why: the temporary path is returned only when the executor job completes; the unlink runs in the executor.
+def _discard_cancelled_cache_write(hass: HomeAssistant, future: asyncio.Future[str]) -> None:
     try:
         staged_path = future.result()
     except asyncio.CancelledError:
@@ -122,18 +144,15 @@ def _discard_cancelled_cache_write(future: asyncio.Future[str]) -> None:
     except Exception as exc:
         _LOGGER.warning("Failed to finish cancelled register-cache write: %s", exc)
         return
-    try:
-        os.unlink(staged_path)
-    except FileNotFoundError:
-        pass
-    except OSError as exc:
-        _LOGGER.warning("Failed to remove cancelled register-cache staging file: %s", exc)
+    schedule_staged_file_removal(hass, staged_path, "cancelled register-cache")
 
 
 # Intent: stage register-cache JSON before lifecycle-gated replacement.
 # Why: executor completion can race with config-entry teardown or reload.
 def _write_cache_temp(cache_path: str, values: dict[str, str]) -> str:
     cache_dir = os.path.dirname(cache_path)
+    # Why: directory creation is blocking disk I/O, so it runs here in the executor, not on the event loop.
+    os.makedirs(cache_dir, exist_ok=True)
     file_descriptor, staged_path = tempfile.mkstemp(prefix=".register_cache_", suffix=".tmp", dir=cache_dir)
     try:
         with os.fdopen(file_descriptor, "w", encoding="utf-8") as cache_file:
@@ -142,6 +161,17 @@ def _write_cache_temp(cache_path: str, values: dict[str, str]) -> str:
         os.unlink(staged_path)
         raise
     return staged_path
+
+
+# Intent: atomically publish a staged register cache and always remove the staging file.
+# Why: replace and cleanup are blocking disk I/O and must run in the executor; the lifecycle check
+# stays inside the job so an unload that starts while the job is queued still prevents the commit.
+def _publish_cache(staged_path: str, cache_path: str, is_active: Callable[[], bool]) -> None:
+    try:
+        if is_active():
+            os.replace(staged_path, cache_path)
+    finally:
+        remove_staged_file(staged_path, "register-cache")
 
 
 class CoordinatorState(TypedDict):
@@ -1426,34 +1456,33 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if "divisor" not in entry:
                 entry["divisor"] = divisor
 
+    # Intent: report whether the coordinator may still commit work to disk.
+    # Why: the cache publish job reads this flag from the executor thread right before it replaces the file.
+    def _is_active(self) -> bool:
+        return not (self._stopped or self._unload_requested)
+
     # Intent: commit register-cache updates only while the coordinator is active.
     # Why: a late executor write can overwrite cache data from a reloaded coordinator.
     async def _async_save_cache(self, values: dict[str, str]) -> None:
         if self._stopped or self._unload_requested:
             return
         cache_path = self._cache_path
-        cache_dir = os.path.dirname(cache_path)
-        staged_path: str | None = None
         try:
-            os.makedirs(cache_dir, exist_ok=True)
             write_future = asyncio.ensure_future(
                 self.hass.async_add_executor_job(_write_cache_temp, cache_path, values)
             )
             try:
-                try:
-                    staged_path = await asyncio.shield(write_future)
-                except asyncio.CancelledError:
-                    write_future.add_done_callback(_discard_cancelled_cache_write)
-                    raise
-                if self._stopped or self._unload_requested:
-                    return
-                os.replace(staged_path, cache_path)
-            finally:
-                if staged_path is not None and os.path.exists(staged_path):
-                    try:
-                        os.unlink(staged_path)
-                    except FileNotFoundError:
-                        pass
+                staged_path = await asyncio.shield(write_future)
+            except asyncio.CancelledError:
+                write_future.add_done_callback(partial(_discard_cancelled_cache_write, self.hass))
+                raise
+            # The publish job replaces the file only while active and removes the staging file in every case.
+            # Shielded so cancelling the caller cannot stop a queued publish job, which owns the staging-file cleanup.
+            await asyncio.shield(
+                asyncio.ensure_future(
+                    self.hass.async_add_executor_job(_publish_cache, staged_path, cache_path, self._is_active)
+                )
+            )
         except Exception:
             # Log the path and failure class only — never cache values.
             _LOGGER.warning("Failed to save register cache to %s", cache_path, exc_info=True)

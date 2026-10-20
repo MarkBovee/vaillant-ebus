@@ -4779,7 +4779,11 @@ async def test_save_cache_repeated_cancellation_removes_staged_file(tmp_path: Pa
             await save_task
         allow_write_to_finish.set()
         await write_finished.wait()
-        await asyncio.sleep(0)
+        # The cancelled-write callback now removes the staged file through the executor, so give it a few turns.
+        for _ in range(50):
+            if not list(cache_path.parent.glob(".register_cache_*.tmp")):
+                break
+            await asyncio.sleep(0.01)
 
         assert cache_path.read_text(encoding="utf-8") == '{"old":"value"}'
         assert list(cache_path.parent.glob(".register_cache_*.tmp")) == []
