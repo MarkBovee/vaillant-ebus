@@ -244,7 +244,7 @@ Hard-won facts from the 1.10.x line. Read these before touching `_define_custom_
 | `tools/hardware_matrix.py` | Which hardware variants the community fixtures cover (also in the CI step summary). |
 | `tools/mutation_check.py` | Mutation check of one source file against chosen tests; survivors show missing or weak tests (use on small pure modules). |
 | `tools/release_gate.py` | Release-job gate: hassfest and HACS must be green on the tagged commit. |
-| `tools/check_comments.py` | Functions a diff adds or changes without the required `# Intent:` and `# Why:` comments (`validate.py` does not check this; run it before a review). |
+| `tools/check_comments.py` | Functions a diff adds or changes without the required comment: `# Intent:` and `# Why:` in tests, any comment above the function in code (`validate.py` does not check this; run it before a review). |
 | `tools/ast_compare.py` | Proof that a change is comment-only: compares the syntax trees of the working tree with a git ref. |
 | `tools/differential.py` | Behaviour-equality harness: dumps the runtime defines, withheld set, planned reads, entities and `REGISTER_MAP` for every community fixture. Two trees decide the same when the dumps are identical (use `PYTHONHASHSEED=0`). |
 | `tools/ha_snapshot.py` | Read-only snapshots of the owner's HA host: registry rows, newest discovery dump, and the deployed files against a git ref. Use it to copy the live registry shape into test fakes. |
@@ -303,8 +303,11 @@ python3 tools/version.py check
 python3 -m compileall -f custom_components/vaillant_ebus/
 ```
 
-- The line limit is 120 characters (`ruff` E501), comments included. Every function and test needs an `# Intent:` and a
-  `# Why:` comment above it.
+- The line limit is 120 characters (`ruff` E501), comments included.
+- Comments above functions follow two rules:
+  - **Tests** (`tests/`): every test has an `# Intent:` and a `# Why:` comment above it.
+  - **Code** (`custom_components/`, `tools/`): every function has a normal comment above it that says what it does and,
+    when it is not obvious, why. Do not add `# Intent:` or `# Why:` labels to new code; existing ones may stay.
 - `tools/known_env_failures.txt` is empty: the timer-resolution test that used to fail on Windows was removed in
   1.12.0. `.gitattributes` keeps `tests/fixtures/**` byte-exact (`-text`), so the fixture
   digests match without CRLF changes; `tests/test_search_upstream.py` needs `jq` and is skipped without it. A clone made

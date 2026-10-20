@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""List functions that a diff adds or changes and that lack an `# Intent:` and a `# Why:` comment block above them.
+"""List functions that a diff adds or changes and that lack the required comment block above them.
 
     python tools/check_comments.py                # compares origin/main...HEAD
     python tools/check_comments.py v1.12.0        # compares v1.12.0...HEAD
 
-The project rule (AGENTS.md) is that every function and test has both comments. `tools/validate.py` does not check it,
-so run this before a review. Only Python files are looked at; the exit code is 1 when something is missing.
+The project rule (AGENTS.md) is that every test has an `# Intent:` and a `# Why:` comment, and that every function in
+code (`custom_components/`, `tools/`) has a normal comment above it. `tools/validate.py` does not check it, so run this
+before a review. Only Python files are looked at; the exit code is 1 when something is missing.
 """
 
 from __future__ import annotations
@@ -49,9 +50,15 @@ def comment_block(lines: list[str], node: ast.FunctionDef | ast.AsyncFunctionDef
     return "\n".join(reversed(block))
 
 
-# Intent: find the functions on the given lines whose comment block lacks `Intent:` or `Why:`.
-# Why: this is the pure core of the check, so a test can feed it source text without git.
-def find_missing(source: str, touched_lines: set[int]) -> list[tuple[int, str, str]]:
+# Tests keep the strict `# Intent:` and `# Why:` pair; all other code only needs a normal comment (see AGENTS.md).
+def is_test_path(name: str) -> bool:
+    return name.startswith("tests/")
+
+
+# Find the functions on the given lines that lack the required comment block. With `strict` (tests) the block must hold
+# `Intent:` and `Why:`; without it (code) any comment text above the function is enough. This is the pure core of the
+# check, so a test can feed it source text without git.
+def find_missing(source: str, touched_lines: set[int], strict: bool = True) -> list[tuple[int, str, str]]:
     lines = source.splitlines()
     missing: list[tuple[int, str, str]] = []
     for node in ast.walk(ast.parse(source)):
@@ -59,7 +66,8 @@ def find_missing(source: str, touched_lines: set[int]) -> list[tuple[int, str, s
             continue
         block = comment_block(lines, node)
         has_intent, has_why = "Intent:" in block, "Why:" in block
-        if not (has_intent and has_why):
+        has_comment = any(line.lstrip("# \t") for line in block.splitlines())
+        if not ((has_intent and has_why) if strict else has_comment):
             have = "/".join(name for name, present in (("Intent", has_intent), ("Why", has_why)) if present)
             missing.append((node.lineno, node.name, have or "none"))
     return sorted(missing)
@@ -74,8 +82,8 @@ def changed_lines(base: str, root: Path = ROOT) -> dict[str, set[int]]:
     return parse_added_lines(diff)
 
 
-# Intent: print the functions without both comments and return a shell exit code.
-# Why: a missing comment is a blocking review finding in this repository, never a style nit.
+# Print the functions without the required comment and return a shell exit code. A missing comment is a blocking review
+# finding in this repository, never a style nit; tests need the strict Intent/Why pair, other code any comment.
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     base = args[0] if args else "origin/main"
@@ -84,9 +92,10 @@ def main(argv: list[str] | None = None) -> int:
         path = ROOT / name
         if path.suffix != ".py" or not path.exists():
             continue
-        for lineno, function, have in find_missing(path.read_text(encoding="utf-8"), touched):
+        source = path.read_text(encoding="utf-8")
+        for lineno, function, have in find_missing(source, touched, strict=is_test_path(name)):
             findings.append(f"{name}:{lineno} {function} (has: {have})")
-    print(f"{len(findings)} functions without an Intent and Why block")
+    print(f"{len(findings)} functions without the required comment (tests: Intent and Why, code: any comment)")
     for finding in findings:
         print(f"  {finding}")
     return 1 if findings else 0

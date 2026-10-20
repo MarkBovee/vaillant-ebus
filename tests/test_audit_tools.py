@@ -6,7 +6,10 @@ import contextlib
 import dataclasses
 import io
 import json
+from pathlib import Path
 from typing import Any
+
+import pytest
 
 from tests.test_dev_tools import load_tool
 
@@ -87,6 +90,51 @@ def test_find_missing_ignores_untouched_functions() -> None:
     tool = load_tool("check_comments")
 
     assert tool.find_missing(SOURCE, {3}) == []
+
+
+# Intent: in code mode any comment text above a function is enough, while a bare function or an empty `#` is reported.
+# Why: AGENTS.md asks for a normal comment in code and keeps the Intent/Why pair for tests only.
+def test_find_missing_accepts_any_comment_for_code() -> None:
+    tool = load_tool("check_comments")
+    code = """\
+# plain comment
+def a() -> None:
+    pass
+
+
+#
+def b() -> None:
+    pass
+
+
+def c() -> None:
+    pass
+"""
+    every_line = set(range(1, 13))
+
+    missing = tool.find_missing(code, every_line, strict=False)
+
+    assert [(name, have) for _, name, have in missing] == [("b", "none"), ("c", "none")]
+    assert [name for _, name, _ in tool.find_missing(code, every_line)] == ["a", "b", "c"]
+
+
+# Intent: the command holds files under tests/ to the Intent/Why pair and every other file to a normal comment.
+# Why: the wiring in main() is what makes the two rules differ, so a plain comment must fail in tests only.
+def test_main_applies_the_strict_rule_to_tests_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tool = load_tool("check_comments")
+    names = ("tests/test_x.py", "custom_components/code.py")
+    for name in names:
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text("# plain comment\ndef f() -> None:\n    pass\n", encoding="utf-8")
+    monkeypatch.setattr(tool, "ROOT", tmp_path)
+    monkeypatch.setattr(tool, "changed_lines", lambda base: {name: {2} for name in names})
+
+    assert tool.main([]) == 1
+    output = capsys.readouterr().out
+    assert "tests/test_x.py:2 f" in output
+    assert "custom_components" not in output
 
 
 # Intent: a comment-only edit has the same syntax tree, a code edit does not, and an allowed rename is applied.
