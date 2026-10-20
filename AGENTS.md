@@ -125,6 +125,38 @@ Climate behavior must follow the corresponding `mypyllant` implementation.
 - If quick veto is already active in a time-controlled mode, update its temperature without writing a new duration.
 - Preset mapping, HVAC modes, and climate services should remain aligned with `mypyllant`.
 
+## Home Assistant Event Loop (No Blocking I/O)
+
+Blocking the event loop stalls all of Home Assistant, most on slow storage such as an SD card. The HACS review of 1.12.2
+rejected the integration for exactly this (`os.makedirs`, `os.replace`, `os.path.exists`, `os.unlink` in
+`_async_save_cache` and `_persist_dump`). These rules are hard rules for every change:
+
+- **Nothing blocking runs directly in an `async def`.** This covers `open()`, every `os.*` and `os.path.*` file call
+  (`exists`, `makedirs`, `replace`, `unlink`, `stat`, `listdir`, ...), `pathlib` reads, writes and checks, `time.sleep`,
+  blocking sockets, serial, subprocess and HTTP calls, and parsing or dumping a large file. An existence check counts
+  as I/O.
+- **Put the work in a sync helper and run it with `await hass.async_add_executor_job(helper, ...)`.** Make the helper
+  do the whole sequence (create the folder, write, replace, clean up), not one call at a time. Network traffic to
+  ebusd goes through the async `EbusService`, never a blocking socket.
+- **Write files with the stage-and-publish pattern already in the code.** Stage in `_write_cache_temp` /
+  `_write_yaml_temp`, publish in `_publish_cache` / `_publish_dump`. The lifecycle check (`_is_active`,
+  `ensure_active`) runs inside the publish job right before `os.replace`, because an unload can start while the job is
+  queued. The job removes its own staging file with `remove_staged_file` in a `finally`.
+- **Shield the publish job** (`asyncio.shield(asyncio.ensure_future(...))`) so cancelling the caller cannot stop a
+  queued job that owns the cleanup. Done-callbacks that clean up after a cancelled write must not unlink on the loop;
+  use `schedule_staged_file_removal` (it falls back to a direct delete when the executor is already closed).
+- **Do not import heavy or third-party modules lazily inside a coroutine.** Import at module level; Home Assistant
+  warns about blocking `import_module` calls in the loop.
+- **The guard is `tests/test_no_blocking_io_in_async.py`.** It scans every module of the integration and fails on a
+  blocking call directly inside an `async def` (a nested sync helper is fine). Fix the code; never add an allowlist
+  entry or weaken the scanner. When you add a new blocking pattern to this list, add it to the scanner and to its
+  self-check test.
+- **Tests that mock `async_add_executor_job` must still run the function.** A mock that only records the call hides a
+  skipped file operation. Where timing matters (a cleanup callback), wait for the effect with a short bounded poll,
+  never a single `sleep(0)`.
+- **Ask reviewers explicitly** to look for blocking calls on the loop in the diff, including helpers that are called
+  from a coroutine without an executor.
+
 ## ebusd Safety
 
 - Never modify, upload, or delete ebusd addon CSV files.

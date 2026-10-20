@@ -211,8 +211,37 @@ async def test_persist_dump_creates_directory_before_write(tmp_path: Path) -> No
     hass.async_add_executor_job = _executor
     target = tmp_path / "nested" / "discovery_dump.yaml"
     await DUMP._persist_dump(hass, str(target), {"metadata": {"dump_version": 3}})
-    assert order == ["_mkdir", "_write_yaml_temp"]
+    assert order == ["_mkdir", "_write_yaml_temp", "_publish_dump"]
     assert target.exists()
+    assert list(tmp_path.glob("nested/.discovery_dump_*.yaml")) == []
+
+
+# Intent: an unload that starts while the publish job is queued keeps the old dump and removes the staged file.
+# Why: the publish step moved to the executor, so its lifecycle check must still gate the file replace.
+async def test_persist_dump_publish_job_respects_unload(tmp_path: Path) -> None:
+    target = tmp_path / "discovery_dump.yaml"
+    target.write_text("old", encoding="utf-8")
+    state = {"active": True}
+    hass = MagicMock()
+
+    async def _executor(func, *args):
+        if func is DUMP._publish_dump:
+            state["active"] = False
+        return func(*args)
+
+    hass.async_add_executor_job = _executor
+
+    # Intent: raise like the real guard once unload has started.
+    # Why: mirrors ensure_active in async_export_discovery_dump.
+    def _ensure_active() -> None:
+        if not state["active"]:
+            raise HomeAssistantError("unloading")
+
+    with pytest.raises(HomeAssistantError):
+        await DUMP._persist_dump(hass, str(target), {"metadata": {}}, ensure_active=_ensure_active)
+
+    assert target.read_text(encoding="utf-8") == "old"
+    assert list(tmp_path.glob(".discovery_dump_*.yaml")) == []
 
 
 # Intent: exporting a dump with ebus None raises a HomeAssistantError naming the disconnected state.
@@ -1791,7 +1820,11 @@ async def test_persist_dump_cancellation_removes_staged_file(tmp_path: Path) -> 
         await persist_task
     allow_executor_return.set()
     await write_finished.wait()
-    await asyncio.sleep(0)
+    # The cancelled-write callback now removes the staged file through the executor, so give it a few turns.
+    for _ in range(50):
+        if not list(tmp_path.glob(".discovery_dump_*.yaml")):
+            break
+        await asyncio.sleep(0.01)
 
     assert list(tmp_path.glob(".discovery_dump_*.yaml")) == []
 

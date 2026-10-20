@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.12.3 - 2026-10-20
+
+A maintenance release without new features. It moves the last blocking file operations off the Home Assistant event
+loop, which the HACS review asked for.
+
+### Fixed
+
+- **The register cache and the discovery dump no longer touch the disk on the event loop.** Creating the cache folder,
+  replacing the cache file, publishing a discovery dump and deleting leftover staging files now all run in the
+  executor. On slow storage such as an SD card, saving the cache or exporting a dump can no longer stall the rest of
+  Home Assistant. The check that stops a late write after the integration is unloaded still runs right before the
+  file is replaced, so an unload that starts while the write is queued still keeps the old file.
+
 ## 1.12.2 - 2026-10-19
 
 A small fix for BASS3 controllers (for example the GeniaSet): the cooling mode can be changed from Home Assistant.

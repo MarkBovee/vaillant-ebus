@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from typing import Literal
 from weakref import WeakKeyDictionary
 
@@ -36,7 +37,7 @@ from .backend.mapping import (
 from .backend.models import HMUX0_PRECISE_TEMPERATURE_REGISTERS, DeviceGraph, is_no_data_value
 from .backend.redaction import is_sensitive_register_name
 from .const import DOMAIN, INTEGRATION_VERSION
-from .coordinator import VaillantCoordinator
+from .coordinator import VaillantCoordinator, remove_staged_file, schedule_staged_file_removal
 
 _LOGGER = logging.getLogger(__name__)
 GRAB_CONNECT_TIMEOUT = 5
@@ -918,8 +919,8 @@ def _mkdir(path: str) -> None:
 
 
 # Intent: discard a staged dump after its executor finishes if its caller was cancelled.
-# Why: the temporary path is returned only when the executor job completes.
-def _discard_cancelled_dump_write(future: asyncio.Future[str]) -> None:
+# Why: the temporary path is returned only when the executor job completes; the unlink runs in the executor.
+def _discard_cancelled_dump_write(hass: HomeAssistant, future: asyncio.Future[str]) -> None:
     try:
         staged_filepath = future.result()
     except asyncio.CancelledError:
@@ -927,12 +928,7 @@ def _discard_cancelled_dump_write(future: asyncio.Future[str]) -> None:
     except Exception as exc:
         _LOGGER.warning("Failed to finish cancelled dump serialization: %s", exc)
         return
-    try:
-        os.unlink(staged_filepath)
-    except FileNotFoundError:
-        pass
-    except OSError as exc:
-        _LOGGER.warning("Failed to remove cancelled dump staging file: %s", exc)
+    schedule_staged_file_removal(hass, staged_filepath, "cancelled dump")
 
 
 # Ordered persistence: the directory must exist before the YAML write lands.
@@ -951,22 +947,28 @@ async def _persist_dump(
     if ensure_active is not None:
         ensure_active()
     write_future = asyncio.ensure_future(hass.async_add_executor_job(_write_yaml_temp, filepath, dump_data))
-    staged_filepath: str | None = None
     try:
-        try:
-            staged_filepath = await asyncio.shield(write_future)
-        except asyncio.CancelledError:
-            write_future.add_done_callback(_discard_cancelled_dump_write)
-            raise
+        staged_filepath = await asyncio.shield(write_future)
+    except asyncio.CancelledError:
+        write_future.add_done_callback(partial(_discard_cancelled_dump_write, hass))
+        raise
+    # Shielded so cancelling the caller cannot stop a queued publish job, which owns the staging-file cleanup.
+    # The lifecycle check runs inside that job, so a failing check still removes the staged file.
+    await asyncio.shield(
+        asyncio.ensure_future(hass.async_add_executor_job(_publish_dump, staged_filepath, filepath, ensure_active))
+    )
+
+
+# Intent: atomically publish a staged dump and always remove the staging file.
+# Why: replace and cleanup are blocking disk I/O and must run in the executor; ensure_active runs inside the job
+# so an unload that starts while the job is queued still prevents the commit.
+def _publish_dump(staged_filepath: str, filepath: str, ensure_active: Callable[[], None] | None) -> None:
+    try:
         if ensure_active is not None:
             ensure_active()
         os.replace(staged_filepath, filepath)
     finally:
-        if staged_filepath is not None and os.path.exists(staged_filepath):
-            try:
-                os.unlink(staged_filepath)
-            except FileNotFoundError:
-                pass
+        remove_staged_file(staged_filepath, "dump")
 
 
 # Write YAML dump file with security header
