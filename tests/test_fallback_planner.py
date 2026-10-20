@@ -241,3 +241,20 @@ def test_map_driven_flow_temp_read_is_firmware_gated(sw: str, expected: bool) ->
     )
 
     assert (("hmux0", "RunDataFlowTemp") in plan) is expected
+
+
+# Intent: interleaving visits every circuit in turn, keeps the order inside each circuit and drops nothing.
+# Why: issue #193 - the bus guard needs errors from two circuits, and a plan grouped by circuit sent 77 reads to the
+#      first circuit before the second one was asked.
+def test_interleave_by_circuit_round_robins_and_keeps_every_read() -> None:
+    reads = [("hmux0", "A"), ("hmux0", "B"), ("ctlv3", "C"), ("vwzio", "D"), ("hmux0", "E"), ("ctlv3", "F")]
+
+    assert PLANNER.interleave_by_circuit(reads) == [
+        ("hmux0", "A"),
+        ("ctlv3", "C"),
+        ("vwzio", "D"),
+        ("hmux0", "B"),
+        ("ctlv3", "F"),
+        ("hmux0", "E"),
+    ]
+    assert PLANNER.interleave_by_circuit([]) == []

@@ -1961,7 +1961,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     if self._stopped or self._unload_requested:
                         return {"ebusd": await self._async_values_from_registers()}
                     if reconnected:
-                        self._bus_guard.reset()
+                        # Intent: keep the bus guard as it is across a transport reconnect.
+                        # Why: issue #193 - the adapter sits behind ebusd, so a new TCP connection says nothing about
+                        # it being reset; clearing the guard here restarted the pause at 60 s and sent the whole
+                        # read set again. A rediscovery requested by the owner still resets it.
                         self._runtime_definitions.clear()
                         self._last_energy_poll = datetime.min
                         ebus = self.ebus
