@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.12.4 - 2026-10-20
+
+A fix for the stuck adapter of issue #193. Version 1.12.0 added a pause for the active reads; this release makes that
+pause start sooner and stay in place.
+
+### Fixed
+
+- **A stuck adapter now gets a handful of reads before the pause starts, not dozens (issue #193).** The pause waits
+  for failed reads on two different circuits. The integration read its registers one circuit after another, so on
+  the reporter's bus (heat pump, controller and hydraulic station) about 77 reads went to the heat pump before the
+  controller was asked even once. The reads now take the circuits in turn. Nothing is added or left out, so a
+  healthy bus gets the same reads as before.
+- **A reconnect no longer cancels a running pause.** When ebusd answered too slowly, the integration dropped the
+  connection and reconnected, and that also reset the pause: it started again at 60 seconds, the runtime
+  definitions went out again and so did the whole read set. The adapter hangs on ebusd, not on the integration, so a
+  new connection tells us nothing about it. The pause now runs to its end. If you reset the adapter or restart ebusd
+  while it runs, the integration can take up to ten minutes to read again; **Rediscover eBUS** ends the pause at once.
+
+### Not solved yet
+
+- On the reporter's hardware the adapter can still get stuck right after the first start, when the runtime
+  definitions and the first request to the heat pump follow each other. Whether spacing them out helps needs a test
+  on that hardware.
+- ebusd polls the three `r5` definitions for the controller by itself, also while the integration pauses. The pause
+  cannot stop that.
+
 ## 1.12.3 - 2026-10-20
 
 A maintenance release without new features. It moves the last blocking file operations off the Home Assistant event

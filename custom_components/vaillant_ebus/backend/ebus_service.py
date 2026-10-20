@@ -62,7 +62,8 @@ def is_bus_error(response: str | None) -> bool:
 # which kept the adapter busy. The pause needs bus errors on at least two circuits, so one slave that stops answering
 # never blocks reads to the others. A value breaks the run (cached answers can do so too, which only delays a trip);
 # local errors and missing values are neutral. After the pause the next read is a probe: a value closes the guard, a
-# bus error pauses again for twice as long. A reconnect calls reset().
+# bus error pauses again for twice as long. Only a rediscovery requested by the owner calls reset(); a transport
+# reconnect leaves the guard alone, because a new TCP connection to ebusd says nothing about the adapter.
 class BusErrorGuard:
     # Intent: create a closed guard whose clock can be replaced.
     # Why: tests must move time by hand instead of waiting for the real pause.
@@ -114,7 +115,7 @@ class BusErrorGuard:
         self._trips += 1
 
     # Intent: forget the run, the pause and the probe state.
-    # Why: a reconnect or a requested rediscovery may mean the adapter was replugged, so old errors do not count.
+    # Why: a requested rediscovery usually follows a reset of the adapter, so old errors do not count.
     def reset(self) -> None:
         self._run.clear()
         self._cooldown = BUS_ERROR_BASE_COOLDOWN

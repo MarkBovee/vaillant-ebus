@@ -6,7 +6,8 @@ the discovered device graph and passes the per-hardware polling restrictions.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Mapping
+from collections import deque
+from collections.abc import Callable, Collection, Mapping, Sequence
 
 from .mapping import (
     HMUX0_SW0407_FALLBACK_NAMES,
@@ -240,4 +241,21 @@ def plan_fallback_reads(
                 resolved = fallback_candidate(graph, resolve_circuit, circuit, name)
                 if resolved is not None:
                     _add(resolved, name)
-    return candidates
+    return interleave_by_circuit(candidates)
+
+
+# Intent: reorder reads so every circuit is asked in turn, keeping the planned order inside each circuit.
+# Why: issue #193 - the bus guard needs bus errors from two circuits before it pauses, and a plan grouped by circuit
+# sent dozens of reads to the first circuit of a stuck adapter before the second one was asked. Nothing is dropped
+# or added, so a healthy bus gets the same reads.
+def interleave_by_circuit(reads: Sequence[tuple[str, str]]) -> list[tuple[str, str]]:
+    queues: dict[str, deque[tuple[str, str]]] = {}
+    for read in reads:
+        queues.setdefault(read[0].casefold(), deque()).append(read)
+    ordered: list[tuple[str, str]] = []
+    while queues:
+        for circuit_key in list(queues):
+            ordered.append(queues[circuit_key].popleft())
+            if not queues[circuit_key]:
+                del queues[circuit_key]
+    return ordered

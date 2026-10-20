@@ -6706,6 +6706,76 @@ async def test_issue193_stuck_adapter_pauses_the_fallback_cycle_and_resumes_afte
         assert coordinator.ebus.read_register.await_count == healthy_reads
 
 
+# Intent: on the bus of issue #193 (heat pump, controller, hydraulic station) a stuck adapter gets only the reads the
+#         guard needs to see two circuits fail, not the whole block of the first circuit.
+# Why: the reporter logged 137 controller and 46 pump reads in one cycle after the pause had been announced; the plan
+#      was grouped by circuit, so the second circuit was only asked after dozens of failed reads.
+async def test_issue193_stuck_adapter_is_noticed_within_the_trip_count_on_a_three_circuit_bus() -> None:
+    fixture = "community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture))
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator._graph = graph
+        coordinator._refresh_find_keys()
+        await coordinator._define_custom_registers()
+        coordinator.ebus.read_register = AsyncMock(return_value="ERR: arbitration lost")
+
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+
+        assert coordinator.ebus.read_register.await_count == EBUS.BUS_ERROR_TRIP_COUNT
+        assert coordinator._bus_guard.allow() is False
+
+
+# Intent: a transport reconnect leaves a running pause in place.
+# Why: issue #193 - a read that waited longer than the read timeout dropped the connection, and the reconnect reset the
+#      guard, so the pause restarted at 60 s and the whole read set went out again; the adapter sits behind ebusd, so
+#      a new TCP connection says nothing about whether it was reset.
+async def test_issue193_transport_reconnect_keeps_the_bus_pause() -> None:
+    clock = [1000.0]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c._cache_seeded = c._ebusd_connected = True
+        c._graph = _make_graph()
+        repairs_module.async_create_ebusd_unreachable.reset_mock()
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.disconnect = AsyncMock()
+        c.ebus.find_registers = AsyncMock(side_effect=TimeoutError("ebusd read timed out"))
+        c.ebus._reconnect = AsyncMock(return_value=True)
+        c._bus_guard = EBUS.BusErrorGuard(clock=lambda: clock[0])
+        for circuit in ("hmux0", "ctlv3", "hmux0", "ctlv3"):
+            c._bus_guard.observe(circuit, "ERR: read timeout")
+        assert c._bus_guard.allow() is False
+
+        await c._async_update_data()
+
+        assert c._ebusd_connected is False
+        assert c._bus_guard.allow() is False
+        assert c._bus_guard.snapshot()["trips"] == 1
+
+
+# Intent: an explicit rediscovery request still clears the pause.
+# Why: the owner asked for a fresh start, for example after resetting the adapter, and must not wait out the cool-down.
+async def test_issue193_manual_rediscovery_clears_the_bus_pause() -> None:
+    clock = [1000.0]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.disconnect = AsyncMock()
+        c.async_request_refresh = AsyncMock()
+        c._bus_guard = EBUS.BusErrorGuard(clock=lambda: clock[0])
+        for circuit in ("hmux0", "ctlv3", "hmux0", "ctlv3"):
+            c._bus_guard.observe(circuit, "ERR: read timeout")
+        assert c._bus_guard.allow() is False
+
+        await c.async_request_rediscover()
+
+        assert c._bus_guard.allow() is True
+
+
 # Intent: the periodic check raises one stale-entities issue when orphans exist and clears it when none are left.
 # Why: the owner has 86 restored entities that stayed invisible; a repair with a confirmation is how they get removed.
 async def test_stale_entities_issue_follows_the_registry() -> None:
