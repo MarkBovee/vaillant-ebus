@@ -47,14 +47,14 @@ HASH_SCRIPT = (
 )
 
 
-# Intent: hash file content with line endings folded to LF.
-# Why: a Windows checkout deploys CRLF files while git stores LF, and the comparison must not report that as a change.
+# Hash file content with line endings folded to LF.
+# A Windows checkout deploys CRLF files while git stores LF, and the comparison must not report that as a change.
 def normalized_sha256(data: bytes) -> str:
     return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
 
 
-# Intent: split two path-to-hash maps into files only on the host, only in git, and with different content.
-# Why: those three lists are the whole answer to "does the host run this release".
+# Split two path-to-hash maps into files only on the host, only in git, and with different content.
+# Those three lists are the whole answer to "does the host run this release".
 def diff_hashes(remote: dict[str, str], local: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
     only_remote = sorted(set(remote) - set(local))
     only_local = sorted(set(local) - set(remote))
@@ -62,8 +62,8 @@ def diff_hashes(remote: dict[str, str], local: dict[str, str]) -> tuple[list[str
     return only_remote, only_local, different
 
 
-# Intent: hash every integration file of a git ref, keyed like the host listing.
-# Why: the host hashes are compared with the content of the commit or tag that should be deployed.
+# Hash every integration file of a git ref, keyed like the host listing.
+# The host hashes are compared with the content of the commit or tag that should be deployed.
 def git_hashes(ref: str, root: Path = ROOT) -> dict[str, str]:
     names = subprocess.check_output(
         ["git", "ls-tree", "-r", "--name-only", ref, COMPONENT_PREFIX], cwd=root, text=True
@@ -77,8 +77,8 @@ def git_hashes(ref: str, root: Path = ROOT) -> dict[str, str]:
     }
 
 
-# Intent: open one SSH session to the Home Assistant host with the credentials of the repository `.env`.
-# Why: the deploy tool already owns the credential handling, so this tool never reads or prints them itself.
+# Open one SSH session to the Home Assistant host with the credentials of the repository `.env`.
+# The deploy tool already owns the credential handling, so this tool never reads or prints them itself.
 def connect() -> Any:
     sys.path.insert(0, str(ROOT / "tools"))
     import deploy_ha  # noqa: PLC0415  (imports paramiko lazily, only when a snapshot is requested)
@@ -100,8 +100,8 @@ def connect() -> Any:
     return client
 
 
-# Intent: run one read-only command on the host, with sudo first and plain as the fallback.
-# Why: the SSH add-on user may or may not need sudo for /config/.storage and /config/vaillant_ebus.
+# Run one read-only command on the host, with sudo first and plain as the fallback.
+# The SSH add-on user may or may not need sudo for /config/.storage and /config/vaillant_ebus.
 def run_read(client: Any, command: str) -> str:
     sys.path.insert(0, str(ROOT / "tools"))
     import deploy_ha  # noqa: PLC0415
@@ -114,8 +114,8 @@ def run_read(client: Any, command: str) -> str:
     return output
 
 
-# Intent: save the integration's registry rows and devices as JSON.
-# Why: the rows show the real stored shape (aliases, disabled_by, labels) that unit-test fakes must copy.
+# Save the integration's registry rows and devices as JSON.
+# The rows show the real stored shape (aliases, disabled_by, labels) that unit-test fakes must copy.
 def snapshot_registry(out_dir: Path) -> Path:
     client = connect()
     try:
@@ -129,8 +129,8 @@ def snapshot_registry(out_dir: Path) -> Path:
     return target
 
 
-# Intent: save the newest discovery dump of the host.
-# Why: the dump holds every register value, which is the evidence for what the entity factory should decide.
+# Save the newest discovery dump of the host.
+# The dump holds every register value, which is the evidence for what the entity factory should decide.
 def snapshot_dump(out_dir: Path) -> Path:
     client = connect()
     try:
@@ -145,8 +145,8 @@ def snapshot_dump(out_dir: Path) -> Path:
     return target
 
 
-# Intent: compare the integration files on the host with a git ref and print the three difference lists.
-# Why: it answers whether the host runs exactly the release, before and after a deploy.
+# Compare the integration files on the host with a git ref and print the three difference lists.
+# It answers whether the host runs exactly the release, before and after a deploy.
 def compare_deployed(ref: str) -> int:
     client = connect()
     try:
@@ -161,8 +161,8 @@ def compare_deployed(ref: str) -> int:
     return 1 if (only_remote or only_local or different) else 0
 
 
-# Intent: dispatch the three subcommands.
-# Why: one entry point keeps the credential handling and the output folder in one place.
+# Dispatch the three subcommands.
+# One entry point keeps the credential handling and the output folder in one place.
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)

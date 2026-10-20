@@ -28,8 +28,8 @@ def remove_legacy_datetime_date_entities(registry: Any, entry_id: str, domain: s
             registry.async_remove(registry_entry.entity_id)
 
 
-# Intent: remove legacy sensor registry rows when discovery replaces them with selects.
-# Why: HA cannot safely retain two platform entities with the same unique ID.
+# Remove legacy sensor registry rows when discovery replaces them with selects.
+# HA cannot safely retain two platform entities with the same unique ID.
 def remove_legacy_room_temp_switch_sensor_entities(
     registry: Any,
     entry_id: str,
@@ -47,8 +47,8 @@ def remove_legacy_room_temp_switch_sensor_entities(
             registry.async_remove(registry_entry.entity_id)
 
 
-# Intent: restore the legacy CTLV2 sensor after an integration disable caused by no-data startup.
-# Why: this register remains a supported CTLV2 sensor even when ebusd temporarily reports no value.
+# Restore the legacy CTLV2 sensor after an integration disable caused by no-data startup.
+# This register remains a supported CTLV2 sensor even when ebusd temporarily reports no value.
 def enable_legacy_room_temp_switch_sensor_entities(
     registry: Any,
     entry_id: str,
@@ -68,8 +68,8 @@ def enable_legacy_room_temp_switch_sensor_entities(
             registry.async_update_entity(registry_entry.entity_id, disabled_by=None)
 
 
-# Intent: disable stale room-temperature sensor entries from another controller alias.
-# Why: a CTLV3 select must not coexist with a restored CTLV2 sensor for the same logical control.
+# Disable stale room-temperature sensor entries from another controller alias.
+# A CTLV3 select must not coexist with a restored CTLV2 sensor for the same logical control.
 def disable_legacy_room_temp_switch_sensor_aliases(
     registry: Any,
     entry_id: str,

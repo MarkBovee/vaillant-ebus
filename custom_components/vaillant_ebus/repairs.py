@@ -25,8 +25,8 @@ ISSUE_DETECTION_INCOMPLETE = "detection_incomplete"
 ISSUE_STALE_ENTITIES = "stale_entities"
 
 
-# Intent: provide the fix flow Home Assistant requires of every repairs platform module.
-# Why: without `async_create_fix_flow` HA logs "Invalid repairs platform" and the fixable issue cannot be resolved.
+# Provide the fix flow Home Assistant requires of every repairs platform module.
+# Without `async_create_fix_flow` HA logs "Invalid repairs platform" and the fixable issue cannot be resolved.
 async def async_create_fix_flow(
     hass: HomeAssistant, issue_id: str, data: dict[str, str | int | float | None] | None
 ) -> RepairsFlow:
@@ -39,25 +39,25 @@ async def async_create_fix_flow(
     return ConfirmRepairFlow()
 
 
-# Intent: show the registry entities that nothing provides any more and the enabled entities without data, then remove
+# Show the registry entities that nothing provides any more and the enabled entities without data, then remove
 # the first and switch off the second after one confirmation.
-# Why: the owner's 86 restored entities stayed invisible; the list is recomputed at each step so the user confirms what
+# The owner's 86 restored entities stayed invisible; the list is recomputed at each step so the user confirms what
 # is true now, and nothing changes while ebusd is disconnected or before the user submits.
 class StaleEntitiesRepairFlow(RepairsFlow):
     """Preview and remove the stale Vaillant eBUS registry entities."""
 
-    # Intent: remember which config entry the issue belongs to.
-    # Why: the flow recomputes the stale entities of exactly that entry at each step.
+    # Remember which config entry the issue belongs to.
+    # The flow recomputes the stale entities of exactly that entry at each step.
     def __init__(self, entry_id: str) -> None:
         self._entry_id = entry_id
 
-    # Intent: start at the confirmation step, which shows the preview.
-    # Why: the repair has one decision only, so there is no separate first screen.
+    # Start at the confirmation step, which shows the preview.
+    # The repair has one decision only, so there is no separate first screen.
     async def async_step_init(self, user_input: dict[str, str] | None = None) -> FlowResult:
         return await self.async_step_confirm()
 
-    # Intent: show the preview; on submit remove the listed orphans and finish, which clears the issue.
-    # Why: nothing may be removed before the user submits, and the list must be true at that moment.
+    # Show the preview; on submit remove the listed orphans and finish, which clears the issue.
+    # Nothing may be removed before the user submits, and the list must be true at that moment.
     async def async_step_confirm(self, user_input: dict[str, str] | None = None) -> FlowResult:
         coordinator = self.hass.data.get(DOMAIN, {}).get(self._entry_id)
         registry = entity_registry.async_get(self.hass)
@@ -102,6 +102,7 @@ class StaleEntitiesRepairFlow(RepairsFlow):
         )
 
 
+# Create or update the fixable repair issue that is shown while ebusd is unreachable.
 async def async_create_ebusd_unreachable(hass: HomeAssistant) -> None:
     """Create or update a repair issue for ebusd being unreachable."""
     ir.async_create_issue(
@@ -115,22 +116,22 @@ async def async_create_ebusd_unreachable(hass: HomeAssistant) -> None:
     )
 
 
-# Intent: remove the ebusd-unreachable repair issue.
-# Why: once ebusd answers again the repair must not stay open.
+# Remove the ebusd-unreachable repair issue.
+# Once ebusd answers again the repair must not stay open.
 async def async_dismiss_ebusd_unreachable(hass: HomeAssistant) -> None:
     """Dismiss the ebusd unreachable repair issue."""
     ir.async_delete_issue(hass, DOMAIN, ISSUE_EBUSD_UNREACHABLE)
 
 
-# Intent: remove the detection-incomplete repair issue.
-# Why: a successful discovery makes the stale detection warning untrue.
+# Remove the detection-incomplete repair issue.
+# A successful discovery makes the stale detection warning untrue.
 async def async_dismiss_detection_incomplete(hass: HomeAssistant) -> None:
     """Remove stale detection issues after a successful discovery."""
     ir.async_delete_issue(hass, DOMAIN, ISSUE_DETECTION_INCOMPLETE)
 
 
-# Intent: create or update the repair issue that lists the stale entities and the entities without data.
-# Why: the issue carries the entry id for the fix flow and the counts and names for the text.
+# Create or update the repair issue that lists the stale entities and the entities without data.
+# The issue carries the entry id for the fix flow and the counts and names for the text.
 async def async_create_stale_entities(
     hass: HomeAssistant,
     entry_id: str,
@@ -159,8 +160,8 @@ async def async_create_stale_entities(
     )
 
 
-# Intent: remove the stale entities repair issue.
-# Why: once nothing is stale the repair must not stay open.
+# Remove the stale entities repair issue.
+# Once nothing is stale the repair must not stay open.
 async def async_dismiss_stale_entities(hass: HomeAssistant) -> None:
     """Remove the stale entities repair issue once nothing is stale."""
     ir.async_delete_issue(hass, DOMAIN, ISSUE_STALE_ENTITIES)

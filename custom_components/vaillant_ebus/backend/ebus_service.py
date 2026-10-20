@@ -29,8 +29,8 @@ WRITE_VERIFY_RETRY_DELAY = 0.25
 
 EBUSD_STATUS_SUFFIXES = (";ok", ";err", ";inv", ";too_small", ";too_big", ";nan", ";unknown")
 
-# Intent: texts of the ebusd answers that prove the adapter or the bus could not carry a request.
-# Why: issue #193 - a stuck adapter answers every bus read with `arbitration lost` or `read timeout`. Local answers
+# Texts of the ebusd answers that prove the adapter or the bus could not carry a request.
+# Issue #193 - a stuck adapter answers every bus read with `arbitration lost` or `read timeout`. Local answers
 # such as `element not found`, `invalid position` or `no data stored` cost no bus time and say nothing about it.
 BUS_ERROR_MARKERS = ("arbitration lost", "read timeout", "no signal")
 # Consecutive bus errors, over at least this many circuits, that pause the active reads.
@@ -48,8 +48,8 @@ class CommandLogEntry(TypedDict):
     duration_ms: int
 
 
-# Intent: tell a bus-level ebusd error from a local one in a read answer.
-# Why: only bus-level errors say something about the adapter; they feed the BusErrorGuard (issue #193).
+# Tell a bus-level ebusd error from a local one in a read answer.
+# Only bus-level errors say something about the adapter; they feed the BusErrorGuard (issue #193).
 def is_bus_error(response: str | None) -> bool:
     if not response:
         return False
@@ -57,16 +57,16 @@ def is_bus_error(response: str | None) -> bool:
     return text.startswith("err:") and any(marker in text for marker in BUS_ERROR_MARKERS)
 
 
-# Intent: pause the active reads while the adapter or bus cannot carry requests, and probe before resuming.
-# Why: issue #193 - a stuck adapter failed every bus read, and the integration repeated its whole read set every cycle,
+# Pause the active reads while the adapter or bus cannot carry requests, and probe before resuming.
+# Issue #193 - a stuck adapter failed every bus read, and the integration repeated its whole read set every cycle,
 # which kept the adapter busy. The pause needs bus errors on at least two circuits, so one slave that stops answering
 # never blocks reads to the others. A value breaks the run (cached answers can do so too, which only delays a trip);
 # local errors and missing values are neutral. After the pause the next read is a probe: a value closes the guard, a
 # bus error pauses again for twice as long. Only a rediscovery requested by the owner calls reset(); a transport
 # reconnect leaves the guard alone, because a new TCP connection to ebusd says nothing about the adapter.
 class BusErrorGuard:
-    # Intent: create a closed guard whose clock can be replaced.
-    # Why: tests must move time by hand instead of waiting for the real pause.
+    # Create a closed guard whose clock can be replaced.
+    # Tests must move time by hand instead of waiting for the real pause.
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
         self._run: list[str] = []
@@ -76,8 +76,8 @@ class BusErrorGuard:
         self._probing = False
         self._trips = 0
 
-    # Intent: report whether an active read may be sent now; the first call after the pause starts the probe.
-    # Why: the loop that reads registers asks before every read, so a pause ends exactly once.
+    # Report whether an active read may be sent now; the first call after the pause starts the probe.
+    # The loop that reads registers asks before every read, so a pause ends exactly once.
     def allow(self) -> bool:
         if self._paused_until is None:
             return True
@@ -87,8 +87,8 @@ class BusErrorGuard:
         self._probing = True
         return True
 
-    # Intent: record one read answer and return True when it paused the active reads.
-    # Why: the guard only learns about the bus from the answers of the reads it gates.
+    # Record one read answer and return True when it paused the active reads.
+    # The guard only learns about the bus from the answers of the reads it gates.
     def observe(self, circuit: str, response: str | None) -> bool:
         if is_bus_error(response):
             self._run.append(circuit.casefold())
@@ -104,8 +104,8 @@ class BusErrorGuard:
                 self._cooldown = BUS_ERROR_BASE_COOLDOWN
         return False
 
-    # Intent: pause the active reads and double the next pause.
-    # Why: a stuck adapter only clears when it is reset, so probing must get rarer while it keeps failing.
+    # Pause the active reads and double the next pause.
+    # A stuck adapter only clears when it is reset, so probing must get rarer while it keeps failing.
     def _trip(self) -> None:
         self._pause_seconds = self._cooldown
         self._paused_until = self._clock() + self._cooldown
@@ -114,8 +114,8 @@ class BusErrorGuard:
         self._probing = False
         self._trips += 1
 
-    # Intent: forget the run, the pause and the probe state.
-    # Why: a requested rediscovery usually follows a reset of the adapter, so old errors do not count.
+    # Forget the run, the pause and the probe state.
+    # A requested rediscovery usually follows a reset of the adapter, so old errors do not count.
     def reset(self) -> None:
         self._run.clear()
         self._cooldown = BUS_ERROR_BASE_COOLDOWN
@@ -123,8 +123,8 @@ class BusErrorGuard:
         self._paused_until = None
         self._probing = False
 
-    # Intent: return the guard state as plain values.
-    # Why: the pause log line and tests read the pause length and the counters without touching private state.
+    # Return the guard state as plain values.
+    # The pause log line and tests read the pause length and the counters without touching private state.
     def snapshot(self) -> dict[str, float | int | bool]:
         paused = self._paused_until is not None and self._clock() < self._paused_until
         return {
@@ -177,6 +177,7 @@ def _values_match(written: str, read_back: str) -> bool:
 AddressConfig = dict[str, str | list[str]]
 
 
+# Parse the 'key: value' pairs of the ebusd `info` reply into a dictionary.
 def _parse_info_data(data: str) -> dict[str, str | dict[str, AddressConfig]]:
     info: dict[str, str | dict[str, AddressConfig]] = {}
     for line in data.splitlines():
@@ -268,13 +269,13 @@ class EbusService:
         self._lock = asyncio.Lock()
         self._command_log: deque[CommandLogEntry] = deque(maxlen=20)
 
+    # Whether the TCP socket to ebusd is currently connected.
     @property
     def is_connected(self) -> bool:
-        # Return whether TCP socket is currently connected
         return self._writer is not None
 
-    # Intent: expose the active TCP peer so dump locking uses the connected daemon identity.
-    # Why: DNS aliases may differ even when they reach the same ebusd process.
+    # Expose the active TCP peer so dump locking uses the connected daemon identity.
+    # DNS aliases may differ even when they reach the same ebusd process.
     @property
     def connected_endpoint(self) -> tuple[str, int] | None:
         if self._writer is None:
@@ -287,20 +288,20 @@ class EbusService:
         except TypeError, ValueError:
             return None
 
+    # The cached ebusd daemon version string.
     @property
     def version(self) -> str | None:
-        # Return cached ebusd daemon version string
         return self._version
 
-    # Intent: expose whether the most recent find contained a usable row.
-    # Why: an empty/error-only response is distinct from both transport failure and discovery success.
+    # Expose whether the most recent find contained a usable row.
+    # An empty/error-only response is distinct from both transport failure and discovery success.
     @property
     def last_find_usable(self) -> bool | None:
         return self._last_find_usable
 
+    # Command log and connection state, for diagnostics.
     @property
     def debug_info(self) -> dict[str, object]:
-        # Return command log and connection state for diagnostics
         return {
             "connected": self._writer is not None,
             "reconnect_count": self._reconnect_count,
@@ -345,13 +346,13 @@ class EbusService:
         async with self._lock:
             await self._disconnect_nolock()
 
-    # Intent: prevent a pending reconnect from opening a socket after unload.
-    # Why: disconnect alone cannot cancel a reconnect that is sleeping outside the lock.
+    # Prevent a pending reconnect from opening a socket after unload.
+    # Disconnect alone cannot cancel a reconnect that is sleeping outside the lock.
     def request_shutdown(self) -> None:
         self._shutdown_requested = True
 
-    # Intent: allow a failed Home Assistant platform unload to resume normally.
-    # Why: a temporary unload failure must not permanently disable the coordinator.
+    # Allow a failed Home Assistant platform unload to resume normally.
+    # A temporary unload failure must not permanently disable the coordinator.
     def clear_shutdown_request(self) -> None:
         self._shutdown_requested = False
 
@@ -387,8 +388,8 @@ class EbusService:
             result = await self._send_line_locked(cmd)
             return self._log_cmd(cmd, result, t0)
 
-    # Intent: send one serialized command and clear the socket after EOF or timeout.
-    # Why: later operations must not reuse a TCP stream that stopped returning lines.
+    # Send one serialized command and clear the socket after EOF or timeout.
+    # Later operations must not reuse a TCP stream that stopped returning lines.
     # Drain stale data, send one command, and read its single-line response.
     # Caller must hold _lock for the whole transaction.
     async def _send_line_locked(self, cmd: str) -> SendResult:
@@ -441,8 +442,8 @@ class EbusService:
         )
         return result
 
-    # Intent: collect multi-line responses and report EOF before the quiet terminator.
-    # Why: a truncated find/info response must not be treated as a complete result.
+    # Collect multi-line responses and report EOF before the quiet terminator.
+    # A truncated find/info response must not be treated as a complete result.
     # Send one command and collect every response line until ebusd goes quiet.
     # Holds the lock for the whole multi-line transaction so concurrent
     # commands cannot drain these lines or receive one as their own response.
@@ -519,8 +520,8 @@ class EbusService:
             self._command_log[-1]["duration_ms"] = int((time.monotonic() - t0) * 1000)
         return lines
 
-    # Intent: record when a completed find contains no usable register or scan rows.
-    # Why: an empty response is not TCP failure, but it cannot prove discovery recovered.
+    # Record when a completed find contains no usable register or scan rows.
+    # An empty response is not TCP failure, but it cannot prove discovery recovered.
     async def _send_find(self) -> list[str]:
         async with self._lock:
             self._last_find_usable = None
@@ -542,8 +543,8 @@ class EbusService:
                 return lines
             return lines
 
-    # Intent: propagate incomplete `info` transport responses instead of returning a success-shaped empty banner.
-    # Why: discovery dumps must not save as complete when the ebusd metadata read failed.
+    # Propagate incomplete `info` transport responses instead of returning a success-shaped empty banner.
+    # Discovery dumps must not save as complete when the ebusd metadata read failed.
     # Send 'info' and return every banner line. ebusd lists the per-address
     # loaded CSV/include files after the version line, so get_info needs the
     # whole response rather than the first line only.
@@ -561,8 +562,8 @@ class EbusService:
     async def find_registers(self) -> list[str]:
         return await self._send_find()
 
-    # Intent: read a register value and optionally surface transport errors to pollers.
-    # Why: unsupported values are unavailable data, while TCP failures need a reconnect.
+    # Read a register value and optionally surface transport errors to pollers.
+    # Unsupported values are unavailable data, while TCP failures need a reconnect.
     # Read a single register value from ebusd, strip status suffix. By default
     # ebusd may answer from its cache; force=True adds "-f" so an active-read
     # register is queried from the device instead (used to verify writes).

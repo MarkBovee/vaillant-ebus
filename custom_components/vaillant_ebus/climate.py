@@ -99,8 +99,8 @@ async def async_setup_entry(
     created_zones: set[str] = set()
     created_flow_ranges: set[str] = set()
 
-    # Intent: create thermostat and flow-range entities only for discovered zones.
-    # Why: a synthetic z1 fallback can target the wrong controller or create a ghost climate entity.
+    # Create thermostat and flow-range entities only for discovered zones.
+    # A synthetic z1 fallback can target the wrong controller or create a ghost climate entity.
     def _ensure_zone_entities() -> None:
         zone_circuits = coordinator.zone_circuits()
         if not coordinator.discovery_ready or not zone_circuits:
@@ -187,8 +187,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             presets.append(PRESET_AWAY)
         return presets
 
-    # Intent: verify every register needed to arm manual cooling.
-    # Why: date support without the zone operation-mode register would permit a partial write.
+    # Verify every register needed to arm manual cooling.
+    # Date support without the zone operation-mode register would permit a partial write.
     def _manual_cooling_capability(self) -> bool:
         circuit = self.coordinator.heating_circuit
         return (
@@ -200,8 +200,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             and self.coordinator.zone_register_discovery_status(circuit, self._zone, "OpMode") is True
         )
 
-    # Intent: verify that a single-zone climate write has a discovered target.
-    # Why: base climate entities can outlive a partial reconnect graph.
+    # Verify that a single-zone climate write has a discovered target.
+    # Base climate entities can outlive a partial reconnect graph.
     def _zone_register_capability(self, name: str) -> bool | None:
         circuit = self.coordinator.resolve_register_circuit(self._circuit)
         if circuit is None:
@@ -223,8 +223,8 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             return None
         return True
 
-    # Intent: report whether this zone can write its complete holiday register set.
-    # Why: away mode must not expose a partial write capability.
+    # Report whether this zone can write its complete holiday register set.
+    # Away mode must not expose a partial write capability.
     def _away_capability(self) -> bool | None:
         circuit = self.coordinator.resolve_register_circuit(self._circuit)
         if circuit is None:
@@ -379,6 +379,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         # suppress BOOST while the reported end is unchanged from cancellation.
         return not (self._boost_suppressed_end is not None and end == self._boost_suppressed_end)
 
+    # Available while the coordinator's last update succeeded.
     @property
     def available(self) -> bool:
         return self.coordinator.last_update_success
@@ -566,14 +567,16 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if self._cancel_confirm_refresh is not None:
             return
 
+        # Timer callback: forget the pending timer handle and ask the coordinator for a refresh so the new state is read
+        # back.
         def _fire(_now: datetime) -> None:
             self._cancel_confirm_refresh = None
             self.hass.async_create_task(self.coordinator.async_request_refresh())
 
         self._cancel_confirm_refresh = async_call_later(self.coordinator.hass, QUICK_VETO_CONFIRM_DELAY, _fire)
 
-    # Intent: cancel pending quick-veto confirmation when the climate entity unloads.
-    # Why: an orphaned timer must not refresh or reconnect an unloaded config entry.
+    # Cancel pending quick-veto confirmation when the climate entity unloads.
+    # An orphaned timer must not refresh or reconnect an unloaded config entry.
     async def async_will_remove_from_hass(self) -> None:
         if self._cancel_confirm_refresh is not None:
             self._cancel_confirm_refresh()
@@ -750,6 +753,7 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     def hvac_mode(self) -> HVACMode | None:
         return _hvac_mode(_value(self.coordinator, f"{self._zn}OpMode", self._circuit))
 
+    # Available while the coordinator's last update succeeded.
     @property
     def available(self) -> bool:
         return self.coordinator.last_update_success

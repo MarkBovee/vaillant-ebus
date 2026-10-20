@@ -37,8 +37,8 @@ VWZ_STATUS01_FIELDS = (
     "pumpstate,,UCH,0=off;1=on;2=overrun;4=hwc,,"
 )
 
-# Intent: field layout of the HMUX0 B511/00 compressor status block (upstream issues #249/#522/#687, PR #330).
-# Why: the active SW0303 read and the passive SW0407 decode share one layout so both fill the same entity fields.
+# Field layout of the HMUX0 B511/00 compressor status block (upstream issues #249/#522/#687, PR #330).
+# The active SW0303 read and the passive SW0407 decode share one layout so both fill the same entity fields.
 HMUX0_STATUS00_FIELDS = (
     "supplytemp,,D2C,,°C,,waterpressure,,UCH,10,bar,,"
     "compressormodulation,,UCH,,%,,compressorstate,,UCH,0=off;1=heating_prerun;"
@@ -98,16 +98,16 @@ HMUX0_SW0407_PASSIVE_REGISTERS = (
     ("CompressorHwc", "B511", "1802", "ign,,IGN:1,,,,runtime,,ULG,,min,,cycles,,ULG"),
 )
 
-# Intent: HMUX0 SW0407/HW0504 telegrams that both the controller (0x10, about every 10 s) and the gateway (0xf1) poll.
-# Why: issue #175 capture - a blank source address lets one passive definition decode either sender; the Status01
+# HMUX0 SW0407/HW0504 telegrams that both the controller (0x10, about every 10 s) and the gateway (0xf1) poll.
+# Issue #175 capture - a blank source address lets one passive definition decode either sender; the Status01
 # layout matches five display values (flow, return, outside, storage, setpoint) and Status00 matches flow and state.
 HMUX0_SW0407_ANY_MASTER_REGISTERS = (
     ("Status01", "B511", "01", VWZ_STATUS01_FIELDS),
     ("Status00", "B511", "00", HMUX0_STATUS00_FIELDS),
 )
 
-# Intent: VWZIO SW0500/HW0504 B512/030f0001 passive temperatures (strong assumption, single captured state).
-# Why: issue #175 capture - D2C bytes 0-1 read 46.56 degC (display storage 46.5) and bytes 3-4 read 30.0 degC
+# VWZIO SW0500/HW0504 B512/030f0001 passive temperatures (strong assumption, single captured state).
+# Issue #175 capture - D2C bytes 0-1 read 46.56 degC (display storage 46.5) and bytes 3-4 read 30.0 degC
 # (display flow after the backup heater 30.0); the other bytes stay ignored until a second state explains them.
 VWZIO_SW0500_ANY_MASTER_REGISTERS = (
     (
@@ -118,13 +118,13 @@ VWZIO_SW0500_ANY_MASTER_REGISTERS = (
     ),
 )
 
-# Intent: HMUX0 compressor runtime/start counters that are defined as plain `r` messages on SW0406.
-# Why: ebusd never polls plain `r` messages and their entities are off by default, so the energy poll re-reads them.
+# HMUX0 compressor runtime/start counters that are defined as plain `r` messages on SW0406.
+# ebusd never polls plain `r` messages and their entities are off by default, so the energy poll re-reads them.
 HMUX0_COMPRESSOR_COUNTER_NAMES = frozenset({"CompressorHc", "CompressorHwc"})
 
 
-# Intent: runtime definitions of the HMUX0 precise flow/return temperatures and the yield/COP statistics.
-# Why: ebusd's own CSV lacks them for SW0303 (issue #171) and for a SW0406 bus without an hmux0 configuration (#185);
+# Runtime definitions of the HMUX0 precise flow/return temperatures and the yield/COP statistics.
+# ebusd's own CSV lacks them for SW0303 (issue #171) and for a SW0406 bus without an hmux0 configuration (#185);
 # upstream PR #496 defines flow as ext 0xfc/0x08 next to return (0x06/0x09). SW0303 answers tempv (1/16 degC, `D2C`),
 # SW0406 answers the same ids with a 4-byte float (`EXP`, issue #188: `00 80 05 42` is 33.375 degC), so the caller
 # picks the layout with `float_temperatures`.
@@ -154,8 +154,8 @@ def _hmux0_precise_and_yield_definitions(circuit: str, float_temperatures: bool 
     ]
 
 
-# Intent: runtime definitions of the HMUX0 B509 compressor speed and building-circuit pump power.
-# Why: community captures (issues #99/#161/#185) read both on HW0504 firmware; the ids exclude the length byte.
+# Runtime definitions of the HMUX0 B509 compressor speed and building-circuit pump power.
+# Community captures (issues #99/#161/#185) read both on HW0504 firmware; the ids exclude the length byte.
 def _hmux0_b509_monitor_definitions(circuit: str) -> list[str]:
     return [
         f"r,{circuit},RunDataCompressorSpeed,RunDataCompressorSpeed,31,08,B509,5402000d0a"
@@ -165,8 +165,8 @@ def _hmux0_b509_monitor_definitions(circuit: str) -> list[str]:
     ]
 
 
-# Intent: runtime definitions of the HMUX0 compressor runtime/start counters for heating and DHW.
-# Why: B511 data 1801/1802 carry the same layout the SW0407 captures show passively (upstream 08.hmu.tsp); on SW0406
+# Runtime definitions of the HMUX0 compressor runtime/start counters for heating and DHW.
+# B511 data 1801/1802 carry the same layout the SW0407 captures show passively (upstream 08.hmu.tsp); on SW0406
 # the #188 capture reads them as `RunStatsCompressorHc = 2880;126`. The ebusd id excludes the length byte.
 def _hmux0_compressor_counter_definitions(circuit: str) -> list[str]:
     fields = "ign,,IGN:1,,,,runtime,,ULG,,min,,cycles,,ULG"
@@ -176,8 +176,8 @@ def _hmux0_compressor_counter_definitions(circuit: str) -> list[str]:
     ]
 
 
-# Intent: passive definition of the electrical power frame that the myVAILLANT gateway polls from the heat pump.
-# Why: issue #188 - the SW0406 answer to `B509 5402005b0d` is a 4-byte float in watts (33.2 idle, 1341.4 running,
+# Passive definition of the electrical power frame that the myVAILLANT gateway polls from the heat pump.
+# Issue #188 - the SW0406 answer to `B509 5402005b0d` is a 4-byte float in watts (33.2 idle, 1341.4 running,
 # 961.27 in the gateway frame), the same layout the SW0407 passive set uses. Passive means it only decodes the
 # gateway frame and sends nothing, so it stays unavailable until that frame is seen.
 def _hmux0_passive_power_definition(circuit: str) -> str:
@@ -187,8 +187,8 @@ def _hmux0_passive_power_definition(circuit: str) -> str:
     return f"u,{circuit},{name},{name},f1,08,{message_id},{subaddress},{fields}"
 
 
-# Intent: runtime definitions for a SW0406/HW0504 bus whose ebusd supplies no hmux0 registers of its own.
-# Why: issues #185/#188 - a default ebusd config lists only the registers this integration defined itself, so the
+# Runtime definitions for a SW0406/HW0504 bus whose ebusd supplies no hmux0 registers of its own.
+# Issues #185/#188 - a default ebusd config lists only the registers this integration defined itself, so the
 # evidenced yield, COP, temperature and compressor-counter registers must be defined at runtime. When ebusd lists
 # any other hmux0 register its CSV is loaded (issue #171), so defining the same names would duplicate them.
 def _hmux0_sw0406_definitions(graph: DeviceGraph, circuit: str, defines: list[str]) -> list[str]:
@@ -214,8 +214,8 @@ def _hmux0_sw0406_definitions(graph: DeviceGraph, circuit: str, defines: list[st
     return candidates
 
 
-# Intent: compile the full list of runtime define strings for the graph's hardware.
-# Why: keeping this pure lets tests assert the exact definitions per capture without a coordinator. The optional
+# Compile the full list of runtime define strings for the graph's hardware.
+# Keeping this pure lets tests assert the exact definitions per capture without a coordinator. The optional
 # `withheld` set collects the (circuit, register) pairs whose definition was left out because the owner cannot
 # answer it, so the read planner can skip them too (issue #179).
 def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple[str, str]] | None = None) -> list[str]:
@@ -362,8 +362,8 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
             )
         ]
 
-    # Intent: compile each logical runtime definition against its discovered owner.
-    # Why: definitions must never be sent to a guessed physical circuit.
+    # Compile each logical runtime definition against its discovered owner.
+    # Definitions must never be sent to a guessed physical circuit.
     def _resolve_definition_circuit(definition: str) -> str | None:
         parts = definition.split(",", 3)
         if len(parts) < 3 or not graph:
@@ -387,8 +387,8 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
         )
         if resolution.status != ResolutionStatus.UNIQUE:
             return None
-        # Intent: B524 belongs to the VRC700-family controllers, never to a BAI boiler interface.
-        # Why: a BAI that owns control registers is resolved as the heating controller when the real controller
+        # B524 belongs to the VRC700-family controllers, never to a BAI boiler interface.
+        # A BAI that owns control registers is resolved as the heating controller when the real controller
         # (e.g. a VRC350 `35000`) is not typed as one; the `r5` poll definitions then spin on `invalid position`
         # (issue #179). The scan id says what the node is, so no per-model circuit name is needed; the real
         # controller answers B524 with `00`, so re-targeting these definitions would not help either.
@@ -478,14 +478,14 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
             f"u,{vwzio.circuit},PowerConsumptionVwz,PowerConsumptionVwz,f1,76,B516,14"
             ",value,,IGN:1,,,,value,,EXP,1000,kW,Hydraulic station power consumption"
         )
-        # Intent: decode the captured DHW backup-heater runtime/start counters without polling.
-        # Why: issue #161 correlates the HW0504 delta to two runs; absent data must stay unavailable.
+        # Decode the captured DHW backup-heater runtime/start counters without polling.
+        # Issue #161 correlates the HW0504 delta to two runs; absent data must stay unavailable.
         defines.append(
             f"u,{vwzio.circuit},RunStatsImmersionHeaterHwc,RunStatsImmersionHeaterHwc,f1,76,B511,1802"
             ",ign,,IGN:1,,,,runtime,,ULG,,min,,cycles,,ULG"
         )
-        # Intent: decode the captured backup-heater DHW heat total (B516 source 0x49, usage 04) without polling.
-        # Why: strong assumption from the issue #161 capture (6487 Wh against 106 min of heater runtime);
+        # Decode the captured backup-heater DHW heat total (B516 source 0x49, usage 04) without polling.
+        # Strong assumption from the issue #161 capture (6487 Wh against 106 min of heater runtime);
         # the layout matches the Hwc counters, and the entity is disabled by default and unavailable when absent.
         defines.append(
             f"u,{vwzio.circuit},HeaterYieldHwcTotal,HeaterYieldHwcTotal,f1,76,B516,1000ffff49040000"

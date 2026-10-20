@@ -43,7 +43,9 @@ def _resolve_coordinator(hass: HomeAssistant, call: ServiceCall) -> VaillantCoor
     raise HomeAssistantError("multiple vaillant_ebus config entries are loaded; pass entry_id to select one")
 
 
+# Bind the hass object into a service handler so Home Assistant can register it as a one-argument callback.
 def _service_handler(hass: HomeAssistant, handler):
+    # Registered service callback: call the handler with the bound hass object and the service call.
     async def callback(call: ServiceCall) -> None:
         await handler(hass, call)
 
@@ -83,6 +85,7 @@ async def _svc_set_mode_override(hass: HomeAssistant, call: ServiceCall) -> None
         raise HomeAssistantError("SetModeOverride write failed")
 
 
+# Service handler: cancel the eloBLOCK mode override and its keep-alive refresh on the targeted coordinator.
 async def _svc_clear_mode_override(hass: HomeAssistant, call: ServiceCall) -> None:
     _resolve_coordinator(hass, call).async_clear_mode_override()
 

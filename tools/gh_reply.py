@@ -28,14 +28,14 @@ ADD_COMMENT_MUTATION = (
 )
 
 
-# Intent: run a gh command in the repository and return its stdout.
-# Why: one place for error handling; gh stays the only network client.
+# Run a gh command in the repository and return its stdout.
+# One place for error handling; gh stays the only network client.
 def gh(*args: str) -> str:
     return subprocess.run(["gh", *args], capture_output=True, text=True, check=True, cwd=ROOT).stdout.strip()
 
 
-# Intent: mark the item as replied in the local inbox state file (git-ignored).
-# Why: the inbox skill uses replied_to to avoid answering the same thread twice.
+# Mark the item as replied in the local inbox state file (git-ignored).
+# The inbox skill uses replied_to to avoid answering the same thread twice.
 def mark_replied(kind: str, number: int) -> None:
     state = json.loads(STATE_FILE.read_text(encoding="utf-8")) if STATE_FILE.exists() else {}
     key = f"{'issue' if kind == 'issue' else 'discussion'}-{number}"
@@ -44,8 +44,8 @@ def mark_replied(kind: str, number: int) -> None:
     STATE_FILE.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
 
-# Intent: post a discussion reply under the thread root and return the comment URL.
-# Why: GitHub rejects replies whose parent is already inside a thread, so the root comment id is required.
+# Post a discussion reply under the thread root and return the comment URL.
+# GitHub rejects replies whose parent is already inside a thread, so the root comment id is required.
 def reply_discussion(number: int, body: str, reply_to: str | None) -> str:
     info = json.loads(gh("repo", "view", "--json", "owner,name"))
     root = json.loads(
@@ -69,8 +69,8 @@ def reply_discussion(number: int, body: str, reply_to: str | None) -> str:
     return json.loads(gh(*arguments))["data"]["addDiscussionComment"]["comment"]["url"]
 
 
-# Intent: parse arguments and post the reply.
-# Why: keeps reply posting repeatable and auditable.
+# Parse arguments and post the reply.
+# Keeps reply posting repeatable and auditable.
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("kind", choices=("issue", "discussion"))

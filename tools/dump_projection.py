@@ -18,6 +18,8 @@ _ROOT = Path(__file__).resolve().parents[1]
 _BACKEND = _ROOT / "custom_components" / "vaillant_ebus" / "backend"
 
 
+# Load the dump normalizer straight from the backend directory behind stub packages, so no Home Assistant import is
+# needed.
 def _load_normalizer() -> Any:
     """Load the HA-independent normalizer without importing Home Assistant."""
     package = types.ModuleType("vaillant_ebus")
@@ -43,12 +45,15 @@ def _load_normalizer() -> Any:
     return module
 
 
+# Whether a register entry passes the circuit and name filters; an empty filter accepts everything.
 def _matches(entry: dict[str, Any], circuits: list[str], names: list[re.Pattern[str]]) -> bool:
     circuit = str(entry.get("circuit", ""))
     name = str(entry.get("name", ""))
     return (not circuits or circuit in circuits) and (not names or any(pattern.search(name) for pattern in names))
 
 
+# Build the compact projection of a dump for the chosen sections and filters; the normalized source data stays
+# unchanged.
 def project_dump(
     dump: dict[str, Any], source: str, sections: set[str], circuits: list[str], names: list[str]
 ) -> dict[str, Any]:
@@ -88,6 +93,7 @@ def project_dump(
     return selected
 
 
+# Command line entry: read a YAML dump and print or write its projection as JSON; returns 1 on a read or parse error.
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dump", type=Path)

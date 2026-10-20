@@ -26,9 +26,12 @@ class AnalysisResult:
 class AnalysisService:
     """Detect devices/entities from registers that became live since the last tick."""
 
+    # Use the given entity factory, or a default one, to build entities from the live graph.
     def __init__(self, entity_factory: EntityFactoryService | None = None) -> None:
         self._entity_factory = entity_factory or EntityFactoryService()
 
+    # Compare the current graph and entities with the registers that went live and report new devices, new entities,
+    # enable candidates and unknown circuits.
     def analyze(
         self,
         live_registers: dict[str, str],

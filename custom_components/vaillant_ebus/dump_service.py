@@ -83,8 +83,8 @@ class GrabCaptureResult:
     approximate_rows: tuple[str, ...] = ()
 
 
-# Intent: resolve hostnames to the socket addresses used for dump-lock identity.
-# Why: DNS names and literal IPs can refer to one ebusd process with global grab state.
+# Resolve hostnames to the socket addresses used for dump-lock identity.
+# DNS names and literal IPs can refer to one ebusd process with global grab state.
 async def _grab_endpoint_keys(
     host: str,
     port: int,
@@ -112,8 +112,8 @@ async def _grab_endpoint_keys(
     return endpoints
 
 
-# Intent: serialize dump captures for every resolved address on the Home Assistant event loop.
-# Why: different host strings can resolve to one daemon whose grab state is global.
+# Serialize dump captures for every resolved address on the Home Assistant event loop.
+# Different host strings can resolve to one daemon whose grab state is global.
 @asynccontextmanager
 async def _grab_session_lock(
     host: str,
@@ -140,8 +140,8 @@ async def _grab_session_lock(
             lock.release()
 
 
-# Intent: block only passive runtime definitions and firmware-specific unsafe diagnostic reads.
-# Why: dump map probes must not reintroduce active requests omitted by coordinator policy.
+# Block only passive runtime definitions and firmware-specific unsafe diagnostic reads.
+# Dump map probes must not reintroduce active requests omitted by coordinator policy.
 def _fallback_read_skip_keys(graph: DeviceGraph | None, runtime_definitions: list[str]) -> set[tuple[str, str]]:
     skipped: set[tuple[str, str]] = set()
     for definition in runtime_definitions:
@@ -184,8 +184,8 @@ def _redact(value: str | None, name: str) -> str | None:
     return value
 
 
-# Intent: parse raw find rows into standalone bus registers for dump serialization.
-# Why: field-shaped keys are parsed values of their parent telegram, not separate registers.
+# Parse raw find rows into standalone bus registers for dump serialization.
+# Field-shaped keys are parsed values of their parent telegram, not separate registers.
 def _parse_find_lines(raw_lines: list[str]) -> list[dict]:
     result: list[dict] = []
     for line in raw_lines:
@@ -218,8 +218,8 @@ def _parse_find_lines(raw_lines: list[str]) -> list[dict]:
     return result
 
 
-# Intent: export discovered and mapped registers without polling unsafe fallback entries.
-# Why: a diagnostic dump must not restart the active reads suppressed by coordinator metadata.
+# Export discovered and mapped registers without polling unsafe fallback entries.
+# A diagnostic dump must not restart the active reads suppressed by coordinator metadata.
 async def _dump_registers(
     ebus,
     seen_keys: set[str] | None = None,
@@ -321,8 +321,8 @@ async def _dump_registers(
 
 
 # Send a raw grab command to ebusd and collect response lines.
-# Intent: close the raw command socket as soon as lifecycle teardown is observed.
-# Why: a read may be suspended while HA unloads the config entry.
+# Close the raw command socket as soon as lifecycle teardown is observed.
+# A read may be suspended while HA unloads the config entry.
 async def _grab_cmd(
     host: str,
     port: int,
@@ -377,8 +377,8 @@ async def _grab_cmd(
         await writer.wait_closed()
 
 
-# Intent: finish the grab-stop command even if the caller is cancelled again.
-# Why: ebusd must not keep capturing after HA has unloaded the integration.
+# Finish the grab-stop command even if the caller is cancelled again.
+# ebusd must not keep capturing after HA has unloaded the integration.
 async def _stop_grab_uninterruptibly(host: str, port: int) -> list[str]:
     stop_task = asyncio.create_task(_grab_cmd(host, port, "grab stop"))
     interrupted = False
@@ -412,8 +412,8 @@ async def _stop_grab_uninterruptibly(host: str, port: int) -> list[str]:
     return stop_response
 
 
-# Intent: validate ebusd grab errors and recognize owned or already-active sessions.
-# Why: `_grab_cmd` treats protocol replies as data rather than exceptions.
+# Validate ebusd grab errors and recognize owned or already-active sessions.
+# `_grab_cmd` treats protocol replies as data rather than exceptions.
 def _validate_grab_response(command: str, response: list[str]) -> None:
     error = next(
         (line for line in response if line.strip().upper().startswith(("ERR:", "USAGE:"))),
@@ -429,14 +429,14 @@ def _validate_grab_response(command: str, response: list[str]) -> None:
         raise HomeAssistantError(f"ebusd did not confirm {action}: {response}")
 
 
-# Intent: require ebusd's explicit acknowledgement that raw traffic capture stopped.
-# Why: arbitrary non-error text does not prove the bus capture has ended.
+# Require ebusd's explicit acknowledgement that raw traffic capture stopped.
+# Arbitrary non-error text does not prove the bus capture has ended.
 def _validate_grab_stop_response(response: list[str]) -> None:
     _validate_grab_response("grab stop", response)
 
 
-# Intent: validate and index one ebusd grab-result snapshot.
-# Why: interval deltas need stable message identities and cumulative counts.
+# Validate and index one ebusd grab-result snapshot.
+# Interval deltas need stable message identities and cumulative counts.
 def _validate_grab_result_response(response: list[str]) -> list[GrabResultEntry]:
     _validate_grab_response("grab result all", response)
     if response == ["grab disabled"]:
@@ -475,8 +475,8 @@ def _validate_grab_result_response(response: list[str]) -> list[GrabResultEntry]
     return entries
 
 
-# Intent: combine counts for ebusd rows with the same visible request/response/label.
-# Why: duplicate definitions can expose identical rows while each bus event updates only one internal message key.
+# Combine counts for ebusd rows with the same visible request/response/label.
+# Duplicate definitions can expose identical rows while each bus event updates only one internal message key.
 def _coalesce_grab_result_entries(entries: list[GrabResultEntry]) -> list[GrabResultEntry]:
     by_key: dict[str, GrabResultEntry] = {}
     for entry in entries:
@@ -495,8 +495,8 @@ def _coalesce_grab_result_entries(entries: list[GrabResultEntry]) -> list[GrabRe
     return list(by_key.values())
 
 
-# Intent: attribute a family's count growth when ebusd replaced some rows' latest payload.
-# Why: ebusd keeps one latest payload per key, so a changed payload makes the baseline row vanish; the family's
+# Attribute a family's count growth when ebusd replaced some rows' latest payload.
+# ebusd keeps one latest payload per key, so a changed payload makes the baseline row vanish; the family's
 # summed counts still show how many telegrams arrived, and discarding the whole capture lost the payload evidence.
 # Returns the per-key deltas and whether any baseline row vanished (then the split is an estimate, not exact).
 def _ambiguous_family_deltas(
@@ -532,8 +532,8 @@ def _ambiguous_family_deltas(
     return deltas, True
 
 
-# Intent: derive only messages observed between two snapshots of a continued grab.
-# Why: ebusd keeps one latest payload and cumulative count per global message key.
+# Derive only messages observed between two snapshots of a continued grab.
+# ebusd keeps one latest payload and cumulative count per global message key.
 # `approximate_rows` collects the emitted `request / response` payloads whose counts are attributed, not exact.
 def _grab_result_delta(
     baseline: list[GrabResultEntry],
@@ -587,8 +587,8 @@ def _grab_result_delta(
     return delta_lines
 
 
-# Intent: capture raw traffic for a bounded duration without stopping shared auto-grab.
-# Why: unload cleans up owned captures, but a continued session belongs to ebusd.
+# Capture raw traffic for a bounded duration without stopping shared auto-grab.
+# Unload cleans up owned captures, but a continued session belongs to ebusd.
 async def async_grab(
     host: str,
     port: int,
@@ -603,8 +603,8 @@ async def async_grab(
     capture_started_at: float | None = None
     approximate_rows: list[str] = []
 
-    # Intent: record an exporter-started grab as soon as ebusd sends its start ACK.
-    # Why: the shared protocol has no session ID, so the operator must not mutate grab state during export.
+    # Record an exporter-started grab as soon as ebusd sends its start ACK.
+    # The shared protocol has no session ID, so the operator must not mutate grab state during export.
     def _mark_grab_started() -> None:
         nonlocal capture_started_at, grab_started
         grab_started = True
@@ -702,8 +702,8 @@ async def async_grab(
     return GrabCaptureResult(tuple(lines), capture_status, captured_duration, tuple(approximate_rows))
 
 
-# Intent: track dump exports so config-entry unload can cancel them.
-# Why: raw capture and file persistence may outlive platform teardown.
+# Track dump exports so config-entry unload can cancel them.
+# Raw capture and file persistence may outlive platform teardown.
 async def async_export_discovery_dump(
     hass: HomeAssistant,
     coordinator: VaillantCoordinator,
@@ -728,15 +728,15 @@ async def async_export_discovery_dump(
             active_tasks.discard(task)
 
 
-# Intent: export a discovery dump only from an authoritative ebusd graph.
-# Why: map probes before ownership discovery can poll an assumed circuit.
+# Export a discovery dump only from an authoritative ebusd graph.
+# Map probes before ownership discovery can poll an assumed circuit.
 async def _async_export_discovery_dump_impl(
     hass: HomeAssistant,
     coordinator: VaillantCoordinator,
     grab_duration: int = 0,
 ) -> None:
-    # Intent: stop diagnostic reads when platform teardown starts.
-    # Why: dump export can outlive the config-entry unload request.
+    # Stop diagnostic reads when platform teardown starts.
+    # Dump export can outlive the config-entry unload request.
     def ensure_active() -> None:
         if getattr(coordinator, "_stopped", False) is True or getattr(coordinator, "_unload_requested", False) is True:
             raise HomeAssistantError("Cannot export discovery dump while the integration is unloading.")
@@ -862,8 +862,8 @@ async def _async_export_discovery_dump_impl(
     if grab_error is not None:
         dump_data["metadata"]["grab_error"] = grab_error
     if grab_approximate_rows:
-        # Intent: tell readers which rows carry attributed rather than exact interval counts.
-        # Why: ebusd replaces a row's latest payload, so the split of the family delta is an estimate.
+        # Tell readers which rows carry attributed rather than exact interval counts.
+        # ebusd replaces a row's latest payload, so the split of the family delta is an estimate.
         dump_data["metadata"]["grab_approximate_rows"] = list(grab_approximate_rows)
     parsed_telegrams = None
     if grab_lines:
@@ -918,8 +918,8 @@ def _mkdir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
-# Intent: discard a staged dump after its executor finishes if its caller was cancelled.
-# Why: the temporary path is returned only when the executor job completes; the unlink runs in the executor.
+# Discard a staged dump after its executor finishes if its caller was cancelled.
+# The temporary path is returned only when the executor job completes; the unlink runs in the executor.
 def _discard_cancelled_dump_write(hass: HomeAssistant, future: asyncio.Future[str]) -> None:
     try:
         staged_filepath = future.result()
@@ -932,8 +932,8 @@ def _discard_cancelled_dump_write(hass: HomeAssistant, future: asyncio.Future[st
 
 
 # Ordered persistence: the directory must exist before the YAML write lands.
-# Intent: persist the dump only while its coordinator remains active.
-# Why: directory creation yields before the YAML write is submitted.
+# Persist the dump only while its coordinator remains active.
+# Directory creation yields before the YAML write is submitted.
 async def _persist_dump(
     hass: HomeAssistant,
     filepath: str,
@@ -959,8 +959,8 @@ async def _persist_dump(
     )
 
 
-# Intent: atomically publish a staged dump and always remove the staging file.
-# Why: replace and cleanup are blocking disk I/O and must run in the executor; ensure_active runs inside the job
+# Atomically publish a staged dump and always remove the staging file.
+# Replace and cleanup are blocking disk I/O and must run in the executor; ensure_active runs inside the job
 # so an unload that starts while the job is queued still prevents the commit.
 def _publish_dump(staged_filepath: str, filepath: str, ensure_active: Callable[[], None] | None) -> None:
     try:
@@ -979,8 +979,8 @@ def _write_yaml(filepath: str, data: dict) -> None:
         f.write(header + body)
 
 
-# Intent: serialize a dump to a unique temporary file beside its final path.
-# Why: unload can discard the staged file before atomically publishing it.
+# Serialize a dump to a unique temporary file beside its final path.
+# Unload can discard the staged file before atomically publishing it.
 def _write_yaml_temp(filepath: str, data: dict) -> str:
     file_descriptor, staged_filepath = tempfile.mkstemp(
         prefix=".discovery_dump_", suffix=".yaml", dir=os.path.dirname(filepath)

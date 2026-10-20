@@ -22,8 +22,8 @@ EXCLUDED_DIRS = {"__pycache__"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo"}
 
 
-# Intent: read KEY=VALUE pairs from the repository .env without exporting them to child processes.
-# Why: deployment secrets must stay inside this process and never be printed.
+# Read KEY=VALUE pairs from the repository .env without exporting them to child processes.
+# Deployment secrets must stay inside this process and never be printed.
 def load_env(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     if not path.exists():
@@ -37,8 +37,8 @@ def load_env(path: Path) -> dict[str, str]:
     return values
 
 
-# Intent: build the component zip in memory without caches or a directory prefix.
-# Why: `__pycache__` from the Windows interpreter must never reach the HA host.
+# Build the component zip in memory without caches or a directory prefix.
+# `__pycache__` from the Windows interpreter must never reach the HA host.
 def build_zip() -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -49,16 +49,16 @@ def build_zip() -> bytes:
     return buffer.getvalue()
 
 
-# Intent: run a command on the HA host and return its exit status and output.
-# Why: every remote step needs the same error handling and must not log credentials.
+# Run a command on the HA host and return its exit status and output.
+# Every remote step needs the same error handling and must not log credentials.
 def run_remote(client, command: str) -> tuple[int, str]:
     _, stdout, stderr = client.exec_command(command, timeout=120)
     output = stdout.read().decode("utf-8", "replace") + stderr.read().decode("utf-8", "replace")
     return stdout.channel.recv_exit_status(), output.strip()
 
 
-# Intent: parse CLI flags.
-# Why: validation and restart are opt-in/opt-out per the home-assistant skill.
+# Parse CLI flags.
+# Validation and restart are opt-in/opt-out per the home-assistant skill.
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--restart", action="store_true", help="restart Home Assistant core after the upload")
@@ -67,10 +67,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-# Intent: orchestrate zip build, remote backup, replacement and optional restart.
-# Why: a single entry point keeps the deploy repeatable and the rollback path obvious.
-# Intent: write the host key accepted with --accept-new-host-key to the user's known_hosts file.
-# Why: AutoAddPolicy trusts the key for this run only; without saving it the next run asks again and fails.
+# Orchestrate zip build, remote backup, replacement and optional restart.
+# A single entry point keeps the deploy repeatable and the rollback path obvious.
+# Write the host key accepted with --accept-new-host-key to the user's known_hosts file.
+# AutoAddPolicy trusts the key for this run only; without saving it the next run asks again and fails.
 def persist_accepted_host_key(client) -> Path:
     known_hosts = Path.home() / ".ssh" / "known_hosts"
     known_hosts.parent.mkdir(parents=True, exist_ok=True)
@@ -78,6 +78,8 @@ def persist_accepted_host_key(client) -> Path:
     return known_hosts
 
 
+# Deploy the integration to the HA host over SSH: check the target, take a backup, then install the new zip. --dry-run
+# stops after the login and directory check.
 def main() -> int:
     args = parse_args()
     env = load_env(REPO_ROOT / ".env")

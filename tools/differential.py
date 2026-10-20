@@ -31,8 +31,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 
-# Intent: turn a dataclass, container or scalar into JSON-safe data with a stable order for sets.
-# Why: two dumps are compared byte for byte, so the same decision must always serialise the same way.
+# Turn a dataclass, container or scalar into JSON-safe data with a stable order for sets.
+# Two dumps are compared byte for byte, so the same decision must always serialise the same way.
 def plain(value: Any) -> Any:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {field.name: plain(getattr(value, field.name)) for field in dataclasses.fields(value)}
@@ -46,16 +46,18 @@ def plain(value: Any) -> Any:
     return repr(value)
 
 
-# Intent: record the differences between two decoded dumps as readable lines and a count per top-level section.
-# Why: a failed comparison must show where the trees diverge, not only that they do.
+# Record the differences between two decoded dumps as readable lines and a count per top-level section.
+# A failed comparison must show where the trees diverge, not only that they do.
 def diff_dumps(left: Any, right: Any) -> tuple[list[str], Counter[str]]:
     lines: list[str] = []
     counts: Counter[str] = Counter()
 
+    # Section of a diff path: its second segment, used to count differences per section.
     def section(path: str) -> str:
         parts = path.split("/")
         return parts[1] if len(parts) > 1 else path
 
+    # Compare two values recursively and record every difference with its path.
     def walk(a: Any, b: Any, path: str) -> None:
         if type(a) is not type(b):
             lines.append(f"{path}: type {type(a).__name__} vs {type(b).__name__}")
@@ -89,8 +91,8 @@ def diff_dumps(left: Any, right: Any) -> tuple[list[str], Counter[str]]:
     return lines, counts
 
 
-# Intent: run the coordinator define pass and two fallback passes on a graph and return what was sent and planned.
-# Why: this is the part of the integration that decides which registers are defined and read for a hardware variant.
+# Run the coordinator define pass and two fallback passes on a graph and return what was sent and planned.
+# This is the part of the integration that decides which registers are defined and read for a hardware variant.
 async def coordinator_decisions(lines: list[str], modules: Any) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as tmpdir:
         graph = modules.discovery.DiscoveryService.build_device_graph(lines)
@@ -113,8 +115,8 @@ async def coordinator_decisions(lines: list[str], modules: Any) -> dict[str, Any
         return {"defines": defines, "withheld": withheld, "reads_full": reads_full, "reads_basic": reads_basic}
 
 
-# Intent: generate the entity descriptions for a graph and list their decisions in a stable order.
-# Why: enabled-by-default, device circuit and metadata are what users see, so they must not drift silently.
+# Generate the entity descriptions for a graph and list their decisions in a stable order.
+# enabled-by-default, device circuit and metadata are what users see, so they must not drift silently.
 def entity_decisions(lines: list[str], modules: Any) -> list[Any]:
     graph = modules.discovery.DiscoveryService.build_device_graph(lines)
     rows = [
@@ -134,11 +136,12 @@ def entity_decisions(lines: list[str], modules: Any) -> list[Any]:
 FROZEN_MOMENT = (2026, 1, 15, 12, 0, 0)
 
 
-# Intent: make `datetime.now()` return a fixed moment inside one module.
-# Why: the day and month energy registers carry the current date in their message id, so dumps made on different days
+# Make `datetime.now()` return a fixed moment inside one module.
+# The day and month energy registers carry the current date in their message id, so dumps made on different days
 # would differ in their `define` strings even when the code is identical.
 def freeze_clock(module: Any, moment: tuple[int, ...] = FROZEN_MOMENT) -> None:
     class FrozenDatetime(datetime.datetime):
+        # Always return the frozen moment.
         @classmethod
         def now(cls, tz: datetime.tzinfo | None = None) -> FrozenDatetime:
             return cls(*moment)
@@ -146,8 +149,8 @@ def freeze_clock(module: Any, moment: tuple[int, ...] = FROZEN_MOMENT) -> None:
     module.datetime = FrozenDatetime
 
 
-# Intent: dump the decisions of one checkout for every community fixture into a JSON file.
-# Why: the JSON of two checkouts is compared with the `compare` subcommand.
+# Dump the decisions of one checkout for every community fixture into a JSON file.
+# The JSON of two checkouts is compared with the `compare` subcommand.
 def dump_tree(tree: Path, out_path: Path) -> None:
     os.chdir(tree)
     sys.path.insert(0, str(tree))
@@ -197,8 +200,8 @@ def dump_tree(tree: Path, out_path: Path) -> None:
     print(f"{len(result['fixtures'])} fixtures, {len(result['register_map'])} register map entries -> {out_path}")
 
 
-# Intent: compare two dump files and print the differences; the exit code says whether they are identical.
-# Why: byte-identical files are the proof that a refactor or merge kept every recorded decision.
+# Compare two dump files and print the differences; the exit code says whether they are identical.
+# Byte-identical files are the proof that a refactor or merge kept every recorded decision.
 def compare_files(first: Path, second: Path, limit: int) -> int:
     left = json.loads(first.read_text(encoding="utf-8"))
     right = json.loads(second.read_text(encoding="utf-8"))
@@ -210,8 +213,8 @@ def compare_files(first: Path, second: Path, limit: int) -> int:
     return 1 if lines else 0
 
 
-# Intent: dispatch the two subcommands.
-# Why: one tool for both halves keeps the harness and its comparison in step.
+# Dispatch the two subcommands.
+# One tool for both halves keeps the harness and its comparison in step.
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)

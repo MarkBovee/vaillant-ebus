@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 HUNK = re.compile(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@")
 
 
-# Intent: turn the text of `git diff -U0` into the added line numbers per file.
-# Why: a function counts as touched when its `def` line is inside an added or changed hunk.
+# Turn the text of `git diff -U0` into the added line numbers per file.
+# A function counts as touched when its `def` line is inside an added or changed hunk.
 def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     result: dict[str, set[int]] = {}
     current = ""
@@ -38,8 +38,8 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     return result
 
 
-# Intent: return the comment block directly above a function, above its decorators.
-# Why: the rule is about the lines a reader sees before the function, and decorators sit between them.
+# Return the comment block directly above a function, above its decorators.
+# The rule is about the lines a reader sees before the function, and decorators sit between them.
 def comment_block(lines: list[str], node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     first = min([node.lineno, *(decorator.lineno for decorator in node.decorator_list)])
     index = first - 2
@@ -73,8 +73,8 @@ def find_missing(source: str, touched_lines: set[int], strict: bool = True) -> l
     return sorted(missing)
 
 
-# Intent: read the added lines of every changed Python file between a base ref and HEAD.
-# Why: only new or changed functions are checked, so old code does not drown the result.
+# Read the added lines of every changed Python file between a base ref and HEAD.
+# Only new or changed functions are checked, so old code does not drown the result.
 def changed_lines(base: str, root: Path = ROOT) -> dict[str, set[int]]:
     diff = subprocess.check_output(
         ["git", "diff", "-U0", f"{base}...HEAD", "--", "*.py"], cwd=root, text=True, encoding="utf-8"

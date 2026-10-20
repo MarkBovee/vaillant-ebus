@@ -92,14 +92,14 @@ VWZIO_SW0500_FALLBACK_BLOCKLIST: frozenset[str] = frozenset(
 VWZIO_SW0500_FALLBACK_NAMES: frozenset[str] = frozenset(item.casefold() for item in VWZIO_SW0500_FALLBACK_BLOCKLIST)
 
 
-# Intent: return the discovered circuit only for the exact HMUX0 firmware whose map probes are unavailable.
-# Why: the fallback blocklist must not leak to other heat-pump variants or guessed circuits.
+# Return the discovered circuit only for the exact HMUX0 firmware whose map probes are unavailable.
+# The fallback blocklist must not leak to other heat-pump variants or guessed circuits.
 def hmux0_sw0407_circuit(graph: DeviceGraph | None) -> str | None:
     return profile_owner(graph, HMUX0_SW0407)
 
 
-# Intent: identify HMUX0 circuits whose latest scan evidence cannot authorize fallback polling.
-# Why: retained firmware metadata must not bypass hardware-specific blocklists after incomplete or conflicting scans.
+# Identify HMUX0 circuits whose latest scan evidence cannot authorize fallback polling.
+# Retained firmware metadata must not bypass hardware-specific blocklists after incomplete or conflicting scans.
 def hmux0_uncertain_scan_circuits(graph: DeviceGraph | None) -> frozenset[str]:
     if graph is None:
         return frozenset()
@@ -119,14 +119,14 @@ def hmux0_uncertain_scan_circuits(graph: DeviceGraph | None) -> frozenset[str]:
     )
 
 
-# Intent: normalize a scan identity or circuit name for generic ownership comparison.
-# Why: incomplete scan rows still need to identify the circuit whose hardware fallback must fail closed.
+# Normalize a scan identity or circuit name for generic ownership comparison.
+# Incomplete scan rows still need to identify the circuit whose hardware fallback must fail closed.
 def _normalize_scan_name(value: str) -> str:
     return "".join(character for character in value.casefold() if character.isalnum())
 
 
-# Intent: share HMUX0 fallback restrictions between coordinator polling and dump map probes.
-# Why: both readers must block confirmed SW0407 and uncertain current scan identities identically.
+# Share HMUX0 fallback restrictions between coordinator polling and dump map probes.
+# Both readers must block confirmed SW0407 and uncertain current scan identities identically.
 def hmux0_fallback_blocked_circuits(graph: DeviceGraph | None) -> frozenset[str]:
     blocked = set(hmux0_uncertain_scan_circuits(graph))
     sw0407 = hmux0_sw0407_circuit(graph)
@@ -135,8 +135,8 @@ def hmux0_fallback_blocked_circuits(graph: DeviceGraph | None) -> frozenset[str]
     return frozenset(blocked)
 
 
-# Intent: identify HMUX0 scan evidence for one physical heat-pump owner, including aliases.
-# Why: ebusd may expose a scanned HMUX0 device through the logical `hmu` circuit.
+# Identify HMUX0 scan evidence for one physical heat-pump owner, including aliases.
+# ebusd may expose a scanned HMUX0 device through the logical `hmu` circuit.
 def hmux0_owner_scan(graph: DeviceGraph | None) -> tuple[str, ScanIdentity] | None:
     if graph is None:
         return None
@@ -160,16 +160,16 @@ def hmux0_owner_scan(graph: DeviceGraph | None) -> tuple[str, ScanIdentity] | No
     return node.circuit, scan
 
 
-# Intent: HMUX0 firmware revisions (with HW0504) whose B509 RunDataFlowTemp/RunDataReturnTemp are read actively.
-# Why: SW0303 was confirmed live (issue #171, 1/16 degC layout); SW0406 answers the same ids as a 4-byte float
+# HMUX0 firmware revisions (with HW0504) whose B509 RunDataFlowTemp/RunDataReturnTemp are read actively.
+# SW0303 was confirmed live (issue #171, 1/16 degC layout); SW0406 answers the same ids as a 4-byte float
 # (issue #188), which the SW0406 runtime definition decodes as `EXP` and ebusd's own CSV does too. Reading the float
 # with the 1/16 layout gave 27.3125, `-` or 0.00. Other HMUX0 revisions returned absurd decodes (issue #99), so they
 # stay out until they have their own evidence.
 HMUX0_PRECISE_TEMPERATURE_SW_VERSIONS: frozenset[str] = HMUX0_PRECISE_TEMPERATURE.sw
 
 
-# Intent: return the HMUX0 owner circuit only when its complete, current, unique scan matches the given firmware set.
-# Why: retained node firmware fields cannot authorize a definition or an active read after a partial refresh.
+# Return the HMUX0 owner circuit only when its complete, current, unique scan matches the given firmware set.
+# Retained node firmware fields cannot authorize a definition or an active read after a partial refresh.
 def _hmux0_owner_for_profile(graph: DeviceGraph | None, profile: HardwareProfile) -> str | None:
     owner_scan = hmux0_owner_scan(graph)
     if graph is None or owner_scan is None:
@@ -186,26 +186,26 @@ def _hmux0_owner_for_profile(graph: DeviceGraph | None, profile: HardwareProfile
     return circuit
 
 
-# Intent: allow SW0303-only runtime definitions only for current unique evidence.
-# Why: ebusd's own CSV lacks the SW0303 RunData definitions, so only this revision needs a runtime `define`.
+# Allow SW0303-only runtime definitions only for current unique evidence.
+# ebusd's own CSV lacks the SW0303 RunData definitions, so only this revision needs a runtime `define`.
 def hmux0_sw0303_owner(graph: DeviceGraph | None) -> str | None:
     return _hmux0_owner_for_profile(graph, HMUX0_SW0303)
 
 
-# Intent: allow SW0406/HW0504 runtime definitions only for a complete, unique, current HMUX0 scan.
-# Why: the #188 capture proves these layouts on SW0406/HW0504 only; ebusd supplies them itself when its hmux0 CSV loads.
+# Allow SW0406/HW0504 runtime definitions only for a complete, unique, current HMUX0 scan.
+# The #188 capture proves these layouts on SW0406/HW0504 only; ebusd supplies them itself when its hmux0 CSV loads.
 def hmux0_sw0406_owner(graph: DeviceGraph | None) -> str | None:
     return _hmux0_owner_for_profile(graph, HMUX0_SW0406)
 
 
-# Intent: allow active RunDataFlowTemp/RunDataReturnTemp reads only for HMUX0 revisions with evidenced layout.
-# Why: SW0406 units already receive both registers from ebusd's CSV and need polling, not a `define` (issue #171).
+# Allow active RunDataFlowTemp/RunDataReturnTemp reads only for HMUX0 revisions with evidenced layout.
+# SW0406 units already receive both registers from ebusd's CSV and need polling, not a `define` (issue #171).
 def hmux0_precise_temperature_owner(graph: DeviceGraph | None) -> str | None:
     return _hmux0_owner_for_profile(graph, HMUX0_PRECISE_TEMPERATURE)
 
 
-# Intent: identify circuits that may be an HMUX0 owner when identity is incomplete.
-# Why: only these candidates need the HMUX0-specific RunDataReturnTemp fallback restriction.
+# Identify circuits that may be an HMUX0 owner when identity is incomplete.
+# Only these candidates need the HMUX0-specific RunDataReturnTemp fallback restriction.
 def hmux0_candidate_circuits(graph: DeviceGraph | None) -> frozenset[str]:
     if graph is None:
         return frozenset()
@@ -218,14 +218,14 @@ def hmux0_candidate_circuits(graph: DeviceGraph | None) -> frozenset[str]:
     return frozenset()
 
 
-# Intent: resolve the discovered circuit only for the VWZIO scan with passive telemetry evidence.
-# Why: SW0500/HW0504 supports captured B516/B511 frames, not HW5103's active Status01 probe.
+# Resolve the discovered circuit only for the VWZIO scan with passive telemetry evidence.
+# SW0500/HW0504 supports captured B516/B511 frames, not HW5103's active Status01 probe.
 def vwzio_sw0500_circuit(graph: DeviceGraph | None) -> str | None:
     return profile_owner(graph, VWZIO_SW0500)
 
 
-# Intent: return the physical VWZ-family circuit currently scanned at slave 0x76.
-# Why: generic VWZ/VWZIO Status01 definitions embed address 0x76 and cannot follow a matching device elsewhere.
+# Return the physical VWZ-family circuit currently scanned at slave 0x76.
+# Generic VWZ/VWZIO Status01 definitions embed address 0x76 and cannot follow a matching device elsewhere.
 def vwz_station_scan_76_circuit(graph: DeviceGraph | None) -> str | None:
     return profile_owner(graph, VWZ_STATION_76)
 
@@ -335,8 +335,8 @@ MULTI_FIELD_FIELDS: dict[str, list[str]] = {
 }
 
 
-# Intent: resolve multi-field metadata without depending on register-name casing.
-# Why: lower-case Status registers must still expose their parsed fields.
+# Resolve multi-field metadata without depending on register-name casing.
+# Lower-case Status registers must still expose their parsed fields.
 def _multi_field_lookup(register_key: str) -> list[str] | None:
     fields = MULTI_FIELD_FIELDS.get(register_key)
     if fields is not None:
@@ -359,6 +359,7 @@ def _multi_field_lookup(register_key: str) -> list[str] | None:
     return None
 
 
+# Field names of a multi-field register such as Status01, or None for a single-value register.
 def multi_field_fields(register_key: str) -> list[str] | None:
     """Return the field names for a multi-field register, or None."""
     return _multi_field_lookup(register_key)
@@ -374,6 +375,7 @@ def parent_register_name(register_key: str) -> str:
     return register_key.rsplit(".", 1)[0] if is_field_key(register_key) else register_key
 
 
+# Split a raw multi-field value on ';' into named fields; the raw value stays available under 'value'.
 def split_multi_field(register_key: str, raw: str | None) -> dict[str, str | None]:
     """Split a raw register value into named fields; keep the raw value under "value"."""
     fields = _multi_field_lookup(register_key)
@@ -391,8 +393,8 @@ REGISTER_MAP: dict[str, RegisterMeta] = {
     **SYSTEM_AND_OTHER_REGISTERS,
 }
 
-# Intent: the Z1 settings that every further zone offers with the same metadata (issue #186).
-# Why: ebusd exposes `Z2*`/`Z3*` under the same names and layout as `Z1*`; hard-coding only Z1 left a live second zone
+# The Z1 settings that every further zone offers with the same metadata (issue #186).
+# ebusd exposes `Z2*`/`Z3*` under the same names and layout as `Z1*`; hard-coding only Z1 left a live second zone
 # with read-only raw sensors. DayTemp and RoomTemp keep their own explicit entries above.
 SECONDARY_ZONE_SETTING_NAMES: tuple[str, ...] = (
     "OpMode",
@@ -417,16 +419,16 @@ SECONDARY_ZONE_SETTING_NAMES: tuple[str, ...] = (
 SECONDARY_ZONE_NUMBERS: tuple[int, ...] = (2, 3)
 
 
-# Intent: copy a Z1 metadata entry for another zone, renaming the zone suffix of its label.
-# Why: the label carries "(Z1)" only where the first zone's entity name needs it; other labels stay generic.
+# Copy a Z1 metadata entry for another zone, renaming the zone suffix of its label.
+# The label carries "(Z1)" only where the first zone's entity name needs it; other labels stay generic.
 def _zone_metadata_from_first_zone(meta: RegisterMeta, zone_number: int) -> RegisterMeta:
     zone_meta = replace(meta, options=list(meta.options) if meta.options else None)
     zone_meta.friendly_name = meta.friendly_name.replace("(Z1)", f"(Z{zone_number})")
     return zone_meta
 
 
-# Intent: add the Z2/Z3 settings next to the explicit entries, never replacing an existing entry.
-# Why: entity existence still comes from discovery; this only supplies metadata for registers ebusd reports.
+# Add the Z2/Z3 settings next to the explicit entries, never replacing an existing entry.
+# Entity existence still comes from discovery; this only supplies metadata for registers ebusd reports.
 for _zone_number in SECONDARY_ZONE_NUMBERS:
     for _setting in SECONDARY_ZONE_SETTING_NAMES:
         _first_zone_meta = REGISTER_MAP.get(f"ctlv2.Z1{_setting}")
@@ -437,8 +439,8 @@ for _zone_number in SECONDARY_ZONE_NUMBERS:
 del _zone_number, _setting, _first_zone_meta
 
 
-# Intent: return the zone number when a register is one of the shared secondary-zone settings, else None.
-# Why: the entity factory restricts these writable settings to zones that report a live room temperature.
+# Return the zone number when a register is one of the shared secondary-zone settings, else None.
+# The entity factory restricts these writable settings to zones that report a live room temperature.
 def secondary_zone_setting_number(name: str) -> int | None:
     lowered = name.casefold()
     for zone_number in SECONDARY_ZONE_NUMBERS:
@@ -527,8 +529,8 @@ def b516_date_bytes(now: datetime) -> str:
     return f"{(w << 4) | v:02x}{qq:02x}"
 
 
-# Intent: return metadata namespaces applicable to a discovered circuit.
-# Why: physical controller numbers map to the shared controller metadata without becoming targets.
+# Return metadata namespaces applicable to a discovered circuit.
+# Physical controller numbers map to the shared controller metadata without becoming targets.
 def metadata_circuits(circuit: str) -> tuple[str, ...]:
     if is_controller_circuit(circuit):
         return (circuit, "ctlv2", "hmu")
@@ -543,8 +545,8 @@ def metadata_circuits(circuit: str) -> tuple[str, ...]:
     return (circuit,)
 
 
-# Intent: look up register metadata without depending on ebusd name casing.
-# Why: lower-case discovery keys must retain their canonical metadata and entity type.
+# Look up register metadata without depending on ebusd name casing.
+# Lower-case discovery keys must retain their canonical metadata and entity type.
 def _map_get(key: str) -> RegisterMeta | None:
     meta = REGISTER_MAP.get(key)
     if meta is not None:

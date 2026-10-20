@@ -16,8 +16,8 @@ SENSITIVE_WORDS: frozenset[str] = frozenset({"bc", "code", "pin", "phone"})
 _WORD_PATTERN = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+")
 
 
-# Intent: report whether a register name holds data that a shared dump must hide.
-# Why: the old substring match for "code", "pin" and "bc" hid RunDataStatuscode, Z1RoomZoneMapping and SourceTempInput,
+# Report whether a register name holds data that a shared dump must hide.
+# The old substring match for "code", "pin" and "bc" hid RunDataStatuscode, Z1RoomZoneMapping and SourceTempInput,
 # which are the evidence an analysis needs (compressor mode, zone ownership), while real secrets must stay hidden.
 def is_sensitive_register_name(name: str) -> bool:
     lowered = name.lower()

@@ -33,8 +33,8 @@ async def async_setup_entry(
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
     added_prefixes: set[str] = set()
 
-    # Intent: add each discovered schedule once, including schedules found later.
-    # Why: a fixed added flag would lose capabilities arriving during rediscovery.
+    # Add each discovered schedule once, including schedules found later.
+    # A fixed added flag would lose capabilities arriving during rediscovery.
     def _ensure_calendars() -> None:
         if not coordinator.discovery_ready or coordinator.heating_circuit is None:
             return
@@ -98,9 +98,9 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         self._attr_unique_id = f"{entry.entry_id}_calendar_{prefix.lower()}"
         self._attr_device_info = coordinator.get_device_info(device_circuit or self._circuit)
 
+    # The event that is active now, or the next one within the coming eight days.
     @property
     def event(self) -> CalendarEvent | None:
-        # Return current or next upcoming scheduled event
         now = dt_util.now()
         events = self._events_between(now, now + timedelta(days=8))
         active = [event for event in events if event.start <= now < event.end]

@@ -55,6 +55,7 @@ def iter_grab_telegrams(grab_lines: Iterable[str]) -> Iterator[GrabTelegram]:
         }
 
 
+# List-returning wrapper around iter_grab_telegrams, kept for callers of the historical API.
 def parse_grab_lines(grab_lines: list[str]) -> list[GrabTelegram]:
     """Parse grab lines while preserving the historical list-based API."""
     return list(iter_grab_telegrams(grab_lines))

@@ -36,16 +36,20 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 _PRE_RELEASE = r"(rc|alpha|beta|a|b|post|dev)"
 
 
+# Comparison form of a version: lower case with everything except letters and digits removed, so 1.8.0-rc2 and 1.8.0rc2
+# compare equal.
 def canonical(version: str) -> str:
     """Normalize ``1.8.0-rc2`` / ``1.8.0rc2`` / ``1.8.0`` for comparison."""
     return re.sub(r"[^0-9a-z]", "", version.strip().lower())
 
 
+# PEP 440 form of a version for pyproject.toml (1.8.0-rc2 becomes 1.8.0rc2).
 def pyproject_version(version: str) -> str:
     """PEP 440 form for pyproject: ``1.8.0-rc2`` → ``1.8.0rc2``."""
     return re.sub(rf"-{_PRE_RELEASE}", r"\1", version, count=1, flags=re.IGNORECASE)
 
 
+# Version string from pyproject.toml; exits when it is missing.
 def read_pyproject() -> str:
     match = re.search(r'^version\s*=\s*"([^"]+)"', PYPROJECT.read_text(), re.MULTILINE)
     if match is None:
@@ -53,14 +57,18 @@ def read_pyproject() -> str:
     return match.group(1)
 
 
+# Version string from the integration's manifest.json.
 def read_manifest() -> str:
     return str(json.loads(MANIFEST.read_text())["version"])
 
 
+# Version headings ('## x.y.z') of CHANGELOG.md.
 def read_changelog_headings() -> list[str]:
     return re.findall(r"^##\s+(\S+)", CHANGELOG.read_text(), re.MULTILINE)
 
 
+# Check that pyproject.toml and manifest.json carry the same version and that CHANGELOG.md has a heading for it; returns
+# 1 on a mismatch.
 def check() -> int:
     pyproject, manifest, headings = read_pyproject(), read_manifest(), read_changelog_headings()
     problems: list[str] = []
@@ -76,6 +84,7 @@ def check() -> int:
     return 0
 
 
+# Write a new version into pyproject.toml and manifest.json, then run the check; the CHANGELOG heading is added by hand.
 def bump(new: str) -> int:
     pyproject_text = PYPROJECT.read_text()
     pyproject_new = re.sub(
@@ -109,6 +118,7 @@ def bump(new: str) -> int:
     return check()
 
 
+# Command line entry: `check`, or `bump X.Y.Z`.
 def main(argv: list[str]) -> int:
     if len(argv) < 2 or argv[1] not in ("check", "bump"):
         print(__doc__, file=sys.stderr)

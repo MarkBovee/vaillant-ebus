@@ -25,6 +25,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
 
+    # Build the number entities for the matching descriptions, skipping duplicate unique ids.
     def _build(descriptions: list[EntityDescription]) -> list[NumberEntity]:
         entities: list[NumberEntity] = []
         seen: set[str] = set()
@@ -66,9 +67,9 @@ class EbusdNumber(CoordinatorEntity[VaillantCoordinator], NumberEntity):
         if desc.meta.icon:
             self._attr_icon = desc.meta.icon
 
+    # The register value as a float; None when the register is missing or not numeric.
     @property
     def native_value(self) -> float | None:
-        # Return float value from coordinator data
         raw = get_register_value(self.coordinator, self._desc.circuit, self._desc.name, self._desc.field)
         if raw is None:
             return None

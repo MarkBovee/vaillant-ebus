@@ -16,8 +16,8 @@ from .models import (
 )
 
 
-# Intent: identify cache rows from a logical alias that the current graph replaced.
-# Why: preserve normal 1.9.x cache-backed entities while retiring proven old-device ghosts.
+# Identify cache rows from a logical alias that the current graph replaced.
+# Preserve normal 1.9.x cache-backed entities while retiring proven old-device ghosts.
 def is_stale_legacy_alias(circuit: str, graph: DeviceGraph) -> bool:
     is_logical_alias = (
         is_controller_circuit(circuit) or is_heat_pump_circuit(circuit) or circuit.casefold() in {"bai", "vwz", "vwzio"}
@@ -30,8 +30,8 @@ def is_stale_legacy_alias(circuit: str, graph: DeviceGraph) -> bool:
     return False
 
 
-# Intent: merge delayed discovery while replacing metadata that reflects the latest find response.
-# Why: stale error-row markers must clear when a later usable find reports the register without an error.
+# Merge delayed discovery while replacing metadata that reflects the latest find response.
+# Stale error-row markers must clear when a later usable find reports the register without an error.
 def merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> DeviceGraph:
     nodes = dict(existing.nodes)
     for circuit, node in discovered.nodes.items():
@@ -88,8 +88,8 @@ def merge_device_graphs(existing: DeviceGraph, discovered: DeviceGraph) -> Devic
     )
 
 
-# Intent: append new entity descriptions and update the ones that already exist, without duplicating keys.
-# Why: cache-seeded entities are already registered with HA; a live description must update them in place.
+# Append new entity descriptions and update the ones that already exist, without duplicating keys.
+# Cache-seeded entities are already registered with HA; a live description must update them in place.
 def merge_entities(
     existing: list[EntityDescription],
     additions: list[EntityDescription],

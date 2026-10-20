@@ -44,16 +44,16 @@ class RemovalResult:
     devices: int
 
 
-# Intent: read a registry "disabled by"/"hidden by" marker as a plain lower-case string.
-# Why: Home Assistant stores these as enum members; tests and older versions may hand in plain strings.
+# Read a registry "disabled by"/"hidden by" marker as a plain lower-case string.
+# Home Assistant stores these as enum members; tests and older versions may hand in plain strings.
 def _marker(value: Any) -> str | None:
     if value is None:
         return None
     return str(getattr(value, "value", value)).casefold()
 
 
-# Intent: report whether one alias is text the user typed.
-# Why: Home Assistant 2026.10 gives every registry row a default alias, the sentinel "use the entity name" (null on
+# Report whether one alias is text the user typed.
+# Home Assistant 2026.10 gives every registry row a default alias, the sentinel "use the entity name" (null on
 # disk, a truthy enum member in memory). Treating it as user data made every row look customised, so nothing was
 # ever offered for removal. Only a non-blank string is a customisation.
 def _is_user_alias(alias: Any) -> bool:
@@ -64,8 +64,8 @@ def _is_user_alias(alias: Any) -> bool:
 _DEFAULT_SENSOR_OPTION_KEYS = frozenset({"suggested_display_precision", "suggested_unit_of_measurement"})
 
 
-# Intent: report whether the registry `options` hold a choice the user made, not the defaults of a new row.
-# Why: since Home Assistant 2026.10 every row carries `sensor.suggested_display_precision` and
+# Report whether the registry `options` hold a choice the user made, not the defaults of a new row.
+# Since Home Assistant 2026.10 every row carries `sensor.suggested_display_precision` and
 # `conversation.should_expose: False`; a unit or display precision override or an Assist exposure is user data.
 def _has_user_options(options: Any) -> bool:
     if not isinstance(options, Mapping):
@@ -81,8 +81,8 @@ def _has_user_options(options: Any) -> bool:
     return False
 
 
-# Intent: report whether the user changed an entity registry entry by hand.
-# Why: a renamed, re-iconed, relabelled, categorised or area-assigned entity, a device class, unit or display override
+# Report whether the user changed an entity registry entry by hand.
+# A renamed, re-iconed, relabelled, categorised or area-assigned entity, a device class, unit or display override
 # and an Assist exposure carry user data that cleanup must not delete.
 def _is_customized(entry: Any) -> bool:
     aliases = getattr(entry, "aliases", None) or ()
@@ -99,8 +99,8 @@ def _is_customized(entry: Any) -> bool:
     )
 
 
-# Intent: report whether the state machine holds only the placeholder state of a registry entry without an entity.
-# Why: Home Assistant marks such a state `restored: true`; a live entity that is merely unavailable (ebusd down) or
+# Report whether the state machine holds only the placeholder state of a registry entry without an entity.
+# Home Assistant marks such a state `restored: true`; a live entity that is merely unavailable (ebusd down) or
 # unknown (no holiday set) has no such marker and must never count as an orphan.
 def _is_restored_placeholder(state: Any) -> bool:
     if state is None or state.state != "unavailable":
@@ -108,16 +108,16 @@ def _is_restored_placeholder(state: Any) -> bool:
     return state.attributes.get("restored") is True
 
 
-# Intent: report whether a unique id has the shape of a generated entity description: entry, `ebusd`, circuit, name.
-# Why: hand-built entities (quick veto end, online, climate) also register as disabled by the integration but have no
+# Report whether a unique id has the shape of a generated entity description: entry, `ebusd`, circuit, name.
+# Hand-built entities (quick veto end, online, climate) also register as disabled by the integration but have no
 # description, so only generated ids can be judged against the set of generated unique ids.
 def _is_generated_id(unique_id: str, entry_id: str) -> bool:
     prefix = f"{entry_id}_ebusd_"
     return unique_id.startswith(prefix) and "_" in unique_id[len(prefix) :]
 
 
-# Intent: list the registry entries of this config entry that no entity provides any more.
-# Why: removed zones, replaced register layouts and earlier releases leave entries behind; the old purge looked at the
+# List the registry entries of this config entry that no entity provides any more.
+# Removed zones, replaced register layouts and earlier releases leave entries behind; the old purge looked at the
 # state `unknown` instead, which deleted live entities and missed these (issue #186 follow-up).
 # Enabled entries are orphans when only a restored placeholder state exists. Entries disabled by the integration are
 # orphans when the current discovery generates no entity with that unique id. Entries disabled by the user stay.
@@ -151,8 +151,8 @@ def find_orphans(
     return OrphanReport(orphans=tuple(orphans), kept_customized=tuple(kept))
 
 
-# Intent: list enabled registry entries whose live entity has no value and that the current discovery switches off.
-# Why: older releases created sensors for hardware that is not there (storage temperatures) and for service registers as
+# List enabled registry entries whose live entity has no value and that the current discovery switches off.
+# Older releases created sensors for hardware that is not there (storage temperatures) and for service registers as
 # enabled. Home Assistant never changes an enabled row, and the integration leaves enabled rows of default-off entities
 # alone, so they stay `unknown` for ever. `switched_off_unique_ids` holds the casefolded unique ids of the generated
 # descriptions that are off by default; hand-built entities and default-on entities are not in it, so an unset
@@ -181,14 +181,14 @@ def find_dormant(
     return tuple(dormant), tuple(kept)
 
 
-# Intent: build the casefolded `circuit.name` key of an entity description, the key of its parent register.
-# Why: the runtime-defined register set, the no-data disabling and the cleanup report must agree on one key format.
+# Build the casefolded `circuit.name` key of an entity description, the key of its parent register.
+# The runtime-defined register set, the no-data disabling and the cleanup report must agree on one key format.
 def register_key_fold(description: Any) -> str:
     return f"{getattr(description, 'circuit', '')}.{getattr(description, 'name', '')}".casefold()
 
 
-# Intent: build the cleanup report for one config entry, or refuse when the report would not be trustworthy.
-# Why: before ebusd is connected and entities are generated, every registry row looks orphaned; removing rows then
+# Build the cleanup report for one config entry, or refuse when the report would not be trustworthy.
+# Before ebusd is connected and entities are generated, every registry row looks orphaned; removing rows then
 # would delete live entities. The generated unique ids carry the config entry prefix Home Assistant puts on them.
 # `discovery_ready` also excludes the window where entities come from the cache and no live discovery has run yet, in
 # which a cached `unknown` state would look like a register without data. Registers the integration defined itself
@@ -217,8 +217,8 @@ def stale_report(
     return OrphanReport(orphans=report.orphans, kept_customized=(*report.kept_customized, *kept), dormant=dormant)
 
 
-# Intent: switch the given entity registry rows off as disabled by the integration and return how many were changed.
-# Why: only a row the integration disabled is switched on again by the analysis when its register returns a value; the
+# Switch the given entity registry rows off as disabled by the integration and return how many were changed.
+# Only a row the integration disabled is switched on again by the analysis when its register returns a value; the
 # caller passes the Home Assistant disabler so this module needs no Home Assistant import. Each row is read again, so a
 # row that was removed, switched off or customised after the report was built is left as it is.
 def disable_dormant(registry: Any, entity_ids: Iterable[str], disabler: Any) -> int:
@@ -234,8 +234,8 @@ def disable_dormant(registry: Any, entity_ids: Iterable[str], disabler: Any) -> 
     return switched
 
 
-# Intent: remove the given registry entities, then those devices of this config entry that have no entity left.
-# Why: an empty zone or solar device would otherwise stay in the device list after its entities are gone. A device the
+# Remove the given registry entities, then those devices of this config entry that have no entity left.
+# An empty zone or solar device would otherwise stay in the device list after its entities are gone. A device the
 # user renamed or labelled stays, because that is user data like a renamed entity. The caller passes the device entries
 # of this config entry (Home Assistant's `async_entries_for_config_entry`), because iterating the registry yields ids on
 # older versions and reading `DeviceEntry.config_entries` is deprecated since 2026.10.
@@ -264,8 +264,8 @@ def remove_orphans(
     return RemovalResult(entities=removed, devices=removed_devices)
 
 
-# Intent: describe a few orphans in one text block for the confirmation step.
-# Why: the user confirms a removal only when the names are visible; a long list is cut with a count of the rest.
+# Describe a few orphans in one text block for the confirmation step.
+# The user confirms a removal only when the names are visible; a long list is cut with a count of the rest.
 def preview_text(orphans: Collection[OrphanEntity], limit: int = PREVIEW_LIMIT) -> str:
     if not orphans:
         return "- none"

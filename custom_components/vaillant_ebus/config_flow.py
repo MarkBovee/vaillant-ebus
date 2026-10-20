@@ -196,8 +196,8 @@ class VaillantOptionsFlow(OptionsFlow):
             menu_options=["settings", "purge_entities", "rediscover", "export_dump"],
         )
 
-    # Intent: preview, then remove stale registry entities and switch off enabled entities without data.
-    # Why: one confirmation covers both lists; nothing is changed before the user ticks the box, and the report is
+    # preview, then remove stale registry entities and switch off enabled entities without data.
+    # One confirmation covers both lists; nothing is changed before the user ticks the box, and the report is
     # refused while ebusd is not connected.
     async def async_step_purge_entities(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Remove registry entities that no entity provides any more, after a preview and a confirmation."""
@@ -248,6 +248,7 @@ class VaillantOptionsFlow(OptionsFlow):
             data_schema=vol.Schema({vol.Required("confirm", default=False): cv.boolean}),
         )
 
+    # Options step: after confirmation, reconnect to ebusd and rebuild the discovery graph.
     async def async_step_rediscover(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Reconnect to ebusd and rebuild the discovery graph."""
         if user_input is not None:
@@ -278,6 +279,8 @@ class VaillantOptionsFlow(OptionsFlow):
         CONF_ENERGY_DIVISOR,
     )
 
+    # Options step: edit the ebusd connection and the behaviour options; a connection-only change keeps the stored
+    # options.
     async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
             data = dict(self._config_entry.data)
