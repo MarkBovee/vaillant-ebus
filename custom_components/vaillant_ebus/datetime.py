@@ -27,8 +27,8 @@ async def async_setup_entry(
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
     added = False
 
-    # Intent: add quick-veto only after both zone end registers are discovered.
-    # Why: the datetime entity must not exist without a backing register pair.
+    # Add quick-veto only after both zone end registers are discovered.
+    # The datetime entity must not exist without a backing register pair.
     def _ensure_entity() -> None:
         nonlocal added
         if added or not coordinator.discovery_ready:

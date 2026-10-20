@@ -30,12 +30,12 @@ from .models import (
 )
 from .runtime_definitions import HMUX0_COMPRESSOR_COUNTER_NAMES
 
-# Intent: register names of the HMUX0 precise (1/16 degC) temperatures that need an explicit active read.
+# Register names of the HMUX0 precise (1/16 degC) temperatures that need an explicit active read.
 HMUX0_PRECISE_TEMPERATURE_NAMES = ("RunDataFlowTemp", "RunDataReturnTemp")
 
 
-# Intent: select a unique discovered owner for a logical register map entry.
-# Why: registers live under basv3/ctlv3/vwzio too, so the literal map circuit must not be assumed.
+# Select a unique discovered owner for a logical register map entry.
+# Registers live under basv3/ctlv3/vwzio too, so the literal map circuit must not be assumed.
 def fallback_candidate(
     graph: DeviceGraph | None, resolve_circuit: Callable[[str], str | None], logical_circuit: str, name: str
 ) -> str | None:
@@ -84,8 +84,8 @@ def fallback_candidate(
     return None
 
 
-# Intent: list the (circuit, register) pairs to read actively, in order, without duplicates.
-# Why: fallback probes must not bypass per-register polling restrictions.
+# List the (circuit, register) pairs to read actively, in order, without duplicates.
+# Fallback probes must not bypass per-register polling restrictions.
 def plan_fallback_reads(
     graph: DeviceGraph,
     last_find_keys: Collection[str],
@@ -100,8 +100,8 @@ def plan_fallback_reads(
 ) -> list[tuple[str, str]]:
     graph_keys = last_find_keys
 
-    # Intent: resolve metadata for a discovered source circuit without changing its owner.
-    # Why: family metadata is presentation compatibility, not bus routing.
+    # Resolve metadata for a discovered source circuit without changing its owner.
+    # Family metadata is presentation compatibility, not bus routing.
     def _meta_key(circuit: str, name: str) -> str | None:
         for alt in metadata_circuits(circuit):
             key = f"{alt}.{name}"
@@ -125,8 +125,8 @@ def plan_fallback_reads(
     vwzio_sw0500 = vwzio_sw0500_circuit(graph)
     vwz_station_76 = vwz_station_scan_76_circuit(graph)
 
-    # Intent: add each resolved fallback candidate once.
-    # Why: map, passive-definition, and placeholder paths can nominate the same register.
+    # Add each resolved fallback candidate once.
+    # map, passive-definition, and placeholder paths can nominate the same register.
     def _add(circuit: str, name: str) -> None:
         circuit_key = circuit.casefold()
         name_key = name.casefold()
@@ -134,8 +134,8 @@ def plan_fallback_reads(
             return
         if (circuit_key, name_key) in passive_register_keys:
             return
-        # Intent: never read a register whose runtime definition was withheld because its owner cannot answer it.
-        # Why: the map-driven pass would otherwise still send a one-off read for it each cycle (issue #179).
+        # Never read a register whose runtime definition was withheld because its owner cannot answer it.
+        # The map-driven pass would otherwise still send a one-off read for it each cycle (issue #179).
         if (circuit_key, name_key) in withheld_keys:
             return
         # B511 counters remain passive even if their map fallback metadata changes.
@@ -204,7 +204,7 @@ def plan_fallback_reads(
         ):
             continue
         resolved_circuit = candidate_circuit if candidate_circuit is not None else resolve_circuit(map_circuit)
-        # Why: RunDataFlowTemp is only evidenced for the current SW0303/SW0406 HW0504 HMUX0 owner (issue #171); an
+        # RunDataFlowTemp is only evidenced for the current SW0303/SW0406 HW0504 HMUX0 owner (issue #171); an
         # HMUX0 alias key must not trigger an active B509 read on any other heat-pump circuit.
         if (
             resolved_circuit is not None
@@ -244,8 +244,8 @@ def plan_fallback_reads(
     return interleave_by_circuit(candidates)
 
 
-# Intent: reorder reads so every circuit is asked in turn, keeping the planned order inside each circuit.
-# Why: issue #193 - the bus guard needs bus errors from two circuits before it pauses, and a plan grouped by circuit
+# Reorder reads so every circuit is asked in turn, keeping the planned order inside each circuit.
+# Issue #193 - the bus guard needs bus errors from two circuits before it pauses, and a plan grouped by circuit
 # sent dozens of reads to the first circuit of a stuck adapter before the second one was asked. Nothing is dropped
 # or added, so a healthy bus gets the same reads.
 def interleave_by_circuit(reads: Sequence[tuple[str, str]]) -> list[tuple[str, str]]:

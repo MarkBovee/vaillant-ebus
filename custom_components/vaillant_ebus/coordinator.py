@@ -70,6 +70,8 @@ from .migration import (
 _LOGGER = logging.getLogger(__name__)
 
 
+# Whether a registry unique id matches an entity description id, with or without the config-entry prefix Home Assistant
+# adds.
 def _registry_matches_description(registry_unique_id: str, description_unique_id: str) -> bool:
     """Match HA's config-entry-prefixed ID to integration entity ID."""
     return registry_unique_id == description_unique_id or registry_unique_id.endswith(f"_{description_unique_id}")
@@ -81,7 +83,7 @@ PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 ENERGY_POLL_INTERVAL = timedelta(minutes=5)
 WRITE_LOG_SIZE = 100
 
-# Intent: (circuit, register) pairs of the HMUX0 precise temperatures, for poll-time key matching.
+# (circuit, register) pairs of the HMUX0 precise temperatures, for poll-time key matching.
 _HMUX0_PRECISE_TEMPERATURE_KEYS = frozenset(("hmux0", name) for name in HMUX0_PRECISE_TEMPERATURE_REGISTERS)
 
 HMUX0_RUNTIME_REGISTERS = frozenset(
@@ -113,8 +115,8 @@ def _register_values(register_key: str, raw: str | None) -> dict[str, str | None
     return split_multi_field(register_key, raw)
 
 
-# Intent: delete a staged file, ignoring one that is already gone.
-# Why: staging files are removed from the executor so the unlink never blocks the event loop.
+# Delete a staged file, ignoring one that is already gone.
+# Staging files are removed from the executor so the unlink never blocks the event loop.
 def remove_staged_file(staged_path: str, label: str) -> None:
     try:
         os.unlink(staged_path)
@@ -124,8 +126,8 @@ def remove_staged_file(staged_path: str, label: str) -> None:
         _LOGGER.warning("Failed to remove %s staging file: %s", label, exc)
 
 
-# Intent: remove a staged file through the executor, falling back to a direct delete during shutdown.
-# Why: the executor refuses new jobs once Home Assistant is stopping, and a leftover staging file is worse than one
+# Remove a staged file through the executor, falling back to a direct delete during shutdown.
+# The executor refuses new jobs once Home Assistant is stopping, and a leftover staging file is worse than one
 # short unlink at that point.
 def schedule_staged_file_removal(hass: HomeAssistant, staged_path: str, label: str) -> None:
     try:
@@ -134,8 +136,8 @@ def schedule_staged_file_removal(hass: HomeAssistant, staged_path: str, label: s
         remove_staged_file(staged_path, label)
 
 
-# Intent: discard a staged cache after its executor finishes if its caller was cancelled.
-# Why: the temporary path is returned only when the executor job completes; the unlink runs in the executor.
+# Discard a staged cache after its executor finishes if its caller was cancelled.
+# The temporary path is returned only when the executor job completes; the unlink runs in the executor.
 def _discard_cancelled_cache_write(hass: HomeAssistant, future: asyncio.Future[str]) -> None:
     try:
         staged_path = future.result()
@@ -147,11 +149,11 @@ def _discard_cancelled_cache_write(hass: HomeAssistant, future: asyncio.Future[s
     schedule_staged_file_removal(hass, staged_path, "cancelled register-cache")
 
 
-# Intent: stage register-cache JSON before lifecycle-gated replacement.
-# Why: executor completion can race with config-entry teardown or reload.
+# Stage register-cache JSON before lifecycle-gated replacement.
+# Executor completion can race with config-entry teardown or reload.
 def _write_cache_temp(cache_path: str, values: dict[str, str]) -> str:
     cache_dir = os.path.dirname(cache_path)
-    # Why: directory creation is blocking disk I/O, so it runs here in the executor, not on the event loop.
+    # Directory creation is blocking disk I/O, so it runs here in the executor, not on the event loop.
     os.makedirs(cache_dir, exist_ok=True)
     file_descriptor, staged_path = tempfile.mkstemp(prefix=".register_cache_", suffix=".tmp", dir=cache_dir)
     try:
@@ -163,8 +165,8 @@ def _write_cache_temp(cache_path: str, values: dict[str, str]) -> str:
     return staged_path
 
 
-# Intent: atomically publish a staged register cache and always remove the staging file.
-# Why: replace and cleanup are blocking disk I/O and must run in the executor; the lifecycle check
+# Atomically publish a staged register cache and always remove the staging file.
+# Replace and cleanup are blocking disk I/O and must run in the executor; the lifecycle check
 # stays inside the job so an unload that starts while the job is queued still prevents the commit.
 def _publish_cache(staged_path: str, cache_path: str, is_active: Callable[[], bool]) -> None:
     try:
@@ -178,6 +180,7 @@ class CoordinatorState(TypedDict):
     ebusd: dict[str, str]
 
 
+# Return the raw value unless it is an ebusd sentinel or a known invalid temperature decode, in which case None.
 def _usable_register_value(register_key: str, raw: str | None) -> str | None:
     """Reject ebusd sentinels and known invalid temperature decodes."""
     if raw is None or is_no_data_value(raw):
@@ -202,14 +205,14 @@ def _usable_register_value(register_key: str, raw: str | None) -> str | None:
 # same ctlv2/hmu circuit aliasing as get_meta(). Registers covered by the map
 # may legitimately be present via runtime definitions or the fallback read even
 # when the current find output does not list them.
-# Intent: report whether a map entry may support a cache-only register.
-# Why: disabled fallback reads must not keep stale B524 values alive after discovery.
+# Report whether a map entry may support a cache-only register.
+# Disabled fallback reads must not keep stale B524 values alive after discovery.
 def _register_has_enabled_map_entry(register_key: str) -> bool:
     return bool(_enabled_map_entry_circuits(register_key))
 
 
-# Intent: list the metadata circuits whose enabled, fallback-read map entry matches a register key.
-# Why: callers need to know which family (controller, heat pump, boiler) supplies the metadata, not just that one does.
+# List the metadata circuits whose enabled, fallback-read map entry matches a register key.
+# Callers need to know which family (controller, heat pump, boiler) supplies the metadata, not just that one does.
 def _enabled_map_entry_circuits(register_key: str) -> list[str]:
     if "." not in register_key:
         return []
@@ -225,8 +228,8 @@ def _enabled_map_entry_circuits(register_key: str) -> list[str]:
     return matches
 
 
-# Intent: detect a cache-only register whose only metadata twin belongs to a heat pump that is not on the bus.
-# Why: gas-boiler systems (issue #152, BASS3 + BAI) cached bai/bass Stat*EnergySum rows that borrow hmu metadata; the
+# Detect a cache-only register whose only metadata twin belongs to a heat pump that is not on the bus.
+# Gas-boiler systems (issue #152, BASS3 + BAI) cached bai/bass Stat*EnergySum rows that borrow hmu metadata; the
 # fallback read can never refresh them without a heat pump, so they would show frozen values forever.
 def _is_heat_pump_only_cache_register(register_key: str, graph: DeviceGraph) -> bool:
     circuit = register_key.split(".", 1)[0]
@@ -247,8 +250,8 @@ def _is_heat_pump_only_cache_register(register_key: str, graph: DeviceGraph) -> 
     return has_boiler_scan and not has_heat_pump_scan
 
 
-# Intent: detect placeholders that metadata explicitly forbids polling or exposing.
-# Why: cached descriptions must not survive when a live error is the only discovery result.
+# Detect placeholders that metadata explicitly forbids polling or exposing.
+# Cached descriptions must not survive when a live error is the only discovery result.
 def _register_disables_fallback_placeholder(register_key: str) -> bool:
     if "." not in register_key:
         return False
@@ -263,8 +266,8 @@ def _register_disables_fallback_placeholder(register_key: str) -> bool:
     return False
 
 
-# Intent: resolve a register dictionary key while preferring the current spelling.
-# Why: cache/live updates with different casing must update one register object.
+# Resolve a register dictionary key while preferring the current spelling.
+# cache/live updates with different casing must update one register object.
 def _mapping_key(mapping: Mapping[str, object], key: str) -> str | None:
     if key in mapping:
         return key
@@ -272,9 +275,9 @@ def _mapping_key(mapping: Mapping[str, object], key: str) -> str | None:
     return next((current for current in mapping if current.casefold() == expected), None)
 
 
-# Intent: determine whether a cache-only mapped register still belongs to the
+# Determine whether a cache-only mapped register still belongs to the
 # discovered circuit rather than a legacy logical alias.
-# Why: a BASS3/BAI bus can retain ctlv2 or hmu cache values from an older
+# A BASS3/BAI bus can retain ctlv2 or hmu cache values from an older
 # installation; preserving those aliases creates stale entities and ghost
 # devices even though initial discovery has authoritative circuit metadata.
 def _cache_register_is_supported(register_key: str, live_keys: set[str], graph: DeviceGraph) -> bool:
@@ -306,9 +309,9 @@ def _cache_register_is_supported(register_key: str, live_keys: set[str], graph: 
     return True
 
 
-# Intent: disable registry entries whose cached source circuit disappeared from
+# Disable registry entries whose cached source circuit disappeared from
 # the current discovery graph.
-# Why: cache-seeded platform entities may already be registered before the first
+# Cache-seeded platform entities may already be registered before the first
 # real discovery completes; leaving them enabled would keep stale alias devices
 # visible after the coordinator prunes their descriptions.
 def _disable_stale_registry_entities(hass: HomeAssistant, entry_id: str, entities: list[EntityDescription]) -> None:
@@ -323,8 +326,8 @@ def _disable_stale_registry_entities(hass: HomeAssistant, entry_id: str, entitie
             registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
 
 
-# Intent: retrieve a register value case-insensitively from a coordinator-like object.
-# Why: platform tests and delayed discovery stubs may provide a coordinator without the concrete method.
+# Retrieve a register value case-insensitively from a coordinator-like object.
+# Platform tests and delayed discovery stubs may provide a coordinator without the concrete method.
 def get_register_value(coordinator: Any, circuit: str, name: str, field: str = "value") -> str | None:
     expected = f"{circuit}.{name}.{field}".casefold()
     data = getattr(coordinator, "data", {}) or {}
@@ -340,8 +343,8 @@ def get_register_value(coordinator: Any, circuit: str, name: str, field: str = "
 
 
 class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
-    # Intent: initialize per-entry connection, cache and recovery state.
-    # Why: setup and retry tasks rely on one consistent starting lifecycle.
+    # Initialize per-entry connection, cache and recovery state.
+    # Setup and retry tasks rely on one consistent starting lifecycle.
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._entry = entry
         self._stopped = False
@@ -402,20 +405,23 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
 
         self._cache_seeded = False
 
+    # Configured ebusd host.
     @property
     def ebusd_host(self) -> str:
         return self._entry.data.get(CONF_EBUSD_HOST, "")
 
+    # Configured ebusd TCP port (8888 by default).
     @property
     def ebusd_port(self) -> int:
         return self._entry.data.get(CONF_EBUSD_PORT, 8888)
 
-    # Intent: report when reads and writes can trust the current discovery graph.
-    # Why: a live TCP socket alone does not establish register ownership.
+    # Report when reads and writes can trust the current discovery graph.
+    # A live TCP socket alone does not establish register ownership.
     @property
     def discovery_ready(self) -> bool:
         return self._ebusd_connected and self._graph is not None and bool(self._graph.nodes)
 
+    # Circuit of the heating controller, or None until discovery found exactly one.
     @property
     def heating_circuit(self) -> str | None:
         if self._graph is None:
@@ -423,6 +429,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         result = self._graph.heating_controller_result()
         return result.circuit if result.status == ResolutionStatus.UNIQUE else None
 
+    # Circuit of the heat pump, or None until discovery found exactly one.
     @property
     def heat_pump_circuit(self) -> str | None:
         if self._graph is None:
@@ -430,6 +437,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         result = self._graph.heat_pump_result()
         return result.circuit if result.status == ResolutionStatus.UNIQUE else None
 
+    # Map a logical register circuit from the map to the circuit discovered on this bus; None when the graph cannot
+    # resolve it uniquely.
     def resolve_register_circuit(self, circuit: str) -> str | None:
         """Resolve legacy map circuits to circuits discovered on this bus."""
         if self._graph is not None:
@@ -439,8 +448,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return resolution.circuit or circuit
         return None
 
-    # Intent: allow user-initiated reads only after the discovered graph is authoritative.
-    # Why: cache-seeded aliases must not route requests during initial discovery.
+    # Allow user-initiated reads only after the discovered graph is authoritative.
+    # Cache-seeded aliases must not route requests during initial discovery.
     async def async_read_register(self, circuit: str, name: str, field: str = "") -> str | None:
         """Read a register only after resolving its discovered circuit owner."""
         if (
@@ -475,8 +484,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     owners.setdefault(zone, set()).add(node.circuit)
         return {zone: next(iter(circuits)) for zone, circuits in owners.items() if len(circuits) == 1}
 
-    # Intent: select the lowest-numbered discovered active zone as the primary UI zone.
-    # Why: primary-zone entities must not assume that z1 is present on every controller.
+    # Select the lowest-numbered discovered active zone as the primary UI zone.
+    # Primary-zone entities must not assume that z1 is present on every controller.
     @property
     def primary_zone(self) -> str | None:
         zones = self.zone_circuits()
@@ -484,8 +493,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return None
         return min(zones, key=lambda zone: int(zone[1:]) if zone[1:].isdigit() else zone)
 
-    # Intent: read a coordinator value without depending on ebusd register casing.
-    # Why: protocol dumps may preserve lower-case names while metadata uses canonical casing.
+    # Read a coordinator value without depending on ebusd register casing.
+    # Protocol dumps may preserve lower-case names while metadata uses canonical casing.
     def value_for_register(self, circuit: str, name: str, field: str = "value") -> str | None:
         return get_register_value(self, circuit, name, field)
 
@@ -538,8 +547,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         status = self.zone_register_discovery_status(circuit, zone, name)
         return status is not False
 
-    # Intent: check a discovered HcN register on its owning source circuit.
-    # Why: flow-range and heating-circuit writes must not be confused with ZN registers.
+    # Check a discovered HcN register on its owning source circuit.
+    # Flow-range and heating-circuit writes must not be confused with ZN registers.
     def has_heating_circuit_register(self, circuit: str, heating_circuit: str, name: str) -> bool:
         if self._graph is None or not self._last_find_keys:
             return False
@@ -555,13 +564,13 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     def has_controller_register(self, name: str) -> bool:
         return self._graph_lists_register(self.heating_circuit, name)
 
-    # Intent: report whether the discovered heat pump circuit lists a register in the discovery graph.
-    # Why: derived heat pump entities (DHW heating) need a backing register on the circuit that owns it.
+    # Report whether the discovered heat pump circuit lists a register in the discovery graph.
+    # Derived heat pump entities (DHW heating) need a backing register on the circuit that owns it.
     def has_heat_pump_register(self, name: str) -> bool:
         return self._graph_lists_register(self.heat_pump_circuit, name)
 
-    # Intent: shared lookup of "circuit.name" among the raw and placeholder registers of the graph, ignoring case.
-    # Why: one capability check for the controller and the heat pump instead of two copies.
+    # Shared lookup of "circuit.name" among the raw and placeholder registers of the graph, ignoring case.
+    # One capability check for the controller and the heat pump instead of two copies.
     def _graph_lists_register(self, circuit: str | None, name: str) -> bool:
         if self._graph is None or not self._last_find_keys or circuit is None:
             return False
@@ -580,8 +589,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return
         self._last_find_keys = set(self._graph.raw_registers) | set(self._graph.placeholder_registers)
 
-    # Intent: stage cached discovery state until all asynchronous inputs are ready.
-    # Why: cache and YAML reads may overlap an unload request.
+    # Stage cached discovery state until all asynchronous inputs are ready.
+    # Cache and YAML reads may overlap an unload request.
     async def _async_seed_entities_from_cache(self) -> None:
         cache = await self._async_load_cache()
         if self._stopped or self._unload_requested:
@@ -629,8 +638,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             "Seeded %d entities from %d cache entries (%d circuits)", len(self.entities), len(cache), len(graph.nodes)
         )
 
-    # Intent: establish a working ebusd session before clearing connection repairs.
-    # Why: a prior startup failure must stop surfacing once fresh discovery succeeds.
+    # Establish a working ebusd session before clearing connection repairs.
+    # A prior startup failure must stop surfacing once fresh discovery succeeds.
     async def _ebusd_connect_and_discover(self) -> None:
         if self._stopped or self._unload_requested:
             return
@@ -749,8 +758,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self._schedule_delayed_rediscovery()
         self._schedule_analysis()
 
-    # Intent: restore retry eligibility and clean up transport state after setup cancellation.
-    # Why: cancelled background setup must not strand a pending ebusd connection.
+    # Restore retry eligibility and clean up transport state after setup cancellation.
+    # Cancelled background setup must not strand a pending ebusd connection.
     async def _async_run_setup_task(self) -> None:
         try:
             await self._ebusd_connect_and_discover()
@@ -775,8 +784,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if not self._ebusd_connected and not self._stopped and not self._unload_requested:
                 self._started = False
 
-    # Intent: reset the coordinator after an ebusd transport or discovery failure.
-    # Why: future polls must launch a fresh connection instead of reusing a dead client.
+    # Reset the coordinator after an ebusd transport or discovery failure.
+    # Future polls must launch a fresh connection instead of reusing a dead client.
     async def _async_mark_ebusd_unreachable(self, reason: str) -> None:
         if self._stopped or self._unload_requested:
             return
@@ -786,8 +795,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         _LOGGER.warning("ebusd unavailable, will retry: %s", reason)
         await repairs.async_create_ebusd_unreachable(self.hass)
 
-    # Intent: apply discovery results to cached and generated entity descriptions.
-    # Why: initial and delayed rediscovery must retire stale entities before forwarding replacements.
+    # Apply discovery results to cached and generated entity descriptions.
+    # Initial and delayed rediscovery must retire stale entities before forwarding replacements.
     async def _apply_discovery_graph(self, graph: DeviceGraph, source: str) -> None:
         if self._stopped or self._unload_requested:
             return
@@ -841,8 +850,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # to appear.
         if source == "initial":
             live_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
-            # Intent: registers the integration defined on this bus keep their entities while ebusd has no value.
-            # Why: `define` can drop the cached value, so a post-define find lists them as no-data placeholders
+            # Registers the integration defined on this bus keep their entities while ebusd has no value.
+            # `define` can drop the cached value, so a post-define find lists them as no-data placeholders
             # or omits them until the next telegram or read; pruning them disabled user-enabled entities (#175)
             # and, once the fallback read re-enabled them, made Home Assistant reload the entry in a loop (#171).
             runtime_defined_key_folds = self.runtime_defined_key_folds()
@@ -863,8 +872,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             stale_keys = set(stale)
             raw_key_folds = {key.casefold() for key in graph.raw_registers}
             placeholder_keys = {key for key in graph.placeholder_registers if key.casefold() not in raw_key_folds}
-            # Intent: a runtime-defined register that find omits must not show its previous-session value.
-            # Why: it is kept for its entity, but no telegram has arrived since `define`, so it is unavailable.
+            # A runtime-defined register that find omits must not show its previous-session value.
+            # It is kept for its entity, but no telegram has arrived since `define`, so it is unavailable.
             listed_folds = raw_key_folds | {key.casefold() for key in graph.placeholder_registers}
             for register_key, register in self.registers.items():
                 if register_key.casefold() in runtime_defined_key_folds and register_key.casefold() not in listed_folds:
@@ -991,8 +1000,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             except Exception:
                 _LOGGER.warning("Post-discovery callback failed", exc_info=True)
 
-    # Intent: refresh live scan ownership from each usable find before any runtime definition or fallback read.
-    # Why: discovery-ready graphs still need current address evidence when bus identities change.
+    # Refresh live scan ownership from each usable find before any runtime definition or fallback read.
+    # Discovery-ready graphs still need current address evidence when bus identities change.
     async def _refresh_graph_from_usable_find(self, find_lines: list[str]) -> None:
         discovered = DiscoveryService.build_device_graph(find_lines)
         if self.discovery_ready and self._graph is not None:
@@ -1002,8 +1011,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         elif self._graph is not None:
             self._graph = merge_device_graphs(self._graph, discovered)
 
-    # Intent: keep at most one delayed discovery callback pending.
-    # Why: one bounded retry handles transient find failures without polling continuously.
+    # Keep at most one delayed discovery callback pending.
+    # One bounded retry handles transient find failures without polling continuously.
     def _schedule_delayed_rediscovery(self) -> None:
         if self._stopped or self._unload_requested or self._delayed_rediscovery_scheduled:
             return
@@ -1014,8 +1023,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             self._async_delayed_rediscover,
         )
 
-    # Intent: refresh discovery once after the initial ebusd startup window.
-    # Why: delayed discovery can fill registers that were unavailable during setup.
+    # Refresh discovery once after the initial ebusd startup window.
+    # Delayed discovery can fill registers that were unavailable during setup.
     async def _async_delayed_rediscover(self, _: datetime) -> None:
         if self._stopped or self._unload_requested:
             self._cancel_delayed_rediscovery = None
@@ -1088,9 +1097,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if not self._stopped:
                 self._schedule_analysis()
 
-    # Intent: raise or clear the repair issue that lists registry entities no entity provides any more, and enabled
+    # Raise or clear the repair issue that lists registry entities no entity provides any more, and enabled
     # entities without data that the discovery switches off by default.
-    # Why: the old purge was hidden in the options and missed them; a repair with a preview and a confirmation is the
+    # The old purge was hidden in the options and missed them; a repair with a preview and a confirmation is the
     # way they get removed or switched off. The report is refused while ebusd is disconnected, so a restart never
     # raises it by mistake.
     async def _async_refresh_stale_entities_issue(self) -> None:
@@ -1185,8 +1194,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             except Exception as exc:
                 _LOGGER.warning("Entity adder failed for %s: %s", entity_type, exc)
 
-    # Intent: casefolded `circuit.name` keys of the registers this integration defined on the current bus.
-    # Why: discovery pruning and no-data disabling must leave these alone while ebusd has no value for them.
+    # Casefolded `circuit.name` keys of the registers this integration defined on the current bus.
+    # Discovery pruning and no-data disabling must leave these alone while ebusd has no value for them.
     def runtime_defined_key_folds(self) -> set[str]:
         return {
             f"{parts[1]}.{parts[2]}".casefold()
@@ -1218,8 +1227,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 continue
             if description.raw_value:
                 continue
-            # Intent: never flip the registry state of a register the integration defined itself.
-            # Why: passive definitions legitimately have no value until the next telegram, and every disabled_by
+            # Never flip the registry state of a register the integration defined itself.
+            # Passive definitions legitimately have no value until the next telegram, and every disabled_by
             # change makes Home Assistant reload the whole entry (issues #171, #175).
             if cleanup.register_key_fold(description) in runtime_defined:
                 continue
@@ -1241,6 +1250,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if disabled:
             _LOGGER.info("Disabled %d no-data entities after discovery", disabled)
 
+    # Disable restored entities whose current descriptions have no data, and the known stale B516 month-even counter.
     def disable_no_data_entities(self) -> None:
         """Disable restored entities whose current descriptions have no data."""
         self._disable_no_data_registry_entities(self.entities)
@@ -1281,8 +1291,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             _LOGGER.info("Auto-enabled entities with live data: %s", ", ".join(enabled))
         return enabled
 
-    # Intent: inject only evidence-backed runtime register definitions after the bus owner is known.
-    # Why: definitions must follow discovered circuit identity and preserve safe absent-register behavior.
+    # Inject only evidence-backed runtime register definitions after the bus owner is known.
+    # Definitions must follow discovered circuit identity and preserve safe absent-register behavior.
     async def _define_custom_registers(self) -> None:
         if (
             self._stopped
@@ -1336,8 +1346,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 len(defines),
             )
 
-    # Intent: avoid cache I/O and state publication after teardown begins.
-    # Why: an in-flight poll may reach this helper after unload is requested.
+    # Avoid cache I/O and state publication after teardown begins.
+    # An in-flight poll may reach this helper after unload is requested.
     async def _async_values_from_registers(self, registers: list[EbusdRegister] | None = None) -> dict[str, str]:
         if self._stopped or self._unload_requested:
             return {}
@@ -1363,14 +1373,17 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return {}
         return values
 
+    # Path of the JSON file that stores the last register values.
     @property
     def _cache_path(self) -> str:
         return self.hass.config.path(DOMAIN, "register_cache.json")
 
+    # Path of the optional user-edited entity metadata override file.
     def _yaml_overrides_path(self) -> str:
         """Path of the optional user-facing entity metadata override file."""
         return self.hass.config.path(DOMAIN, "entities.yaml")
 
+    # Global energy-counter divisor from the options flow.
     @property
     def _energy_counter_divisor(self) -> float:
         """Global energy-counter scale (divisor) from the Options Flow.
@@ -1391,6 +1404,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return DEFAULT_ENERGY_DIVISOR
         return value if value > 0 else DEFAULT_ENERGY_DIVISOR
 
+    # Load the user's entities.yaml metadata overrides in the executor, so reading the file never blocks the event loop.
     async def _async_load_yaml_overrides(self) -> dict[str, dict[str, object]]:
         """Load ``config/vaillant_ebus/entities.yaml`` metadata overrides.
 
@@ -1402,7 +1416,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         overrides: dict[str, dict[str, object]] = {}
         path = self._yaml_overrides_path()
         if await self.hass.async_add_executor_job(os.path.isfile, path):
-
+            # Executor job: parse the overrides YAML file.
             def _read() -> object:
                 with open(path, encoding="utf-8") as handle:
                     return yaml.safe_load(handle)
@@ -1443,6 +1457,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         "HwcElecConsDay",
     )
 
+    # Add the global divisor to the energy-counter overrides that do not set their own; a divisor of 1 changes nothing.
     def _apply_global_energy_divisor(self, overrides: dict[str, dict[str, object]]) -> None:
         divisor = self._energy_counter_divisor
         if divisor == 1.0:
@@ -1456,13 +1471,13 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if "divisor" not in entry:
                 entry["divisor"] = divisor
 
-    # Intent: report whether the coordinator may still commit work to disk.
-    # Why: the cache publish job reads this flag from the executor thread right before it replaces the file.
+    # Report whether the coordinator may still commit work to disk.
+    # The cache publish job reads this flag from the executor thread right before it replaces the file.
     def _is_active(self) -> bool:
         return not (self._stopped or self._unload_requested)
 
-    # Intent: commit register-cache updates only while the coordinator is active.
-    # Why: a late executor write can overwrite cache data from a reloaded coordinator.
+    # Commit register-cache updates only while the coordinator is active.
+    # A late executor write can overwrite cache data from a reloaded coordinator.
     async def _async_save_cache(self, values: dict[str, str]) -> None:
         if self._stopped or self._unload_requested:
             return
@@ -1487,9 +1502,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             # Log the path and failure class only — never cache values.
             _LOGGER.warning("Failed to save register cache to %s", cache_path, exc_info=True)
 
+    # Read the register cache in the executor; a missing or unreadable file gives an empty cache.
     async def _async_load_cache(self) -> dict[str, str]:
         try:
-
+            # Executor job: read the cache file as JSON.
             def _read():
                 with open(self._cache_path) as f:
                     return json.load(f)
@@ -1517,6 +1533,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return "Domestic Hot Water"
         return CIRCUIT_NAMES.get("dhw", "Boiler (DHW)")
 
+    # Build the Home Assistant device info of a circuit: name and model from the heat pump, the circuit tables or the
+    # scan type, versions from the scan, linked to its parent device.
     def get_device_info(self, circuit: str) -> DeviceInfo:
         scan_type = ""
         scan_sw = ""
@@ -1588,8 +1606,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     def _fallback_candidate(self, logical_circuit: str, name: str) -> str | None:
         return fallback_candidate(self._graph, self.resolve_register_circuit, logical_circuit, name)
 
-    # Intent: read only mapped registers that are safe for active fallback polling.
-    # Why: fallback probes must not bypass per-register polling restrictions.
+    # Read only mapped registers that are safe for active fallback polling.
+    # Fallback probes must not bypass per-register polling restrictions.
     async def _fallback_read(
         self,
         include_placeholders: bool = False,
@@ -1599,12 +1617,12 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     ) -> None:
         if not self.ebus or not self.ebus.is_connected or self._graph is None:
             return
-        # Intent: do not let a retained graph authorize polls after an unusable find.
-        # Why: its circuit ownership may no longer match the devices currently on the bus.
+        # Do not let a retained graph authorize polls after an unusable find.
+        # Its circuit ownership may no longer match the devices currently on the bus.
         if getattr(self.ebus, "last_find_usable", None) is False:
             return
-        # Intent: send no active read while the bus guard is paused after repeated bus errors.
-        # Why: a stuck adapter fails every request, and repeating the whole read set each cycle keeps it busy.
+        # Send no active read while the bus guard is paused after repeated bus errors.
+        # A stuck adapter fails every request, and repeating the whole read set each cycle keeps it busy.
         if not self._bus_guard.allow():
             _LOGGER.debug("Fallback read skipped: active reads are paused after repeated ebusd bus errors")
             return
@@ -1751,8 +1769,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             "Fallback read complete: %d/%d registers with data (%d new)", read_with_data, len(candidates), added
         )
 
-    # Intent: refresh register data and recover disconnected ebusd sessions.
-    # Why: failed reconnects must retry, and repairs clear only after a valid poll cycle.
+    # Refresh register data and recover disconnected ebusd sessions.
+    # Failed reconnects must retry, and repairs clear only after a valid poll cycle.
     async def _async_update_data(self) -> CoordinatorState:
         if self._stopped or self._unload_requested:
             return {"ebusd": {}}
@@ -1961,8 +1979,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     if self._stopped or self._unload_requested:
                         return {"ebusd": await self._async_values_from_registers()}
                     if reconnected:
-                        # Intent: keep the bus guard as it is across a transport reconnect.
-                        # Why: issue #193 - the adapter sits behind ebusd, so a new TCP connection says nothing about
+                        # Keep the bus guard as it is across a transport reconnect.
+                        # Issue #193 - the adapter sits behind ebusd, so a new TCP connection says nothing about
                         # it being reset; clearing the guard here restarted the pause at 60 s and sent the whole
                         # read set again. A rediscovery requested by the owner still resets it.
                         self._runtime_definitions.clear()
@@ -2008,8 +2026,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if len(self._write_log) > WRITE_LOG_SIZE:
             del self._write_log[: len(self._write_log) - WRITE_LOG_SIZE]
 
-    # Intent: verify a write target remains present in the authoritative graph.
-    # Why: entities can outlive a partial reconnect and must fail closed before any batch write.
+    # Verify a write target remains present in the authoritative graph.
+    # Entities can outlive a partial reconnect and must fail closed before any batch write.
     def _graph_has_register(self, circuit: str, name: str) -> bool:
         if self._graph is None:
             return False
@@ -2018,8 +2036,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             key.casefold() == expected for key in (*self._graph.raw_registers, *self._graph.placeholder_registers)
         )
 
-    # Intent: write only through an authoritative discovered register owner.
-    # Why: service calls during setup must not target cached or assumed circuits.
+    # Write only through an authoritative discovered register owner.
+    # Service calls during setup must not target cached or assumed circuits.
     async def async_write_registers(
         self,
         writes: list[tuple[str, str, str]],
@@ -2080,6 +2098,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             require_discovered=require_discovered,
         )
 
+    # Write the eloBLOCK B510 mode override and, with keep_alive, write it again every 50 seconds.
     async def async_set_mode_override(
         self,
         flow_temperature: float,
@@ -2104,19 +2123,21 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             )
         return True
 
+    # Timer callback: write the stored mode override again while one is set and ebusd is connected.
     async def _async_keep_mode_override_alive(self, _now: datetime) -> None:
         if not self._set_mode_override_payload or not self.ebus or not self.ebus.is_connected:
             return
         await self.async_write_register("bai", "SetModeOverride", self._set_mode_override_payload, strict_verify=False)
 
+    # Stop the keep-alive refresh and forget the stored mode override payload.
     def async_clear_mode_override(self) -> None:
         if self._cancel_set_mode_override:
             self._cancel_set_mode_override()
             self._cancel_set_mode_override = None
         self._set_mode_override_payload = None
 
-    # Intent: stop polling, scheduled work, and the active ebusd session.
-    # Why: a successfully unloaded config entry must not retain transport or callbacks.
+    # Stop polling, scheduled work, and the active ebusd session.
+    # A successfully unloaded config entry must not retain transport or callbacks.
     async def async_stop(self) -> None:
         self._stopped = True
         self._ebusd_connected = False
@@ -2162,8 +2183,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self.ebus = None
         self.discovery = None
 
-    # Intent: block transport reconnects while Home Assistant unloads platforms.
-    # Why: platform teardown may await while a failed poll is sleeping before reconnect.
+    # Block transport reconnects while Home Assistant unloads platforms.
+    # Platform teardown may await while a failed poll is sleeping before reconnect.
     def request_unload(self) -> None:
         self._unload_requested = True
         self._started = False
@@ -2178,8 +2199,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if request_shutdown is not None:
                 request_shutdown()
 
-    # Intent: restore transport reconnects when platform unload did not complete.
-    # Why: HA may retry an unload using the still-loaded coordinator.
+    # Restore transport reconnects when platform unload did not complete.
+    # HA may retry an unload using the still-loaded coordinator.
     def cancel_unload_request(self) -> None:
         self._unload_requested = False
         self._started = False

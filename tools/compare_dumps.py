@@ -16,6 +16,7 @@ except ImportError:
     import yaml
 
 
+# Run a command on the HA host through sshpass and return its stripped output; an SSH error ends the script.
 def ssh(cmd: str, passwd: str, user: str, host: str) -> str:
     r = subprocess.run(
         [
@@ -40,6 +41,7 @@ def ssh(cmd: str, passwd: str, user: str, host: str) -> str:
     return r.stdout.strip()
 
 
+# List the discovery dumps on the HA host as (timestamp, path) pairs, sorted by timestamp.
 def list_dumps(passwd: str, user: str, host: str) -> list[tuple[str, str]]:
     """Return sorted [(timestamp, path), ...] from HA."""
     out = ssh("ls -1 /config/vaillant_ebus/discovery_dump_*.yaml 2>/dev/null", passwd, user, host)
@@ -56,6 +58,7 @@ def list_dumps(passwd: str, user: str, host: str) -> list[tuple[str, str]]:
     return sorted(result, key=lambda x: x[0])
 
 
+# Download one dump from the HA host through a temporary file and return it parsed as YAML.
 def fetch_dump(path: str, passwd: str, user: str, host: str) -> dict:
     with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
         local = f.name
@@ -68,6 +71,7 @@ def fetch_dump(path: str, passwd: str, user: str, host: str) -> dict:
     return result
 
 
+# Compare the two newest discovery dumps on the HA host, with the connection settings read from .env.
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compare HA discovery dumps")
     parser.add_argument("--env", default="/mnt/work/Projects/Personal/vaillant-ebus/.env")

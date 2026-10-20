@@ -36,8 +36,8 @@ def is_no_data_value(raw: str | None) -> bool:
     return low.startswith("no data stored") or low.startswith("(empty ") or low.startswith("err:") or "(err" in low
 
 
-# Intent: identify ebusd error responses separately from ordinary no-data sentinels.
-# Why: error rows remain diagnostic placeholders but must not authorize active polling.
+# Identify ebusd error responses separately from ordinary no-data sentinels.
+# Error rows remain diagnostic placeholders but must not authorize active polling.
 def is_ebusd_error_value(raw: str | None) -> bool:
     if raw is None:
         return False
@@ -45,11 +45,13 @@ def is_ebusd_error_value(raw: str | None) -> bool:
     return low.startswith(("err:", "(err:")) or "(err" in low
 
 
-# Intent: lower-cased names of the HMUX0 B509 1/16 degC flow/return temperature registers.
-# Why: both share one layout, so they must share the same plausibility guard and fallback restriction.
+# Lower-cased names of the HMUX0 B509 1/16 degC flow/return temperature registers.
+# Both share one layout, so they must share the same plausibility guard and fallback restriction.
 HMUX0_PRECISE_TEMPERATURE_REGISTERS: frozenset[str] = frozenset({"rundataflowtemp", "rundatareturntemp"})
 
 
+# Plausibility check for an HMUX0 flow or return temperature decode: -50 to 100 degC is accepted, anything else is a
+# wrong decode and stays unavailable.
 def is_valid_hmux0_return_temperature(raw: str) -> bool:
     """Return whether an HMUX0 flow/return-temperature decode is physically plausible."""
     try:
@@ -124,9 +126,9 @@ class EbusdRegister:
     message_type: str = ""
     address: str = ""
 
+    # Dot-separated circuit.name key that identifies the register.
     @property
     def key(self) -> str:
-        # Dot-separated circuit.name unique identifier
         return f"{self.circuit}.{self.name}"
 
 
@@ -156,8 +158,8 @@ COMPRESSOR_STATUS_LABELS: dict[str, str] = {
 }
 
 
-# Intent: find a register regardless of casing used by a discovery response.
-# Why: compressor and tank derivation must not depend on canonical register spelling.
+# Find a register regardless of casing used by a discovery response.
+# Compressor and tank derivation must not depend on canonical register spelling.
 def _register_lookup(registers: Mapping[str, EbusdRegister], key: str) -> EbusdRegister | None:
     register = registers.get(key)
     if register is not None:
@@ -237,10 +239,12 @@ OPERATING_STATE_DEFROST = "Defrost"
 _ON_BITS = frozenset({"on", "1", "true", "yes"})
 
 
+# Whether a status value is one of the 'on' bit values; a no-data sentinel is never on.
 def _value_is_on(value: str | None) -> bool:
     return not is_no_data_value(value) and (value or "").strip().lower() in _ON_BITS
 
 
+# Normalize a status string to lower case; ebusd no-data sentinels become an empty string.
 def _clean(value: str | None) -> str:
     """Normalize a status string, treating ebusd no-data sentinels as empty."""
     return "" if is_no_data_value(value) else (value or "").strip().lower()
@@ -253,8 +257,8 @@ def _clean(value: str | None) -> str:
 SETMODE_RELEASE_COOLING_INDEX = 9
 
 
-# Intent: retrieve derived-state fields independently of register-name casing.
-# Why: energy-state decoding consumes the raw coordinator data map directly.
+# Retrieve derived-state fields independently of register-name casing.
+# Energy-state decoding consumes the raw coordinator data map directly.
 def _value_lookup(values: Mapping[str, str | None], key: str) -> str | None:
     value = values.get(key)
     if value is not None:
@@ -263,6 +267,7 @@ def _value_lookup(values: Mapping[str, str | None], key: str) -> str | None:
     return next((value for name, value in values.items() if name.casefold() == expected), None)
 
 
+# Whether the heat pump asks for cooling: the releaseCooling field of the SetMode register is '1'.
 def _setmode_release_cooling(values: Mapping[str, str | None], hp_circuit: str) -> bool:
     """Return whether the heat pump requests cooling via SetMode.releaseCooling."""
     raw = _value_lookup(values, f"{hp_circuit}.SetMode.value")
@@ -343,6 +348,7 @@ def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | N
 # _clean() normalizes an empty/NaN read to "", so we detect it there.
 
 
+# Parse a storage temperature; a sentinel, an empty value or a non-positive reading gives None.
 def _parse_temp(raw: str | None) -> float | None:
     """Return a positive storage temperature, or None for a sentinel/absence."""
     if raw is None:
@@ -392,8 +398,8 @@ def derive_tank_presence(values: Mapping[str, str | None], dhw_circuit: str | No
 _DHW_SIGNAL_FIELDS = ("Status00.compressorstate", "Status01.pumpstate", "Status07.heatermain_b7_warmwater")
 
 
-# Intent: derive whether the heat pump is in hot water mode (charging the cylinder) from its status fields.
-# Why: issue #191 - a water heater entity has no heating state, so a binary sensor reuses the operating-state logic,
+# Derive whether the heat pump is in hot water mode (charging the cylinder) from its status fields.
+# Issue #191 - a water heater entity has no heating state, so a binary sensor reuses the operating-state logic,
 # which also reads Status00, Status01.pumpstate and Status07 for units whose RunDataStatuscode stays at 0 during hot
 # water demand. A blocked or switched-off hot water heater is not on. No usable status is unknown, never off, and a
 # bare numeric status without any other signal is unknown because the code is not decoded here and such a unit may
@@ -549,12 +555,13 @@ class ResolutionResult:
     reason: str = ""
 
 
+# Whether a node is a numeric VRC controller: its circuit name is all digits and its scan type is that name plus '00'.
 def _is_numeric_vrc_controller(node: DeviceNode) -> bool:
     return node.circuit.isdigit() and node.scan_type == f"{node.circuit}00"
 
 
-# Intent: identify numbered and family-level controller circuit aliases.
-# Why: owner resolution must support ctlv1 through ctlv9 without a ctlv2 default.
+# Identify numbered and family-level controller circuit aliases.
+# Owner resolution must support ctlv1 through ctlv9 without a ctlv2 default.
 def is_controller_circuit(circuit: str) -> bool:
     """Return whether a circuit name identifies a numbered controller family."""
     lower = circuit.casefold()
@@ -563,8 +570,8 @@ def is_controller_circuit(circuit: str) -> bool:
     )
 
 
-# Intent: identify heat-pump circuit aliases without choosing a physical default.
-# Why: HMU and HMUX variants need the same role-based resolver.
+# Identify heat-pump circuit aliases without choosing a physical default.
+# HMU and HMUX variants need the same role-based resolver.
 def is_heat_pump_circuit(circuit: str) -> bool:
     """Return whether a circuit name identifies a heat-pump family."""
     lower = circuit.casefold()
@@ -601,8 +608,8 @@ class DeviceGraph:
         }
     )
 
-    # Intent: classify controller/DHW register names, including numbered zones.
-    # Why: a placeholder Z9/Hc9 control register still proves its source owner.
+    # Classify controller/DHW register names, including numbered zones.
+    # A placeholder Z9/Hc9 control register still proves its source owner.
     @classmethod
     def _is_control_register(cls, name: str) -> bool:
         lower = name.casefold()

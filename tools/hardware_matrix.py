@@ -26,24 +26,24 @@ SCAN_RE = re.compile(r"scanned:\s*MF=[^;]*;ID=([A-Za-z0-9]+);SW=(\w+);HW=(\w+)")
 IGNORED_IDS = frozenset({"NETX2", "NETX3"})
 
 
-# Intent: list the hardware variants (device, firmware, hardware) scanned in one fixture.
-# Why: the coverage table counts variants; gateways such as NETX2 and NETX3 are neither heat pump nor controller.
+# List the hardware variants (device, firmware, hardware) scanned in one fixture.
+# The coverage table counts variants; gateways such as NETX2 and NETX3 are neither heat pump nor controller.
 def fixture_variants(path: Path) -> set[str]:
     """Return ``{"HMUX0 SW0406/HW0504", ...}`` for every scanned device in one fixture."""
     text = path.read_text(errors="replace")
     return {f"{dev} SW{sw}/HW{hw}" for dev, sw, hw in SCAN_RE.findall(text) if dev not in IGNORED_IDS}
 
 
-# Intent: count the test files that name a fixture.
-# Why: a fixture that no test names gives no evidence for its hardware variant.
+# Count the test files that name a fixture.
+# A fixture that no test names gives no evidence for its hardware variant.
 def test_references(fixture_name: str) -> int:
     """Count test files that name the fixture (by file name, with or without extension)."""
     stem = Path(fixture_name).stem
     return sum(1 for test in TESTS.glob("test_*.py") if stem in test.read_text(errors="replace"))
 
 
-# Intent: map every hardware variant to its fixtures and the number of tests that reference each.
-# Why: one table shows which variants rest on a single capture or on none.
+# Map every hardware variant to its fixtures and the number of tests that reference each.
+# One table shows which variants rest on a single capture or on none.
 def build_matrix() -> dict[str, dict[str, int]]:
     """Map variant -> {fixture file name: number of referencing test files}."""
     matrix: dict[str, dict[str, int]] = defaultdict(dict)
@@ -53,8 +53,8 @@ def build_matrix() -> dict[str, dict[str, int]]:
     return dict(matrix)
 
 
-# Intent: format the coverage matrix as a Markdown table.
-# Why: the table goes into the CI step summary.
+# Format the coverage matrix as a Markdown table.
+# The table goes into the CI step summary.
 def render(matrix: dict[str, dict[str, int]]) -> str:
     lines = [
         "## Hardware coverage (community fixtures)",
@@ -71,8 +71,8 @@ def render(matrix: dict[str, dict[str, int]]) -> str:
     return "\n".join(lines)
 
 
-# Intent: print the matrix and, with --fail-on-untested, exit 1 when a variant has no test reference.
-# Why: CI can then block a variant that no test covers.
+# Print the matrix and, with --fail-on-untested, exit 1 when a variant has no test reference.
+# CI can then block a variant that no test covers.
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fail-on-untested", action="store_true")

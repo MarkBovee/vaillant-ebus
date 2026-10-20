@@ -10,6 +10,8 @@ from homeassistant.const import Platform
 DOMAIN = "vaillant_ebus"
 
 
+# Read the version from manifest.json so the dump metadata cannot drift from the release; 'unknown' when it cannot be
+# read.
 def _read_manifest_version() -> str:
     """Read version from manifest so dump metadata cannot drift."""
     try:

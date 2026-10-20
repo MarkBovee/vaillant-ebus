@@ -24,6 +24,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
 
+    # Build the sensor entities for the matching descriptions, skipping duplicate unique ids.
     def _build(descriptions: list[EntityDescription]) -> list[SensorEntity]:
         entities: list[SensorEntity] = []
         seen: set[str] = set()
@@ -44,8 +45,8 @@ async def async_setup_entry(
     # entity. It reports `unavailable` until a status field carries data.
     energy_added = False
 
-    # Intent: add the derived energy-state sensor once a heat-pump owner is discovered.
-    # Why: first refresh can finish before background discovery identifies the heat pump.
+    # Add the derived energy-state sensor once a heat-pump owner is discovered.
+    # First refresh can finish before background discovery identifies the heat pump.
     def _ensure_energy_state() -> None:
         nonlocal energy_added
         heat_pump_circuit = coordinator.heat_pump_circuit
@@ -65,6 +66,7 @@ class EbusdEnergyManagerState(CoordinatorEntity[VaillantCoordinator], SensorEnti
     _attr_name = "Energy Manager State"
     _attr_icon = "mdi:heat-pump-outline"
 
+    # Attach the energy manager state sensor to the heat pump device and remember its circuit as the fallback.
     def __init__(
         self,
         coordinator: VaillantCoordinator,
@@ -76,17 +78,19 @@ class EbusdEnergyManagerState(CoordinatorEntity[VaillantCoordinator], SensorEnti
         self._attr_device_info = coordinator.get_device_info(heat_pump_circuit)
         self._fallback_circuit = heat_pump_circuit
 
+    # Operating state derived from the heat pump circuit. The circuit is resolved again on every call, so late discovery
+    # or a renamed circuit keeps the sensor on the device that reports the status.
     def _state(self) -> str | None:
-        # Re-resolve the heat-pump circuit so late discovery or a circuit rename
-        # keeps the state sensor on the device that actually reports the status.
         circuit = self.coordinator.heat_pump_circuit or self._fallback_circuit
         data = (self.coordinator.data or {}).get("ebusd", {})
         return derive_operating_state(data, circuit)
 
+    # The derived operating state.
     @property
     def native_value(self) -> str | None:
         return self._state()
 
+    # Available when the last update succeeded and an operating state could be derived.
     @property
     def available(self) -> bool:
         return self.coordinator.last_update_success and self._state() is not None
@@ -120,6 +124,8 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
             cat = desc.meta.entity_category
             self._attr_entity_category = EntityCategory(cat) if cat != "config" else None
 
+    # The register value for the sensor; None (unknown) when there is no live data, so a register that stops being read
+    # cannot freeze the entity on its last value.
     @property
     def native_value(self) -> float | str | None:
         raw = get_register_value(self.coordinator, self._desc.circuit, self._desc.name, self._desc.field)
@@ -146,9 +152,8 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
                 val = val / divisor
         return val
 
+    # Available while coordinator updates succeed. A missing register key shows as unknown (native_value None) without
+    # flipping availability, so idle 'no data stored' registers do not flicker.
     @property
     def available(self) -> bool:
-        # Entity available when coordinator updates succeed. A missing register
-        # key surfaces as unknown (native_value None) without flipping
-        # availability, so idle "no data stored" registers do not flicker.
         return self.coordinator.last_update_success

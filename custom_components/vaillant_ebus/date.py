@@ -31,8 +31,8 @@ async def async_setup_entry(
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
     added_registers: set[str] = set()
 
-    # Intent: add dates only for active discovered zone/controller registers.
-    # Why: cache values and static inactive-zone rows must not create date controls.
+    # Add dates only for active discovered zone/controller registers.
+    # Cache values and static inactive-zone rows must not create date controls.
     # Add each date control once its backing register appears in the discovery graph.
     def ensure_date_entities() -> None:
         entities: list[DateEntity] = []

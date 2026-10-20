@@ -58,8 +58,8 @@ async def async_setup_entry(
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
     added = False
 
-    # Intent: add the water heater only after every register used by its features exists.
-    # Why: operation, boost, target, and away writes must not be partially supported.
+    # Add the water heater only after every register used by its features exists.
+    # operation, boost, target, and away writes must not be partially supported.
     def _ensure_entity() -> None:
         nonlocal added
         if added or not coordinator.discovery_ready:
@@ -127,8 +127,8 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         except ValueError:
             return None
 
-    # Intent: expose whether the heat pump is charging the cylinder as the `heating` attribute.
-    # Why: a water heater entity has no heating state of its own (issue #191); the attribute shares the derivation of
+    # Expose whether the heat pump is charging the cylinder as the `heating` attribute.
+    # A water heater entity has no heating state of its own (issue #191); the attribute shares the derivation of
     # the "DHW Heating" binary sensor. It is left out without a usable heat pump status (gas boilers), because
     # "not heating" would be a claim the data does not support.
     @property
@@ -161,6 +161,7 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
         operation = (_value(self.coordinator, "HwcOpMode") or "").lower()
         return EBUSD_TO_HA_OPMODE.get(operation)
 
+    # Available while the coordinator's last update succeeded.
     @property
     def available(self) -> bool:
         return self.coordinator.last_update_success

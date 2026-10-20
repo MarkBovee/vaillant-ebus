@@ -26,6 +26,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
 
+    # Build the select entities for the matching descriptions, skipping duplicate unique ids.
     def _build(descriptions: list[EntityDescription]) -> list[SelectEntity]:
         entities: list[SelectEntity] = []
         seen: set[str] = set()
@@ -63,10 +64,9 @@ class EbusdSelect(CoordinatorEntity[VaillantCoordinator], SelectEntity):
         if desc.meta.icon:
             self._attr_icon = desc.meta.icon
 
+    # The selected option; an ebusd sentinel means unknown, because it is not a selectable option.
     @property
     def current_option(self) -> str | None:
-        # Return current selected option; ebusd sentinels mean "unknown", not
-        # a selectable option.
         raw = get_register_value(self.coordinator, self._desc.circuit, self._desc.name, self._desc.field)
         if raw is None or is_no_data_value(str(raw)):
             return None

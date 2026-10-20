@@ -28,26 +28,26 @@ DISCUSSION_QUERY = (
 )
 
 
-# Intent: find GitHub attachment URLs in free text, keeping order and dropping duplicates.
-# Why: issue bodies and comments link the dumps as Markdown or plain URLs.
+# Find GitHub attachment URLs in free text, keeping order and dropping duplicates.
+# Issue bodies and comments link the dumps as Markdown or plain URLs.
 def extract_attachment_urls(text: str) -> list[str]:
     return list(dict.fromkeys(ATTACHMENT_PATTERN.findall(text)))
 
 
-# Intent: hash file content with line endings normalized.
-# Why: a CRLF checkout of a fixture must still match the LF attachment.
+# Hash file content with line endings normalized.
+# A CRLF checkout of a fixture must still match the LF attachment.
 def normalized_digest(data: bytes) -> str:
     return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
 
 
-# Intent: map fixture digests to their names for duplicate detection.
-# Why: avoid adding a second copy of a capture that is already a fixture.
+# Map fixture digests to their names for duplicate detection.
+# Avoid adding a second copy of a capture that is already a fixture.
 def fixture_digests(directory: Path = FIXTURES) -> dict[str, str]:
     return {normalized_digest(path.read_bytes()): path.name for path in directory.glob("*") if path.is_file()}
 
 
-# Intent: return True when the target directory is inside the repository's tracked fixture tree.
-# Why: downloading over a tracked fixture silently modifies it (this happened once in 1.10.5).
+# Return True when the target directory is inside the repository's tracked fixture tree.
+# Downloading over a tracked fixture silently modifies it (this happened once in 1.10.5).
 def inside_fixtures(target: Path) -> bool:
     try:
         target.resolve().relative_to(FIXTURES.resolve())
@@ -56,16 +56,16 @@ def inside_fixtures(target: Path) -> bool:
     return True
 
 
-# Intent: run a gh command in the repository and return its stdout decoded as UTF-8.
-# Why: text=True alone decodes with the Windows ANSI code page (cp1252), which crashed on emoji and umlauts in comments.
+# Run a gh command in the repository and return its stdout decoded as UTF-8.
+# text=True alone decodes with the Windows ANSI code page (cp1252), which crashed on emoji and umlauts in comments.
 def run_gh(*args: str) -> str:
     return subprocess.run(
         ["gh", *args], capture_output=True, text=True, encoding="utf-8", check=True, cwd=ROOT
     ).stdout
 
 
-# Intent: collect the text of an issue or discussion including comments and replies.
-# Why: attachments are usually posted in comments, not in the body.
+# Collect the text of an issue or discussion including comments and replies.
+# Attachments are usually posted in comments, not in the body.
 def collect_text(number: int, discussion: bool) -> str:
     if not discussion:
         return run_gh("issue", "view", str(number), "--json", "body,comments")
@@ -84,8 +84,8 @@ def collect_text(number: int, discussion: bool) -> str:
     )
 
 
-# Intent: download every attachment to the output directory and report duplicates of existing fixtures.
-# Why: gives analysis a scratch copy and a reuse hint without touching the repository.
+# Download every attachment to the output directory and report duplicates of existing fixtures.
+# Gives analysis a scratch copy and a reuse hint without touching the repository.
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("number", type=int, help="issue or discussion number")

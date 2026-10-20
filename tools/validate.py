@@ -25,8 +25,8 @@ FORMAT_TARGETS = ["custom_components"]
 MYPY_TARGETS = ["custom_components/vaillant_ebus/backend"]
 
 
-# Intent: pick the repository virtualenv interpreter for the current OS, falling back to the running Python.
-# Why: tools must run the same ruff/pytest versions the project is developed with.
+# Pick the repository virtualenv interpreter for the current OS, falling back to the running Python.
+# Tools must run the same ruff/pytest versions the project is developed with.
 def venv_python() -> str:
     for candidate in (ROOT / ".venv" / "Scripts" / "python.exe", ROOT / ".venv" / "bin" / "python"):
         if candidate.exists():
@@ -34,8 +34,8 @@ def venv_python() -> str:
     return sys.executable
 
 
-# Intent: read the baseline of environment-only failing test ids (prefix match, comments allowed).
-# Why: Windows checkouts fail a handful of tests for reasons unrelated to the change under test.
+# Read the baseline of environment-only failing test ids (prefix match, comments allowed).
+# Windows checkouts fail a handful of tests for reasons unrelated to the change under test.
 def load_baseline(path: Path = BASELINE_FILE) -> list[str]:
     if not path.exists():
         return []
@@ -43,21 +43,21 @@ def load_baseline(path: Path = BASELINE_FILE) -> list[str]:
     return [line for line in lines if line and not line.startswith("#")]
 
 
-# Intent: split failing test ids into known-environment and new failures.
-# Why: only new failures should fail a local run.
+# Split failing test ids into known-environment and new failures.
+# Only new failures should fail a local run.
 def classify_failures(failures: list[str], baseline: list[str]) -> tuple[list[str], list[str]]:
     known = [item for item in failures if any(item.startswith(prefix) for prefix in baseline)]
     return known, [item for item in failures if item not in known]
 
 
-# Intent: extract failing node ids from pytest's short summary.
-# Why: the baseline comparison needs stable ids, not the raw log.
+# Extract failing node ids from pytest's short summary.
+# The baseline comparison needs stable ids, not the raw log.
 def parse_failures(output: str) -> list[str]:
     return [match.group(1).strip() for match in re.finditer(r"^(?:FAILED|ERROR) (\S+)", output, re.MULTILINE)]
 
 
-# Intent: run one named step and report pass or fail without aborting the remaining steps.
-# Why: a single run should list every problem, not only the first.
+# Run one named step and report pass or fail without aborting the remaining steps.
+# A single run should list every problem, not only the first.
 def run_step(name: str, command: list[str], results: dict[str, bool]) -> subprocess.CompletedProcess[str]:
     print(f"\n== {name}")
     completed = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
@@ -67,8 +67,8 @@ def run_step(name: str, command: list[str], results: dict[str, bool]) -> subproc
     return completed
 
 
-# Intent: run the YAML syntax check CI applies to every *.yml/*.yaml file in the repository.
-# Why: a broken fixture or workflow should fail locally, not in CI.
+# Run the YAML syntax check CI applies to every *.yml/*.yaml file in the repository.
+# A broken fixture or workflow should fail locally, not in CI.
 def check_yaml(python: str, results: dict[str, bool]) -> None:
     code = (
         "import pathlib,yaml,sys\n"
@@ -83,8 +83,8 @@ def check_yaml(python: str, results: dict[str, bool]) -> None:
     run_step("yaml", [python, "-c", code], results)
 
 
-# Intent: orchestrate the CI-equivalent checks.
-# Why: release candidates need CI parity before a tag is pushed (a failing hassfest once shipped in a tag).
+# Orchestrate the CI-equivalent checks.
+# Release candidates need CI parity before a tag is pushed (a failing hassfest once shipped in a tag).
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--quick", action="store_true", help="skip pytest")

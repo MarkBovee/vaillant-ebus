@@ -25,6 +25,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
 
+    # Build the binary sensor entities for the matching descriptions, skipping duplicate unique ids.
     def _build(descriptions: list[EntityDescription]) -> list[BinarySensorEntity]:
         entities: list[BinarySensorEntity] = []
         seen: set[str] = set()
@@ -41,8 +42,8 @@ async def async_setup_entry(
     async_add_entities(_build(coordinator.entities))
     tank_added = False
 
-    # Intent: add tank presence only after its controller storage register is discovered.
-    # Why: a derived entity without a backing HwcStorageTemp capability is a ghost.
+    # Add tank presence only after its controller storage register is discovered.
+    # A derived entity without a backing HwcStorageTemp capability is a ghost.
     def _ensure_tank_entity() -> None:
         nonlocal tank_added
         if tank_added or not coordinator.discovery_ready:
@@ -56,8 +57,8 @@ async def async_setup_entry(
     coordinator.register_post_discovery_callback(_ensure_tank_entity)
     dhw_heating_added = False
 
-    # Intent: add the DHW heating sensor only where the heat pump status register is discovered.
-    # Why: gas boilers have no such register, and a derived entity without a backing register is a ghost.
+    # Add the DHW heating sensor only where the heat pump status register is discovered.
+    # Gas boilers have no such register, and a derived entity without a backing register is a ghost.
     def _ensure_dhw_heating_entity() -> None:
         nonlocal dhw_heating_added
         if dhw_heating_added or not coordinator.discovery_ready:
@@ -71,8 +72,8 @@ async def async_setup_entry(
     coordinator.register_post_discovery_callback(_ensure_dhw_heating_entity)
     added_fixed = False
 
-    # Intent: add connection and fault sensors once a heat-pump owner exists.
-    # Why: these derived sensors need a discovered physical heat-pump circuit.
+    # Add connection and fault sensors once a heat-pump owner exists.
+    # These derived sensors need a discovered physical heat-pump circuit.
     def _ensure_fixed_entities() -> None:
         nonlocal added_fixed
         if added_fixed or not coordinator.discovery_ready or coordinator.heat_pump_circuit is None:
@@ -117,17 +118,17 @@ class EbusdBinarySensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEnti
         elif "cool" in low_name:
             self._attr_device_class = BinarySensorDeviceClass.COLD
 
+    # Binary state of the register; an ebusd sentinel means unknown, not off.
     @property
     def is_on(self) -> bool | None:
-        # Return binary state; ebusd sentinels mean "unknown", not off.
         raw = get_register_value(self.coordinator, self._desc.circuit, self._desc.name, self._desc.field)
         if raw is None or is_no_data_value(str(raw)):
             return None
         return raw.strip().lower() in BINARY_TRUE_VALUES
 
+    # Available while the coordinator's last update succeeded.
     @property
     def available(self) -> bool:
-        # Entity available when coordinator updates succeed
         return self.coordinator.last_update_success
 
 
@@ -144,9 +145,9 @@ class EbusdConnectionSensor(CoordinatorEntity[VaillantCoordinator], BinarySensor
         self._attr_unique_id = f"{entry.entry_id}_ebusd_online"
         self._attr_device_info = coordinator.get_device_info(coordinator.heat_pump_circuit)
 
+    # On while the coordinator's last update succeeded, which means ebusd is reachable.
     @property
     def is_on(self) -> bool:
-        # True when coordinator last update succeeded
         return self.coordinator.last_update_success
 
 
@@ -176,9 +177,9 @@ class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntit
         )
         return any(value and any(part.strip() not in {"", "-"} for part in str(value).split(";")) for value in values)
 
+    # Available while the coordinator's last update succeeded.
     @property
     def available(self) -> bool:
-        # Entity available when coordinator updates succeed
         return self.coordinator.last_update_success
 
 
@@ -196,11 +197,13 @@ class EbusdTankPresentSensor(CoordinatorEntity[VaillantCoordinator], BinarySenso
     _attr_icon = "mdi:water-boiler"
     _attr_entity_registry_enabled_default = True
 
+    # Attach the tank-present sensor to the domestic hot water device.
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_dhw_tank_present"
         self._attr_device_info = coordinator.get_device_info("dhw")
 
+    # Derive tank presence from the storage temperature of the heating circuit; None until that circuit is resolved.
     @property
     def is_on(self) -> bool | None:
         circuit = self.coordinator.heating_circuit
@@ -209,11 +212,10 @@ class EbusdTankPresentSensor(CoordinatorEntity[VaillantCoordinator], BinarySenso
         data = (self.coordinator.data or {}).get("ebusd", {})
         return derive_tank_presence(data, circuit)
 
+    # Tracked with the coordinator update only, so a missing storage-temperature register shows as a genuine 'unknown'
+    # state instead of being mixed up with a present (on) or absent (off) tank.
     @property
     def available(self) -> bool:
-        # Always tracked with the coordinator update so a missing storage-temp
-        # register surfaces as a genuine "unknown" state rather than being
-        # conflated with either a connected (on) or absent (off) tank.
         return self.coordinator.last_update_success
 
 
@@ -230,22 +232,22 @@ class EbusdDhwHeatingSensor(CoordinatorEntity[VaillantCoordinator], BinarySensor
     _attr_icon = "mdi:water-boiler"
     _attr_device_class = BinarySensorDeviceClass.HEAT
 
-    # Intent: build the sensor with a stable unique id on the logical DHW device.
-    # Why: the id must not look like a generated register id, so cleanup never treats it as an orphan.
+    # Build the sensor with a stable unique id on the logical DHW device.
+    # The id must not look like a generated register id, so cleanup never treats it as an orphan.
     def __init__(self, coordinator: VaillantCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_dhw_heating"
         self._attr_device_info = coordinator.get_device_info("dhw")
 
-    # Intent: report hot water mode from the heat pump status fields of the coordinator data.
-    # Why: None keeps missing data "unknown" instead of reporting "not heating".
+    # Report hot water mode from the heat pump status fields of the coordinator data.
+    # None keeps missing data "unknown" instead of reporting "not heating".
     @property
     def is_on(self) -> bool | None:
         data = (self.coordinator.data or {}).get("ebusd", {})
         return derive_dhw_heating(data, self.coordinator.heat_pump_circuit)
 
-    # Intent: follow the coordinator update state.
-    # Why: a missing status must surface as unknown, not as unavailable.
+    # Follow the coordinator update state.
+    # A missing status must surface as unknown, not as unavailable.
     @property
     def available(self) -> bool:
         # Tracks the coordinator so a missing status surfaces as unknown, not as unavailable or off.

@@ -19,23 +19,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-# Intent: report whether two Python sources have the same syntax tree.
-# Why: this is the proof that a comment-only or formatting-only change did not alter behaviour.
+# Report whether two Python sources have the same syntax tree.
+# This is the proof that a comment-only or formatting-only change did not alter behaviour.
 def trees_equal(old_source: str, new_source: str, renames: dict[str, str] | None = None) -> bool:
     for old_name, new_name in (renames or {}).items():
         old_source = old_source.replace(old_name, new_name)
     return ast.dump(ast.parse(old_source)) == ast.dump(ast.parse(new_source))
 
 
-# Intent: list the Python files that differ between the working tree and a ref.
-# Why: only changed files need the comparison, and deleted files have nothing to parse.
+# List the Python files that differ between the working tree and a ref.
+# Only changed files need the comparison, and deleted files have nothing to parse.
 def changed_python_files(ref: str, root: Path = ROOT) -> list[str]:
     out = subprocess.check_output(["git", "diff", "--name-only", ref, "--", "*.py"], cwd=root, text=True)
     return [name for name in out.splitlines() if name.strip() and (root / name).exists()]
 
 
-# Intent: compare every changed Python file with the same file at the ref and print the verdicts.
-# Why: one run answers whether a whole change set is comment-only.
+# Compare every changed Python file with the same file at the ref and print the verdicts.
+# One run answers whether a whole change set is comment-only.
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--ref", default="HEAD")

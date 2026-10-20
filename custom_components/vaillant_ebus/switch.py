@@ -33,6 +33,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
 
+    # Build the switch entities for the matching descriptions, skipping duplicate unique ids.
     def _build(descriptions: list[EntityDescription]) -> list[SwitchEntity]:
         entities: list[SwitchEntity] = []
         seen: set[str] = set()
@@ -49,8 +50,8 @@ async def async_setup_entry(
     async_add_entities(_build(coordinator.entities))
     fixed_added: set[str] = set()
 
-    # Intent: add each fixed switch only when every register it writes is discovered.
-    # Why: partial capability sets must not expose controls that can issue partial writes.
+    # Add each fixed switch only when every register it writes is discovered.
+    # Partial capability sets must not expose controls that can issue partial writes.
     def _ensure_fixed_entities() -> None:
         if not coordinator.discovery_ready:
             return
@@ -111,9 +112,9 @@ class EbusdSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         if desc.meta.icon:
             self._attr_icon = desc.meta.icon
 
+    # Boolean state of the register; an ebusd sentinel means unknown, not off.
     @property
     def is_on(self) -> bool | None:
-        # Return boolean state; ebusd sentinels mean "unknown", not off.
         raw = get_register_value(self.coordinator, self._desc.circuit, self._desc.name, self._desc.field)
         if raw is None or is_no_data_value(str(raw)):
             return None
@@ -173,15 +174,15 @@ def _today_str() -> str:
 AWAY_ZONE_REGISTERS = ("HolidayStartPeriod", "HolidayEndPeriod", "HolidayTemp")
 
 
-# Intent: report whether a zone currently reports a real room temperature.
-# Why: a placeholder zone keeps static defaults, so only a live room temperature proves the zone is installed.
+# Report whether a zone currently reports a real room temperature.
+# A placeholder zone keeps static defaults, so only a live room temperature proves the zone is installed.
 def _zone_has_room_temperature(coordinator: VaillantCoordinator, controller: str, zone: str) -> bool:
     value = get_register_value(coordinator, controller, f"{zone.upper()}RoomTemp")
     return value is not None and not is_no_data_value(value)
 
 
-# Intent: list the zones whose holiday period the away switch reads and writes, primary zone first.
-# Why: issue #186 - away mode must cover every live zone, but never a placeholder zone or one whose holiday registers
+# List the zones whose holiday period the away switch reads and writes, primary zone first.
+# Issue #186 - away mode must cover every live zone, but never a placeholder zone or one whose holiday registers
 # were not discovered; the primary zone stays unconditional so single-zone systems behave exactly as before.
 def _away_zones(coordinator: VaillantCoordinator, primary_zone: str) -> list[str]:
     controller = coordinator.heating_circuit
@@ -198,8 +199,8 @@ def _away_zones(coordinator: VaillantCoordinator, primary_zone: str) -> list[str
     return [primary_zone, *sorted(others, key=lambda zone: int(zone[1:]) if zone[1:].isdigit() else 0)]
 
 
-# Intent: report whether one zone is on holiday: True, False, or None when its dates cannot be read.
-# Why: an explicit "unset" start date proves the zone is not away even when the end register is unreadable, but a
+# Report whether one zone is on holiday: True, False, or None when its dates cannot be read.
+# An explicit "unset" start date proves the zone is not away even when the end register is unreadable, but a
 # missing or no-data register is unknown and must never be coerced into "not away" (issue #186 audit).
 def _zone_away_state(coordinator: VaillantCoordinator, controller: str, zone: str) -> bool | None:
     start = get_register_value(coordinator, controller, f"{zone.upper()}HolidayStartPeriod")
@@ -227,10 +228,10 @@ class AwayModeSwitch(CoordinatorEntity[VaillantCoordinator], SwitchEntity):
         self._zone = zone
         self._attr_device_info = coordinator.get_device_info(zone)
 
+    # On when every live zone is on holiday. One zone that is provably not away turns it off, and unreadable data stays
+    # unknown unless another zone already proves the system is not away.
     @property
     def is_on(self) -> bool | None:
-        # True when every live zone is on holiday; one zone that is provably not away makes it off, and unreadable
-        # data stays unknown unless another zone already proves the system is not away.
         circuit = self.coordinator.heating_circuit
         zones = _away_zones(self.coordinator, self._zone)
         if circuit is None or not zones:

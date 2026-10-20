@@ -39,6 +39,7 @@ def _coerce_telegram(raw: Mapping[str, Any]) -> GrabTelegram:
     }
 
 
+# Whether a register value is real data rather than an ebusd sentinel such as '-' or 'no data stored'.
 def _meaningful(value: Any) -> bool:
     """Return whether a register value carries usable data."""
     if value is None:
@@ -47,6 +48,7 @@ def _meaningful(value: Any) -> bool:
     return not any(text == sentinel or text.startswith(f"{sentinel} ") for sentinel in _SENTINELS)
 
 
+# Index the serialized register entries by their circuit.name key, skipping entries that lack either part.
 def _registers_by_key(registers: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Index serialized register entries by stable circuit/name key."""
     return {
@@ -56,6 +58,7 @@ def _registers_by_key(registers: list[dict[str, Any]]) -> dict[str, dict[str, An
     }
 
 
+# Sort registers into the discovered, mapped, unavailable and disabled lists of the dump summary.
 def _register_categories(registers: list[dict[str, Any]]) -> dict[str, list[str]]:
     """Classify discovered, mapped, unavailable, and disabled registers."""
     categories: dict[str, list[str]] = {
@@ -80,6 +83,8 @@ def _register_categories(registers: list[dict[str, Any]]) -> dict[str, list[str]
     return categories
 
 
+# Compare two register snapshots and list the new and changed registers, ignoring changes that only move between
+# sentinel values.
 def _register_changes(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> dict[str, list[Any]]:
     """Compare register snapshots while ignoring sentinel-only transitions."""
     old = _registers_by_key(before)
@@ -100,6 +105,8 @@ def _register_changes(before: list[dict[str, Any]], after: list[dict[str, Any]])
     return changes
 
 
+# Group captured telegrams by their bus identity so repeats collapse into one entry that still lists the changing
+# responses.
 def group_telegrams(telegrams: list[GrabTelegram]) -> list[TelegramGroup]:
     """Aggregate telegrams by bus identity, preserving changing responses."""
     groups: dict[tuple[str | None, ...], TelegramGroup] = {}
@@ -143,6 +150,7 @@ def group_telegrams(telegrams: list[GrabTelegram]) -> list[TelegramGroup]:
     )
 
 
+# Bring a dump of any version (legacy, current or newer) into the current shape without changing the input.
 def normalize_dump(dump: dict[str, Any], parsed_telegrams: list[GrabTelegram] | None = None) -> dict[str, Any]:
     """Normalize legacy/current/future dump data without mutating input."""
     metadata = dict(dump.get("metadata") or {})

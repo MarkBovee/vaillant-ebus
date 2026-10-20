@@ -33,6 +33,7 @@ _DHW_PREFIXES = ("dhw", "hwc", "cylinder", "maxcylinder", "solar")
 class EntityDescription:
     """Store entity metadata linking register to HA platform."""
 
+    # Store the circuit, register name, field and metadata that identify one entity.
     def __init__(
         self,
         circuit: str,
@@ -53,6 +54,8 @@ class EntityDescription:
         self.enabled_by_default = enabled_by_default
         self._device_circuit = device_circuit
 
+    # Globally unique entity id for the Home Assistant registry: circuit, name and, for multi-field registers, the
+    # field.
     @property
     def unique_id(self) -> str:
         """Globally unique entity identifier for HA registry."""
@@ -61,11 +64,14 @@ class EntityDescription:
             suffix += f"_{self.field}"
         return f"ebusd_{self.circuit}_{suffix}"
 
+    # Dot-separated circuit.name.field key used to look up the entity's data.
     @property
     def key(self) -> str:
         """Dot-separated key for data lookup."""
         return f"{self.circuit}.{self.name}.{self.field}"
 
+    # Circuit whose Home Assistant device the entity belongs to; a mapped device circuit wins over the register's own
+    # circuit.
     @property
     def device_circuit(self) -> str:
         """Resolve logical device circuit for grouping in HA."""
@@ -73,6 +79,7 @@ class EntityDescription:
             return self.meta.device_circuit
         return self._device_circuit or self.circuit
 
+    # Home Assistant platform of the entity (sensor, binary_sensor, ...).
     @property
     def entity_type(self) -> str:
         """Return HA platform type (sensor, binary_sensor, etc.).
@@ -83,6 +90,7 @@ class EntityDescription:
         return self.meta.entity_type
 
 
+# Whether the string parses as a number.
 def _is_numeric(value: str) -> bool:
     """Check if string can be parsed as a number."""
     try:
@@ -92,14 +100,16 @@ def _is_numeric(value: str) -> bool:
         return False
 
 
-# Intent: register-name fragments that mark a numeric measurement (counter, energy, power) rather than a flag.
-# Why: a counter that currently reads 0 or 1 (for example YieldTotal at 0) must stay a sensor and not flip
+# Register-name fragments that mark a numeric measurement (counter, energy, power) rather than a flag.
+# A counter that currently reads 0 or 1 (for example YieldTotal at 0) must stay a sensor and not flip
 # into a binary_sensor that disagrees with its own later values.
 _NUMERIC_MEASURE_NAME_PATTERN = re.compile(
     r"(yield|energy|hours|starts|cycles|count|total|sum(?!mer)|power|consumption)", re.IGNORECASE
 )
 
 
+# Pick the Home Assistant platform for a register: an explicit entity type wins, otherwise the platform follows the
+# shape of the value and whether the register is writable.
 def _classify_register(
     register: EbusdRegister,
     field: str,
@@ -133,8 +143,8 @@ def _classify_register(
     return "sensor"
 
 
-# Intent: merge user-facing overrides without changing the register's polling policy.
-# Why: YAML entity overrides can adjust presentation, but cannot make unsafe fallback reads safe.
+# Merge user-facing overrides without changing the register's polling policy.
+# YAML entity overrides can adjust presentation, but cannot make unsafe fallback reads safe.
 def _merge_overrides(meta: RegisterMeta, override: dict[str, Any]) -> RegisterMeta:
     """Merge YAML overrides into a RegisterMeta, returning new instance."""
     if not override:
@@ -160,6 +170,8 @@ def _merge_overrides(meta: RegisterMeta, override: dict[str, Any]) -> RegisterMe
     return merged
 
 
+# Decide whether an entity starts enabled: never when the map disables it or the value is a no-data sentinel, otherwise
+# when the register or its node has live data.
 def _determine_enabled_by_default(
     register_key: str,
     raw_value: str | None,
@@ -186,8 +198,8 @@ def _determine_enabled_by_default(
     return False
 
 
-# Intent: report whether the controller itself declares heating circuit N unused.
-# Why: ebusd keeps static defaults (heat curve, min flow) for unused circuits, so they look live (issue #152);
+# Report whether the controller itself declares heating circuit N unused.
+# ebusd keeps static defaults (heat curve, min flow) for unused circuits, so they look live (issue #152);
 # only the controller's own `HcNCircuitType = inactive` is evidence, and an unreadable type must never hide a circuit.
 def _heating_circuit_inactive(graph: DeviceGraph, circuit: str, number: str) -> bool:
     expected = f"{circuit}.Hc{number}CircuitType".casefold()
@@ -201,8 +213,8 @@ _CIRCUIT_TYPE_KEY = re.compile(r"^([^.]+)\.Hc(\d+)CircuitType$", re.IGNORECASE)
 SOLAR_CIRCUIT = "sc"
 
 
-# Intent: list the (circuit, number) pairs of secondary heating circuits that the controller itself declares unused.
-# Why: ebusd and the controller answer static defaults for zones that are not installed (day temperature 21.0, holiday
+# List the (circuit, number) pairs of secondary heating circuits that the controller itself declares unused.
+# ebusd and the controller answer static defaults for zones that are not installed (day temperature 21.0, holiday
 # dates 2015), so their registers look live and created about 40 entities for two zones that do not exist (the owner's
 # HA, issue #152). Only `HcNCircuitType = inactive` is evidence. Zone 1 is never declared unused, an unreadable
 # type never is, and a zone that reports a room temperature is kept because contradictory evidence must fail safe.
@@ -221,8 +233,8 @@ def declared_unused_zones(graph: DeviceGraph) -> frozenset[tuple[str, int]]:
     return frozenset(unused)
 
 
-# Intent: list the zone numbers that every reporting controller declares unused.
-# Why: zone devices are shared by number across controllers, so a number is unused only when none of them uses it.
+# List the zone numbers that every reporting controller declares unused.
+# Zone devices are shared by number across controllers, so a number is unused only when none of them uses it.
 def _unused_zone_numbers(graph: DeviceGraph) -> frozenset[int]:
     declared = declared_unused_zones(graph)
     in_use = {
@@ -233,8 +245,8 @@ def _unused_zone_numbers(graph: DeviceGraph) -> frozenset[int]:
     return frozenset({number for _, number in declared} - in_use)
 
 
-# Intent: list the solar-controller circuits that only mirror the heating controller.
-# Why: in all 14 captures with a scan of address `ec` the "solar controller" has the same SW and HW as the heating
+# List the solar-controller circuits that only mirror the heating controller.
+# In all 14 captures with a scan of address `ec` the "solar controller" has the same SW and HW as the heating
 # controller and every `sc` row reads `no data stored`; the controller answers at the solar address. A real solar module
 # has its own identity and answers its registers, so either difference keeps the circuit.
 def ghost_solar_circuits(graph: DeviceGraph) -> frozenset[str]:
@@ -255,21 +267,21 @@ def ghost_solar_circuits(graph: DeviceGraph) -> frozenset[str]:
     return frozenset({SOLAR_CIRCUIT}) if mirrored else frozenset()
 
 
-# Intent: return the zone or heating-circuit number of a zone node circuit such as `z2` or `hc3`, or None.
-# Why: zone devices are matched to the declared-unused numbers by this number.
+# Return the zone or heating-circuit number of a zone node circuit such as `z2` or `hc3`, or None.
+# Zone devices are matched to the declared-unused numbers by this number.
 def _zone_node_number(circuit: str) -> int | None:
     digits = re.sub(r"^\D+", "", circuit)
     return int(digits) if digits.isdigit() else None
 
 
-# Intent: return the lower-cased circuit part of a `circuit.name` register key.
-# Why: circuit names are compared case-insensitively everywhere in the graph.
+# Return the lower-cased circuit part of a `circuit.name` register key.
+# Circuit names are compared case-insensitively everywhere in the graph.
 def _circuit_of(register_key: str) -> str:
     return register_key.partition(".")[0].casefold()
 
 
-# Intent: report whether zone N currently reports a real room temperature.
-# Why: the controller keeps static defaults for a zone that is not installed (issue #186, Z3); only a live room
+# Report whether zone N currently reports a real room temperature.
+# The controller keeps static defaults for a zone that is not installed (issue #186, Z3); only a live room
 # temperature proves the zone exists, so writable settings must not appear for a placeholder zone.
 def _zone_reports_room_temperature(graph: DeviceGraph, circuit: str, zone_number: int) -> bool:
     expected = f"{circuit}.Z{zone_number}RoomTemp".casefold()
@@ -277,12 +289,13 @@ def _zone_reports_room_temperature(graph: DeviceGraph, circuit: str, zone_number
     return value is not None and not is_no_data_value(value)
 
 
-# Intent: give a placeholder zone's setting the empty metadata it had before zone templating.
-# Why: the zone keeps showing its raw value as a plain sensor, exactly as in 1.11.1, without a write control.
+# Give a placeholder zone's setting the empty metadata it had before zone templating.
+# The zone keeps showing its raw value as a plain sensor, exactly as in 1.11.1, without a write control.
 def _placeholder_zone_meta() -> RegisterMeta:
     return RegisterMeta()
 
 
+# Whether the BAI part number identifies the confirmed eloBLOCK VE 28 hardware.
 def _is_eloblock(graph: DeviceGraph) -> bool:
     """Identify the confirmed eloBLOCK VE 28 BAI hardware."""
     for key, raw in graph.raw_registers.items():
@@ -294,6 +307,8 @@ def _is_eloblock(graph: DeviceGraph) -> bool:
     return False
 
 
+# Find the Home Assistant device group of an entity from the graph; None for a no-data orphan circuit, which gets no
+# entity.
 def _resolve_device_circuit(
     register_key: str,
     node: DeviceNode,
@@ -317,7 +332,7 @@ def _resolve_device_circuit(
     return None
 
 
-# Intent: return a zone or heating-circuit number from a register name.
+# Return a zone or heating-circuit number from a register name.
 def _extract_prefixed_number(name: str, prefix: str) -> str:
     suffix = name[len(prefix) :]
     digits = ""
@@ -328,7 +343,7 @@ def _extract_prefixed_number(name: str, prefix: str) -> str:
     return digits
 
 
-# Intent: place controller-owned sub-device registers on their logical devices.
+# Place controller-owned sub-device registers on their logical devices.
 def _redistribute_device_assignments(
     entities: list[EntityDescription],
     graph: DeviceGraph,
@@ -376,8 +391,8 @@ def _redistribute_device_assignments(
 class EntityFactoryService:
     """Pure mapper: device graph + REGISTER_MAP → EntityDescription list."""
 
-    # Intent: map each discovered register using its owning hardware metadata.
-    # Why: writable controls must not leak across controller variants.
+    # Map each discovered register using its owning hardware metadata.
+    # Writable controls must not leak across controller variants.
     def generate(
         self,
         graph: DeviceGraph,
@@ -457,8 +472,8 @@ class EntityFactoryService:
                     continue
 
                 override = overrides.get(rk) or {}
-                # Intent: skip registers of devices and zones that the bus proves unused; `enabled: true` overrides win.
-                # Why: a mirrored solar controller and zones the controller declares inactive only add dead entities.
+                # Skip registers of devices and zones that the bus proves unused; `enabled: true` overrides win.
+                # A mirrored solar controller and zones the controller declares inactive only add dead entities.
                 if override.get("enabled") is not True:
                     if circuit.casefold() in ghost_solar:
                         continue
@@ -541,7 +556,7 @@ class EntityFactoryService:
                     entity_enabled = True
                 if eloblock and circuit.lower() == "bai" and name in ELOBLOCK_GAS_REGISTERS:
                     entity_enabled = False
-                # Why: the composite "a;b;c" Status string repeats values that the per-field entities
+                # The composite "a;b;c" Status string repeats values that the per-field entities
                 # already expose and changes on almost every poll, which floods the recorder history.
                 if name_lower.startswith("status") and multi_field_fields(rk) and override.get("enabled") is not True:
                     entity_enabled = False

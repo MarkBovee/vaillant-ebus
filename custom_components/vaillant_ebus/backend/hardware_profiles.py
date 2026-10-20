@@ -26,8 +26,8 @@ class HardwareProfile:
     prefix_match: bool = False
     evidence: str = ""
 
-    # Intent: decide whether one scan identity (type, firmware, hardware) falls under this profile.
-    # Why: every hardware gate shares this check, so a new revision is a table entry, never a literal comparison.
+    # Decide whether one scan identity (type, firmware, hardware) falls under this profile.
+    # Every hardware gate shares this check, so a new revision is a table entry, never a literal comparison.
     def matches_scan(self, scan_type: str, scan_sw: str, scan_hw: str) -> bool:
         """Return whether a scan identity (type, firmware, hardware) is covered by this profile."""
         kind = scan_type.casefold()
@@ -41,8 +41,8 @@ class HardwareProfile:
         return not self.hw or scan_hw in self.hw
 
 
-# Intent: the single table of firmware/hardware gates; evidence names the capture or upstream thread.
-# Why: gates were scattered literals; one table makes the supported matrix reviewable and testable.
+# The single table of firmware/hardware gates; evidence names the capture or upstream thread.
+# Gates were scattered literals; one table makes the supported matrix reviewable and testable.
 HMUX0_SW0407 = HardwareProfile(
     name="hmux0_sw0407",
     scan_type="hmux0",
@@ -105,8 +105,8 @@ HMU00_HW5103 = HardwareProfile(
 )
 
 
-# Intent: return a node's identity check against a profile, including node type and scan address.
-# Why: a name or firmware match alone must not authorise a definition on the wrong device role.
+# Return a node's identity check against a profile, including node type and scan address.
+# A name or firmware match alone must not authorise a definition on the wrong device role.
 def node_matches(profile: HardwareProfile, node: DeviceNode) -> bool:
     if profile.device_type and node.device_type.name != profile.device_type:
         return False
@@ -115,8 +115,8 @@ def node_matches(profile: HardwareProfile, node: DeviceNode) -> bool:
     return profile.matches_scan(node.scan_type, node.scan_sw, node.scan_hw)
 
 
-# Intent: return the one circuit that matches a profile with a current, unique scan identity.
-# Why: ambiguous or stale scan evidence must fail closed instead of picking a circuit.
+# Return the one circuit that matches a profile with a current, unique scan identity.
+# Ambiguous or stale scan evidence must fail closed instead of picking a circuit.
 def profile_owner(graph: DeviceGraph | None, profile: HardwareProfile) -> str | None:
     if graph is None:
         return None
@@ -128,14 +128,14 @@ def profile_owner(graph: DeviceGraph | None, profile: HardwareProfile) -> str | 
     return matches[0].circuit if len(matches) == 1 else None
 
 
-# Intent: whether a complete scan row is covered by a profile (used where the owner comes from scan rows).
-# Why: HMUX0 ownership is resolved from scan rows, so the firmware check must share the profile table.
+# Whether a complete scan row is covered by a profile (used where the owner comes from scan rows).
+# HMUX0 ownership is resolved from scan rows, so the firmware check must share the profile table.
 def scan_matches(profile: HardwareProfile, scan: ScanIdentity) -> bool:
     return scan.complete and profile.matches_scan(scan.scan_type, scan.scan_sw, scan.scan_hw)
 
 
-# Intent: verify that a device node still matches exactly one current scan identity.
-# Why: cached node metadata cannot authorize bus traffic after scans conflict or disappear.
+# Verify that a device node still matches exactly one current scan identity.
+# Cached node metadata cannot authorize bus traffic after scans conflict or disappear.
 def has_current_unique_scan_identity(graph: DeviceGraph, node: DeviceNode) -> bool:
     address = node.scan_address.casefold()
     scan_type = node.scan_type.casefold()

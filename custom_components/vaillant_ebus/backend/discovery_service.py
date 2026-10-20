@@ -27,20 +27,20 @@ HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
 ALWAYS_HIDDEN = {"memory"}
 HIDDEN_DEVICE_KEYWORDS = {"broadcast", "scan", "general"}
 HIDDEN_REGISTER_NAMES = {"tmpb516montheven"}
-# Intent: identify numbered zone and heating-circuit node names.
-# Why: filtering must continue to work beyond the common z1/hc3 range.
+# Identify numbered zone and heating-circuit node names.
+# Filtering must continue to work beyond the common z1/hc3 range.
 _NUMBERED_ZONE_RE = re.compile(r"^(?:hc|z)(\d+)$", re.IGNORECASE)
 
 
-# Intent: identify secondary numbered zone and heating-circuit nodes.
-# Why: inactive-zone filtering must apply consistently beyond z1/hc1.
+# Identify secondary numbered zone and heating-circuit nodes.
+# Inactive-zone filtering must apply consistently beyond z1/hc1.
 def _is_secondary_zone_circuit(circuit: str) -> bool:
     match = _NUMBERED_ZONE_RE.fullmatch(circuit)
     return bool(match and int(match.group(1)) > 1)
 
 
-# Intent: detect static registers belonging to inactive numbered zones.
-# Why: DayTemp/OpMode defaults must not authorize a ghost zone entity.
+# Detect static registers belonging to inactive numbered zones.
+# DayTemp/OpMode defaults must not authorize a ghost zone entity.
 def _is_inactive_zone_register(name: str, has_data: dict[str, bool]) -> bool:
     lower = name.lower()
     for prefix in ("hc", "z"):
@@ -71,11 +71,12 @@ class ScanMetadata(NamedTuple):
 
 
 class DiscoveryService:
+    # Keep the ebusd service that discovery reads from.
     def __init__(self, ebus: EbusService) -> None:
         self._ebus = ebus
 
-    # Intent: build a device graph only from a find response with usable rows.
-    # Why: error-only register lines can otherwise masquerade as discovered nodes.
+    # Build a device graph only from a find response with usable rows.
+    # Error-only register lines can otherwise masquerade as discovered nodes.
     async def discover(self) -> DeviceGraph:
         find_lines = await self._ebus.find_registers()
         if getattr(self._ebus, "last_find_usable", None) is False:
@@ -102,8 +103,8 @@ class DiscoveryService:
         )
         return graph
 
-    # Intent: parse one register row without crashing on an empty or malformed LHS.
-    # Why: malformed find data must be rejected at the transport boundary, not crash discovery.
+    # Parse one register row without crashing on an empty or malformed LHS.
+    # Malformed find data must be rejected at the transport boundary, not crash discovery.
     @staticmethod
     def _parse_register(line: str) -> ParsedRegister:
         """Parse a find line into (circuit, name, value_or_None)."""
@@ -130,8 +131,8 @@ class DiscoveryService:
                 return ParsedRegister(circuit, name, None)
         return ParsedRegister(circuit, name, val)
 
-    # Intent: accept only ebusd's address-qualified scan metadata row shape.
-    # Why: scan-prefixed register names such as `Scan.08 Id` must remain register rows.
+    # Accept only ebusd's address-qualified scan metadata row shape.
+    # Scan-prefixed register names such as `Scan.08 Id` must remain register rows.
     @staticmethod
     def _parse_scan(line: str) -> ScanEntry | None:
         """Parse a scan metadata line into (scan_addr, TYPE, SW, HW) or None."""
@@ -160,8 +161,8 @@ class DiscoveryService:
             return None
         return ScanEntry(lhs.strip(), parts[1].strip(), parts[2].strip(), parts[3].strip())
 
-    # Intent: retain recognized address-qualified scan observations even when their identity fields are incomplete.
-    # Why: incomplete evidence at a fixed target address must invalidate hardware authorization, not disappear.
+    # Retain recognized address-qualified scan observations even when their identity fields are incomplete.
+    # Incomplete evidence at a fixed target address must invalidate hardware authorization, not disappear.
     @staticmethod
     def _parse_scan_identity(line: str) -> ScanIdentity | None:
         line = line.strip()
@@ -212,6 +213,8 @@ class DiscoveryService:
             complete=set(metadata) == {"MF", "ID", "SW", "HW"} and all(metadata.values()),
         )
 
+    # Whether a register is internal or noise (scan rows, timers, hidden names and devices) and must never produce an
+    # entity.
     @staticmethod
     def _is_hidden(register_key: str, has_data: dict[str, bool] | None = None) -> bool:
         """Return True if register_key should not produce an HA entity."""
@@ -246,6 +249,8 @@ class DiscoveryService:
                 return True
         return False
 
+    # Decide the device type of a circuit from its scan type first, then its name prefix, then its registers; UNKNOWN
+    # when none of them decides.
     @staticmethod
     def categorize_circuit(
         circuit: str,
@@ -269,8 +274,8 @@ class DiscoveryService:
         _LOGGER.info("Circuit %s categorized as UNKNOWN", circuit)
         return DeviceType.UNKNOWN
 
-    # Intent: build a device graph from register and scan observations.
-    # Why: unavailable rows retain ownership metadata without fabricating a raw value.
+    # Build a device graph from register and scan observations.
+    # Unavailable rows retain ownership metadata without fabricating a raw value.
     @staticmethod
     def build_device_graph(find_lines: list[str]) -> DeviceGraph:
         raw_registers: dict[str, str] = {}
@@ -442,8 +447,8 @@ class DiscoveryService:
         )
 
 
-# Intent: accept find rows that discovery can parse into registers or scan observations.
-# Why: incomplete address-qualified scans must remain usable evidence so they can
+# Accept find rows that discovery can parse into registers or scan observations.
+# Incomplete address-qualified scans must remain usable evidence so they can
 # block ambiguous hardware authorization.
 def has_usable_find_records(find_lines: Sequence[str]) -> bool:
     usable = False
@@ -479,8 +484,8 @@ def has_usable_find_records(find_lines: Sequence[str]) -> bool:
     return usable
 
 
-# Intent: recompute a merged node's live-data state from its current register graph.
-# Why: delayed discovery can remove the register that previously made a device active.
+# Recompute a merged node's live-data state from its current register graph.
+# Delayed discovery can remove the register that previously made a device active.
 def node_has_live_data(node: DeviceNode, raw_registers: dict[str, str]) -> bool:
     raw_by_fold = {key.casefold(): (key, value) for key, value in raw_registers.items()}
     if node.device_type == DeviceType.ZONE:
@@ -507,6 +512,7 @@ def _sub_name(sub_key: str) -> str:
     return sub_key.split("/", 1)[1]
 
 
+# Whether ebusd named the circuit after a raw hexadecimal bus address instead of a device name.
 def _is_address_circuit(circuit: str) -> bool:
     """Return whether ebusd used a raw hexadecimal bus address as circuit name."""
     try:
@@ -557,6 +563,7 @@ def _detect_sub_devices(
     return result
 
 
+# Zone number of a register name such as Z1DayTemp ('1'), or an empty string when there is none.
 def _extract_zn(name: str) -> str:
     """Extract zone number from register name like 'Z1DayTemp' → '1'."""
     if not name or len(name) < 2:
@@ -572,6 +579,7 @@ def _extract_zn(name: str) -> str:
     return zn
 
 
+# Heating circuit number of a register name such as Hc1FlowTemp ('1'), or an empty string when there is none.
 def _extract_hcn(name: str) -> str:
     """Extract heating circuit number from register name like 'Hc1FlowTemp' → '1'."""
     if not name or len(name) < 3:
@@ -604,8 +612,8 @@ def _collect_sub_regs(
     return result
 
 
-# Intent: determine whether a zone or heating-circuit subdevice has live evidence.
-# Why: static defaults are insufficient to create owner-dependent entities.
+# Determine whether a zone or heating-circuit subdevice has live evidence.
+# Static defaults are insufficient to create owner-dependent entities.
 def _subdevice_has_data(sub_name: str, parent_circuit: str, raw_registers: dict[str, str]) -> bool:
     """Return whether a zone/heating-circuit node has live ownership evidence."""
     number = sub_name[1:] if sub_name.startswith("z") else sub_name[2:]
@@ -678,13 +686,13 @@ def _name_family(name: str) -> str:
 # so a wrong assignment poisons the graph. Identical repeated scan lines (find
 # output may repeat them) collapse to the first occurrence, keeping the result
 # deterministic regardless of duplication.
-# Intent: map unique physical scan identities to their logical ebusd circuits.
-# Why: scan metadata controls hardware-gated runtime definitions and must never be guessed across addresses.
+# Map unique physical scan identities to their logical ebusd circuits.
+# Scan metadata controls hardware-gated runtime definitions and must never be guessed across addresses.
 def _unambiguous_scan_entries(
     scan_entries: Sequence[ScanEntry | tuple[str, str, str, str]],
 ) -> list[ScanEntry]:
-    # Intent: retain one compatible scan identity per address/type pair and reject ambiguous physical identities.
-    # Why: a repeated row at one address is harmless, but scan addresses/types cannot be guessed across devices.
+    # Retain one compatible scan identity per address/type pair and reject ambiguous physical identities.
+    # A repeated row at one address is harmless, but scan addresses/types cannot be guessed across devices.
     grouped: dict[tuple[str, str], list[ScanEntry]] = {}
     for raw_entry in scan_entries:
         entry = raw_entry if isinstance(raw_entry, ScanEntry) else ScanEntry(*raw_entry)
@@ -724,8 +732,8 @@ def _unambiguous_scan_entries(
     ]
 
 
-# Intent: bind each usable scan identity to at most one discovered circuit.
-# Why: runtime definitions depend on circuit ownership and physical bus address.
+# Bind each usable scan identity to at most one discovered circuit.
+# Runtime definitions depend on circuit ownership and physical bus address.
 def _match_scan_to_circuits(
     scan_entries: Sequence[ScanEntry | tuple[str, str, str, str]],
     regs_by_circuit: dict[str, list[str]],
@@ -823,6 +831,7 @@ def _match_scan_to_circuits(
     return result
 
 
+# Match a numeric VRC scan id such as 70000 to the shortened three-digit circuit name ebusd uses (700).
 def _numeric_scan_matches_circuit(scan_type: str, circuit: str) -> bool:
     """Match numeric VRC scan IDs to their shortened ebusd circuit names."""
     if len(scan_type) != 5 or len(circuit) != 3 or not scan_type.isdigit() or not circuit.isdigit():
@@ -830,8 +839,8 @@ def _numeric_scan_matches_circuit(scan_type: str, circuit: str) -> bool:
     return scan_type[:3] == circuit and scan_type[3:] == "00"
 
 
-# Intent: retain physical HMUX0 and target VWZIO scans even when no CSV creates a circuit node.
-# Why: exact scan identity can gate additive runtime definitions without inventing a device or address.
+# Retain physical HMUX0 and target VWZIO scans even when no CSV creates a circuit node.
+# Exact scan identity can gate additive runtime definitions without inventing a device or address.
 def _scan_only_circuits(
     scan_entries: Sequence[ScanEntry], regs_by_circuit: dict[str, list[str]]
 ) -> dict[str, ScanMetadata]:
@@ -870,6 +879,7 @@ def _scan_only_circuits(
     return result
 
 
+# Whether every HMUX0 scan row is SW0303/HW0504 and no separately scanned HMU exists, so the hmu alias is suppressed.
 def _is_hmux0_0303_0504_without_hmu(scan_entries: Sequence[ScanEntry]) -> bool:
     """Identify confirmed HMUX0 hardware without an independently scanned HMU."""
     hmux0 = [entry for entry in scan_entries if _normalize_name(entry.scan_type) == "hmux0"]
@@ -896,6 +906,8 @@ def _is_boiler_without_heat_pump(scan_entries: Sequence[ScanEntry]) -> bool:
 _RUNTIME_ONLY_CONTROLLER_REGISTERS = frozenset({"SetModeOverride", "HeatingSwitch", "HwcSwitch"})
 
 
+# Whether a node is a scan-less heating controller that only exists because runtime-defined registers were read from it
+# (a stale alias).
 def _is_runtime_only_controller_alias(node: DeviceNode) -> bool:
     """Return whether a node is a scan-less runtime-only controller alias."""
     if node.device_type != DeviceType.HEATING_CONTROLLER or node.scan_type or node.has_data:
