@@ -12,6 +12,7 @@ import tempfile
 import types
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -2693,6 +2694,25 @@ async def test_placeholder_cache_cleanup_preserves_user_enabled_registry_entry()
         registry.async_update_entity.assert_not_called()
 
 
+# Intent: build a registry row the user never touched, in the live shape (no name, icon, area, labels or options).
+# Why: a bare MagicMock answers every attribute with a truthy mock, which the customisation check reads as user data.
+def _plain_registry_row(**overrides: object) -> SimpleNamespace:
+    values: dict[str, object] = {
+        "disabled_by": None,
+        "hidden_by": None,
+        "name": None,
+        "icon": None,
+        "area_id": None,
+        "labels": set(),
+        "categories": {},
+        "device_class": None,
+        "options": {},
+        "aliases": set(),
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
 # Intent: stale alias entities already present in the registry become
 # integration-disabled when discovery proves that their source circuit vanished.
 # Why: cache seeding can register an alias before discovery finishes; disabling
@@ -2711,10 +2731,9 @@ async def test_initial_discovery_disables_stale_alias_registry_entity() -> None:
         )
         registry = MagicMock()
         registry.entities = {
-            "sensor.stale_pump_hours": MagicMock(
+            "sensor.stale_pump_hours": _plain_registry_row(
                 unique_id=desc.unique_id,
                 config_entry_id="entry-1",
-                disabled_by=None,
             )
         }
         registry.async_update_entity = MagicMock()
@@ -2755,10 +2774,9 @@ async def test_initial_discovery_disables_cached_b524_error_placeholder(monkeypa
         registry = MagicMock()
         entity_id = "sensor.cached_hc1_flow_temp_calc"
         registry.entities = {
-            entity_id: MagicMock(
+            entity_id: _plain_registry_row(
                 unique_id=cached_entity.unique_id,
                 config_entry_id=entry.entry_id,
-                disabled_by=None,
             )
         }
         registry.async_update_entity = MagicMock()

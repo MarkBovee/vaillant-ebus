@@ -309,6 +309,8 @@ def _cache_register_is_supported(register_key: str, live_keys: set[str], graph: 
 # Cache-seeded platform entities may already be registered before the first
 # real discovery completes; leaving them enabled would keep stale alias devices
 # visible after the coordinator prunes their descriptions.
+# An entry the user customised (renamed, labelled, placed in an area) stays enabled: the user chose it, and a register
+# that only reports "no data stored" at the first discovery would otherwise switch it off without asking.
 def _disable_stale_registry_entities(hass: HomeAssistant, entry_id: str, entities: list[EntityDescription]) -> None:
     registry = entity_registry.async_get(hass)
     stale_uids = {entity.unique_id for entity in entities}
@@ -317,6 +319,7 @@ def _disable_stale_registry_entities(hass: HomeAssistant, entry_id: str, entitie
             entry.config_entry_id == entry_id
             and any(_registry_matches_description(entry.unique_id, uid) for uid in stale_uids)
             and entry.disabled_by != "user"
+            and not cleanup.is_customized(entry)
         ):
             registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
 

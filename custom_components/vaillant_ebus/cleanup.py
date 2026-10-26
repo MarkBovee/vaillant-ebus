@@ -84,7 +84,7 @@ def _has_user_options(options: Any) -> bool:
 # Report whether the user changed an entity registry entry by hand.
 # A renamed, re-iconed, relabelled, categorised or area-assigned entity, a device class, unit or display override
 # and an Assist exposure carry user data that cleanup must not delete.
-def _is_customized(entry: Any) -> bool:
+def is_customized(entry: Any) -> bool:
     aliases = getattr(entry, "aliases", None) or ()
     return bool(
         getattr(entry, "name", None)
@@ -147,7 +147,7 @@ def find_orphans(
             continue
         label = (state.attributes.get("friendly_name") if state is not None else None) or entry.entity_id
         item = OrphanEntity(entity_id=entry.entity_id, unique_id=entry.unique_id, label=str(label))
-        (kept if _is_customized(entry) else orphans).append(item)
+        (kept if is_customized(entry) else orphans).append(item)
     return OrphanReport(orphans=tuple(orphans), kept_customized=tuple(kept))
 
 
@@ -177,7 +177,7 @@ def find_dormant(
             continue
         label = state.attributes.get("friendly_name") or entry.entity_id
         item = OrphanEntity(entity_id=entry.entity_id, unique_id=entry.unique_id, label=str(label))
-        (kept if _is_customized(entry) else dormant).append(item)
+        (kept if is_customized(entry) else dormant).append(item)
     return tuple(dormant), tuple(kept)
 
 
@@ -226,7 +226,7 @@ def disable_dormant(registry: Any, entity_ids: Iterable[str], disabler: Any) -> 
     for entity_id in entity_ids:
         entry = registry.async_get(entity_id)
         # The report was built a moment ago; skip a row that was removed, switched off or customised since then.
-        if entry is None or _marker(getattr(entry, "disabled_by", None)) is not None or _is_customized(entry):
+        if entry is None or _marker(getattr(entry, "disabled_by", None)) is not None or is_customized(entry):
             continue
         registry.async_update_entity(entity_id, disabled_by=disabler)
         _LOGGER.debug("Switched off %s because its register has no data", entity_id)

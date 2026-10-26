@@ -617,3 +617,48 @@ async def test_fix_flow_finishes_when_nothing_is_left() -> None:
     assert result == {"type": "create_entry"}
     registry.async_remove.assert_not_called()
     registry.async_update_entity.assert_not_called()
+
+
+# Intent: build the registry stand-in the stale-entity disable step iterates, and record the updates it makes.
+# Why: `_disable_stale_registry_entities` reads `registry.entities.items()` and calls `async_update_entity`.
+def _disable_registry(rows: list[SimpleNamespace]) -> MagicMock:
+    registry = MagicMock()
+    registry.entities.items.side_effect = lambda: [(row.entity_id, row) for row in rows]
+    return registry
+
+
+# Intent: run the stale-entity disable step for descriptions with the given unique ids and return the disabled rows.
+# Why: the step reaches the registry through `entity_registry.async_get`, which the test replaces.
+def _disabled_by_stale_step(rows: list[SimpleNamespace], unique_ids: list[str]) -> list[str]:
+    from unittest.mock import patch
+
+    coordinator = sys.modules["vaillant_ebus.coordinator"]
+    registry = _disable_registry(rows)
+    descriptions = [SimpleNamespace(unique_id=unique_id) for unique_id in unique_ids]
+    with patch.object(coordinator.entity_registry, "async_get", return_value=registry):
+        coordinator._disable_stale_registry_entities(MagicMock(), ENTRY_ID, descriptions)
+    return [call.args[0] for call in registry.async_update_entity.call_args_list]
+
+
+# Intent: a stale registry row is switched off, but a row the user customised or switched off themselves is left alone.
+# Why: audit of 1.12.5 - a name-only register reporting "no data stored" at the first discovery must not silently
+#      disable an entity the user renamed or put in an area; the plain row still goes off.
+def test_stale_disable_skips_rows_the_user_customised() -> None:
+    plain = _row("sensor.plain", "ebusd_hmu_energyintegral", config_entry_id=ENTRY_ID)
+    renamed = _row("sensor.renamed", "ebusd_hmu_flowpressure", config_entry_id=ENTRY_ID, name="My pressure")
+    placed = _row("sensor.placed", "ebusd_hmu_compressorblocktime", config_entry_id=ENTRY_ID, area_id="boiler_room")
+    by_user = _row("sensor.by_user", "ebusd_ctlv2_pumpadditionaltime", config_entry_id=ENTRY_ID, disabled_by="user")
+    other_entry = _row("sensor.other", "ebusd_ctlv2_solaryieldtotal", config_entry_id="entry-2")
+
+    disabled = _disabled_by_stale_step(
+        [plain, renamed, placed, by_user, other_entry],
+        [
+            "ebusd_hmu_energyintegral",
+            "ebusd_hmu_flowpressure",
+            "ebusd_hmu_compressorblocktime",
+            "ebusd_ctlv2_pumpadditionaltime",
+            "ebusd_ctlv2_solaryieldtotal",
+        ],
+    )
+
+    assert disabled == ["sensor.plain"]
