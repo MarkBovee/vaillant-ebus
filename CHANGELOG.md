@@ -1,5 +1,56 @@
 # Changelog
 
+## 1.12.5 - 2026-10-26
+
+A tidy-up of the entity list, plus the gas counters of discussion 31. Several sensors that repeated each other or
+carried a raw register name are cleaned up; nothing is deleted without a confirmation.
+
+### Added
+
+- **Gas consumption counters (`PrFuelSum*`, discussion 31).** An old rule hid every register whose name starts with
+  `PrFuelSum`, so a gas boiler with a VRC 720 never got these sensors, even though ebusd showed values such as 20446
+  in total and 14 this month. They are now available as raw counters on the controller circuits (`ctlv2` family) and
+  on `b7v`. They are switched off by default, listed as diagnostics and have no unit: no capture shows whether the
+  numbers are kWh, so they cannot go on the Energy dashboard yet. Compare one with your meter and tell us.
+  On some heat pump controllers the same registers exist with the value 0; they show up there as switched-off
+  counters as well.
+
+### Changed
+
+- **Readable names for registers that only had a raw name.** `Energy Integral`, `Flow Pressure`,
+  `Compressor Block Time`, `Solar Yield Total`, `Pump Additional Time` and the DHW bank holiday dates no longer
+  appear as `EnergyIntegral` and the like. No unit is added, because no capture proves one. Like other metadata-only
+  registers they appear once ebusd returns a value, so a switched-off entry without data is no longer created.
+- **The two flow temperatures of a heat pump have different names.** The one from the status message is now
+  `Flow Temperature (Status message)`, as on the boilers, so it no longer shows up next to a second
+  `Flow Temperature` with a `_2` suffix. Existing entity IDs do not change.
+
+### Fixed
+
+- **Holiday and manual cooling dates are no longer listed twice.** Every date of the heating controller existed as a
+  text sensor and as a date control. The date control stays. A zone holiday keeps its sensor when no date control can
+  exist for it (for example when two circuits claim the same zone), and so does a single manual cooling date. If you
+  want the sensor back, set `enabled: true` for it in `entities.yaml`.
+- **Command registers are no longer sensors.** `Clearerrorhistory` and the `EnableTest*` flags of the hydraulic
+  station only stand for a button press or a test switch.
+- **A customised entity is not switched off by the first discovery.** When a register reports `no data stored` at the
+  first discovery after a restart, the integration switches its entity off until data returns. That no longer happens
+  to an entity you renamed, labelled or placed in an area.
+
+### After the update
+
+Old sensors that nothing provides any more (the duplicate dates, the command registers and some switched-off entries
+without data) show up under **Repairs** as stale entities. Nothing changes until you confirm; entities you renamed or
+customised are kept.
+
+### Not changed on purpose
+
+- Entity IDs. Several devices still carry two prefixes (for example `vaillant_ctlv2_heating_control_` and
+  `vaillant_sensocomfort_control_`). Changing IDs breaks dashboards and automations, so it needs a separate,
+  opt-in step.
+- The Zone 2 state "Heating" follows the controller (`Hc2Status` and the circuit pump), as in mypyllant. It is not
+  derived from the room temperature.
+
 ## 1.12.4 - 2026-10-20
 
 A fix for the stuck adapter of issue #193. Version 1.12.0 added a pause for the active reads; this release makes that
