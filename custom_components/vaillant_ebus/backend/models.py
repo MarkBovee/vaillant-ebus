@@ -813,3 +813,40 @@ class DeviceGraph:
     def resolve_circuit(self, circuit: str) -> str:
         result = self.resolve_circuit_result(circuit)
         return result.circuit or circuit
+
+
+# Registers whose live value proves a numbered zone is real; static defaults (DayTemp, OpMode) do not.
+ZONE_LIVE_REGISTERS: tuple[str, ...] = ("RoomTemp", "ActualRoomTempDesired")
+
+
+# Whether a raw zone-register value proves real data: anything the shared no-data helper rejects, except "none", which
+# is a legitimate RoomZoneMapping value for unused zones and must not count as live data.
+def zone_value_has_data(raw: str | None) -> bool:
+    return raw is not None and not is_no_data_value(raw) and raw.strip().lower() != "none"
+
+
+# Whether a discovered zone of one circuit is a real heating zone rather than a ghost.
+# A room-zone mapping with a value proves it; otherwise a measured value on a live register does.
+def zone_is_valid(graph: DeviceGraph, circuit: str, zone: str) -> bool:
+    zone_upper = zone.upper()
+    expected_mapping = f"{circuit}.{zone_upper}RoomZoneMapping".casefold()
+    mapping = next((value for key, value in graph.raw_registers.items() if key.casefold() == expected_mapping), None)
+    if zone_value_has_data(mapping):
+        return True
+    for name in ZONE_LIVE_REGISTERS:
+        expected = f"{circuit}.{zone_upper}{name}".casefold()
+        value = next((raw for key, raw in graph.raw_registers.items() if key.casefold() == expected), None)
+        if zone_value_has_data(value):
+            return True
+    return False
+
+
+# Map each valid zone to its single owning circuit; a zone claimed by two circuits belongs to none.
+# The coordinator and the entity factory share this so a zone-based decision cannot drift between them.
+def valid_zone_owners(graph: DeviceGraph) -> dict[str, str]:
+    owners: dict[str, set[str]] = {}
+    for node in graph.nodes.values():
+        for zone in node.zone_circuits:
+            if zone_is_valid(graph, node.circuit, zone):
+                owners.setdefault(zone, set()).add(node.circuit)
+    return {zone: next(iter(circuits)) for zone, circuits in owners.items() if len(circuits) == 1}

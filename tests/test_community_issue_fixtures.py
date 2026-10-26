@@ -6,6 +6,7 @@ import struct
 
 import pytest
 import yaml
+from vaillant_ebus.backend.models import valid_zone_owners  # noqa: E402
 
 from tests.fake_ebusd import FIXTURES_DIR, load_discovery_dump, load_find_lines
 from tests.test_entity_factory import MAPPING, DiscoveryService, EntityFactoryService
@@ -1084,3 +1085,14 @@ def test_command_registers_create_no_sensor() -> None:
     ):
         assert Discovery._is_hidden(key) is True
     assert Discovery._is_hidden("vwz.TestHwcTemp") is False
+
+
+# Intent: a zone holiday keeps its sensor when the date platform would not create the date control.
+# Why: review finding on 1.12.5 - on the geniaset capture Z1 is claimed by two circuits, so no zone is valid and no date
+# control exists; dropping the sensors would have left the holiday dates without any entity.
+def test_zone_holiday_sensors_stay_when_no_date_control_exists() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/geniaset_bass3_discovery.yaml"))
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert valid_zone_owners(graph) == {}
+    assert {"bass.Z1HolidayStartPeriod.value", "bass.Z1HolidayEndPeriod.value"} <= keys
