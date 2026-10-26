@@ -1051,28 +1051,40 @@ class TestPrEnergySum:
         ):
             assert by_key.get(reg) is None, f"unexpected {reg}"
 
-    # The runtime-defined manual cooling dates (GitHub issue #644) must appear as
-    # sensor entities when present in the find output, carrying the mapped
-    # friendly name.
-    # Intent: the runtime-defined ManualCoolingStartDate and ManualCoolingEndDate
-    # registers generate sensor entities with the mapped names.
-    # Why: issue #644: the manual cooling dates must be usable from Home Assistant.
-    def test_manual_cooling_dates_entities(self) -> None:
+    # The runtime-defined manual cooling dates (GitHub issue #644) keep their mapped
+    # friendly name; the date platform serves them since the duplicate sensor was dropped.
+    # Intent: the manual cooling dates keep their mapped names, and no sensor repeats the date controls.
+    # Why: issue #644 made them usable from Home Assistant; the owner's HA then listed every date as sensor and date.
+    def test_manual_cooling_dates_keep_names_and_get_no_duplicate_sensor(self) -> None:
         lines = [
             "ctlv2 ManualCoolingStartDate = 14.08.2026",
             "ctlv2 ManualCoolingEndDate = 15.08.2026",
         ]
         graph = DiscoveryService.build_device_graph(lines)
-        entities = EntityFactoryService().generate(graph)
-        by_key = {e.key: e for e in entities}
-        start = by_key.get("ctlv2.ManualCoolingStartDate.value")
-        end = by_key.get("ctlv2.ManualCoolingEndDate.value")
-        assert start is not None
-        assert end is not None
-        assert start.entity_type == "sensor"
-        assert end.entity_type == "sensor"
-        assert start.meta.friendly_name == "Manual Cooling Start Date"
-        assert end.meta.friendly_name == "Manual Cooling End Date"
+        keys = {e.key for e in EntityFactoryService().generate(graph)}
+
+        assert not [key for key in keys if "ManualCooling" in key]
+        assert get_meta("ctlv2", "ManualCoolingStartDate").friendly_name == "Manual Cooling Start Date"
+        assert get_meta("ctlv2", "ManualCoolingEndDate").friendly_name == "Manual Cooling End Date"
+
+    # Intent: a lone manual cooling date keeps its sensor, because the date platform needs both dates.
+    # Why: dropping the sensor without a date control would remove the only way to see the value.
+    def test_lone_manual_cooling_date_keeps_its_sensor(self) -> None:
+        graph = DiscoveryService.build_device_graph(["ctlv2 ManualCoolingStartDate = 14.08.2026"])
+        keys = {e.key for e in EntityFactoryService().generate(graph)}
+
+        assert "ctlv2.ManualCoolingStartDate.value" in keys
+
+    # Intent: an `enabled: true` override brings the duplicate sensor back.
+    # Why: the user's explicit choice wins over the built-in suppression, like for unused zones.
+    def test_override_keeps_a_date_register_sensor(self) -> None:
+        lines = ["ctlv2 ManualCoolingStartDate = 14.08.2026", "ctlv2 ManualCoolingEndDate = 15.08.2026"]
+        graph = DiscoveryService.build_device_graph(lines)
+        overrides = {"ctlv2.ManualCoolingStartDate": {"enabled": True}}
+        keys = {e.key for e in EntityFactoryService().generate(graph, overrides)}
+
+        assert "ctlv2.ManualCoolingStartDate.value" in keys
+        assert "ctlv2.ManualCoolingEndDate.value" not in keys
 
 
 class TestStatEnergyRegisters:

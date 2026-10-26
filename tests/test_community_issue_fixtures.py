@@ -1055,3 +1055,32 @@ def test_fuel_sum_entries_create_nothing_when_the_register_is_absent() -> None:
     keys = {entity.key for entity in EntityFactoryService().generate(graph)}
 
     assert not [key for key in keys if "PrFuelSum" in key]
+
+
+DATE_DUPLICATE_FIXTURE = "community/flexotherm_discovery.yaml"
+
+
+# Intent: holiday dates of the heating controller have a date control only; no sensor repeats them.
+# Why: the owner's HA listed DHW and Z1 holiday start/end as a sensor and as a date (audit of 2026-10-26).
+def test_holiday_dates_are_served_by_the_date_platform_only() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines(DATE_DUPLICATE_FIXTURE))
+    before = [line for line in load_find_lines(DATE_DUPLICATE_FIXTURE) if "HolidayStartPeriod" in line]
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert before, "fixture must list holiday registers"
+    assert not [key for key in keys if "HolidayStartPeriod" in key or "HolidayEndPeriod" in key]
+
+
+# Intent: the command and test-flag registers are no longer listed as sensors.
+# Why: `Clearerrorhistory` and `EnableTest*` only mean a button press or a test switch (owner audit, 1.12.5).
+def test_command_registers_create_no_sensor() -> None:
+    from tests.test_entity_factory import DiscoveryService as Discovery
+
+    for key in (
+        "hmu.Clearerrorhistory",
+        "vwz.EnableTestHwcTemp",
+        "vwz.EnableTestOutdoorTemp",
+        "vwz.EnableTestThreeWayValve",
+    ):
+        assert Discovery._is_hidden(key) is True
+    assert Discovery._is_hidden("vwz.TestHwcTemp") is False

@@ -245,6 +245,25 @@ def _unused_zone_numbers(graph: DeviceGraph) -> frozenset[int]:
     return frozenset({number for _, number in declared} - in_use)
 
 
+_DATE_PLATFORM_REGISTER = re.compile(r"^(?:z\d+holiday(?:start|end)period|hwcholiday(?:start|end)period)$")
+_MANUAL_COOLING_DATES = ("manualcoolingstartdate", "manualcoolingenddate")
+
+
+# Report whether the date platform already serves this register of the heating controller as a date control.
+# Holiday periods and the manual-cooling window are also created as sensors that repeat the same text, so the owner's
+# HA listed every date twice. The date platform reads them from the heating controller only, and the manual-cooling
+# controls need both dates, so a register on any other circuit or without its pair keeps its sensor.
+def _served_by_date_platform(graph: DeviceGraph, controller: DeviceNode | None, circuit: str, name_lower: str) -> bool:
+    if controller is None or controller.circuit.casefold() != circuit.casefold():
+        return False
+    if _DATE_PLATFORM_REGISTER.fullmatch(name_lower):
+        return True
+    if name_lower not in _MANUAL_COOLING_DATES:
+        return False
+    listed = {key.casefold() for key in (*graph.raw_registers, *graph.placeholder_registers)}
+    return all(f"{circuit}.{pair}".casefold() in listed for pair in _MANUAL_COOLING_DATES)
+
+
 # List the solar-controller circuits that only mirror the heating controller.
 # In all 14 captures with a scan of address `ec` the "solar controller" has the same SW and HW as the heating
 # controller and every `sc` row reads `no data stored`; the controller answers at the solar address. A real solar module
@@ -476,6 +495,9 @@ class EntityFactoryService:
                 # A mirrored solar controller and zones the controller declares inactive only add dead entities.
                 if override.get("enabled") is not True:
                     if circuit.casefold() in ghost_solar:
+                        continue
+                    # The date platform owns the date registers of the heating controller; a text sensor repeats them.
+                    if _served_by_date_platform(graph, controller, circuit, name_lower):
                         continue
                     unused_match = re.match(r"^(?:Z|Hc)(\d+)", name, re.IGNORECASE)
                     if (
