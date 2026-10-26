@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping
 from copy import copy
 from typing import Any
 
@@ -23,6 +24,7 @@ from .models import (
     EbusdRegister,
     RegisterMeta,
     is_no_data_value,
+    valid_zone_owners,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -245,6 +247,36 @@ def _unused_zone_numbers(graph: DeviceGraph) -> frozenset[int]:
     return frozenset({number for _, number in declared} - in_use)
 
 
+_ZONE_DATE_REGISTER = re.compile(r"^(z\d+)holiday(?:start|end)period$")
+_DHW_DATE_REGISTER = re.compile(r"^hwcholiday(?:start|end)period$")
+_MANUAL_COOLING_DATES = ("manualcoolingstartdate", "manualcoolingenddate")
+
+
+# Report whether the date platform already serves this register of the heating controller as a date control.
+# Holiday periods and the manual-cooling window are also created as sensors that repeat the same text, so the owner's
+# HA listed every date twice. The date platform reads them from the heating controller only; a zone holiday needs a
+# valid zone with one owner, and the manual-cooling controls need both dates. Anything else keeps its sensor, because
+# dropping it would leave the value without any entity.
+def _served_by_date_platform(
+    graph: DeviceGraph,
+    controller: DeviceNode | None,
+    valid_zones: Mapping[str, str],
+    circuit: str,
+    name_lower: str,
+) -> bool:
+    if controller is None or controller.circuit.casefold() != circuit.casefold():
+        return False
+    if _DHW_DATE_REGISTER.fullmatch(name_lower):
+        return True
+    zone_match = _ZONE_DATE_REGISTER.fullmatch(name_lower)
+    if zone_match is not None:
+        return zone_match.group(1) in valid_zones
+    if name_lower not in _MANUAL_COOLING_DATES:
+        return False
+    listed = {key.casefold() for key in (*graph.raw_registers, *graph.placeholder_registers)}
+    return all(f"{circuit}.{pair}".casefold() in listed for pair in _MANUAL_COOLING_DATES)
+
+
 # List the solar-controller circuits that only mirror the heating controller.
 # In all 14 captures with a scan of address `ec` the "solar controller" has the same SW and HW as the heating
 # controller and every `sc` row reads `no data stored`; the controller answers at the solar address. A real solar module
@@ -343,6 +375,9 @@ def _extract_prefixed_number(name: str, prefix: str) -> str:
     return digits
 
 
+_HC_CIRCUIT_TYPE = re.compile(r"^hc\d+circuittype$")
+
+
 # Place controller-owned sub-device registers on their logical devices.
 def _redistribute_device_assignments(
     entities: list[EntityDescription],
@@ -371,7 +406,11 @@ def _redistribute_device_assignments(
         heating_circuit_number = _extract_prefixed_number(name_lower, "hc") if name_lower.startswith("hc") else ""
         target_zone = f"z{zone_number or heating_circuit_number}"
 
-        if zone_number or heating_circuit_number:
+        if _HC_CIRCUIT_TYPE.fullmatch(name_lower):
+            # The circuit type is a property of the controller, not of one zone, so HC1, HC2 and HC3 are listed
+            # together on the controller device instead of HC1 under Zone 1 and the inactive ones elsewhere.
+            entity._device_circuit = entity.circuit
+        elif zone_number or heating_circuit_number:
             if target_zone in active_zones:
                 entity._device_circuit = target_zone
             elif target_zone != "z1":
@@ -406,6 +445,7 @@ class EntityFactoryService:
         controller = graph.heating_controller_result().node
         unused_zones = declared_unused_zones(graph)
         ghost_solar = ghost_solar_circuits(graph)
+        valid_zones = valid_zone_owners(graph)
 
         reg_to_node: dict[str, DeviceNode] = {}
         for node in graph.nodes.values():
@@ -476,6 +516,9 @@ class EntityFactoryService:
                 # A mirrored solar controller and zones the controller declares inactive only add dead entities.
                 if override.get("enabled") is not True:
                     if circuit.casefold() in ghost_solar:
+                        continue
+                    # The date platform owns the date registers of the heating controller; a text sensor repeats them.
+                    if _served_by_date_platform(graph, controller, valid_zones, circuit, name_lower):
                         continue
                     unused_match = re.match(r"^(?:Z|Hc)(\d+)", name, re.IGNORECASE)
                     if (

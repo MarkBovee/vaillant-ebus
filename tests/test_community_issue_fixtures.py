@@ -6,6 +6,7 @@ import struct
 
 import pytest
 import yaml
+from vaillant_ebus.backend.models import valid_zone_owners  # noqa: E402
 
 from tests.fake_ebusd import FIXTURES_DIR, load_discovery_dump, load_find_lines
 from tests.test_entity_factory import MAPPING, DiscoveryService, EntityFactoryService
@@ -967,3 +968,146 @@ def test_issue197_cooling_mode_entry_creates_nothing_when_register_is_absent() -
     keys = {entity.key for entity in EntityFactoryService().generate(graph)}
 
     assert not [key for key in keys if "OpModeCooling" in key]
+
+
+NAME_ONLY_FIXTURE = "community/hmux0_issue99_2026-09-10_170850.yaml"
+NAME_ONLY_NAMES = {
+    "hmux0.EnergyIntegral.value": "Energy Integral",
+    "hmux0.FlowPressure.value": "Flow Pressure",
+}
+
+
+# Intent: registers that had only their raw name get a readable name once they return a live value.
+# Why: the entity list showed `EnergyIntegral` and `FlowPressure` next to properly named entries (owner audit, 1.12.5).
+def test_name_only_registers_with_live_values_have_readable_names() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines(NAME_ONLY_FIXTURE))
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    for key, expected_name in NAME_ONLY_NAMES.items():
+        assert entities[key].meta.friendly_name == expected_name
+        assert entities[key].enabled_by_default
+        # No unit, class or category is claimed because no capture proves them.
+        assert (entities[key].meta.unit, entities[key].meta.device_class) == ("", "")
+
+
+# Intent: a name-only register is exposed only after ebusd returns a value, and is never read actively.
+# Why: the entries set fallback_read=False so a bus without the register gets no extra failing reads.
+def test_name_only_registers_without_data_create_no_entity() -> None:
+    emptied = (" EnergyIntegral = ", " FlowPressure = ")
+    lines = [
+        f"{line.split(' = ')[0]} = no data stored" if any(name in line for name in emptied) else line
+        for line in load_find_lines(NAME_ONLY_FIXTURE)
+    ]
+    graph = DiscoveryService.build_device_graph(lines)
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert not set(NAME_ONLY_NAMES) & keys
+    assert all(not MAPPING.get_meta("hmux0", name).fallback_read for name in ("EnergyIntegral", "FlowPressure"))
+
+
+# Intent: an unnamed multi-value status register (`auto;60;75.0;70;65.0`) creates no raw-string entity on a boiler.
+# Why: mapping `Status02` with a friendly name would have added one (found with the differential tool, 1.12.5).
+def test_boiler_multi_value_status02_creates_no_raw_string_entity() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/ecotec_vrt380_ctlv2_discovery.yaml"))
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert not [key for key in keys if "Status02" in key]
+
+
+DISCUSSION31_FIXTURE = "community/ecotec_b7v_discussion31_2026-10-21_205103_discovery.yaml"
+FUEL_SUM_WITH_DATA = {
+    "b7v.PrFuelSum.value": "20446",
+    "b7v.PrFuelSumHc.value": "20434",
+    "b7v.PrFuelSumHcThisMonth.value": "14",
+}
+
+
+# Intent: the gas counters of a VRC 720 (b7v) become raw diagnostic counters that are off by default and carry no unit.
+# Why: discussion 31 - registers readable in ebusd gave no sensor because a name rule hid them; the unit is unproven.
+def test_discussion31_fuel_sum_counters_are_raw_disabled_diagnostics() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines(DISCUSSION31_FIXTURE))
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    for key, expected_value in FUEL_SUM_WITH_DATA.items():
+        entity = entities[key]
+        assert entity.raw_value == expected_value
+        assert not entity.enabled_by_default
+        assert (entity.meta.unit, entity.meta.device_class) == ("", "")
+        assert (entity.meta.state_class, entity.meta.entity_category) == ("total_increasing", "diagnostic")
+        assert "raw counter" in entity.meta.friendly_name
+
+
+# Intent: a register without data on the same bus creates no entity, and none of the new entries is read actively.
+# Why: discovery stays the source of truth; `PrFuelSumHwcLastMonth` reads `no data stored` in the capture.
+def test_discussion31_fuel_sum_without_data_creates_no_entity() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines(DISCUSSION31_FIXTURE))
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert "b7v.PrFuelSumHwcLastMonth.value" not in keys
+    assert not MAPPING.get_meta("b7v", "PrFuelSum").fallback_read
+    assert not MAPPING.get_meta("ctlv3", "PrFuelSumHc").fallback_read
+
+
+# Intent: with the gas counters absent from the bus, nothing is created for them.
+# Why: REGISTER_MAP entries must be safe when the register is absent (hardware without a gas boiler).
+def test_fuel_sum_entries_create_nothing_when_the_register_is_absent() -> None:
+    lines = [line for line in load_find_lines(DISCUSSION31_FIXTURE) if "PrFuelSum" not in line]
+    graph = DiscoveryService.build_device_graph(lines)
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert not [key for key in keys if "PrFuelSum" in key]
+
+
+DATE_DUPLICATE_FIXTURE = "community/flexotherm_discovery.yaml"
+
+
+# Intent: holiday dates of the heating controller have a date control only; no sensor repeats them.
+# Why: the owner's HA listed DHW and Z1 holiday start/end as a sensor and as a date (audit of 2026-10-26).
+def test_holiday_dates_are_served_by_the_date_platform_only() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines(DATE_DUPLICATE_FIXTURE))
+    before = [line for line in load_find_lines(DATE_DUPLICATE_FIXTURE) if "HolidayStartPeriod" in line]
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert before, "fixture must list holiday registers"
+    assert not [key for key in keys if "HolidayStartPeriod" in key or "HolidayEndPeriod" in key]
+
+
+# Intent: the command and test-flag registers are no longer listed as sensors.
+# Why: `Clearerrorhistory` and `EnableTest*` only mean a button press or a test switch (owner audit, 1.12.5).
+def test_command_registers_create_no_sensor() -> None:
+    from tests.test_entity_factory import DiscoveryService as Discovery
+
+    for key in (
+        "hmu.Clearerrorhistory",
+        "vwz.EnableTestHwcTemp",
+        "vwz.EnableTestOutdoorTemp",
+        "vwz.EnableTestThreeWayValve",
+    ):
+        assert Discovery._is_hidden(key) is True
+    assert Discovery._is_hidden("vwz.TestHwcTemp") is False
+    # A map entry would also make the fallback planner read the command register actively.
+    assert not [key for key in MAPPING.REGISTER_MAP if key.casefold().endswith(".clearerrorhistory")]
+
+
+# Intent: a zone holiday keeps its sensor when the date platform would not create the date control.
+# Why: review finding on 1.12.5 - on the geniaset capture Z1 is claimed by two circuits, so no zone is valid and no date
+# control exists; dropping the sensors would have left the holiday dates without any entity.
+def test_zone_holiday_sensors_stay_when_no_date_control_exists() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/geniaset_bass3_discovery.yaml"))
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert valid_zone_owners(graph) == {}
+    assert {"bass.Z1HolidayStartPeriod.value", "bass.Z1HolidayEndPeriod.value"} <= keys
+
+
+# Intent: the circuit types of all heating circuits are listed together on the controller device, while the other HC1
+# entities stay on the Zone 1 device.
+# Why: the owner found HC1 under Zone 1 and the inactive HC2/HC3 elsewhere, three sensors of one kind on two devices.
+def test_circuit_types_share_the_controller_device_and_other_hc1_entities_stay_on_zone_1() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_plus_2zone_discovery.yaml"))
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    circuit_types = {key: entity for key, entity in entities.items() if key.endswith("CircuitType.value")}
+    assert {"ctlv3.Hc1CircuitType.value", "ctlv3.Hc2CircuitType.value"} <= circuit_types.keys()
+    assert {entity.device_circuit for entity in circuit_types.values()} == {"ctlv3"}
+    assert entities["ctlv3.Hc1FlowTemp.value"].device_circuit == "z1"

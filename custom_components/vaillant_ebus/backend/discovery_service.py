@@ -26,7 +26,14 @@ _LOGGER = logging.getLogger(__name__)
 HIDDEN_BROADCAST = {"id", "idanswer", "load", "signoflife"}
 ALWAYS_HIDDEN = {"memory"}
 HIDDEN_DEVICE_KEYWORDS = {"broadcast", "scan", "general"}
-HIDDEN_REGISTER_NAMES = {"tmpb516montheven"}
+# Command and switch registers are not values: reading them as sensors only lists a button press or a test flag.
+HIDDEN_REGISTER_NAMES = {
+    "tmpb516montheven",
+    "clearerrorhistory",
+    "enabletesthwctemp",
+    "enabletestoutdoortemp",
+    "enabletestthreewayvalve",
+}
 # Identify numbered zone and heating-circuit node names.
 # Filtering must continue to work beyond the common z1/hc3 range.
 _NUMBERED_ZONE_RE = re.compile(r"^(?:hc|z)(\d+)$", re.IGNORECASE)
@@ -233,8 +240,6 @@ class DiscoveryService:
         if c_lower in ALWAYS_HIDDEN or any(kw in c_lower for kw in HIDDEN_DEVICE_KEYWORDS):
             return True
         if n_lower.startswith(("cctimer_", "hwctimer_")) or re.match(r"z\d+timer_", n_lower):
-            return True
-        if n_lower.startswith("prfuelsum"):
             return True
         if n_lower.startswith(("installer", "phonenumber", "keycode", "maintenancedate", "maintenancedue")):
             return True

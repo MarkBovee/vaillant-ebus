@@ -162,7 +162,7 @@ def _graph_single_zone() -> DeviceGraph:
 # Ghost zone: mapping "none", room temp sentinel, and only static set-point
 # defaults on DayTemp/OpMode — exactly what ebusd reports on an unused zone.
 # These defaults must NOT count as live data (regression: they used to make
-# _zone_is_valid accept the ghost zone).
+# zone_is_valid accept the ghost zone).
 def _graph_ghost_zone() -> DeviceGraph:
     graph = _graph_single_zone()
     graph.raw_registers["ctlv2.Z2RoomZoneMapping"] = "none"

@@ -49,6 +49,7 @@ from .backend.models import (
     is_heat_pump_circuit,
     is_no_data_value,
     is_valid_hmux0_return_temperature,
+    valid_zone_owners,
     zero_idle_registers,
 )
 from .backend.runtime_definitions import build_runtime_defines
@@ -102,12 +103,6 @@ HMUX0_RUNTIME_REGISTERS = frozenset(
         "CopHwcMonth",
     }
 )
-
-# Registers whose live (non-sentinel) value marks a discovered zone as
-# genuinely present. DayTemp/OpMode are excluded: ebusd reports static
-# defaults for these even on unused zones, so they cannot distinguish a real
-# zone from a ghost.
-ZONE_LIVE_REGISTERS: tuple[str, ...] = ("RoomTemp", "ActualRoomTempDesired")
 
 
 # Build the per-field value dict for a register (split multi-field values).
@@ -314,6 +309,8 @@ def _cache_register_is_supported(register_key: str, live_keys: set[str], graph: 
 # Cache-seeded platform entities may already be registered before the first
 # real discovery completes; leaving them enabled would keep stale alias devices
 # visible after the coordinator prunes their descriptions.
+# An entry the user customised (renamed, labelled, placed in an area) stays enabled: the user chose it, and a register
+# that only reports "no data stored" at the first discovery would otherwise switch it off without asking.
 def _disable_stale_registry_entities(hass: HomeAssistant, entry_id: str, entities: list[EntityDescription]) -> None:
     registry = entity_registry.async_get(hass)
     stale_uids = {entity.unique_id for entity in entities}
@@ -322,6 +319,7 @@ def _disable_stale_registry_entities(hass: HomeAssistant, entry_id: str, entitie
             entry.config_entry_id == entry_id
             and any(_registry_matches_description(entry.unique_id, uid) for uid in stale_uids)
             and entry.disabled_by != "user"
+            and not cleanup.is_customized(entry)
         ):
             registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
 
@@ -475,14 +473,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # climate entity. Deliberately NOT filtered on the zone node's has_data:
     # ebusd reports ghost mapping values like "none" as real register values.
     def zone_circuits(self) -> dict[str, str]:
-        owners: dict[str, set[str]] = {}
-        if self._graph is None:
-            return {}
-        for node in self._graph.nodes.values():
-            for zone in node.zone_circuits:
-                if self._zone_is_valid(node.circuit, zone):
-                    owners.setdefault(zone, set()).add(node.circuit)
-        return {zone: next(iter(circuits)) for zone, circuits in owners.items() if len(circuits) == 1}
+        return {} if self._graph is None else valid_zone_owners(self._graph)
 
     # Select the lowest-numbered discovered active zone as the primary UI zone.
     # Primary-zone entities must not assume that z1 is present on every controller.
@@ -497,38 +488,6 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # Protocol dumps may preserve lower-case names while metadata uses canonical casing.
     def value_for_register(self, circuit: str, name: str, field: str = "value") -> str | None:
         return get_register_value(self, circuit, name, field)
-
-    # Whether a raw zone-register value proves real data: anything the shared
-    # no-data helper rejects, except "none" which is a legitimate RoomZoneMapping
-    # value for unused zones and must not count as live data.
-    @staticmethod
-    def _zone_value_has_data(raw: str | None) -> bool:
-        return raw is not None and not is_no_data_value(raw) and raw.strip().lower() != "none"
-
-    # Whether a discovered zone is a real heating zone rather than a ghost.
-    def _zone_is_valid(self, circuit: str, zone: str) -> bool:
-        if self._graph is None:
-            return False
-        zn = zone.upper()
-        expected_mapping = f"{circuit}.{zn}RoomZoneMapping".casefold()
-        mapping = next(
-            (value for key, value in self._graph.raw_registers.items() if key.casefold() == expected_mapping),
-            None,
-        )
-        if self._zone_value_has_data(mapping):
-            return True
-        # Fall back to a measured value on a live register. Static defaults
-        # (DayTemp/OpMode) and sentinel values (empty/unknown/no data stored)
-        # do not prove the zone is real.
-        for name in ZONE_LIVE_REGISTERS:
-            expected = f"{circuit}.{zn}{name}".casefold()
-            value = next(
-                (raw for key, raw in self._graph.raw_registers.items() if key.casefold() == expected),
-                None,
-            )
-            if self._zone_value_has_data(value):
-                return True
-        return False
 
     # Return whether a zone register is supported, unsupported, or not discovered yet.
     def zone_register_discovery_status(self, circuit: str, zone: str, name: str) -> bool | None:

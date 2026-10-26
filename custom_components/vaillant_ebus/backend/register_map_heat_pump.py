@@ -30,8 +30,9 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
     "hmu.RunDataElPowerConsumption": RegisterMeta(
         friendly_name="Electrical Power Consumption", device_class="power", unit="W"
     ),
+    # Named apart from the dedicated `hmu.FlowTemp` so the two flow temperatures do not share a name (`_2` suffix).
     "hmu.Status01.temp": RegisterMeta(
-        friendly_name="Flow Temperature",
+        friendly_name="Flow Temperature (Status message)",
         device_class="temperature",
         unit="°C",
     ),
@@ -128,6 +129,11 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         device_class="temperature",
         unit="°C",
     ),
+    # Name-only entries (no unit, class or category claimed, no active read): the unit of these registers is not proven
+    # by a capture, but a readable name beats the raw register name in the entity list (issue #205 follow-up).
+    "hmu.EnergyIntegral": RegisterMeta(friendly_name="Energy Integral", fallback_read=False),
+    "hmu.FlowPressure": RegisterMeta(friendly_name="Flow Pressure", fallback_read=False),
+    "hmu.CompressorBlocktime": RegisterMeta(friendly_name="Compressor Block Time", fallback_read=False),
     "hmu.FlowTemperature": RegisterMeta(
         friendly_name="Flow Temperature (alt)",
         device_class="temperature",
@@ -932,3 +938,31 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         entity_category="diagnostic",
     ),
 }
+
+# Gas consumption counters of the controller (`PrFuelSum*`, discussion 31: b7v of an ecoTEC with a VRC 720, live values
+# 20446 total / 14 this month). Raw counters of unproven unit, like `bai.PrEnergySumHc1`: no unit, energy class or
+# statistics claim beyond a rising total, diagnostic and disabled by default. `ctlv2` covers the numbered controller
+# circuits through the metadata aliases; `b7v` is a separate ebusd circuit name for the same controller.
+_FUEL_SUM_NAMES: dict[str, str] = {
+    "PrFuelSum": "Fuel Consumption (raw counter)",
+    "PrFuelSumHc": "Fuel Consumption Heating (raw counter)",
+    "PrFuelSumHwc": "Fuel Consumption DHW (raw counter)",
+    "PrFuelSumHcThisMonth": "Fuel Consumption Heating This Month (raw counter)",
+    "PrFuelSumHcLastMonth": "Fuel Consumption Heating Last Month (raw counter)",
+    "PrFuelSumHwcThisMonth": "Fuel Consumption DHW This Month (raw counter)",
+    "PrFuelSumHwcLastMonth": "Fuel Consumption DHW Last Month (raw counter)",
+}
+HEAT_PUMP_AND_BOILER_REGISTERS.update(
+    {
+        f"{circuit}.{register}": RegisterMeta(
+            friendly_name=friendly_name,
+            icon="mdi:counter",
+            state_class="total_increasing",
+            entity_category="diagnostic",
+            enabled=False,
+            fallback_read=False,
+        )
+        for circuit in ("ctlv2", "b7v")
+        for register, friendly_name in _FUEL_SUM_NAMES.items()
+    }
+)

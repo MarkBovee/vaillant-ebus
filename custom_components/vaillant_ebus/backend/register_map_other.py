@@ -297,11 +297,6 @@ SYSTEM_AND_OTHER_REGISTERS: dict[str, RegisterMeta] = {
         # Needs a master `index` field; a parameterless `read` fails with "end of input reached" (issue #182).
         fallback_read=False,
     ),
-    "vr_71.Clearerrorhistory": RegisterMeta(
-        friendly_name="Clear Error History",
-        icon="mdi:delete",
-        entity_category="diagnostic",
-    ),
     "hmu.Status07": RegisterMeta(
         friendly_name="Display Status",
         icon="mdi:information",
