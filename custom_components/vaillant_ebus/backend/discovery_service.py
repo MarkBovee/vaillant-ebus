@@ -234,8 +234,6 @@ class DiscoveryService:
             return True
         if n_lower.startswith(("cctimer_", "hwctimer_")) or re.match(r"z\d+timer_", n_lower):
             return True
-        if n_lower.startswith("prfuelsum"):
-            return True
         if n_lower.startswith(("installer", "phonenumber", "keycode", "maintenancedate", "maintenancedue")):
             return True
         if n_lower in ("general_valuerange", "date_time", "datetime"):

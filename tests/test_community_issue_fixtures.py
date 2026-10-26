@@ -1011,3 +1011,47 @@ def test_boiler_multi_value_status02_creates_no_raw_string_entity() -> None:
     keys = {entity.key for entity in EntityFactoryService().generate(graph)}
 
     assert not [key for key in keys if "Status02" in key]
+
+
+DISCUSSION31_FIXTURE = "community/ecotec_b7v_discussion31_2026-10-21_205103_discovery.yaml"
+FUEL_SUM_WITH_DATA = {
+    "b7v.PrFuelSum.value": "20446",
+    "b7v.PrFuelSumHc.value": "20434",
+    "b7v.PrFuelSumHcThisMonth.value": "14",
+}
+
+
+# Intent: the gas counters of a VRC 720 (b7v) become raw diagnostic counters that are off by default and carry no unit.
+# Why: discussion 31 - registers readable in ebusd gave no sensor because a name rule hid them; the unit is unproven.
+def test_discussion31_fuel_sum_counters_are_raw_disabled_diagnostics() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines(DISCUSSION31_FIXTURE))
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    for key, expected_value in FUEL_SUM_WITH_DATA.items():
+        entity = entities[key]
+        assert entity.raw_value == expected_value
+        assert not entity.enabled_by_default
+        assert (entity.meta.unit, entity.meta.device_class) == ("", "")
+        assert (entity.meta.state_class, entity.meta.entity_category) == ("total_increasing", "diagnostic")
+        assert "raw counter" in entity.meta.friendly_name
+
+
+# Intent: a register without data on the same bus creates no entity, and none of the new entries is read actively.
+# Why: discovery stays the source of truth; `PrFuelSumHwcLastMonth` reads `no data stored` in the capture.
+def test_discussion31_fuel_sum_without_data_creates_no_entity() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines(DISCUSSION31_FIXTURE))
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert "b7v.PrFuelSumHwcLastMonth.value" not in keys
+    assert not MAPPING.get_meta("b7v", "PrFuelSum").fallback_read
+    assert not MAPPING.get_meta("ctlv3", "PrFuelSumHc").fallback_read
+
+
+# Intent: with the gas counters absent from the bus, nothing is created for them.
+# Why: REGISTER_MAP entries must be safe when the register is absent (hardware without a gas boiler).
+def test_fuel_sum_entries_create_nothing_when_the_register_is_absent() -> None:
+    lines = [line for line in load_find_lines(DISCUSSION31_FIXTURE) if "PrFuelSum" not in line]
+    graph = DiscoveryService.build_device_graph(lines)
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert not [key for key in keys if "PrFuelSum" in key]

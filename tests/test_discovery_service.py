@@ -1677,10 +1677,11 @@ def test_hidden_installer_registers() -> None:
     assert DiscoveryService._is_hidden("ctlv2.MaintenanceDate") is True
 
 
-# Intent: PrFuelSumHc is hidden.
-# Why: legacy fuel-summary registers are excluded by name.
-def test_hidden_prfuelsum() -> None:
-    assert DiscoveryService._is_hidden("ctlv2.PrFuelSumHc") is True
+# Intent: the PrFuelSum gas counters are no longer hidden by name.
+# Why: discussion 31 - a gas boiler reports live values, and the old name rule kept every such sensor away.
+def test_prfuelsum_is_not_hidden() -> None:
+    assert DiscoveryService._is_hidden("ctlv2.PrFuelSumHc") is False
+    assert DiscoveryService._is_hidden("b7v.PrFuelSum") is False
 
 
 # Intent: ctlv2.id is not hidden even though Broadcast.id is.
