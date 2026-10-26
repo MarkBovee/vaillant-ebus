@@ -807,13 +807,13 @@ class TestMultiFieldParsing:
         assert "pumpstate" in fields
 
     # Intent: the Status01 temp and temp_1 fields carry flow/return friendly names and temperature metadata.
-    # Why: issue #51: field metadata must match the parsed position.
+    # Why: issue #51: field metadata must match the parsed position; the flow name differs from `hmu.FlowTemp`.
     def test_status01_flow_return_temperature_meta(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._status01_graph())
         flow = next(e for e in entities if e.field == "temp")
         ret = next(e for e in entities if e.field == "temp_1")
-        assert flow.meta.friendly_name == "Flow Temperature"
+        assert flow.meta.friendly_name == "Flow Temperature (Status message)"
         assert flow.meta.device_class == "temperature"
         assert flow.meta.unit == "°C"
         assert ret.meta.friendly_name == "Return Temperature"

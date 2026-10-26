@@ -30,8 +30,9 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
     "hmu.RunDataElPowerConsumption": RegisterMeta(
         friendly_name="Electrical Power Consumption", device_class="power", unit="W"
     ),
+    # Named apart from the dedicated `hmu.FlowTemp` so the two flow temperatures do not share a name (`_2` suffix).
     "hmu.Status01.temp": RegisterMeta(
-        friendly_name="Flow Temperature",
+        friendly_name="Flow Temperature (Status message)",
         device_class="temperature",
         unit="°C",
     ),
@@ -128,6 +129,11 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         device_class="temperature",
         unit="°C",
     ),
+    # Name-only entries (no unit, class or category claimed, no active read): the unit of these registers is not proven
+    # by a capture, but a readable name beats the raw register name in the entity list (issue #205 follow-up).
+    "hmu.EnergyIntegral": RegisterMeta(friendly_name="Energy Integral", fallback_read=False),
+    "hmu.FlowPressure": RegisterMeta(friendly_name="Flow Pressure", fallback_read=False),
+    "hmu.CompressorBlocktime": RegisterMeta(friendly_name="Compressor Block Time", fallback_read=False),
     "hmu.FlowTemperature": RegisterMeta(
         friendly_name="Flow Temperature (alt)",
         device_class="temperature",

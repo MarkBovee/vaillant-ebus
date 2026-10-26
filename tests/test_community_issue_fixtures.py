@@ -967,3 +967,47 @@ def test_issue197_cooling_mode_entry_creates_nothing_when_register_is_absent() -
     keys = {entity.key for entity in EntityFactoryService().generate(graph)}
 
     assert not [key for key in keys if "OpModeCooling" in key]
+
+
+NAME_ONLY_FIXTURE = "community/hmux0_issue99_2026-09-10_170850.yaml"
+NAME_ONLY_NAMES = {
+    "hmux0.EnergyIntegral.value": "Energy Integral",
+    "hmux0.FlowPressure.value": "Flow Pressure",
+}
+
+
+# Intent: registers that had only their raw name get a readable name once they return a live value.
+# Why: the entity list showed `EnergyIntegral` and `FlowPressure` next to properly named entries (owner audit, 1.12.5).
+def test_name_only_registers_with_live_values_have_readable_names() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines(NAME_ONLY_FIXTURE))
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    for key, expected_name in NAME_ONLY_NAMES.items():
+        assert entities[key].meta.friendly_name == expected_name
+        assert entities[key].enabled_by_default
+        # No unit, class or category is claimed because no capture proves them.
+        assert (entities[key].meta.unit, entities[key].meta.device_class) == ("", "")
+
+
+# Intent: a name-only register is exposed only after ebusd returns a value, and is never read actively.
+# Why: the entries set fallback_read=False so a bus without the register gets no extra failing reads.
+def test_name_only_registers_without_data_create_no_entity() -> None:
+    emptied = (" EnergyIntegral = ", " FlowPressure = ")
+    lines = [
+        f"{line.split(' = ')[0]} = no data stored" if any(name in line for name in emptied) else line
+        for line in load_find_lines(NAME_ONLY_FIXTURE)
+    ]
+    graph = DiscoveryService.build_device_graph(lines)
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert not set(NAME_ONLY_NAMES) & keys
+    assert all(not MAPPING.get_meta("hmux0", name).fallback_read for name in ("EnergyIntegral", "FlowPressure"))
+
+
+# Intent: an unnamed multi-value status register (`auto;60;75.0;70;65.0`) creates no raw-string entity on a boiler.
+# Why: mapping `Status02` with a friendly name would have added one (found with the differential tool, 1.12.5).
+def test_boiler_multi_value_status02_creates_no_raw_string_entity() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/ecotec_vrt380_ctlv2_discovery.yaml"))
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert not [key for key in keys if "Status02" in key]

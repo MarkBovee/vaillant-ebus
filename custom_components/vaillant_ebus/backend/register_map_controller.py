@@ -613,6 +613,11 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
         friendly_name="DHW Holiday End",
         icon="mdi:calendar-end",
     ),
+    # Name-only entries (no unit, class or category claimed, no active read), see the heat pump map.
+    "ctlv2.HwcBankHolidayStartPeriod": RegisterMeta(friendly_name="DHW Bank Holiday Start", fallback_read=False),
+    "ctlv2.HwcBankHolidayEndPeriod": RegisterMeta(friendly_name="DHW Bank Holiday End", fallback_read=False),
+    "ctlv2.SolarYieldTotal": RegisterMeta(friendly_name="Solar Yield Total", fallback_read=False),
+    "ctlv2.PumpAdditionalTime": RegisterMeta(friendly_name="Pump Additional Time", fallback_read=False),
     "ctlv2.HwcSFMode": RegisterMeta(
         friendly_name="DHW Special Function",
         icon="mdi:water-boiler",
