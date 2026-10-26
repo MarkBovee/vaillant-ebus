@@ -25,6 +25,11 @@ carried a raw register name are cleaned up; nothing is deleted without a confirm
   `Flow Temperature (Status message)`, as on the boilers, so it no longer shows up next to a second
   `Flow Temperature` with a `_2` suffix. Existing entity IDs do not change.
 
+- **The circuit types of all heating circuits sit together.** `Circuit Type (HC1)` was listed under Zone 1, while the
+  types of the unused HC2 and HC3 ended up on the controller device. All of them are now on the controller device,
+  because the circuit type belongs to the controller, not to one zone. The other HC1 entities stay under Zone 1.
+  Entity IDs do not change; the HC1 sensor moves to the other device after the update.
+
 ### Fixed
 
 - **Holiday and manual cooling dates are no longer listed twice.** Every date of the heating controller existed as a

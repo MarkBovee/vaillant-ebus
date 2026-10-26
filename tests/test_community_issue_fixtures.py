@@ -1098,3 +1098,16 @@ def test_zone_holiday_sensors_stay_when_no_date_control_exists() -> None:
 
     assert valid_zone_owners(graph) == {}
     assert {"bass.Z1HolidayStartPeriod.value", "bass.Z1HolidayEndPeriod.value"} <= keys
+
+
+# Intent: the circuit types of all heating circuits are listed together on the controller device, while the other HC1
+# entities stay on the Zone 1 device.
+# Why: the owner found HC1 under Zone 1 and the inactive HC2/HC3 elsewhere, three sensors of one kind on two devices.
+def test_circuit_types_share_the_controller_device_and_other_hc1_entities_stay_on_zone_1() -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_plus_2zone_discovery.yaml"))
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    circuit_types = {key: entity for key, entity in entities.items() if key.endswith("CircuitType.value")}
+    assert {"ctlv3.Hc1CircuitType.value", "ctlv3.Hc2CircuitType.value"} <= circuit_types.keys()
+    assert {entity.device_circuit for entity in circuit_types.values()} == {"ctlv3"}
+    assert entities["ctlv3.Hc1FlowTemp.value"].device_circuit == "z1"

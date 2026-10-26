@@ -375,6 +375,9 @@ def _extract_prefixed_number(name: str, prefix: str) -> str:
     return digits
 
 
+_HC_CIRCUIT_TYPE = re.compile(r"^hc\d+circuittype$")
+
+
 # Place controller-owned sub-device registers on their logical devices.
 def _redistribute_device_assignments(
     entities: list[EntityDescription],
@@ -403,7 +406,11 @@ def _redistribute_device_assignments(
         heating_circuit_number = _extract_prefixed_number(name_lower, "hc") if name_lower.startswith("hc") else ""
         target_zone = f"z{zone_number or heating_circuit_number}"
 
-        if zone_number or heating_circuit_number:
+        if _HC_CIRCUIT_TYPE.fullmatch(name_lower):
+            # The circuit type is a property of the controller, not of one zone, so HC1, HC2 and HC3 are listed
+            # together on the controller device instead of HC1 under Zone 1 and the inactive ones elsewhere.
+            entity._device_circuit = entity.circuit
+        elif zone_number or heating_circuit_number:
             if target_zone in active_zones:
                 entity._device_circuit = target_zone
             elif target_zone != "z1":
