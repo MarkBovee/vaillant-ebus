@@ -1085,6 +1085,8 @@ def test_command_registers_create_no_sensor() -> None:
     ):
         assert Discovery._is_hidden(key) is True
     assert Discovery._is_hidden("vwz.TestHwcTemp") is False
+    # A map entry would also make the fallback planner read the command register actively.
+    assert not [key for key in MAPPING.REGISTER_MAP if key.casefold().endswith(".clearerrorhistory")]
 
 
 # Intent: a zone holiday keeps its sensor when the date platform would not create the date control.

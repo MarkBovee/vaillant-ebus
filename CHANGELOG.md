@@ -31,8 +31,9 @@ carried a raw register name are cleaned up; nothing is deleted without a confirm
   text sensor and as a date control. The date control stays. A zone holiday keeps its sensor when no date control can
   exist for it (for example when two circuits claim the same zone), and so does a single manual cooling date. If you
   want the sensor back, set `enabled: true` for it in `entities.yaml`.
-- **Command registers are no longer sensors.** `Clearerrorhistory` and the `EnableTest*` flags of the hydraulic
-  station only stand for a button press or a test switch.
+- **Command registers are no longer sensors and are no longer read.** `Clearerrorhistory` and the `EnableTest*` flags
+  of the hydraulic station only stand for a button press or a test switch. The integration also stops asking ebusd
+  to read `Clearerrorhistory` as a fallback.
 - **A customised entity is not switched off by the first discovery.** When a register reports `no data stored` at the
   first discovery after a restart, the integration switches its entity off until data returns. That no longer happens
   to an entity you renamed, labelled or placed in an area.
