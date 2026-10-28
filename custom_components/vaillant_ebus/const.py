@@ -59,6 +59,8 @@ EBUSD_TO_HA_HVAC = {
     "off": "off",
     "auto": "auto",
     "day": "heat",
+    # Controllers with the off/auto/manual layout (CTLV2 config of issue #207) report manual heating as "manual".
+    "manual": "heat",
     "night": "cool",
     "heat": "heat",
     "cool": "cool",

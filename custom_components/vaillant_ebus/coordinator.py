@@ -26,7 +26,7 @@ from . import cleanup, repairs
 from .backend.analysis_service import AnalysisResult, AnalysisService
 from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService
 from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, BusErrorGuard, EbusService
-from .backend.entity_factory import EntityDescription, EntityFactoryService
+from .backend.entity_factory import EntityDescription, EntityFactoryService, unused_zone_numbers
 from .backend.fallback_planner import fallback_candidate, plan_fallback_reads
 from .backend.graph_merge import is_stale_legacy_alias, merge_device_graphs, merge_entities
 from .backend.mapping import (
@@ -377,6 +377,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # Pauses the cyclic active reads while the adapter fails every bus request (issue #193).
         self._bus_guard = BusErrorGuard()
         self._runtime_definitions: dict[str, str] = {}
+        # ebusd's answer to each runtime definition (`ok` or the error text), for the discovery dump (issue #31 HMUX0).
+        self._runtime_define_results: dict[str, str] = {}
         # (circuit, name) pairs whose runtime definition was withheld because the owner cannot answer it.
         # Rebuilt by every `_define_custom_registers` run, which follows each connect and reconnect. It must survive
         # between polls (the fallback read consults it) and must not be cleared with `_runtime_definitions`, or a poll
@@ -626,6 +628,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self._pending_ebus = None
         self.discovery = DiscoveryService(ebus)
         self._runtime_definitions.clear()
+        self._runtime_define_results.clear()
         self._last_energy_poll = datetime.min
 
         version = ebus.version
@@ -1153,6 +1156,19 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             except Exception as exc:
                 _LOGGER.warning("Entity adder failed for %s: %s", entity_type, exc)
 
+    # Zone numbers the controllers themselves declare unused (`HcNCircuitType = inactive`).
+    # The cleanup treats the hand-built climate rows of any other zone as live, even while the zone reports no value.
+    def unused_zone_numbers(self) -> frozenset[int]:
+        return frozenset() if self._graph is None else unused_zone_numbers(self._graph)
+
+    # The runtime definitions ebusd accepted and ebusd's answer to every definition sent since the last connect.
+    # The discovery dump records both, so a dump shows why a defined register is missing.
+    def runtime_define_report(self) -> dict[str, object]:
+        return {
+            "accepted": sorted(self._runtime_definitions.values()),
+            "results": dict(sorted(self._runtime_define_results.items())),
+        }
+
     # Casefolded `circuit.name` keys of the registers this integration defined on the current bus.
     # Discovery pruning and no-data disabling must leave these alone while ebusd has no value for them.
     def runtime_defined_key_folds(self) -> set[str]:
@@ -1275,7 +1291,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # connected. Only changed or previously failed definitions are sent.
         defines = build_runtime_defines(self._graph, datetime.now(), self._withheld_runtime_registers)
         defined = 0
-        unavailable = 0
+        unavailable: list[str] = []
         for definition in defines:
             if self._stopped or self._unload_requested:
                 return
@@ -1288,21 +1304,27 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 if self._stopped:
                     return
                 if resp.startswith("ERR:"):
-                    unavailable += 1
+                    unavailable.append(f"{circuit}.{name} ({resp.strip()})")
+                    self._runtime_define_results[key] = resp.strip()
                     _LOGGER.debug("Runtime register unavailable: %s (%s)", name, resp)
                 else:
                     self._runtime_definitions[key] = definition
+                    self._runtime_define_results[key] = "ok"
                     defined += 1
                     _LOGGER.debug("Runtime register defined: %s", name)
             except Exception as exc:
-                unavailable += 1
+                unavailable.append(f"{circuit}.{name} ({exc})")
+                self._runtime_define_results[key] = f"failed: {exc}"
                 _LOGGER.warning("Failed to define register: %s", exc)
         if defined or unavailable:
+            # Name the rejected definitions: on the HMUX0 SW0406 bus of discussion 31 none of the defined registers
+            # appeared and the count alone could not tell which ones ebusd refused, or why.
             _LOGGER.info(
-                "Runtime register definitions complete: %d defined, %d unavailable, %d total",
+                "Runtime register definitions complete: %d defined, %d unavailable, %d total%s",
                 defined,
-                unavailable,
+                len(unavailable),
                 len(defines),
+                f"; unavailable: {', '.join(unavailable)}" if unavailable else "",
             )
 
     # Avoid cache I/O and state publication after teardown begins.
@@ -1943,6 +1965,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         # it being reset; clearing the guard here restarted the pause at 60 s and sent the whole
                         # read set again. A rediscovery requested by the owner still resets it.
                         self._runtime_definitions.clear()
+                        self._runtime_define_results.clear()
                         self._last_energy_poll = datetime.min
                         ebus = self.ebus
                         if ebus:

@@ -6807,7 +6807,7 @@ async def test_stale_entities_issue_follows_the_registry() -> None:
         c.ebus = MagicMock(spec=EbusService)
         c.ebus.is_connected = True
         c._ebusd_connected = True
-        c._graph = types.SimpleNamespace(nodes={"hmu": object()})  # live discovery finished
+        c._graph = types.SimpleNamespace(nodes={"hmu": object()}, raw_registers={})  # live discovery finished
         c.entities = [MagicMock(unique_id="ebusd_hmu_flowtemp")]
         row = types.SimpleNamespace(
             entity_id="sensor.gone",
@@ -6857,7 +6857,7 @@ async def test_stale_entities_issue_is_raised_for_entities_without_data() -> Non
         c.ebus = MagicMock(spec=EbusService)
         c.ebus.is_connected = True
         c._ebusd_connected = True
-        c._graph = types.SimpleNamespace(nodes={"hmu": object()})  # live discovery finished
+        c._graph = types.SimpleNamespace(nodes={"hmu": object()}, raw_registers={})  # live discovery finished
         c.entities = [
             types.SimpleNamespace(unique_id="ebusd_ctlv2_hwcstoragetemptop", enabled_by_default=False),
             types.SimpleNamespace(unique_id="ebusd_hmu_flowtemp", enabled_by_default=True),
@@ -6931,3 +6931,27 @@ async def test_issue188_sw0406_power_definition_stays_hardware_gated(fixture: st
     definitions = await _runtime_definitions_for(fixture)
 
     assert "u.hmux0.RunDataElPowerConsumption" not in definitions
+
+
+# Intent: every runtime definition records ebusd's answer, and the summary log names the rejected registers.
+# Why: discussion 31 - on an HMUX0 SW0406 bus no defined register appeared and the count alone could not show which
+#      definitions ebusd refused; the report also feeds the discovery dump.
+async def test_runtime_define_report_records_results_and_names_rejections(caplog: pytest.LogCaptureFixture) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fixture = "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(
+            side_effect=lambda text: "ERR: element not found" if ",RunDataFlowTemp," in text else "done"
+        )
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+
+        with caplog.at_level("INFO"):
+            await coordinator._define_custom_registers()
+
+        report = coordinator.runtime_define_report()
+        assert report["results"]["r.hmux0.RunDataFlowTemp"] == "ERR: element not found"
+        assert report["results"]["r.hmux0.RunDataReturnTemp"] == "ok"
+        assert not any(",RunDataFlowTemp," in text for text in report["accepted"])
+        assert "unavailable: hmux0.RunDataFlowTemp (ERR: element not found)" in caplog.text

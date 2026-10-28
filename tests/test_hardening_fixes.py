@@ -1491,6 +1491,8 @@ async def test_export_dump_falls_back_when_continued_grab_delta_is_unsafe(
     assert "counter decreased" in dump_data["metadata"]["grab_error"]
     assert "grab" not in dump_data
     assert {"metadata", "raw_find_lines", "before_registers", "registers"} <= dump_data.keys()
+    # The define report is always present, so a dump can show which runtime definitions ebusd refused.
+    assert dump_data["runtime_definitions"] == {"accepted": [], "results": {}}
     assert commands == ["grab", "grab result all", "grab result all"]
     notification = _ha_components.persistent_notification.create.call_args.args[1]
     assert "raw ebus capture could not be isolated" in notification.casefold()
@@ -2492,3 +2494,19 @@ async def test_registered_service_handlers_are_async_callbacks() -> None:
     await INIT.async_setup(hass, {})
 
     assert all(inspect.iscoroutinefunction(handler) for handler in registered.values())
+
+
+# Intent: write_parameter raises when the write fails and returns quietly when it succeeds.
+# Why: issue #208 - the service only logged `success=False`, so scripts could not tell that a timer write failed.
+async def test_write_parameter_raises_on_a_failed_write() -> None:
+    coordinator = MagicMock()
+    hass = MagicMock()
+    hass.data = {"vaillant_ebus": {"entry-a": coordinator}}
+    data = {"circuit": "ctlv2", "name": "HwcTimer_Monday", "value": "0;1;05:20;06:00"}
+
+    coordinator.async_write_register = AsyncMock(return_value=False)
+    with pytest.raises(HomeAssistantError, match="HwcTimer_Monday"):
+        await INIT._svc_write_parameter(hass, _call(data))
+
+    coordinator.async_write_register = AsyncMock(return_value=True)
+    await INIT._svc_write_parameter(hass, _call(data))

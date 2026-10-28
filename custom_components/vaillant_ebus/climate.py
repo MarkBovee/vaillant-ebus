@@ -276,7 +276,36 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         value = _float(_value(self.coordinator, f"{self._zn}ActualRoomTempDesired", self._circuit))
         if value is not None and 5 <= value <= 30:
             return value
-        return _float(_value(self.coordinator, f"{self._zn}DayTemp", self._circuit))
+        day_temp = _float(_value(self.coordinator, f"{self._zn}DayTemp", self._circuit))
+        if day_temp is not None:
+            return day_temp
+        # The off/auto/manual layout has no DayTemp or ActualRoomTempDesired (issue #207): the manual setpoint
+        # applies in manual mode, and TempDesired is the setpoint the controller currently uses.
+        names = ("ManualTemp", "TempDesired") if self._raw_op_mode() == "manual" else ("TempDesired", "ManualTemp")
+        for name in names:
+            value = _float(_value(self.coordinator, f"{self._zn}{name}", self._circuit))
+            if value is not None and 5 <= value <= 30:
+                return value
+        return None
+
+    # The zone operation mode exactly as the controller reports it, lower-case.
+    def _raw_op_mode(self) -> str:
+        return (_value(self.coordinator, f"{self._zn}OpMode", self._circuit) or "").strip().lower()
+
+    # The register that holds the manual heating setpoint: DayTemp where it exists, else ManualTemp.
+    # Some CTLV2 configurations define only `ZNManualTemp` (issue #207); writing DayTemp there was silently skipped.
+    def _manual_setpoint_register(self) -> str | None:
+        if self._zone_register_capability("DayTemp") is True:
+            return "DayTemp"
+        if self._zone_register_capability("ManualTemp") is True:
+            return "ManualTemp"
+        return None
+
+    # The OpMode value that means manual heating on this zone's controller.
+    # A config with `ZNManualTemp` and without `ZNDayTemp` uses the off/auto/manual enum and rejects "day" with
+    # `ERR: invalid numeric argument` (issue #207); every other config keeps "day", as before.
+    def _heat_op_mode(self) -> str:
+        return "manual" if self._manual_setpoint_register() == "ManualTemp" else "day"
 
     # Supported features: preset mode, target temp, turn on/off
     @property
@@ -406,9 +435,9 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             if cooling_active:
                 ok = await self._cancel_manual_cooling()
                 if ok:
-                    ok = await self._write(f"{self._zn}OpMode", "day")
+                    ok = await self._write(f"{self._zn}OpMode", self._heat_op_mode())
             else:
-                ok = await self._write(f"{self._zn}OpMode", "day")
+                ok = await self._write(f"{self._zn}OpMode", self._heat_op_mode())
         else:
             ebusd_mode = HA_TO_EBUSD_HVAC.get(hvac_mode.value)
             if ebusd_mode is None:
@@ -478,7 +507,7 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Set target temperature following mypyllant semantics: boost active →
     # update the veto temperature only; time-controlled (auto) mode → start a
-    # quick veto; manual/day modes → write the day temp directly.
+    # quick veto; manual/day modes → write the manual setpoint (DayTemp, or ManualTemp where only that exists).
     async def async_set_temperature(self, **kwargs: Any) -> None:
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is None:
@@ -498,9 +527,10 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
                 raise HomeAssistantError(self._quick_veto_error(capability))
             await self._start_quick_veto(float(temp))
             return
-        if self._zone_register_capability("DayTemp") is not True:
+        setpoint = self._manual_setpoint_register()
+        if setpoint is None:
             return
-        ok = await self._write(f"{self._zn}DayTemp", str(temp))
+        ok = await self._write(f"{self._zn}{setpoint}", str(temp))
         if ok:
             self._apply_optimistic_target(float(temp))
             self._schedule_confirm_refresh()

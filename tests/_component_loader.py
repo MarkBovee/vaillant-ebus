@@ -431,6 +431,7 @@ def _register_const() -> None:
             "off": "off",
             "auto": "auto",
             "day": "heat",
+            "manual": "heat",
             "night": "cool",
             "heat": "heat",
             "cool": "cool",

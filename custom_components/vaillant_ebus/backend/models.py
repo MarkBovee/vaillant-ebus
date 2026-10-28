@@ -826,19 +826,29 @@ def zone_value_has_data(raw: str | None) -> bool:
 
 
 # Whether a discovered zone of one circuit is a real heating zone rather than a ghost.
-# A room-zone mapping with a value proves it; otherwise a measured value on a live register does.
+# A room-zone mapping with a value proves it; otherwise a measured value on a live register does. A read error on a
+# live register is not evidence of absence: on the issue #191 capture `Z2RoomTemp` answered `ERR: invalid position`
+# for one discovery, the Zone 2 climate was not created and the repair later deleted its row. Such a zone stays valid
+# unless the controller itself declares its heating circuit inactive; `no data stored` still means a ghost.
 def zone_is_valid(graph: DeviceGraph, circuit: str, zone: str) -> bool:
     zone_upper = zone.upper()
     expected_mapping = f"{circuit}.{zone_upper}RoomZoneMapping".casefold()
     mapping = next((value for key, value in graph.raw_registers.items() if key.casefold() == expected_mapping), None)
     if zone_value_has_data(mapping):
         return True
-    for name in ZONE_LIVE_REGISTERS:
-        expected = f"{circuit}.{zone_upper}{name}".casefold()
-        value = next((raw for key, raw in graph.raw_registers.items() if key.casefold() == expected), None)
-        if zone_value_has_data(value):
-            return True
-    return False
+    live_keys = {f"{circuit}.{zone_upper}{name}".casefold() for name in ZONE_LIVE_REGISTERS}
+    if any(zone_value_has_data(raw) for key, raw in graph.raw_registers.items() if key.casefold() in live_keys):
+        return True
+    unreadable = any(key.casefold() in live_keys for key in graph.error_registers)
+    return unreadable and not _zone_circuit_declared_inactive(graph, circuit, zone_upper[1:])
+
+
+# Whether the controller reports `HcNCircuitType = inactive` for the heating circuit of zone N.
+# Only this explicit answer may overrule an unreadable zone; a missing or unreadable type never does.
+def _zone_circuit_declared_inactive(graph: DeviceGraph, circuit: str, number: str) -> bool:
+    expected = f"{circuit}.Hc{number}CircuitType".casefold()
+    value = next((raw for key, raw in graph.raw_registers.items() if key.casefold() == expected), None)
+    return value is not None and value.strip().casefold() == "inactive"
 
 
 # Map each valid zone to its single owning circuit; a zone claimed by two circuits belongs to none.

@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.13.0 - 2026-10-28
+
+Manual mode on more VRC 720 setups, units for registers that showed as bare text, gas counters in kWh, and a repair
+that no longer deletes a working zone.
+
+### Added
+
+- **Manual mode on controllers with the off/auto/manual layout (issue #207).** Some sensoCOMFORT VRC 720 setups
+  (`ctlv2`) report `manual` instead of `day` and have `Z1ManualTemp` instead of `Z1DayTemp`. The climate entity showed
+  `unknown` there, Heat failed with `ERR: invalid numeric argument`, and the target temperature stayed empty. A zone
+  that has `ManualTemp` but no `DayTemp` now reads `manual` as Heat, writes `manual` for Heat and sends the target
+  temperature to `ManualTemp`. Setups that have `DayTemp` keep writing `day`, as before.
+- **The discovery dump records the runtime definitions.** A new `runtime_definitions` section lists the definitions
+  ebusd accepted and its answer to every definition the integration sent. The log line
+  `Runtime register definitions complete` now names each definition ebusd refused, with the reason. Until now a
+  dump could not show why a defined register (for example the HMUX0 flow temperature) was missing.
+
+### Changed
+
+- **Gas counters are kWh energy sensors (discussion 31).** Upstream ebusd declares the `PrFuelSum*` counters as
+  `energy4`, which is kWh, and the counters in the captured dump add up (heating 20434 + hot water 11 = 20446 in
+  total). They now have the unit kWh and the energy class, so they can go on the Energy dashboard. "Last Month" gets
+  no state class because it is replaced once a month and can go down. They are still switched off by default, and
+  "(raw counter)" is gone from the names. Home Assistant may ask once what to do with the old statistics, because
+  the unit changed.
+- **Units for registers that showed as bare text (issue #205).** The units come from ebusd's own definitions:
+  `°C` for the condenser outlet temperature, the desired flow temperatures of the heat pump and of HC1 to HC3, the
+  heating flow minimum and maximum, the bivalence point and the emergency flow temperature; `°min` for the energy
+  integral and kWh for the immersion heater energy usage. These sensors now get a graph and statistics. The EEV
+  position keeps no unit: ebusd calls it `deg`, not `%`.
+- **`vaillant_ebus.write_parameter` reports a failed write (issue #208).** It used to log `success=False` only. It
+  now raises an error, so a script or automation can see that the write did not go through.
+
+### Fixed
+
+- **A zone no longer disappears after one failed read (issues #191 and #192).** The climate and flow range entities
+  of a zone exist only while the zone shows a live room temperature. When `Z2RoomTemp` answered
+  `ERR: invalid position` for one discovery, Zone 2 lost its climate entity until the next reload. A read error now
+  keeps the zone; only `no data stored`, or the controller reporting the circuit as `inactive`, removes it. The other
+  side of this choice: an unused zone whose room temperature always answers with an error, on a controller that does
+  not report its circuit type, now gets a climate entity. No capture we have shows such a zone.
+- **The stale entities repair no longer deletes a working zone (issue #152).** After such a failed read, the repair
+  listed the zone's climate and flow range rows as left over and removed them, including Zone 1. It now offers these
+  rows only for a zone whose heating circuit the controller reports as `inactive`, like an unused HC3.
+
 ## 1.12.5 - 2026-10-26
 
 A tidy-up of the entity list, plus the gas counters of discussion 31. Several sensors that repeated each other or

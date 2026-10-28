@@ -72,6 +72,14 @@ RELEASE_1120_CAPTURE_PROVENANCE = {
         "MF=Vaillant;ID=HMUX0;SW=0406;HW=0504",
     ),
 }
+# Byte-exact copies of community captures taken from a zip attachment: fixture -> (zip URL, member, sha256).
+ZIP_CAPTURE_PROVENANCE = {
+    "community/saunier_duval_f34_issue191_2026-10-20_094755_discovery.yaml": (
+        "https://github.com/user-attachments/files/33707108/f34-v1.12.2.zip",
+        "f34-v1.12.2/discovery_dump_2026-10-20_094755_idle_purged_capture30.yaml",
+        "8a6191fa6f65dc7e2e04e8612f2c653075aac331bd0ef9754c18bd6181a70cc0",
+    ),
+}
 NEW_CAPTURE_PROVENANCE = {
     "community/arotherm_pro7_issue101_2026-09-15_203102_discovery.yaml": (
         "https://github.com/user-attachments/files/32255148/discovery_dump_2026-09-15_203102Whisper.switch.no.heat.yaml",
@@ -394,3 +402,14 @@ def test_sw0406_captures_keep_hmux0_config_provenance() -> None:
     assert len(_hmux0_find_rows(stock)) == 9
     assert len(_hmux0_find_rows(full_csv)) == 91
     assert any(line.startswith("hmu YieldHcDay = 17.7") for line in local["raw_find_lines"])
+
+
+# Intent: captures taken from a zip attachment stay byte-for-byte copies of the zip member.
+# Why: the issue #191 read-error evidence (`Z2RoomTemp` unreadable for one discovery) only exists in the original lines.
+@pytest.mark.parametrize(("fixture", "expected"), ZIP_CAPTURE_PROVENANCE.items())
+def test_zip_captures_match_source_digests(fixture: str, expected: tuple[str, str, str]) -> None:
+    source_url, member, expected_sha256 = expected
+
+    assert source_url.startswith("https://github.com/user-attachments/files/") and member.endswith(".yaml")
+    assert hashlib.sha256((FIXTURES_DIR / fixture).read_bytes()).hexdigest() == expected_sha256
+    assert load_discovery_dump(fixture)["raw_find_lines"]
