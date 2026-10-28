@@ -38,7 +38,9 @@ that no longer deletes a working zone.
 - **A zone no longer disappears after one failed read (issues #191 and #192).** The climate and flow range entities
   of a zone exist only while the zone shows a live room temperature. When `Z2RoomTemp` answered
   `ERR: invalid position` for one discovery, Zone 2 lost its climate entity until the next reload. A read error now
-  keeps the zone; only `no data stored`, or the controller reporting the circuit as `inactive`, removes it.
+  keeps the zone; only `no data stored`, or the controller reporting the circuit as `inactive`, removes it. The other
+  side of this choice: an unused zone whose room temperature always answers with an error, on a controller that does
+  not report its circuit type, now gets a climate entity. No capture we have shows such a zone.
 - **The stale entities repair no longer deletes a working zone (issue #152).** After such a failed read, the repair
   listed the zone's climate and flow range rows as left over and removed them, including Zone 1. It now offers these
   rows only for a zone whose heating circuit the controller reports as `inactive`, like an unused HC3.

@@ -877,11 +877,11 @@ async def _async_export_discovery_dump_impl(
     # Recent writes the integration itself sent (register, value, resolved
     # circuit, verification result). Correlates with grab traffic for
     # write-vs-app analysis; empty when nothing was written this session.
-    # The definitions ebusd accepted and its answer to each one; a missing defined register is otherwise a guess.
-    dump_data["runtime_definitions"] = coordinator.runtime_define_report()
     write_log = list(getattr(coordinator, "_write_log", []) or [])
     if write_log:
         dump_data["writes"] = write_log
+    # The definitions ebusd accepted and its answer to each one; a missing defined register is otherwise a guess.
+    dump_data["runtime_definitions"] = coordinator.runtime_define_report()
     if has_after_snapshot:
         dump_data["after_registers"] = after_registers
         dump_data["raw_find_lines_after"] = after_raw_lines
