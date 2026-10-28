@@ -167,6 +167,72 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
         entity_type="number",
         entity_category="config",
     ),
+    # Read-only controller temperatures with the unit from the ebusd definitions of the issue #205 reporter (`°C`).
+    "ctlv2.HcBivalencePoint": RegisterMeta(
+        friendly_name="Bivalence Point",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.HcEmergencyTemp": RegisterMeta(
+        friendly_name="Emergency Flow Temperature",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Hc1FlowTempDesired": RegisterMeta(
+        friendly_name="Desired Flow Temperature (HC1)", device_class="temperature", unit="°C", fallback_read=False
+    ),
+    "ctlv2.Hc1HeatingFlowTempMax": RegisterMeta(
+        friendly_name="Heating Flow Max Temperature (HC1)",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Hc1HeatingFlowTempMin": RegisterMeta(
+        friendly_name="Heating Flow Min Temperature (HC1)",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Hc2FlowTempDesired": RegisterMeta(
+        friendly_name="Desired Flow Temperature (HC2)", device_class="temperature", unit="°C", fallback_read=False
+    ),
+    "ctlv2.Hc2HeatingFlowTempMax": RegisterMeta(
+        friendly_name="Heating Flow Max Temperature (HC2)",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Hc2HeatingFlowTempMin": RegisterMeta(
+        friendly_name="Heating Flow Min Temperature (HC2)",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Hc3FlowTempDesired": RegisterMeta(
+        friendly_name="Desired Flow Temperature (HC3)", device_class="temperature", unit="°C", fallback_read=False
+    ),
+    "ctlv2.Hc3HeatingFlowTempMax": RegisterMeta(
+        friendly_name="Heating Flow Max Temperature (HC3)",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "ctlv2.Hc3HeatingFlowTempMin": RegisterMeta(
+        friendly_name="Heating Flow Min Temperature (HC3)",
+        device_class="temperature",
+        unit="°C",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
     "ctlv2.Hc1MaxFlowTempDesired": RegisterMeta(
         friendly_name="Max Flow Temperature (HC1)",
         device_class="temperature",

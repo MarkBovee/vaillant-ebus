@@ -63,6 +63,7 @@ async def _svc_read_parameter(hass: HomeAssistant, call: ServiceCall) -> None:
 
 
 # Write a value with read-after-write verification via the central write path.
+# A failed write raises, so a script or automation sees the failure instead of a log line only (issue #208).
 async def _svc_write_parameter(hass: HomeAssistant, call: ServiceCall) -> None:
     coordinator = _resolve_coordinator(hass, call)
     circuit = call.data["circuit"]
@@ -70,6 +71,8 @@ async def _svc_write_parameter(hass: HomeAssistant, call: ServiceCall) -> None:
     value = call.data["value"]
     ok = await coordinator.async_write_register(circuit, name, value, require_discovered=False)
     _LOGGER.info("write_parameter %s.%s=%s: success=%s", circuit, name, value, ok)
+    if not ok:
+        raise HomeAssistantError(f"Writing {value!r} to {circuit}.{name} failed or was not confirmed by a read-back")
 
 
 # Write the eloBLOCK B510 thermostat override and keep it alive while enabled.

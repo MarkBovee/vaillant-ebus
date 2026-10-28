@@ -129,9 +129,25 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         device_class="temperature",
         unit="°C",
     ),
-    # Name-only entries (no unit, class or category claimed, no active read): the unit of these registers is not proven
-    # by a capture, but a readable name beats the raw register name in the entity list (issue #205 follow-up).
-    "hmu.EnergyIntegral": RegisterMeta(friendly_name="Energy Integral", fallback_read=False),
+    # Never read actively. FlowPressure and CompressorBlocktime are name-only: no capture proves their unit, but a
+    # readable name beats the raw register name. The units of the other entries come from the ebusd definitions the
+    # issue #205 reporter posted (`°min`, `°C` and `kWh` in the unit column).
+    "hmu.EnergyIntegral": RegisterMeta(
+        friendly_name="Energy Integral", unit="°min", state_class="measurement", fallback_read=False
+    ),
+    "hmu.RunDataCondensorOutletTemp": RegisterMeta(
+        friendly_name="Condenser Outlet Temperature", device_class="temperature", unit="°C", fallback_read=False
+    ),
+    "hmu.RunDataFlowTempDesired": RegisterMeta(
+        friendly_name="Desired Flow Temperature", device_class="temperature", unit="°C", fallback_read=False
+    ),
+    "hmu.TotalEnergyUsageImmersionHeater": RegisterMeta(
+        friendly_name="Immersion Heater Energy Usage",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+        fallback_read=False,
+    ),
     "hmu.FlowPressure": RegisterMeta(friendly_name="Flow Pressure", fallback_read=False),
     "hmu.CompressorBlocktime": RegisterMeta(friendly_name="Compressor Block Time", fallback_read=False),
     "hmu.FlowTemperature": RegisterMeta(
@@ -940,24 +956,28 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
 }
 
 # Gas consumption counters of the controller (`PrFuelSum*`, discussion 31: b7v of an ecoTEC with a VRC 720, live values
-# 20446 total / 14 this month). Raw counters of unproven unit, like `bai.PrEnergySumHc1`: no unit, energy class or
-# statistics claim beyond a rising total, diagnostic and disabled by default. `ctlv2` covers the numbered controller
-# circuits through the metadata aliases; `b7v` is a separate ebusd circuit name for the same controller.
+# 20446 total / 14 this month). Upstream ebusd declares them `energy4`, which carries the unit kWh (`_templates.tsp`,
+# `15.700.tsp`), the fixture totals add up (heating 20434 + DHW 11 = 20446) and the myVAILLANT app shows the gas use in
+# kWh. The running totals and this month's value rise and reset, so they are `total_increasing`; last month's value is
+# replaced once a month and can fall, so it gets no state class. Disabled by default; `ctlv2` covers the numbered
+# controller circuits through the metadata aliases; `b7v` is a separate ebusd circuit name for the same controller.
 _FUEL_SUM_NAMES: dict[str, str] = {
-    "PrFuelSum": "Fuel Consumption (raw counter)",
-    "PrFuelSumHc": "Fuel Consumption Heating (raw counter)",
-    "PrFuelSumHwc": "Fuel Consumption DHW (raw counter)",
-    "PrFuelSumHcThisMonth": "Fuel Consumption Heating This Month (raw counter)",
-    "PrFuelSumHcLastMonth": "Fuel Consumption Heating Last Month (raw counter)",
-    "PrFuelSumHwcThisMonth": "Fuel Consumption DHW This Month (raw counter)",
-    "PrFuelSumHwcLastMonth": "Fuel Consumption DHW Last Month (raw counter)",
+    "PrFuelSum": "Fuel Consumption",
+    "PrFuelSumHc": "Fuel Consumption Heating",
+    "PrFuelSumHwc": "Fuel Consumption DHW",
+    "PrFuelSumHcThisMonth": "Fuel Consumption Heating This Month",
+    "PrFuelSumHcLastMonth": "Fuel Consumption Heating Last Month",
+    "PrFuelSumHwcThisMonth": "Fuel Consumption DHW This Month",
+    "PrFuelSumHwcLastMonth": "Fuel Consumption DHW Last Month",
 }
 HEAT_PUMP_AND_BOILER_REGISTERS.update(
     {
         f"{circuit}.{register}": RegisterMeta(
             friendly_name=friendly_name,
-            icon="mdi:counter",
-            state_class="total_increasing",
+            icon="mdi:fire",
+            unit="kWh",
+            device_class="energy",
+            state_class="" if register.endswith("LastMonth") else "total_increasing",
             entity_category="diagnostic",
             enabled=False,
             fallback_read=False,

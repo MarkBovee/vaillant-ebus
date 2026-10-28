@@ -926,3 +926,75 @@ async def test_extra_zone_flow_range_name_does_not_repeat_the_device_name() -> N
     with tempfile.TemporaryDirectory() as tmpdir:
         coordinator = _coordinator(tmpdir, _graph_two_zone(full_parity=True))
         assert CLIMATE.EbusdFlowTempRange(coordinator, _entry(), "z2", "ctlv2")._attr_name == "Flow Temperature Range"
+
+
+# Build the two-zone graph with the off/auto/manual layout of issue #207: Z1 has ManualTemp and TempDesired, but no
+# DayTemp and no ActualRoomTempDesired.
+def _graph_manual_layout() -> DeviceGraph:
+    graph = _graph_two_zone()
+    for name in ("Z1DayTemp", "Z1ActualRoomTempDesired"):
+        graph.raw_registers.pop(f"ctlv2.{name}")
+    graph.raw_registers.update(
+        {"ctlv2.Z1OpMode": "manual", "ctlv2.Z1ManualTemp": "20.5", "ctlv2.Z1TempDesired": "20.5"}
+    )
+    return graph
+
+
+_MANUAL_LAYOUT_DATA = {
+    "ebusd": {
+        "ctlv2.Z1OpMode.value": "manual",
+        "ctlv2.Z1ManualTemp.value": "20.5",
+        "ctlv2.Z1TempDesired.value": "20.5",
+        "ctlv2.Z1RoomTemp.value": "21.2",
+    }
+}
+
+
+# Intent: a zone reporting OpMode "manual" shows HEAT with the manual setpoint as target.
+# Why: issue #207 - the CTLV2 off/auto/manual layout left the entity `unknown` with an empty target.
+async def test_manual_layout_reads_heat_and_the_manual_setpoint() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, _graph_manual_layout(), data=_MANUAL_LAYOUT_DATA)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        assert z1.hvac_mode == HVACMode.HEAT
+        assert z1.target_temperature == 20.5
+
+
+# Intent: HEAT writes "manual" and a target in manual mode writes ManualTemp on the off/auto/manual layout.
+# Why: issue #207 - ebusd rejected "day" with `ERR: invalid numeric argument` and the DayTemp write was skipped.
+async def test_manual_layout_writes_manual_mode_and_manual_setpoint() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, _graph_manual_layout(), data=_MANUAL_LAYOUT_DATA)
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        coordinator.async_write_registers = AsyncMock(return_value=True)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        await z1.async_set_hvac_mode(HVACMode.HEAT)
+        z1._optimistic_hvac_mode = None
+        await z1.async_set_temperature(temperature=21.5)
+
+        calls = [(c.args[0], c.args[1], c.args[2]) for c in coordinator.async_write_register.call_args_list]
+        assert ("ctlv2", "Z1OpMode", "manual") in calls
+        assert ("ctlv2", "Z1ManualTemp", "21.5") in calls
+        assert not any(name in {"Z1DayTemp"} or value == "day" for _, name, value in calls)
+
+
+# Intent: a zone that has DayTemp keeps writing "day" and DayTemp, even when ManualTemp is also discovered.
+# Why: the owner's CTLV2 config (flexotherm_ctlv2_cooling fixture) uses the day enum; it must not change.
+async def test_day_layout_keeps_day_even_with_manual_temp_present() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = _graph_two_zone()
+        graph.raw_registers["ctlv2.Z1ManualTemp"] = "20.0"
+        coordinator = _coordinator(tmpdir, graph, data={"ebusd": {"ctlv2.Z1OpMode.value": "day"}})
+        coordinator.async_write_register = AsyncMock(return_value=True)
+        coordinator.async_write_registers = AsyncMock(return_value=True)
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        await z1.async_set_hvac_mode(HVACMode.HEAT)
+        z1._optimistic_hvac_mode = None
+        await z1.async_set_temperature(temperature=21.5)
+
+        calls = [(c.args[0], c.args[1], c.args[2]) for c in coordinator.async_write_register.call_args_list]
+        assert ("ctlv2", "Z1OpMode", "day") in calls
+        assert ("ctlv2", "Z1DayTemp", "21.5") in calls

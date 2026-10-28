@@ -918,9 +918,7 @@ ISSUE197_FIXTURE = "community/geniaset_bass3_discovery.yaml"
 def _issue197_entities(replacements: dict[str, str] | None = None) -> dict[str, object]:
     values = replacements or {}
     lines = [
-        f"{line.split(' = ', 1)[0]} = {values[line.split(' = ', 1)[0]]}"
-        if line.split(" = ", 1)[0] in values
-        else line
+        f"{line.split(' = ', 1)[0]} = {values[line.split(' = ', 1)[0]]}" if line.split(" = ", 1)[0] in values else line
         for line in load_find_lines(ISSUE197_FIXTURE)
     ]
     graph = DiscoveryService.build_device_graph(lines)
@@ -986,8 +984,9 @@ def test_name_only_registers_with_live_values_have_readable_names() -> None:
     for key, expected_name in NAME_ONLY_NAMES.items():
         assert entities[key].meta.friendly_name == expected_name
         assert entities[key].enabled_by_default
-        # No unit, class or category is claimed because no capture proves them.
-        assert (entities[key].meta.unit, entities[key].meta.device_class) == ("", "")
+        # Only a unit from an ebusd definition is claimed (issue #205: EnergyIntegral is `°min`); the rest stay bare.
+        expected_unit = "°min" if key.endswith("EnergyIntegral.value") else ""
+        assert (entities[key].meta.unit, entities[key].meta.device_class) == (expected_unit, "")
 
 
 # Intent: a name-only register is exposed only after ebusd returns a value, and is never read actively.
@@ -1022,9 +1021,10 @@ FUEL_SUM_WITH_DATA = {
 }
 
 
-# Intent: the gas counters of a VRC 720 (b7v) become raw diagnostic counters that are off by default and carry no unit.
-# Why: discussion 31 - registers readable in ebusd gave no sensor because a name rule hid them; the unit is unproven.
-def test_discussion31_fuel_sum_counters_are_raw_disabled_diagnostics() -> None:
+# Intent: the gas counters of a VRC 720 (b7v) are kWh energy sensors, diagnostic and off by default.
+# Why: discussion 31 - upstream ebusd declares them `energy4` (kWh), heating + DHW add up to the total in the capture,
+#      and the reporter's app shows kWh; last month's value can fall, so only the rising counters get a state class.
+def test_discussion31_fuel_sum_counters_are_kwh_disabled_diagnostics() -> None:
     graph = DiscoveryService.build_device_graph(load_find_lines(DISCUSSION31_FIXTURE))
     entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
 
@@ -1032,9 +1032,10 @@ def test_discussion31_fuel_sum_counters_are_raw_disabled_diagnostics() -> None:
         entity = entities[key]
         assert entity.raw_value == expected_value
         assert not entity.enabled_by_default
-        assert (entity.meta.unit, entity.meta.device_class) == ("", "")
-        assert (entity.meta.state_class, entity.meta.entity_category) == ("total_increasing", "diagnostic")
-        assert "raw counter" in entity.meta.friendly_name
+        assert (entity.meta.unit, entity.meta.device_class) == ("kWh", "energy")
+        expected_state_class = "" if key.endswith("LastMonth.value") else "total_increasing"
+        assert (entity.meta.state_class, entity.meta.entity_category) == (expected_state_class, "diagnostic")
+        assert "raw counter" not in entity.meta.friendly_name
 
 
 # Intent: a register without data on the same bus creates no entity, and none of the new entries is read actively.
@@ -1111,3 +1112,44 @@ def test_circuit_types_share_the_controller_device_and_other_hc1_entities_stay_o
     assert {"ctlv3.Hc1CircuitType.value", "ctlv3.Hc2CircuitType.value"} <= circuit_types.keys()
     assert {entity.device_circuit for entity in circuit_types.values()} == {"ctlv3"}
     assert entities["ctlv3.Hc1FlowTemp.value"].device_circuit == "z1"
+
+
+# Intent: a zone whose room temperature read fails keeps its climate zone, while a zone without data stays a ghost.
+# Why: issue #191/#192 - on this capture `Z2RoomTemp` answered `ERR: invalid position`, Zone 2 lost its climate entity
+#      and the stale-entities repair deleted the row; Zone 3 (`no data stored`, HC3 inactive) must not become a zone.
+def test_unreadable_zone_room_temperature_keeps_the_zone_valid() -> None:
+    graph = DiscoveryService.build_device_graph(
+        load_find_lines("community/saunier_duval_f34_issue191_2026-10-20_094755_discovery.yaml")
+    )
+
+    assert "bass.Z2RoomTemp" in graph.error_registers
+    assert valid_zone_owners(graph) == {"z1": "bass", "z2": "bass"}
+
+
+# Intent: an unreadable zone stays a ghost when the controller declares its heating circuit inactive.
+# Why: only the controller's own `HcNCircuitType = inactive` may overrule a read error; it must not revive zone 3.
+def test_unreadable_zone_of_an_inactive_circuit_is_not_valid() -> None:
+    lines = load_find_lines("community/saunier_duval_f34_issue191_2026-10-20_094755_discovery.yaml")
+    graph = DiscoveryService.build_device_graph(lines)
+    graph.error_registers.add("bass.Z3RoomTemp")
+
+    assert "z3" not in valid_zone_owners(graph)
+
+
+# Intent: the units from the issue #205 ebusd definitions apply to the heat pump and controller registers.
+# Why: these registers showed as bare text without a graph; ebusd's own definitions give `°C` and `kWh`.
+def test_issue205_registers_carry_the_unit_from_the_ebusd_definitions() -> None:
+    expected = {
+        ("hmux0", "RunDataCondensorOutletTemp"): ("°C", "temperature"),
+        ("hmux0", "RunDataFlowTempDesired"): ("°C", "temperature"),
+        ("hmux0", "TotalEnergyUsageImmersionHeater"): ("kWh", "energy"),
+        ("ctlv3", "HcBivalencePoint"): ("°C", "temperature"),
+        ("ctlv3", "HcEmergencyTemp"): ("°C", "temperature"),
+        ("ctlv3", "Hc1FlowTempDesired"): ("°C", "temperature"),
+        ("ctlv3", "Hc2HeatingFlowTempMax"): ("°C", "temperature"),
+        ("ctlv3", "Hc1HeatingFlowTempMin"): ("°C", "temperature"),
+    }
+    for (circuit, name), unit_and_class in expected.items():
+        meta = MAPPING.get_meta(circuit, name)
+        assert (meta.unit, meta.device_class) == unit_and_class, name
+        assert not meta.fallback_read, name

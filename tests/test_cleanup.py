@@ -284,12 +284,17 @@ def test_preview_text_names_the_first_orphans_and_counts_the_rest() -> None:
 # Intent: build a coordinator stand-in with the attributes the report needs.
 # Why: the stale-entity report is only trustworthy while ebusd is connected and entities have been generated.
 def _coordinator(
-    connected: bool = True, entities: int = 1, discovery_ready: bool = True, runtime_defined: set[str] | None = None
+    connected: bool = True,
+    entities: int = 1,
+    discovery_ready: bool = True,
+    runtime_defined: set[str] | None = None,
+    unused_zones: frozenset[int] = frozenset(),
 ) -> SimpleNamespace:
     return SimpleNamespace(
         ebus=SimpleNamespace(is_connected=connected),
         discovery_ready=discovery_ready,
         runtime_defined_key_folds=lambda: set(runtime_defined or ()),
+        unused_zone_numbers=lambda: frozenset(unused_zones),
         entities=[SimpleNamespace(unique_id=f"ebusd_hmu_generated{number}") for number in range(entities)],
     )
 
@@ -305,6 +310,30 @@ def test_stale_report_needs_a_connected_coordinator_with_entities() -> None:
     assert CLEANUP.stale_report(registry, states, ENTRY_ID, DOMAIN, _coordinator(entities=0)) is None
     report = CLEANUP.stale_report(registry, states, ENTRY_ID, DOMAIN, _coordinator())
     assert [item.entity_id for item in report.orphans] == ["sensor.gone"]
+
+
+# Intent: a restored zone climate or flow-range row is offered for removal only when the controller declares the zone
+#         unused.
+# Why: issue #192 - a read error on the zone room temperature dropped the Zone 1 climate after a reload, and the repair
+#      then deleted its row; the inactive third zone must still be removable.
+def test_stale_report_keeps_zone_rows_unless_the_controller_declares_the_zone_unused() -> None:
+    rows = [
+        _row("climate.zone_1", "climate_z1"),
+        _row("climate.zone_2", "climate_z2"),
+        _row("climate.zone_3", "climate_z3"),
+        _row("climate.flow_zone_1", "climate_flow_temp_range"),
+        _row("climate.flow_zone_3", "climate_flow_temp_range_z3"),
+        _row("sensor.gone", "ebusd_hmu_gone"),
+    ]
+    states = _states({row.entity_id: RESTORED for row in rows})
+
+    report = CLEANUP.stale_report(_registry(rows), states, ENTRY_ID, DOMAIN, _coordinator(unused_zones=frozenset({3})))
+
+    assert sorted(item.entity_id for item in report.orphans) == [
+        "climate.flow_zone_3",
+        "climate.zone_3",
+        "sensor.gone",
+    ]
 
 
 # Intent: the generated unique ids come from the coordinator entity descriptions with the config entry prefix.

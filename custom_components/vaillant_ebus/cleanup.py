@@ -7,6 +7,7 @@ imports and the options flow and the repairs flow can share them.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -16,6 +17,9 @@ _LOGGER = logging.getLogger(__name__)
 # Registry rows of internal helper entities that earlier releases created and no release provides any more.
 LEGACY_HELPER_SUFFIXES = ("_tmpb516montheven",)
 PREVIEW_LIMIT = 15
+
+# Unique ids of the hand-built zone entities (climate and flow range); a bare flow range row belongs to zone 1.
+_HAND_BUILT_ZONE_ID = re.compile(r"_climate_(?:z(\d+)|flow_temp_range(?:_z(\d+))?)$")
 
 
 @dataclass(frozen=True)
@@ -108,12 +112,29 @@ def _is_restored_placeholder(state: Any) -> bool:
     return state.attributes.get("restored") is True
 
 
+# Return the zone number of a hand-built zone entity (climate, flow range), or None for any other unique id.
+def _hand_built_zone_number(unique_id: str) -> int | None:
+    match = _HAND_BUILT_ZONE_ID.search(unique_id.lower())
+    if match is None:
+        return None
+    return int(match.group(1) or match.group(2) or 1)
+
+
 # Report whether a unique id has the shape of a generated entity description: entry, `ebusd`, circuit, name.
 # Hand-built entities (quick veto end, online, climate) also register as disabled by the integration but have no
 # description, so only generated ids can be judged against the set of generated unique ids.
 def _is_generated_id(unique_id: str, entry_id: str) -> bool:
     prefix = f"{entry_id}_ebusd_"
     return unique_id.startswith(prefix) and "_" in unique_id[len(prefix) :]
+
+
+# Report whether a restored row may be offered for removal given the zones the controllers declare unused.
+# The climate and flow-range entities exist only while a zone shows a live room temperature, so a short read error on
+# the bus drops them after a reload and their rows turn into placeholders although the zone is real (issue #192, the
+# Zone 1 climate was deleted). Such a row is an orphan only when the controller itself says the zone is inactive.
+def _zone_row_may_go(unique_id: str, unused_zone_numbers: Collection[int]) -> bool:
+    number = _hand_built_zone_number(str(unique_id))
+    return number is None or number in unused_zone_numbers
 
 
 # List the registry entries of this config entry that no entity provides any more.
@@ -127,6 +148,7 @@ def find_orphans(
     entry_id: str,
     domain: str,
     generated_unique_ids: Collection[str],
+    unused_zone_numbers: Collection[int] = (),
 ) -> OrphanReport:
     orphans: list[OrphanEntity] = []
     kept: list[OrphanEntity] = []
@@ -140,7 +162,7 @@ def find_orphans(
         if str(entry.unique_id).lower().endswith(LEGACY_HELPER_SUFFIXES):
             is_orphan = True
         elif disabled_by is None:
-            is_orphan = _is_restored_placeholder(state)
+            is_orphan = _is_restored_placeholder(state) and _zone_row_may_go(entry.unique_id, unused_zone_numbers)
         else:
             is_orphan = _is_generated_id(entry.unique_id, entry_id) and entry.unique_id not in generated_unique_ids
         if not is_orphan:
@@ -212,7 +234,7 @@ def stale_report(
         for entity in coordinator.entities
         if getattr(entity, "enabled_by_default", True) is False and register_key_fold(entity) not in runtime_defined
     }
-    report = find_orphans(registry, states, entry_id, domain, generated)
+    report = find_orphans(registry, states, entry_id, domain, generated, coordinator.unused_zone_numbers())
     dormant, kept = find_dormant(registry, states, entry_id, domain, switched_off)
     return OrphanReport(orphans=report.orphans, kept_customized=(*report.kept_customized, *kept), dormant=dormant)
 

@@ -237,7 +237,7 @@ def declared_unused_zones(graph: DeviceGraph) -> frozenset[tuple[str, int]]:
 
 # List the zone numbers that every reporting controller declares unused.
 # Zone devices are shared by number across controllers, so a number is unused only when none of them uses it.
-def _unused_zone_numbers(graph: DeviceGraph) -> frozenset[int]:
+def unused_zone_numbers(graph: DeviceGraph) -> frozenset[int]:
     declared = declared_unused_zones(graph)
     in_use = {
         int(match.group(2))
@@ -385,7 +385,7 @@ def _redistribute_device_assignments(
     yaml_overrides: dict[str, dict[str, Any]],
 ) -> list[EntityDescription]:
     # A zone the controller declares unused keeps no zone device, so its circuit type lands on the controller device.
-    unused_numbers = _unused_zone_numbers(graph)
+    unused_numbers = unused_zone_numbers(graph)
     active_zones = {
         node.circuit
         for node in graph.nodes.values()
