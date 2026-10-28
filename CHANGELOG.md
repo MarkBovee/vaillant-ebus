@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.13.1 - 2026-10-28
+
+A fix for the status message of HMU00 heat pumps with hardware 5103, found with the new define report of 1.13.0.
+
+### Fixed
+
+- **`Status07` is now defined on HMU00 heat pumps with hardware 5103.** One comma too many after the system pressure
+  field shifted every later field of the definition by one column, so ebusd refused it with
+  `ERR: invalid argument`. The status bits (heater, backup heater, warm water, pressure loss) and the system pressure
+  from this message were therefore never read. A new test checks the field layout of every definition the
+  integration sends, on every community capture.
+
 ## 1.13.0 - 2026-10-28
 
 Manual mode on more VRC 720 setups, units for registers that showed as bare text, gas counters in kWh, and a repair

@@ -6,6 +6,7 @@ import asyncio
 import importlib.machinery
 import importlib.util
 import json
+import re
 import struct
 import sys
 import tempfile
@@ -18,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from tests._component_loader import COMPONENT_PATH  # noqa: E402 — loads the shared modules once
-from tests.fake_ebusd import FakeEbusdServer, load_discovery_dump, load_find_lines
+from tests.fake_ebusd import FIXTURES_DIR, FakeEbusdServer, load_discovery_dump, load_find_lines
 
 HC_STATE_REGISTER_NAMES = (
     "Hc1FlowTempCalc",
@@ -6955,3 +6956,37 @@ async def test_runtime_define_report_records_results_and_names_rejections(caplog
         assert report["results"]["r.hmux0.RunDataReturnTemp"] == "ok"
         assert not any(",RunDataFlowTemp," in text for text in report["accepted"])
         assert "unavailable: hmux0.RunDataFlowTemp (ERR: element not found)" in caplog.text
+
+
+_DISCOVERY_FIXTURES = sorted(
+    f"community/{path.name}"
+    for path in (FIXTURES_DIR / "community").glob("*.yaml")
+    if "raw_find_lines" in path.read_text()
+)
+
+
+# A base type (`UCH`, `IGN:4`) or a template type (`percent1`); a shifted field leaves this column empty.
+_EBUSD_TYPE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?::\d+)?$")
+
+
+# Intent: every field of every runtime definition on every community bus has an ebusd data type in its type column.
+# Why: an extra comma after `displaypressure` shifted every later field of the HW5103 `Status07` define by one
+#      column, and ebusd refused it with `ERR: invalid argument` on the owner's bus; ebusd accepts a short last field,
+#      so the check looks at the type column of each 6-column field instead of the total column count.
+@pytest.mark.parametrize("fixture", _DISCOVERY_FIXTURES)
+async def test_runtime_definition_fields_are_aligned(fixture: str) -> None:
+    for key, definition in (await _runtime_definitions_for(fixture)).items():
+        columns = definition.split(",")
+        for start in range(8, len(columns), 6):
+            assert _EBUSD_TYPE.match(columns[start + 2]), (key, columns[start : start + 6])
+
+
+# Intent: the HW5103 Status07 define is built on the HMU00 HW5103 capture and puts `bar` in the unit column.
+# Why: the misaligned define put `bar` in the comment column and every heaterbackup bit one column off.
+async def test_hmu_hw5103_status07_define_has_aligned_fields() -> None:
+    definitions = await _runtime_definitions_for("community/hmu_e7000_discussion31_2026-10-04_113747_discovery.yaml")
+    columns = definitions["r.hmu.Status07"].split(",")
+    fields = [columns[index : index + 6] for index in range(8, len(columns), 6)]
+
+    assert ["displaypressure", "", "UCH", "30", "bar", ""] in fields
+    assert fields[-1][:3] == ["heaterbackup_b7_warmwater", "", "BI7"]
