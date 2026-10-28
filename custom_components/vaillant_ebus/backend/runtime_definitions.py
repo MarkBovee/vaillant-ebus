@@ -535,7 +535,7 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
             ",heatermain_b5_pressureloss,,BI5,0=off;1=on,,"
             ",heatermain_b6,,BI6,0=off;1=on,,"
             ",heatermain_b7_warmwater,,BI7,0=off;1=on,,"
-            ",displaypressure,,UCH,30,bar,,"
+            ",displaypressure,,UCH,30,bar,"
             ",heaterbackup_b0,,BI0,0=off;1=on,,"
             ",heaterbackup_b1_error,,BI1,0=off;1=on,,"
             ",heaterbackup_b2,,BI2,0=off;1=on,,"
