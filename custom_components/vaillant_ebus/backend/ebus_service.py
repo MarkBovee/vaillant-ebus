@@ -20,10 +20,9 @@ READ_TIMEOUT = 10
 MULTILINE_RESPONSE_TIMEOUT = 1.0
 MULTILINE_RESPONSE_MAX_DURATION = 60
 MULTILINE_RESPONSE_MAX_LINES = 10_000
-DONE_STR = "done"
-# ebusd answers `empty` when the target acknowledges a write without response data (CTLV2 `HwcTimer_<Day>` writes,
-# issue #208 and the owner's controller); that is an acknowledgement, not an unexpected answer.
-WRITE_ACK_STRS = frozenset({DONE_STR, "empty"})
+# ebusd's answers that acknowledge a write: `done`, or `empty` when the target acknowledges without response data
+# (CTLV2 `HwcTimer_<Day>` writes, issue #208 and the owner's controller).
+WRITE_ACK_STRS = frozenset({"done", "empty"})
 # ebusd serves `read` from its cache unless forced; a freshly written value is
 # cached by the write itself. Re-read once from the bus before treating a
 # mismatch as an unapplied write, so a controller that applies the value just
