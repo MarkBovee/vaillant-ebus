@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.13.3 - 2026-10-29
+
+The hot water calendar can hold more than one slot per day on CTLV2 controllers that only read the first slot. On a
+stuck eBUS adapter, ebusd no longer polls three registers on its own, and old values no longer stay on screen.
+
+### Fixed
+
+- **More than one hot water slot per day on CTLV2 SW0514 (issue #208).** On a CTLV2 with firmware 0514/1104 and the
+  `HwcTimer_Timeslots` layout, ebusd's configuration decodes only the first slot of a day. The integration now
+  defines the reads for slots 1 and 2 itself (`B555 a5 00 02 <day> <slot>`, taken from the reporter's capture) and
+  refreshes them every five minutes. The calendar can then read, write and check up to three slots on those days.
+  Configurations that already read three slots are unchanged.
+- **ebusd no longer polls three registers on its own (issue #193).** `z1RoomHumidity`, `ManualCoolingStartDate` and
+  `ManualCoolingEndDate` were defined so that ebusd polled them itself. On a stuck adapter that caused about 76,000
+  bus errors a day, and the integration's bus pause could not stop it. The integration now reads them every five
+  minutes, and the pause applies to them.
+- **Old values turn unavailable after ten minutes without ebusd (issue #193).** When ebusd stays unusable (no
+  connection, or a scan that finds no devices, as after an ebusd restart on a stuck adapter), entities become
+  unavailable after ten minutes instead of showing the last values as current. The Online sensor stays available
+  and shows off. The values return with the first successful discovery.
+- **A bus probe no longer runs on forever.** After a pause, a probe that only gets answers such as `no data stored`
+  ends after three of them. The next pause still doubles, because nothing proved that the adapter works again.
+- **Weekly repeat rules with `INTERVAL=1`.** The hot water calendar accepted `FREQ=WEEKLY` but refused the same rule
+  when a calendar app wrote `INTERVAL=1` out.
+
 ## 1.13.2 - 2026-10-29
 
 The hot water program can now be edited from the calendar. This release also fixes a false error on timer writes,
