@@ -207,12 +207,14 @@ def test_derive_operating_state_from_pumpstate_hwc() -> None:
     assert derive_operating_state({"hmu.Status01.pumpstate": "hwc"}, "hmu") == "DHW"
     assert derive_operating_state({"hmu.Status01.pumpstate": "off"}, "hmu") is None
     # An explicit controller state always outranks the pump position.
-    assert derive_operating_state(
-        {"hmu.Status01.pumpstate": "hwc", "hmu.RunDataStatuscode.value": "standby"}, "hmu"
-    ) == "Standby"
-    assert derive_operating_state(
-        {"hmu.Status01.pumpstate": "hwc", "hmu.Status00.compressorstate": "off"}, "hmu"
-    ) == "Standby"
+    assert (
+        derive_operating_state({"hmu.Status01.pumpstate": "hwc", "hmu.RunDataStatuscode.value": "standby"}, "hmu")
+        == "Standby"
+    )
+    assert (
+        derive_operating_state({"hmu.Status01.pumpstate": "hwc", "hmu.Status00.compressorstate": "off"}, "hmu")
+        == "Standby"
+    )
 
 
 # Intent: derive_operating_state maps HMUX0 Status00 compressor states.

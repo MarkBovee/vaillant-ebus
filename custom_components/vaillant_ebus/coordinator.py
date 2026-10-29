@@ -450,8 +450,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
 
     # Allow user-initiated reads only after the discovered graph is authoritative.
     # Cache-seeded aliases must not route requests during initial discovery.
-    async def async_read_register(self, circuit: str, name: str, field: str = "") -> str | None:
-        """Read a register only after resolving its discovered circuit owner."""
+    async def async_read_register(self, circuit: str, name: str, field: str = "", force: bool = False) -> str | None:
+        """Read a register only after resolving its discovered circuit owner; `force` bypasses ebusd's cache."""
         if (
             self._stopped
             or self._unload_requested
@@ -464,6 +464,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if resolved_circuit is None:
             _LOGGER.warning("Read skipped: unresolved discovered circuit for %s.%s", circuit, name)
             return None
+        if force:
+            return await self.ebus.read_register(resolved_circuit, name, field, force=True)
         return await self.ebus.read_register(resolved_circuit, name, field)
 
     # Active heating zones (zone id -> hosting circuit) derived from the

@@ -59,9 +59,7 @@ class TestAnalysisService:
         entities = _entities(graph)
         service = AnalysisService()
         # A new circuit (e.g. an EcoTEC boiler) with live registers.
-        result = service.analyze(
-            {"hmu.CopHc": "4.2", "vr_71.Mc1Operation": "standby"}, graph, entities
-        )
+        result = service.analyze({"hmu.CopHc": "4.2", "vr_71.Mc1Operation": "standby"}, graph, entities)
         assert "vr_71" in result.new_devices
 
     # Intent: a live register mapping to a REGISTER_MAP entry with enabled=False lands in registers_to_enable.
