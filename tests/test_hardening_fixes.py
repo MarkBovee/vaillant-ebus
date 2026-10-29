@@ -2510,3 +2510,5 @@ async def test_write_parameter_raises_on_a_failed_write() -> None:
 
     coordinator.async_write_register = AsyncMock(return_value=True)
     await INIT._svc_write_parameter(hass, _call(data))
+    # A timer write has no read twin that decodes, so the service must not demand a strict read-back (issue #208).
+    assert coordinator.async_write_register.await_args.kwargs["strict_verify"] is False

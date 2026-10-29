@@ -21,6 +21,9 @@ MULTILINE_RESPONSE_TIMEOUT = 1.0
 MULTILINE_RESPONSE_MAX_DURATION = 60
 MULTILINE_RESPONSE_MAX_LINES = 10_000
 DONE_STR = "done"
+# ebusd answers `empty` when the target acknowledges a write without response data (CTLV2 `HwcTimer_<Day>` writes,
+# issue #208 and the owner's controller); that is an acknowledgement, not an unexpected answer.
+WRITE_ACK_STRS = frozenset({DONE_STR, "empty"})
 # ebusd serves `read` from its cache unless forced; a freshly written value is
 # cached by the write itself. Re-read once from the bus before treating a
 # mismatch as an unapplied write, so a controller that applies the value just
@@ -619,7 +622,7 @@ class EbusService:
         if result.error:
             return WriteResult(success=False, error_message=result.error)
         data = result.data.strip()
-        if data and data != DONE_STR:
+        if data and data not in WRITE_ACK_STRS:
             return WriteResult(success=False, error_message=f"Unexpected response: {data}")
         verified = await self.read_register(circuit, name, force=True)
         if strict_verify and (not verified or verified.startswith("ERR:")):

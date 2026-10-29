@@ -998,3 +998,35 @@ async def test_day_layout_keeps_day_even_with_manual_temp_present() -> None:
         calls = [(c.args[0], c.args[1], c.args[2]) for c in coordinator.async_write_register.call_args_list]
         assert ("ctlv2", "Z1OpMode", "day") in calls
         assert ("ctlv2", "Z1DayTemp", "21.5") in calls
+
+
+# Intent: a CTLV2 zone whose circuit reports `HcNStatus = on` and `HcNPumpStatus = heat` shows HEATING, `cool` shows
+#         COOLING, and `off`/`exthwc` show IDLE, even when the heat pump status code is unusable.
+# Why: issue #207 - the zone stayed `idle` while heating, because the text `on` was parsed as a number, `heat` was not
+#      a known pump value and `RunDataStatuscode` read `0` on that HMU firmware.
+@pytest.mark.parametrize(
+    ("hc_status", "pump_status", "expected"),
+    [
+        ("on", "heat", HVACAction.HEATING),
+        (None, "heat", HVACAction.HEATING),
+        (None, "cool", HVACAction.COOLING),
+        ("off", "off", HVACAction.IDLE),
+        (None, "exthwc", HVACAction.IDLE),
+        ("1", None, HVACAction.HEATING),
+        ("0", "heat", HVACAction.IDLE),
+    ],
+)
+async def test_zone_hvac_action_reads_text_circuit_states(
+    hc_status: str | None, pump_status: str | None, expected: HVACAction
+) -> None:
+    data = dict(_MANUAL_LAYOUT_DATA["ebusd"])
+    data["hmu.RunDataStatuscode.value"] = "0"
+    if hc_status is not None:
+        data["ctlv2.Hc1Status.value"] = hc_status
+    if pump_status is not None:
+        data["ctlv2.Hc1PumpStatus.value"] = pump_status
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, _graph_manual_layout(), data={"ebusd": data})
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+
+        assert z1.hvac_action == expected

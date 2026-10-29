@@ -62,17 +62,19 @@ async def _svc_read_parameter(hass: HomeAssistant, call: ServiceCall) -> None:
     _LOGGER.info("read_parameter %s.%s = %s", circuit, name, value)
 
 
-# Write a value with read-after-write verification via the central write path.
-# A failed write raises, so a script or automation sees the failure instead of a log line only (issue #208).
+# Write any register through the central write path and raise when ebusd refuses the write.
+# A failed write raises, so a script or automation sees the failure instead of a log line only (issue #208). The
+# read-back is not required: many write messages (the CTLV2 `HwcTimer_<Day>` slots) have no read twin that decodes,
+# so a strict read-back reported every accepted timer write as failed. A mismatch is still logged as a warning.
 async def _svc_write_parameter(hass: HomeAssistant, call: ServiceCall) -> None:
     coordinator = _resolve_coordinator(hass, call)
     circuit = call.data["circuit"]
     name = call.data["name"]
     value = call.data["value"]
-    ok = await coordinator.async_write_register(circuit, name, value, require_discovered=False)
+    ok = await coordinator.async_write_register(circuit, name, value, strict_verify=False, require_discovered=False)
     _LOGGER.info("write_parameter %s.%s=%s: success=%s", circuit, name, value, ok)
     if not ok:
-        raise HomeAssistantError(f"Writing {value!r} to {circuit}.{name} failed or was not confirmed by a read-back")
+        raise HomeAssistantError(f"ebusd did not accept writing {value!r} to {circuit}.{name}")
 
 
 # Write the eloBLOCK B510 thermostat override and keep it alive while enabled.
