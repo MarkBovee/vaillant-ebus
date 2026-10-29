@@ -64,9 +64,12 @@ def is_bus_error(response: str | None) -> bool:
 # Issue #193 - a stuck adapter failed every bus read, and the integration repeated its whole read set every cycle,
 # which kept the adapter busy. The pause needs bus errors on at least two circuits, so one slave that stops answering
 # never blocks reads to the others. A value breaks the run (cached answers can do so too, which only delays a trip);
-# local errors and missing values are neutral. After the pause the next read is a probe: a value closes the guard, a
-# bus error pauses again for twice as long. Only a rediscovery requested by the owner calls reset(); a transport
-# reconnect leaves the guard alone, because a new TCP connection to ebusd says nothing about the adapter.
+# local errors and missing values are neutral. After the pause the reads are probes, sent with `read -f` so ebusd
+# cannot answer from its cache: a value closes the guard, a bus error or a lost connection pauses again for twice as
+# long. Before 1.13.2 a cached controller answer closed the guard and reset the pause to 60 s, so a stuck adapter got
+# a full read pass after every pause (issue #193, 1.13.1 report). Only a rediscovery requested by the owner calls
+# reset(); a transport reconnect leaves the guard alone, because a new TCP connection to ebusd says nothing about the
+# adapter.
 class BusErrorGuard:
     # Create a closed guard whose clock can be replaced.
     # Tests must move time by hand instead of waiting for the real pause.
@@ -89,6 +92,18 @@ class BusErrorGuard:
         self._paused_until = None
         self._probing = True
         return True
+
+    # Report whether the next read is a probe after a pause.
+    # The read loop forces probe reads past ebusd's cache, so only a real bus answer can close the guard.
+    @property
+    def probing(self) -> bool:
+        return self._probing
+
+    # Pause again when the connection to ebusd is lost during a probe.
+    # A probe that never got an answer must not leave the guard open for the next session (issue #193).
+    def observe_transport_failure(self) -> None:
+        if self._probing:
+            self._trip()
 
     # Record one read answer and return True when it paused the active reads.
     # The guard only learns about the bus from the answers of the reads it gates.

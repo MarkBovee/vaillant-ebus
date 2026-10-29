@@ -1631,7 +1631,16 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if not self._bus_guard.allow():
                 continue
             try:
-                value = await self.ebus.read_register(circuit, name, raise_transport_errors=True)
+                # A probe after a pause must reach the bus: a cached answer would close the guard on a stuck adapter.
+                if self._bus_guard.probing:
+                    read = self.ebus.read_register(circuit, name, force=True, raise_transport_errors=True)
+                else:
+                    read = self.ebus.read_register(circuit, name, raise_transport_errors=True)
+                try:
+                    value = await read
+                except ConnectionError, TimeoutError, OSError:
+                    self._bus_guard.observe_transport_failure()
+                    raise
                 if self._stopped or self._unload_requested:
                     return
                 if self._bus_guard.observe(circuit, value):
