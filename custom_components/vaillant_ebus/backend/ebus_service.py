@@ -20,7 +20,9 @@ READ_TIMEOUT = 10
 MULTILINE_RESPONSE_TIMEOUT = 1.0
 MULTILINE_RESPONSE_MAX_DURATION = 60
 MULTILINE_RESPONSE_MAX_LINES = 10_000
-DONE_STR = "done"
+# ebusd's answers that acknowledge a write: `done`, or `empty` when the target acknowledges without response data
+# (CTLV2 `HwcTimer_<Day>` writes, issue #208 and the owner's controller).
+WRITE_ACK_STRS = frozenset({"done", "empty"})
 # ebusd serves `read` from its cache unless forced; a freshly written value is
 # cached by the write itself. Re-read once from the bus before treating a
 # mismatch as an unapplied write, so a controller that applies the value just
@@ -61,9 +63,12 @@ def is_bus_error(response: str | None) -> bool:
 # Issue #193 - a stuck adapter failed every bus read, and the integration repeated its whole read set every cycle,
 # which kept the adapter busy. The pause needs bus errors on at least two circuits, so one slave that stops answering
 # never blocks reads to the others. A value breaks the run (cached answers can do so too, which only delays a trip);
-# local errors and missing values are neutral. After the pause the next read is a probe: a value closes the guard, a
-# bus error pauses again for twice as long. Only a rediscovery requested by the owner calls reset(); a transport
-# reconnect leaves the guard alone, because a new TCP connection to ebusd says nothing about the adapter.
+# local errors and missing values are neutral. After the pause the reads are probes, sent with `read -f` so ebusd
+# cannot answer from its cache: a value closes the guard, a bus error or a lost connection pauses again for twice as
+# long. Before 1.13.2 a cached controller answer closed the guard and reset the pause to 60 s, so a stuck adapter got
+# a full read pass after every pause (issue #193, 1.13.1 report). Only a rediscovery requested by the owner calls
+# reset(); a transport reconnect leaves the guard alone, because a new TCP connection to ebusd says nothing about the
+# adapter.
 class BusErrorGuard:
     # Create a closed guard whose clock can be replaced.
     # Tests must move time by hand instead of waiting for the real pause.
@@ -86,6 +91,18 @@ class BusErrorGuard:
         self._paused_until = None
         self._probing = True
         return True
+
+    # Report whether the next read is a probe after a pause.
+    # The read loop forces probe reads past ebusd's cache, so only a real bus answer can close the guard.
+    @property
+    def probing(self) -> bool:
+        return self._probing
+
+    # Pause again when the connection to ebusd is lost during a probe.
+    # A probe that never got an answer must not leave the guard open for the next session (issue #193).
+    def observe_transport_failure(self) -> None:
+        if self._probing:
+            self._trip()
 
     # Record one read answer and return True when it paused the active reads.
     # The guard only learns about the bus from the answers of the reads it gates.
@@ -619,7 +636,7 @@ class EbusService:
         if result.error:
             return WriteResult(success=False, error_message=result.error)
         data = result.data.strip()
-        if data and data != DONE_STR:
+        if data and data not in WRITE_ACK_STRS:
             return WriteResult(success=False, error_message=f"Unexpected response: {data}")
         verified = await self.read_register(circuit, name, force=True)
         if strict_verify and (not verified or verified.startswith("ERR:")):
@@ -634,6 +651,10 @@ class EbusService:
             # A write-only register has no read message, so an unreadable
             # read-back is not proof the write failed. Only strict callers
             # require the controller to confirm the value.
+            if not strict_verify and "element not found" in (verified or "").casefold():
+                # No read twin at all (CTLV2 `HwcTimer_<Day>`): nothing to verify, and the caller checks another way.
+                _LOGGER.debug("Write %s.%s=%r acked; no read message to verify against", circuit, name, value)
+                return WriteResult(success=True, verified_value=None)
             _LOGGER.warning(
                 "Write verification unreadable %s.%s: wrote %r, read back %r",
                 circuit,

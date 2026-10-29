@@ -1153,3 +1153,14 @@ def test_issue205_registers_carry_the_unit_from_the_ebusd_definitions() -> None:
         meta = MAPPING.get_meta(circuit, name)
         assert (meta.unit, meta.device_class) == unit_and_class, name
         assert not meta.fallback_read, name
+
+
+# Intent: the HW5103 Status07 fields have valid Home Assistant metadata now that the message decodes.
+# Why: 1.13.1 made Status07 readable; `%` with the `power` class is invalid for HA, and the combined status text only
+#      repeats the separate sensors.
+def test_status07_fields_have_valid_metadata() -> None:
+    assert MAPPING.get_meta("hmu", "Status07").enabled is False
+    power = MAPPING.get_meta("hmu", "Status07.power")
+    assert (power.unit, power.device_class, power.state_class) == ("%", "", "measurement")
+    pressure = MAPPING.get_meta("hmu", "Status07.displaypressure")
+    assert (pressure.unit, pressure.device_class) == ("bar", "pressure")

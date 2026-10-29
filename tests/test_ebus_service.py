@@ -1176,3 +1176,35 @@ def test_guard_reset_clears_the_pause() -> None:
 
     assert guard.allow() is True
     assert guard.snapshot()["paused"] is False
+
+
+# Intent: ebusd's `empty` answer to a write is an acknowledgement, and a write without a decodable read twin succeeds
+#         when the caller does not require a read-back.
+# Why: issue #208 - every CTLV2 `HwcTimer_<Day>` write answered `empty`, the generic read failed to decode, and the
+#      write_parameter service reported each accepted timer write as failed.
+async def test_write_register_accepts_the_empty_acknowledgement() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(
+        side_effect=[
+            TimeoutError(),  # drain for write
+            b"empty\n",  # write acknowledged without response data
+            TimeoutError(),  # drain for read-back
+            b"ERR: invalid position\n",  # the generic timer read does not decode
+        ]
+    )
+    result = await s.write_register("ctlv2", "HwcTimer_Tuesday", "0;2;03:00;03:20", strict_verify=False)
+    assert result.success
+    assert result.verified_value is None
+
+
+# Intent: a non-strict write whose message has no read twin succeeds without a warning.
+# Why: every calendar slot write logged "Write verification unreadable" on the owner's HA, though nothing went wrong.
+async def test_write_register_without_read_twin_logs_no_warning(caplog: pytest.LogCaptureFixture) -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(
+        side_effect=[TimeoutError(), b"empty\n", TimeoutError(), b"ERR: element not found\n"]
+    )
+    with caplog.at_level("WARNING"):
+        result = await s.write_register("ctlv2", "HwcTimer_Thursday", "0;1;13:30;15:00;35.0", strict_verify=False)
+    assert result.success
+    assert "Write verification unreadable" not in caplog.text

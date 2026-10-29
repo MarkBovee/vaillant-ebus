@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.13.2 - 2026-10-29
+
+The hot water program can now be edited from the calendar. This release also fixes a false error on timer writes,
+shows zone heating on CTLV2 controllers and makes the bus pause of issue #193 hold.
+
+### Added
+
+- **Edit the hot water program from the calendar (issue #208).** The Domestic Hot Water Program calendar accepts
+  new, changed and deleted time slots. The controller only stores weekly slots, so every slot repeats each week; a
+  new event with a weekly rule and several days (`BYDAY=MO,WE`) gets a slot on each of those days. A day holds at
+  most three slots that must not overlap or cross midnight. After each change the integration reads the day back
+  from the controller and shows an error if the controller did not store it. On a configuration that can only read
+  the first slot of a day, a day keeps at most that one slot, and a day that already has more is not changed,
+  because the hidden slots would be lost. If a slot
+  cannot be read even after one retry, nothing is changed. The other programs stay read-only.
+
+### Fixed
+
+- **Timer writes no longer report a false error (issue #208).** `vaillant_ebus.write_parameter` raised an error for
+  every `HwcTimer_<Day>` write since 1.13.0, although the controller stored it. ebusd answers such writes with
+  `empty`, which is now accepted, and the service no longer requires a read-back for registers that have no
+  readable twin. It still raises when ebusd refuses the write.
+- **A CTLV2 zone shows Heating while its circuit runs (issue #207).** The zone stayed idle because `Hc1Status = on`
+  and `Hc1PumpStatus = heat` were not understood as text. Now `on`, `heat` and `cool` count as active, and `off`
+  and `exthwc` as idle, also when the heat pump's status code is unusable.
+- **The bus pause holds on a stuck adapter (issue #193).** After a pause, ebusd could answer the first read from its
+  cache. That reopened the reads and reset the pause to 60 seconds, so every pause ended in a full pass of failing
+  reads. The first reads after a pause now go to the bus (`read -f`), and a read that loses the connection pauses
+  again before the reconnect.
+- **Status message fields of HMU00 HW5103 (1.13.1 follow-up).** The compressor power from `Status07` is a percentage
+  and no longer carries the power class, which Home Assistant rejects with `%`. The combined `Display Status` text is
+  off by default, because it repeats the separate sensors; an existing entity keeps its setting.
+
 ## 1.13.1 - 2026-10-28
 
 A fix for the status message of HMU00 heat pumps with hardware 5103, found with the new define report of 1.13.0.

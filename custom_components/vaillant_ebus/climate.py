@@ -83,6 +83,25 @@ def _float(value: str | None) -> float | None:
         return None
 
 
+# Values of a zone circuit state (`HcNStatus`, `HcNPumpStatus`) that mean the circuit is running or idle.
+# CTLV2 reports `HcNStatus` as `on`/`off` and `HcNPumpStatus` as `off`/`heat`/`cool`/`exthwc` (issue #207); older
+# configs report numbers or `on`/`running`. `exthwc` means the pump serves an external hot water tank, not the zone.
+_ZONE_ACTIVE_VALUES = frozenset({"on", "1", "true", "yes", "running", "heat", "cool"})
+_ZONE_IDLE_VALUES = frozenset({"off", "0", "false", "no", "exthwc"})
+
+
+# Read one zone circuit signal as running (True), idle (False) or unknown (None).
+# A number above 0 counts as running, so a numeric `HcNStatus` keeps working as before.
+def _zone_signal(value: str | None) -> bool | None:
+    text = (value or "").strip().lower()
+    if text in _ZONE_ACTIVE_VALUES:
+        return True
+    if text in _ZONE_IDLE_VALUES:
+        return False
+    number = _float(text) if text else None
+    return None if number is None else number > 0
+
+
 # Map ebusd operation mode string to HA HVACMode
 def _hvac_mode(value: str | None) -> HVACMode | None:
     ha = EBUSD_TO_HA_HVAC.get((value or "").lower())
@@ -327,9 +346,10 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
     # HVAC action derived from zone status, pump, and heat-pump-global compressor state
     @property
     def hvac_action(self) -> HVACAction | None:
-        hc = _float(_value(self.coordinator, f"Hc{self._zone[1:]}Status", self._circuit))
-        pump = _value(self.coordinator, f"Hc{self._zone[1:]}PumpStatus", self._circuit)
-        pump_state = (pump or "").lower()
+        number = self._zone[1:]
+        hc = _zone_signal(_value(self.coordinator, f"Hc{number}Status", self._circuit))
+        pump_state = (_value(self.coordinator, f"Hc{number}PumpStatus", self._circuit) or "").strip().lower()
+        pump = _zone_signal(pump_state)
         comp = (_value(self.coordinator, "RunDataStatuscode", self.coordinator.heat_pump_circuit) or "").lower()
         global_heat = comp in HEATING_STATES
         global_cool = comp in COOLING_STATES
@@ -337,11 +357,11 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         if mode == HVACMode.OFF:
             return HVACAction.OFF
 
-        if hc is not None or pump_state in ("on", "1", "true", "yes", "running", "off", "0", "false", "no"):
-            zone_active = hc > 0 if hc is not None else pump_state in ("on", "1", "true", "yes", "running")
+        if hc is not None or pump is not None:
+            zone_active = hc if hc is not None else pump
             if not zone_active:
                 return HVACAction.IDLE
-            if global_cool or mode == HVACMode.COOL:
+            if pump_state == "cool" or global_cool or mode == HVACMode.COOL:
                 return HVACAction.COOLING
             return HVACAction.HEATING
 

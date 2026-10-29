@@ -91,11 +91,14 @@ class CalendarEvent:
 
     # Intent: store the event fields the calendar platform reads.
     # Why: the calendar tests compare these fields directly against parsed timer slots.
-    def __init__(self, start, end, summary, description=None) -> None:
+    def __init__(self, start, end, summary, description=None, uid=None, rrule=None, recurrence_id=None) -> None:
         self.start = start
         self.end = end
         self.summary = summary
         self.description = description
+        self.uid = uid
+        self.rrule = rrule
+        self.recurrence_id = recurrence_id
 
 
 class _MockDataUpdateCoordinator:
@@ -233,6 +236,14 @@ class _MockClimateCoordinatorEntity(_MockClimateEntity):
     # Why: entity code writes CoordinatorEntity[T] in base-class lists.
     def __class_getitem__(cls, item):
         return cls
+
+
+class _MockCalendarEntityFeature(enum.IntFlag):
+    """Calendar feature flags the calendar platform sets for a writable program."""
+
+    CREATE_EVENT = 1
+    DELETE_EVENT = 2
+    UPDATE_EVENT = 4
 
 
 class _MockCalendarEntity:
@@ -529,6 +540,7 @@ def _load_calendar(root: MagicMock) -> None:
     calendar_pkg = _stub_module("homeassistant.components.calendar")
     calendar_pkg.CalendarEntity = _MockCalendarEntity
     calendar_pkg.CalendarEvent = CalendarEvent
+    calendar_pkg.CalendarEntityFeature = _MockCalendarEntityFeature
     sys.modules["homeassistant.components.calendar"] = calendar_pkg
     ha_util = _stub_module("homeassistant.util")
     ha_util.dt = MagicMock()

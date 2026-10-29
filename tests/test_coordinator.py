@@ -6990,3 +6990,66 @@ async def test_hmu_hw5103_status07_define_has_aligned_fields() -> None:
 
     assert ["displaypressure", "", "UCH", "30", "bar", ""] in fields
     assert fields[-1][:3] == ["heaterbackup_b7_warmwater", "", "BI7"]
+
+
+# Intent: after a pause the first read is forced past ebusd's cache, so a stuck adapter that ebusd still answers from
+#         its cache gets one probe and a doubled pause, not a full read pass with the pause reset to 60 s.
+# Why: issue #193 (1.13.1 report) - a cached controller answer closed the guard after the 240 s pause, 8 of 12 reads
+#      then failed on the bus and the pause started again at 60 s.
+async def test_issue193_probe_after_the_pause_is_forced_past_the_cache() -> None:
+    fixture = "community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml"
+    clock = [1000.0]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture))
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator._graph = graph
+        coordinator._refresh_find_keys()
+        coordinator._bus_guard = EBUS.BusErrorGuard(clock=lambda: clock[0])
+        await coordinator._define_custom_registers()
+        coordinator.ebus.read_register = AsyncMock(return_value="ERR: arbitration lost")
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+        first_pause = coordinator._bus_guard.snapshot()["pause_seconds"]
+
+        # Intent: answer like ebusd on a stuck adapter: from its cache unless the read is forced onto the bus.
+        # Why: only a forced read shows that the adapter still cannot send.
+        async def _cached_unless_forced(circuit: str, name: str, force: bool = False, **kwargs: object) -> str:
+            return "ERR: read timeout" if force else "21.5"
+
+        clock[0] += first_pause + 1
+        coordinator.ebus.read_register = AsyncMock(side_effect=_cached_unless_forced)
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+
+        assert coordinator.ebus.read_register.await_count == 1
+        assert coordinator.ebus.read_register.await_args.kwargs["force"] is True
+        assert coordinator._bus_guard.snapshot()["pause_seconds"] == first_pause * 2
+        assert coordinator._bus_guard.allow() is False
+
+
+# Intent: a probe that loses the connection to ebusd pauses the reads again before the reconnect.
+# Why: issue #193 - the pause was used up by the probe, the read dropped the connection, and the new session sent a
+#      full read pass because the guard had been left open.
+async def test_issue193_probe_that_loses_the_connection_pauses_again() -> None:
+    fixture = "community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml"
+    clock = [1000.0]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture))
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator._graph = graph
+        coordinator._refresh_find_keys()
+        coordinator._bus_guard = EBUS.BusErrorGuard(clock=lambda: clock[0])
+        await coordinator._define_custom_registers()
+        coordinator.ebus.read_register = AsyncMock(return_value="ERR: arbitration lost")
+        await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+
+        clock[0] += coordinator._bus_guard.snapshot()["pause_seconds"] + 1
+        coordinator.ebus.read_register = AsyncMock(side_effect=TimeoutError("ebusd read timed out"))
+        with pytest.raises(TimeoutError):
+            await coordinator._fallback_read(include_placeholders=True, include_energy=True)
+
+        assert coordinator._bus_guard.allow() is False

@@ -41,7 +41,7 @@ def _fake_gh(tmp_path: Path) -> tuple[dict[str, str], Path]:
         "else\n"
         '  json=\'[{"number":2,"title":"PR result","state":"merged","updatedAt":"2026-09-17T00:00:00Z","url":"https://example.test/pull/2"}]\'\n'
         "fi\n"
-        'printf \'%s\\n\' "$json" | jq -r "$jq_expression"\n'
+        'printf \'%s\\n\' "$json" | jq -r "$jq_expression"\n',
     )
     env = os.environ.copy()
     # os.pathsep keeps the fake gh first on Windows too, where a ":" would split the drive letter of tmp_path.
@@ -136,19 +136,19 @@ def test_rate_limit_failure_is_retried(tmp_path: Path) -> None:
         "#!/bin/sh\n"
         f"count=0; [ -f '{state}' ] && count=$(cat '{state}')\n"
         f"count=$((count + 1)); printf '%s' \"$count\" > '{state}'\n"
-        "if [ \"$count\" -eq 1 ]; then\n"
+        'if [ "$count" -eq 1 ]; then\n'
         "  echo 'HTTP 403: API rate limit exceeded' >&2\n"
         "  exit 1\n"
         "fi\n"
         "kind=$2\n"
         "jq_expression=''\n"
         'while [ "$#" -gt 0 ]; do if [ "$1" = --jq ]; then jq_expression="$2"; shift 2; else shift; fi; done\n'
-        "if [ \"$kind\" = issues ]; then\n"
+        'if [ "$kind" = issues ]; then\n'
         '  json=\'[{"number":1,"title":"Issue result","state":"open","updatedAt":"2026-09-17T00:00:00Z","url":"https://example.test/issues/1"}]\'\n'
         "else\n"
         '  json=\'[{"number":2,"title":"PR result","state":"merged","updatedAt":"2026-09-17T00:00:00Z","url":"https://example.test/pull/2"}]\'\n'
         "fi\n"
-        'printf \'%s\\n\' "$json" | jq -r "$jq_expression"\n'
+        'printf \'%s\\n\' "$json" | jq -r "$jq_expression"\n',
     )
     env = os.environ.copy()
     # os.pathsep keeps the fake gh first on Windows too, where a ":" would split the drive letter of tmp_path.
@@ -172,7 +172,7 @@ def test_unrelated_403_is_not_retried(tmp_path: Path) -> None:
         f"count=0; [ -f '{state}' ] && count=$(cat '{state}')\n"
         f"count=$((count + 1)); printf '%s' \"$count\" > '{state}'\n"
         "echo 'HTTP 403: Resource not accessible by integration' >&2\n"
-        "exit 1\n"
+        "exit 1\n",
     )
     env = os.environ.copy()
     # os.pathsep keeps the fake gh first on Windows too, where a ":" would split the drive letter of tmp_path.
