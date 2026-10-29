@@ -282,3 +282,26 @@ async def test_dhw_calendar_refuses_unsafe_requests(
             dtstart=datetime(2026, 11, 2, 6, 0), dtend=datetime(2026, 11, 2, 6, 30), rrule=rrule
         )
     assert controller.writes == []
+
+
+# Intent: a slot read that fails once is retried, so one bus error does not block the change.
+# Why: the owner's live test of 1.13.2 - `HwcTimer_Thursday2` answered `ERR: read timeout` once and then read fine.
+async def test_dhw_calendar_retries_a_slot_read_once() -> None:
+    controller = _FakeTimerController()
+    controller.days["Thursday"] = [("13:30", "15:00", "35.0")]
+    calendar = _writable_calendar(controller)
+    working_read = controller.read
+    failed: set[str] = set()
+
+    # Intent: fail the first read of slot 2 with a timeout, then answer normally.
+    # Why: mirrors the transient timeout seen on the owner's controller.
+    async def _once(circuit: str, name: str, field: str = "", force: bool = False) -> str | None:
+        if name == "HwcTimer_Thursday2" and name not in failed:
+            failed.add(name)
+            return "ERR: read timeout"
+        return await working_read(circuit, name, field, force)
+
+    calendar.coordinator.async_read_register = _once
+    await calendar.async_create_event(dtstart=datetime(2026, 10, 29, 16, 0), dtend=datetime(2026, 10, 29, 16, 30))
+
+    assert controller.days["Thursday"] == [("13:30", "15:00", "35.0"), ("16:00", "16:30", "35.0")]

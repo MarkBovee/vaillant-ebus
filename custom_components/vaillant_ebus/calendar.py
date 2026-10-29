@@ -247,6 +247,9 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
     # would then drop it.
     async def _read(self, name: str) -> str | None:
         value = await self.coordinator.async_read_register(self._circuit or "", name, force=True)
+        if value is None or (value.startswith("ERR:") and "element not found" not in value.casefold()):
+            # One retry: a single bus error (a read timeout on the owner's controller) should not block the change.
+            value = await self.coordinator.async_read_register(self._circuit or "", name, force=True)
         if value is not None and "element not found" in value.casefold():
             return None
         if value is None or value.startswith("ERR:"):

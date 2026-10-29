@@ -651,6 +651,10 @@ class EbusService:
             # A write-only register has no read message, so an unreadable
             # read-back is not proof the write failed. Only strict callers
             # require the controller to confirm the value.
+            if not strict_verify and "element not found" in (verified or "").casefold():
+                # No read twin at all (CTLV2 `HwcTimer_<Day>`): nothing to verify, and the caller checks another way.
+                _LOGGER.debug("Write %s.%s=%r acked; no read message to verify against", circuit, name, value)
+                return WriteResult(success=True, verified_value=None)
             _LOGGER.warning(
                 "Write verification unreadable %s.%s: wrote %r, read back %r",
                 circuit,

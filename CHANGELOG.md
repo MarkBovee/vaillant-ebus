@@ -12,8 +12,8 @@ shows zone heating on CTLV2 controllers and makes the bus pause of issue #193 ho
   new event with a weekly rule and several days (`BYDAY=MO,WE`) gets a slot on each of those days. A day holds at
   most three slots that must not overlap or cross midnight. After each change the integration reads the day back
   from the controller and shows an error if the controller did not store it. On a configuration that can only read
-  the first slot of a day, a day with more slots is not changed, because the hidden slots would be lost. The other
-  programs stay read-only.
+  the first slot of a day, a day with more slots is not changed, because the hidden slots would be lost. If a slot
+  cannot be read even after one retry, nothing is changed. The other programs stay read-only.
 
 ### Fixed
 
