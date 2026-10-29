@@ -1030,3 +1030,22 @@ async def test_zone_hvac_action_reads_text_circuit_states(
         z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
 
         assert z1.hvac_action == expected
+
+
+# Intent: zone 1's flow temperature range keeps the legacy unique id, extra zones get a zone suffix, and no two clash.
+# Why: 1.13.2 review - renaming the extra-zone entity (#152) must not touch the unique ids, or Home Assistant would
+#      orphan the zone 1 entity of every existing install and merge the extra zones into one.
+async def test_flow_range_unique_ids_keep_the_legacy_pattern() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, _graph_two_zone(full_parity=True))
+        ids = [
+            CLIMATE.EbusdFlowTempRange(coordinator, _entry(), zone, "ctlv2")._attr_unique_id
+            for zone in ("z1", "z2", "z3")
+        ]
+        entry_id = _entry().entry_id
+
+        assert ids == [
+            f"{entry_id}_climate_flow_temp_range",
+            f"{entry_id}_climate_flow_temp_range_z2",
+            f"{entry_id}_climate_flow_temp_range_z3",
+        ]

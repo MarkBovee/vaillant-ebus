@@ -1,0 +1,14 @@
+# Issue #208, szflo, CTLV2 SW0514/HW1104, ebusd 26.1: raw grab of the hot water slot read B555 a5 00 02 <day> <slot>.
+# Copied unchanged from the issue comment (request / response, Tuesday = day 01).
+# before
+3115b55505a500020100 / 070200000000ffff    slot 0: status 02 (none)
+3115b55505a500020101 / 070200000000ffff    slot 1: none
+# write HwcTimer_Tuesday "0;2;03:00;03:10" and "1;2;03:20;03:30"
+3115b55505a500020100 / 07000300030ac201    slot 0: 00, 03:00-03:10
+3115b55505a500020101 / 07000314031ec201    slot 1: 00, 03:20-03:30
+3115b55505a500020102 / 070200000000ffff    slot 2: none
+HwcTimer_Timeslots = 1;2;0;0;0;1;0
+# write HwcTimer_Tuesday "0;0;00:00;00:00"  (delete)
+3115b55505a500020100 / 070200000000ffff    all slots gone
+3115b55505a500020101 / 070200000000ffff
+HwcTimer_Timeslots = 1;0;0;0;0;1;0

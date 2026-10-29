@@ -28,7 +28,11 @@ from .models import (
     is_controller_circuit,
     is_heat_pump_circuit,
 )
-from .runtime_definitions import HMUX0_COMPRESSOR_COUNTER_NAMES
+from .runtime_definitions import (
+    HMUX0_COMPRESSOR_COUNTER_NAMES,
+    HWC_TIMER_SLOT_FIELDS,
+    INTEGRATION_POLLED_CONTROLLER_REGISTERS,
+)
 
 # Register names of the HMUX0 precise (1/16 degC) temperatures that need an explicit active read.
 HMUX0_PRECISE_TEMPERATURE_NAMES = ("RunDataFlowTemp", "RunDataReturnTemp")
@@ -165,12 +169,19 @@ def plan_fallback_reads(
 
     # Plain-r B516 definitions are not polled by ebusd. Re-read supported
     # counters even after find has cached their first value (#53/#97).
+    # The same holds for the controller registers moved from `r5` to `r` (#193) and the hot water timer slots
+    # defined for issue #208: without this pass their value would freeze at the first read.
     if include_energy and graph:
         for definition in runtime_definitions.values():
             access, circuit, name, _, _, _, message = definition.split(",", 7)[:7]
             if (
                 access == "r"
-                and (message == "B516" or (message == "B511" and name in HMUX0_COMPRESSOR_COUNTER_NAMES))
+                and (
+                    message == "B516"
+                    or (message == "B511" and name in HMUX0_COMPRESSOR_COUNTER_NAMES)
+                    or (message == "B524" and name in INTEGRATION_POLLED_CONTROLLER_REGISTERS)
+                    or (message == "B555" and definition.endswith(HWC_TIMER_SLOT_FIELDS))
+                )
                 and any(node_key.casefold() == circuit.casefold() for node_key in graph.nodes)
             ):
                 _add(circuit, name)

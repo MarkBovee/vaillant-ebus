@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -1208,3 +1209,51 @@ async def test_write_register_without_read_twin_logs_no_warning(caplog: pytest.L
         result = await s.write_register("ctlv2", "HwcTimer_Thursday", "0;1;13:30;15:00;35.0", strict_verify=False)
     assert result.success
     assert "Write verification unreadable" not in caplog.text
+
+
+# Intent: a probe that only gets neutral answers ends after the limit without closing the pause ladder: reads go back
+#         to normal, and the next trip still doubles the pause instead of restarting at 60 s.
+# Why: 1.13.2 review - neutral answers (no data, unknown message) never ended the probe, so every following read was
+#      forced past ebusd's cache; ending it as "proven working" would wrongly reset the backoff on a stuck adapter.
+def test_guard_probe_ends_after_neutral_answers_and_keeps_the_backoff() -> None:
+    guard, now = _guard()
+    for circuit in ("hmux0", "ctlv3", "hmux0", "ctlv3"):
+        guard.observe(circuit, "ERR: read timeout")
+    now[0] += EBUS.BUS_ERROR_BASE_COOLDOWN + 1
+    assert guard.allow() is True and guard.probing is True
+
+    for answer in ("no data stored", "ERR: element not found")[: EBUS.BUS_ERROR_PROBE_NEUTRAL_LIMIT - 1]:
+        guard.observe("ctlv3", answer)
+    assert guard.probing is True
+    guard.observe("ctlv3", None)
+    assert guard.probing is False
+
+    for circuit in ("hmux0", "ctlv3", "hmux0", "ctlv3"):
+        guard.observe(circuit, "ERR: read timeout")
+    assert guard.snapshot()["pause_seconds"] == EBUS.BUS_ERROR_BASE_COOLDOWN * 2
+
+
+# Intent: the unused zone 2 of the F34 capture answers `invalid position` on every read; those answers never pause the
+#         reads, and a probe that keeps hitting them ends after the neutral limit instead of forcing every read.
+# Why: 1.13.2 review - an unused zone that always errors must neither trip the guard on a healthy bus nor keep a probe
+#      open forever (issue #129/#152 F34 capture).
+def test_guard_f34_unused_zone_errors_are_neutral() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "community" / "saunier_duval_f34_issue129_discovery.yaml"
+    answers = sorted(
+        {
+            line.strip(" -'")
+            for line in fixture.read_text().splitlines()
+            if "invalid position for 3115b524" in line and "020002012" in line
+        }
+    )
+    assert answers
+    guard, now = _guard()
+
+    assert not any(guard.observe(circuit, answer) for answer in answers for circuit in ("ctlv2", "hmu"))
+    for circuit in ("hmu", "ctlv2", "hmu", "ctlv2"):
+        guard.observe(circuit, "ERR: read timeout")
+    now[0] += EBUS.BUS_ERROR_BASE_COOLDOWN + 1
+    assert guard.allow() is True
+    for answer in answers[: EBUS.BUS_ERROR_PROBE_NEUTRAL_LIMIT]:
+        assert guard.observe("ctlv2", answer) is False
+    assert guard.probing is False and guard.allow() is True

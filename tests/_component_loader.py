@@ -381,6 +381,7 @@ def _homeassistant_root() -> MagicMock:
     root.helpers.event = MagicMock()
     root.helpers.update_coordinator = MagicMock()
     root.helpers.update_coordinator.DataUpdateCoordinator = _MockDataUpdateCoordinator
+    root.helpers.update_coordinator.UpdateFailed = type("UpdateFailed", (Exception,), {})
     root.helpers.entity_registry = MagicMock()
     root.helpers.entity_registry.RegistryEntryDisabler = MagicMock(INTEGRATION="integration")
     return root
