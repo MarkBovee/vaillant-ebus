@@ -297,12 +297,18 @@ SYSTEM_AND_OTHER_REGISTERS: dict[str, RegisterMeta] = {
         # Needs a master `index` field; a parameterless `read` fails with "end of input reached" (issue #182).
         fallback_read=False,
     ),
+    # The combined text repeats every field below and changes with each poll; off by default like the hydraulic
+    # station status (1.10.4). The message only decodes since 1.13.1 (a misaligned define was refused before).
     "hmu.Status07": RegisterMeta(
         friendly_name="Display Status",
         icon="mdi:information",
         entity_category="diagnostic",
+        enabled=False,
     ),
-    "hmu.Status07.power": RegisterMeta(friendly_name="Display Compressor Power", device_class="power", unit="%"),
+    # A percentage of the compressor's range, not watts, so it carries no `power` device class.
+    "hmu.Status07.power": RegisterMeta(
+        friendly_name="Display Compressor Power", icon="mdi:speedometer", unit="%", state_class="measurement"
+    ),
     "hmu.Status07.dailyenvyield": RegisterMeta(
         friendly_name="Display Environmental Yield Today", device_class="energy", unit="kWh"
     ),
