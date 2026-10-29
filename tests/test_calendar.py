@@ -267,6 +267,7 @@ async def test_dhw_calendar_writes_nothing_when_a_slot_cannot_be_read(failure: s
     ("rrule", "count_name", "readable", "message"),
     [
         ("FREQ=DAILY", "Timeframes", 3, "weekly rule"),
+        ("FREQ=WEEKLY;COUNT=4", "Timeframes", 3, "weekly rule"),
         ("FREQ=WEEKLY;BYDAY=XX", "Timeframes", 3, "Unknown weekday"),
         (None, "Missing", 1, "Not every time slot"),
     ],
@@ -305,3 +306,20 @@ async def test_dhw_calendar_retries_a_slot_read_once() -> None:
     await calendar.async_create_event(dtstart=datetime(2026, 10, 29, 16, 0), dtend=datetime(2026, 10, 29, 16, 30))
 
     assert controller.days["Thursday"] == [("13:30", "15:00", "35.0"), ("16:00", "16:30", "35.0")]
+
+
+# Intent: on a configuration that reads only slot 0, a second slot on a day is refused before anything is written,
+#         while a day with no slot still gets one.
+# Why: issue #208 config - the second slot would be stored but could not be read back or shown, so the change would
+#      end in an error after the write.
+async def test_dhw_calendar_keeps_to_the_readable_slots() -> None:
+    controller = _FakeTimerController(with_temperature=False, readable=1, count_name="Timeslots")
+    controller.days["Monday"] = [("05:20", "06:00", "-")]
+    calendar = _writable_calendar(controller)
+
+    with pytest.raises(HomeAssistantError, match="only read 1 time slot"):
+        await calendar.async_create_event(dtstart=datetime(2026, 11, 2, 7, 0), dtend=datetime(2026, 11, 2, 7, 30))
+    assert controller.writes == []
+
+    await calendar.async_create_event(dtstart=datetime(2026, 11, 3, 7, 0), dtend=datetime(2026, 11, 3, 7, 30))
+    assert controller.days["Tuesday"] == [("07:00", "07:30", "-")]

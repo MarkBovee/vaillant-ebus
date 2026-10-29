@@ -116,6 +116,8 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         self._attr_device_info = coordinator.get_device_info(device_circuit or self._circuit)
         # One change at a time: each edit reads a whole day and writes it back.
         self._edit_lock = asyncio.Lock()
+        # Slots per weekday that this configuration can read, learned at each read of the day.
+        self._readable_slots: dict[str, int] = {}
         if prefix in WRITABLE_PREFIXES:
             self._attr_supported_features = (
                 CalendarEntityFeature.CREATE_EVENT
@@ -221,11 +223,18 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
             ensure_all_slots_visible(day, slots, counted)
         except TimerProgramError as exc:
             raise HomeAssistantError(str(exc)) from exc
+        self._readable_slots[day] = sum(value is not None for value in raw)
         return slots, any(has_temperature_column(value) for value in raw if value)
 
     # Write one weekday slot by slot, then read it back and refresh the calendar.
     # A write the controller acknowledges but ignores is caught by comparing the read-back with the request.
     async def _write_day(self, day: str, slots: list[TimeSlot], with_temperature: bool) -> None:
+        readable = self._readable_slots.get(day, MAX_SLOTS_PER_DAY)
+        if len(slots) > readable:
+            # A slot the configuration cannot read back could neither be checked nor shown (issue #208 config).
+            raise HomeAssistantError(
+                f"This controller configuration can only read {readable} time slot(s) per day; nothing was changed"
+            )
         try:
             writes = build_day_writes(slots, with_temperature, self._default_temperature(slots))
         except TimerProgramError as exc:
@@ -343,8 +352,8 @@ def _event_weekdays(start: Any, rrule: str | None) -> list[str]:
         key.strip().upper(): value.strip()
         for key, _, value in (part.partition("=") for part in (rrule or "").split(";") if part.strip())
     }
-    if rules and rules.get("FREQ", "").upper() != "WEEKLY":
-        raise HomeAssistantError("Time slots repeat every week; use a weekly rule or none")
+    if rules and (rules.get("FREQ", "").upper() != "WEEKLY" or {"INTERVAL", "COUNT", "UNTIL"} & rules.keys()):
+        raise HomeAssistantError("Time slots repeat every week without end; use a plain weekly rule or none")
     for code in rules.get("BYDAY", "").split(","):
         key = code.strip()[-2:].upper()
         if not key:
