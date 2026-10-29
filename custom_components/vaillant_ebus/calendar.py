@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -113,6 +114,8 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         self._attr_name = name
         self._attr_unique_id = f"{entry.entry_id}_calendar_{prefix.lower()}"
         self._attr_device_info = coordinator.get_device_info(device_circuit or self._circuit)
+        # One change at a time: each edit reads a whole day and writes it back.
+        self._edit_lock = asyncio.Lock()
         if prefix in WRITABLE_PREFIXES:
             self._attr_supported_features = (
                 CalendarEntityFeature.CREATE_EVENT
@@ -159,9 +162,10 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
     # The controller only stores weekly slots, so a single event is stored as a weekly slot too (issue #208).
     async def async_create_event(self, **kwargs: Any) -> None:
         slot = _slot_from_times(kwargs["dtstart"], kwargs["dtend"])
-        for day in _event_weekdays(kwargs["dtstart"], kwargs.get("rrule")):
-            slots, with_temperature = await self._read_day(day)
-            await self._write_day(day, [*slots, slot], with_temperature)
+        async with self._edit_lock:
+            for day in _event_weekdays(kwargs["dtstart"], kwargs.get("rrule")):
+                slots, with_temperature = await self._read_day(day)
+                await self._write_day(day, [*slots, slot], with_temperature)
 
     # Remove the slot behind an event; the uid names the weekday and the slot index.
     # Every occurrence of a weekly slot is the same controller slot, so the recurrence range does not matter.
@@ -169,10 +173,12 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         self, uid: str, recurrence_id: str | None = None, recurrence_range: str | None = None
     ) -> None:
         day, index = _parse_uid(uid)
-        slots, with_temperature = await self._read_day(day)
-        if index >= len(slots):
-            raise HomeAssistantError("This time slot no longer exists; refresh the calendar")
-        await self._write_day(day, [slot for position, slot in enumerate(slots) if position != index], with_temperature)
+        async with self._edit_lock:
+            slots, with_temperature = await self._read_day(day)
+            if index >= len(slots):
+                raise HomeAssistantError("This time slot no longer exists; refresh the calendar")
+            remaining = [slot for position, slot in enumerate(slots) if position != index]
+            await self._write_day(day, remaining, with_temperature)
 
     # Move or resize a slot: remove it from its weekday, then add the new times on the event's weekday(s).
     # The slot keeps its target temperature when it stays on the same layout.
@@ -184,26 +190,35 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         recurrence_range: str | None = None,
     ) -> None:
         day, index = _parse_uid(uid)
-        slots, with_temperature = await self._read_day(day)
-        if index >= len(slots):
-            raise HomeAssistantError("This time slot no longer exists; refresh the calendar")
-        old = slots.pop(index)
-        new = _slot_from_times(event["dtstart"], event["dtend"], old.temperature)
         targets = _event_weekdays(event["dtstart"], event.get("rrule"))
-        if day not in targets:
-            await self._write_day(day, slots, with_temperature)
-        for target in targets:
-            current, target_temperature = (slots, with_temperature) if target == day else await self._read_day(target)
-            await self._write_day(target, [*current, new], target_temperature)
+        async with self._edit_lock:
+            slots, with_temperature = await self._read_day(day)
+            if index >= len(slots):
+                raise HomeAssistantError("This time slot no longer exists; refresh the calendar")
+            old = slots.pop(index)
+            new = _slot_from_times(event["dtstart"], event["dtend"], old.temperature)
+            if day not in targets:
+                await self._write_day(day, slots, with_temperature)
+            for target in targets:
+                if target == day:
+                    current, target_temperature = slots, with_temperature
+                else:
+                    current, target_temperature = await self._read_day(target)
+                await self._write_day(target, [*current, new], target_temperature)
 
     # Read every slot of a weekday straight from the controller and check that none is hidden.
     # Returns the visible slots in order and whether the layout carries a temperature per slot.
     async def _read_day(self, day: str) -> tuple[list[TimeSlot], bool]:
         raw = [await self._read(f"{self._prefix}_{day}{index}") for index in range(MAX_SLOTS_PER_DAY)]
         slots = [slot for slot in (parse_slot(value) for value in raw) if slot is not None]
-        ensure = await self._slot_count(day)
+        counted = await self._slot_count(day)
+        if counted is None and any(value is None for value in raw):
+            # Without a count message, an undefined slot read could hide a slot; only a fully readable day is safe.
+            raise HomeAssistantError(
+                f"Not every time slot of {day} can be read on this controller; nothing was changed"
+            )
         try:
-            ensure_all_slots_visible(day, slots, ensure)
+            ensure_all_slots_visible(day, slots, counted)
         except TimerProgramError as exc:
             raise HomeAssistantError(str(exc)) from exc
         return slots, any(has_temperature_column(value) for value in raw if value)
@@ -227,10 +242,16 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
             raise HomeAssistantError(f"The controller did not store the new time slots for {day}")
         await self.coordinator.async_request_refresh()
 
-    # Read one register past ebusd's cache; an unknown message reads as no value.
+    # Read one register past ebusd's cache; a message this configuration does not define reads as no value.
+    # Any other failure stops the change: a slot that could not be read would look free, and rewriting the day
+    # would then drop it.
     async def _read(self, name: str) -> str | None:
         value = await self.coordinator.async_read_register(self._circuit or "", name, force=True)
-        return None if value is None or value.startswith("ERR:") else value
+        if value is not None and "element not found" in value.casefold():
+            return None
+        if value is None or value.startswith("ERR:"):
+            raise HomeAssistantError(f"Could not read {name} from the controller; nothing was changed")
+        return value
 
     # Read the controller's slot count for a weekday, or None when this configuration has no count message.
     async def _slot_count(self, day: str) -> int | None:
@@ -312,12 +333,22 @@ def _slot_from_times(start: Any, end: Any, temperature: float | None = None) -> 
 
 
 # List the weekdays an event covers: each BYDAY of a weekly rule, else the weekday of its start.
+# Only a weekly rule (or none) matches how the controller stores slots, so any other rule is refused.
 def _event_weekdays(start: Any, rrule: str | None) -> list[str]:
     days: list[str] = []
-    for part in (rrule or "").split(";"):
-        key, _, value = part.partition("=")
-        if key.strip().upper() == "BYDAY":
-            days = [WEEKDAYS[_BYDAY[code.strip()[-2:].upper()]] for code in value.split(",") if code.strip()]
+    rules = {
+        key.strip().upper(): value.strip()
+        for key, _, value in (part.partition("=") for part in (rrule or "").split(";") if part.strip())
+    }
+    if rules and rules.get("FREQ", "").upper() != "WEEKLY":
+        raise HomeAssistantError("Time slots repeat every week; use a weekly rule or none")
+    for code in rules.get("BYDAY", "").split(","):
+        key = code.strip()[-2:].upper()
+        if not key:
+            continue
+        if key not in _BYDAY:
+            raise HomeAssistantError(f"Unknown weekday {code!r} in the repeat rule")
+        days.append(WEEKDAYS[_BYDAY[key]])
     if days:
         return list(dict.fromkeys(days))
     return [WEEKDAYS[dt_util.as_local(start).weekday() if isinstance(start, datetime) else start.weekday()]]

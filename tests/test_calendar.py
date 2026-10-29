@@ -237,3 +237,48 @@ async def test_dhw_calendar_reports_an_ignored_write_and_other_programs_stay_rea
     heating = EbusdCalendar(_coordinator("ctlv2"), _entry(), "Heating Program", "CcTimer", "ctlv2", "ctlv2")
     assert not getattr(heating, "_attr_supported_features", 0)
     assert calendar._attr_supported_features
+
+
+# Intent: a slot read that fails (no answer or a bus error) stops the change before anything is written.
+# Why: a failed read looked like a free slot, so adding a slot would have rewritten the day and dropped the real one.
+@pytest.mark.parametrize("failure", [None, "ERR: read timeout"])
+async def test_dhw_calendar_writes_nothing_when_a_slot_cannot_be_read(failure: str | None) -> None:
+    controller = _FakeTimerController()
+    controller.days["Monday"] = [("13:30", "15:00", "35.0")]
+    calendar = _writable_calendar(controller)
+    working_read = controller.read
+
+    # Intent: fail the read of slot 0 only.
+    # Why: one unreadable slot is enough to make the day look emptier than it is.
+    async def _flaky(circuit: str, name: str, field: str = "", force: bool = False) -> str | None:
+        return failure if name == "HwcTimer_Monday0" else await working_read(circuit, name, field, force)
+
+    calendar.coordinator.async_read_register = _flaky
+    with pytest.raises(HomeAssistantError, match="nothing was changed"):
+        await calendar.async_create_event(dtstart=datetime(2026, 11, 2, 16, 0), dtend=datetime(2026, 11, 2, 16, 30))
+    assert controller.writes == []
+
+
+# Intent: a non-weekly or malformed repeat rule, and a day that cannot be fully read without a count message, are
+#         refused before anything is written.
+# Why: review of 1.13.2 - a daily rule silently wrote one weekday, an unknown BYDAY raised a bare KeyError, and without
+#      a count message an undefined slot read could hide a slot that a rewrite would drop.
+@pytest.mark.parametrize(
+    ("rrule", "count_name", "readable", "message"),
+    [
+        ("FREQ=DAILY", "Timeframes", 3, "weekly rule"),
+        ("FREQ=WEEKLY;BYDAY=XX", "Timeframes", 3, "Unknown weekday"),
+        (None, "Missing", 1, "Not every time slot"),
+    ],
+)
+async def test_dhw_calendar_refuses_unsafe_requests(
+    rrule: str | None, count_name: str, readable: int, message: str
+) -> None:
+    controller = _FakeTimerController(count_name=count_name, readable=readable)
+    calendar = _writable_calendar(controller)
+
+    with pytest.raises(HomeAssistantError, match=message):
+        await calendar.async_create_event(
+            dtstart=datetime(2026, 11, 2, 6, 0), dtend=datetime(2026, 11, 2, 6, 30), rrule=rrule
+        )
+    assert controller.writes == []
