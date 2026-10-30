@@ -1030,3 +1030,49 @@ async def test_zone_hvac_action_reads_text_circuit_states(
         z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
 
         assert z1.hvac_action == expected
+
+
+# Intent: zone 1's flow temperature range keeps the legacy unique id, extra zones get a zone suffix, and no two clash.
+# Why: 1.13.2 review - renaming the extra-zone entity (#152) must not touch the unique ids, or Home Assistant would
+#      orphan the zone 1 entity of every existing install and merge the extra zones into one.
+async def test_flow_range_unique_ids_keep_the_legacy_pattern() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, _graph_two_zone(full_parity=True))
+        ids = [
+            CLIMATE.EbusdFlowTempRange(coordinator, _entry(), zone, "ctlv2")._attr_unique_id
+            for zone in ("z1", "z2", "z3")
+        ]
+        entry_id = _entry().entry_id
+
+        assert ids == [
+            f"{entry_id}_climate_flow_temp_range",
+            f"{entry_id}_climate_flow_temp_range_z2",
+            f"{entry_id}_climate_flow_temp_range_z3",
+        ]
+
+
+# Intent: the quick-veto confirm timer hands Home Assistant a function marked `@callback`, and firing it schedules the
+#         coordinator refresh on the event loop.
+# Why: issue #207 - without the mark Home Assistant ran the timer in a worker thread, where `async_create_task`
+#      raised a RuntimeError and the confirm refresh after a setpoint write never ran.
+async def test_confirm_refresh_timer_runs_on_the_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir, _graph_two_zone())
+        z1 = EbusdClimate(coordinator, _entry(), "z1", "ctlv2")
+        z1.hass = MagicMock()
+        coordinator.async_request_refresh = AsyncMock()
+        scheduled: list[object] = []
+        monkeypatch.setattr(
+            CLIMATE, "async_call_later", lambda _hass, _delay, job: scheduled.append(job) or MagicMock()
+        )
+
+        z1._schedule_confirm_refresh()
+
+        assert len(scheduled) == 1
+        fire = scheduled[0]
+        assert getattr(fire, "_hass_callback", False) is True
+        fire(datetime(2026, 10, 30, 8, 0))
+        assert z1._cancel_confirm_refresh is None
+        z1.hass.async_create_task.assert_called_once()
+        await z1.hass.async_create_task.call_args.args[0]
+        coordinator.async_request_refresh.assert_awaited_once()

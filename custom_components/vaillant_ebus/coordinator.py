@@ -20,7 +20,7 @@ from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from . import cleanup, repairs
 from .backend.analysis_service import AnalysisResult, AnalysisService
@@ -82,6 +82,10 @@ DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
 ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 ENERGY_POLL_INTERVAL = timedelta(minutes=5)
+# How long ebusd may stay unusable (no connection or no device graph) before the last values are marked unavailable.
+# Issue #193 - after an ebusd restart on a stuck adapter, setup kept failing and the old values stayed on screen.
+# Ten minutes matches the longest bus-guard pause, so a short ebusd restart still keeps the values.
+STALE_VALUES_AFTER = timedelta(minutes=10)
 WRITE_LOG_SIZE = 100
 
 # (circuit, register) pairs of the HMUX0 precise temperatures, for poll-time key matching.
@@ -353,6 +357,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self._active_dump_tasks: set[asyncio.Task] = set()
         self._ebusd_connected = False
         self._ebusd_repair_pending = False
+        # When ebusd last became unusable; None while connected. Drives STALE_VALUES_AFTER.
+        self._unreachable_since: datetime | None = None
         # Desired DHW boost state (True when boost was requested). HwcSFMode
         # reports "load" while the cylinder charges even after boost is turned
         # off, so the switch/water-heater report this desired value instead of
@@ -715,6 +721,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 await self._async_mark_ebusd_unreachable("connection closed while applying initial discovery")
             return
         self._ebusd_connected = True
+        self._unreachable_since = None
         await repairs.async_dismiss_ebusd_unreachable(self.hass)
         self._ebusd_repair_pending = False
         await repairs.async_dismiss_detection_incomplete(self.hass)
@@ -748,6 +755,18 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             if not self._ebusd_connected and not self._stopped and not self._unload_requested:
                 self._started = False
 
+    # Mark every entity unavailable once ebusd has been unusable for STALE_VALUES_AFTER.
+    # Issue #193 - with no connection or no device graph nothing is read, so the last values would stay on screen as
+    # if they were current. The setup retry keeps running; the first successful setup brings the values back.
+    def _raise_when_values_are_stale(self) -> None:
+        since = self._unreachable_since
+        if since is None or datetime.now() - since < STALE_VALUES_AFTER:
+            return
+        raise UpdateFailed(
+            f"ebusd has not been usable since {since:%Y-%m-%d %H:%M:%S}; values are unavailable until it recovers. "
+            "If the eBUS adapter is stuck, reset it and restart ebusd"
+        )
+
     # Reset the coordinator after an ebusd transport or discovery failure.
     # Future polls must launch a fresh connection instead of reusing a dead client.
     async def _async_mark_ebusd_unreachable(self, reason: str) -> None:
@@ -756,6 +775,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self._ebusd_connected = False
         self._started = False
         self._ebusd_repair_pending = True
+        if self._unreachable_since is None:
+            self._unreachable_since = datetime.now()
         _LOGGER.warning("ebusd unavailable, will retry: %s", reason)
         await repairs.async_create_ebusd_unreachable(self.hass)
 
@@ -1780,6 +1801,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if not self._ebusd_connected:
             if self._setup_task is not None:
                 if not self._setup_task.done():
+                    # A setup attempt on a stuck adapter can run for minutes; the old values must not count as
+                    # current meanwhile, or the entities flip between unavailable and available (issue #193).
+                    self._raise_when_values_are_stale()
                     return {"ebusd": await self._async_values_from_registers()}
                 setup_task = self._setup_task
                 self._setup_task = None
@@ -1795,6 +1819,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 self._started = True
                 if not self._unload_requested:
                     self._setup_task = self.hass.async_create_task(self._async_run_setup_task())
+            self._raise_when_values_are_stale()
             return {"ebusd": await self._async_values_from_registers()}
 
         if self.ebus and self.ebus.is_connected:
@@ -1956,6 +1981,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     if self._stopped or self._unload_requested:
                         return {"ebusd": {}}
                     self._ebusd_repair_pending = False
+                if self._ebusd_connected:
+                    self._unreachable_since = None
                 if updated:
                     _LOGGER.info("Poll updated %d registers", updated)
                 return {"ebusd": await self._async_values_from_registers()}

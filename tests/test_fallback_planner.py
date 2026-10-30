@@ -258,3 +258,26 @@ def test_interleave_by_circuit_round_robins_and_keeps_every_read() -> None:
         ("hmux0", "E"),
     ]
     assert PLANNER.interleave_by_circuit([]) == []
+
+
+# Intent: the three controller registers that are no longer `r5` are read by the integration on the energy interval,
+#         from the discovered controller, and only when their definition was accepted.
+# Why: issue #193 - ebusd's own `r5` polling caused ~76k bus errors a day on a stuck adapter and ignored the bus
+#      guard; as plain `r` nothing polls them, so without this read their values would freeze.
+def test_controller_registers_moved_off_r5_are_reread_on_the_energy_interval() -> None:
+    graph = _graph(FLEXOTHERM)
+    runtime = load_backend("runtime_definitions")
+    defines = runtime.build_runtime_defines(graph, __import__("datetime").datetime(2026, 1, 15, 12, 0))
+    moved = [
+        item
+        for item in defines
+        if item.split(",")[2] in runtime.INTEGRATION_POLLED_CONTROLLER_REGISTERS and item.startswith("r")
+    ]
+    assert len(moved) == 3 and all(item.startswith("r,") for item in moved)
+    definitions = {f"r.{item.split(',')[1]}.{item.split(',')[2]}": item for item in moved}
+    controller = graph.heating_controller_result().node.circuit
+    expected = {(controller, name) for name in runtime.INTEGRATION_POLLED_CONTROLLER_REGISTERS}
+
+    assert expected <= set(_plan(graph, definitions, include_energy=True))
+    assert not expected & set(_plan(graph, {}, include_energy=True)) - set(_plan(graph, {}))
+    assert not any(item.startswith("r5,") and item.split(",")[2] in expected for item in defines)

@@ -150,6 +150,12 @@ class EbusdConnectionSensor(CoordinatorEntity[VaillantCoordinator], BinarySensor
     def is_on(self) -> bool:
         return self.coordinator.last_update_success
 
+    # Always available: this sensor reports the connection itself, so it must show "off" while the other entities
+    # are unavailable after ebusd stayed unusable (issue #193).
+    @property
+    def available(self) -> bool:
+        return True
+
 
 class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntity):
     """Aggregate current HMU and controller eBUS fault registers."""

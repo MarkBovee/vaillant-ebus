@@ -41,6 +41,9 @@ BUS_ERROR_MIN_CIRCUITS = 2
 # Pause after the first trip; every failed probe doubles it up to the maximum.
 BUS_ERROR_BASE_COOLDOWN = 60.0
 BUS_ERROR_MAX_COOLDOWN = 600.0
+# Neutral answers (no data, unknown message, no answer) after which a probe stops. They prove neither a stuck nor a
+# working bus, and while the probe lasts every read is forced past ebusd's cache.
+BUS_ERROR_PROBE_NEUTRAL_LIMIT = 3
 
 
 class CommandLogEntry(TypedDict):
@@ -79,6 +82,7 @@ class BusErrorGuard:
         self._pause_seconds = 0.0
         self._paused_until: float | None = None
         self._probing = False
+        self._probe_neutral = 0
         self._trips = 0
 
     # Report whether an active read may be sent now; the first call after the pause starts the probe.
@@ -90,6 +94,7 @@ class BusErrorGuard:
             return False
         self._paused_until = None
         self._probing = True
+        self._probe_neutral = 0
         return True
 
     # Report whether the next read is a probe after a pause.
@@ -119,6 +124,12 @@ class BusErrorGuard:
             if self._probing:
                 self._probing = False
                 self._cooldown = BUS_ERROR_BASE_COOLDOWN
+        elif self._probing:
+            # A probe that only gets neutral answers ends without a verdict: reads go back to normal, but the next
+            # pause keeps doubling, because no real answer proved the adapter works again.
+            self._probe_neutral += 1
+            if self._probe_neutral >= BUS_ERROR_PROBE_NEUTRAL_LIMIT:
+                self._probing = False
         return False
 
     # Pause the active reads and double the next pause.
