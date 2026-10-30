@@ -17,7 +17,7 @@ from homeassistant.components.climate.const import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
@@ -618,7 +618,9 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
             return
 
         # Timer callback: forget the pending timer handle and ask the coordinator for a refresh so the new state is read
-        # back.
+        # back. `@callback` keeps it on the event loop; without it Home Assistant runs it in a worker thread, where
+        # `async_create_task` raises and the confirm refresh never runs (issue #207).
+        @callback
         def _fire(_now: datetime) -> None:
             self._cancel_confirm_refresh = None
             self.hass.async_create_task(self.coordinator.async_request_refresh())

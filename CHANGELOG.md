@@ -20,6 +20,10 @@ stuck eBUS adapter, ebusd no longer polls three registers on its own, and old va
   connection, or a scan that finds no devices, as after an ebusd restart on a stuck adapter), entities become
   unavailable after ten minutes instead of showing the last values as current. The Online sensor stays available
   and shows off. The values return with the first successful discovery.
+- **The refresh after a setpoint change runs again (issue #207).** A few seconds after a setpoint or quick veto write,
+  the zone reads the controller again to confirm the change. That timer ran outside Home Assistant's event loop and
+  failed with `RuntimeError: ... calls hass.async_create_task from a thread other than the event loop`, so the
+  confirmation never came. It now runs on the event loop.
 - **A bus probe no longer runs on forever.** After a pause, a probe that only gets answers such as `no data stored`
   ends after three of them. The next pause still doubles, because nothing proved that the adapter works again.
 - **Weekly repeat rules with `INTERVAL=1`.** The hot water calendar accepted `FREQ=WEEKLY` but refused the same rule
