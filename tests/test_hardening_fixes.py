@@ -2512,3 +2512,52 @@ async def test_write_parameter_raises_on_a_failed_write() -> None:
     await INIT._svc_write_parameter(hass, _call(data))
     # A timer write has no read twin that decodes, so the service must not demand a strict read-back (issue #208).
     assert coordinator.async_write_register.await_args.kwargs["strict_verify"] is False
+
+
+# Intent: while ebusd stays unusable, the coordinator keeps the last values for ten minutes and then fails the update,
+#         so entities turn unavailable; repeated failures keep the first timestamp, and a short outage keeps values.
+# Why: issue #193 - after an ebusd restart on a stuck adapter, setup found no device graph and the old values stayed
+#      on screen as if they were current.
+async def test_values_turn_unavailable_after_ebusd_stays_unusable() -> None:
+    coord_module = sys.modules["vaillant_ebus.coordinator"]
+    update_failed = sys.modules["homeassistant.helpers.update_coordinator"].UpdateFailed
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir)
+        coordinator._cache_seeded = True
+        coordinator._started = True
+        coordinator.registers = {
+            "ctlv2.z1RoomHumidity": tc.EbusdRegister("ctlv2", "z1RoomHumidity", ["value"], {"value": "48"}, True)
+        }
+        await coordinator._async_mark_ebusd_unreachable("initial discovery returned no device graph")
+        first = coordinator._unreachable_since
+        await coordinator._async_mark_ebusd_unreachable("initial discovery returned no device graph")
+        assert first is not None and coordinator._unreachable_since == first
+
+        coordinator._started = True
+        short = await coordinator._async_update_data()
+        assert short["ebusd"]["ctlv2.z1RoomHumidity.value"] == "48"
+
+        coordinator._unreachable_since = coord_module.datetime.now() - coord_module.STALE_VALUES_AFTER
+        with pytest.raises(update_failed, match="reset it and restart ebusd"):
+            await coordinator._async_update_data()
+
+
+# Intent: while a setup attempt is still running and ebusd has been unusable past the limit, the poll still fails.
+# Why: issue #193 audit - one setup attempt on a stuck adapter can take minutes; returning the old values during it
+#      made the entities flip back to available between failed attempts.
+async def test_values_stay_unavailable_while_a_slow_setup_runs() -> None:
+    coord_module = sys.modules["vaillant_ebus.coordinator"]
+    update_failed = sys.modules["homeassistant.helpers.update_coordinator"].UpdateFailed
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = _coordinator(tmpdir)
+        coordinator._cache_seeded = True
+        pending = asyncio.get_running_loop().create_future()
+        coordinator._setup_task = pending
+        coordinator._unreachable_since = coord_module.datetime.now() - coord_module.STALE_VALUES_AFTER
+        try:
+            with pytest.raises(update_failed):
+                await coordinator._async_update_data()
+            coordinator._unreachable_since = None
+            assert "ebusd" in await coordinator._async_update_data()
+        finally:
+            pending.cancel()

@@ -99,6 +99,16 @@ VWZ_STATION_76 = HardwareProfile(
     prefix_match=True,
     evidence="upstream PR #598",
 )
+# CTLV2 SW0514/HW1104 answers the per-slot hot water timer read `B555 a5 00 02 <day> <slot>` (issue #208 grab:
+# status, from HH MM, to HH MM, 2 bytes). Its ebusd configuration decodes only slot 0 (`HwcTimer_Timeslots` layout).
+CTLV2_SW0514 = HardwareProfile(
+    name="ctlv2_sw0514",
+    scan_type="ctlv2",
+    device_type="HEATING_CONTROLLER",
+    sw=frozenset({"0514"}),
+    hw=frozenset({"1104"}),
+    evidence="issue #208 raw grab (slots 0-2, Tuesday); flexocompact_find.txt (same scan, Timeslots layout)",
+)
 # HW5103 heat pumps answer b511/07 with the Status07 layout (upstream ebusd-configuration PR #614).
 HMU00_HW5103 = HardwareProfile(
     name="hmu00_hw5103", scan_type="hmu00", hw=frozenset({"5103"}), evidence="upstream PR #614"

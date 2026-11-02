@@ -323,3 +323,38 @@ async def test_dhw_calendar_keeps_to_the_readable_slots() -> None:
 
     await calendar.async_create_event(dtstart=datetime(2026, 11, 3, 7, 0), dtend=datetime(2026, 11, 3, 7, 30))
     assert controller.days["Tuesday"] == [("07:00", "07:30", "-")]
+
+
+# Intent: once slots 1 and 2 are readable on the `Timeslots` layout (no temperature), a second slot on a day is
+#         written slot 0 first with count 2 and no temperature column, and read back.
+# Why: issue #208 - the runtime slot reads lift the one-slot limit; the write message there is `index;count;from;to`.
+async def test_dhw_calendar_writes_two_slots_when_the_slot_reads_exist() -> None:
+    controller = _FakeTimerController(with_temperature=False, readable=3, count_name="Timeslots")
+    controller.days["Monday"] = [("05:20", "06:00", "-")]
+    calendar = _writable_calendar(controller)
+
+    await calendar.async_create_event(dtstart=datetime(2026, 11, 2, 7, 0), dtend=datetime(2026, 11, 2, 7, 30))
+
+    assert controller.writes == ["HwcTimer_Monday=0;2;05:20;06:00", "HwcTimer_Monday=1;2;07:00;07:30"]
+    assert controller.days["Monday"] == [("05:20", "06:00", "-"), ("07:00", "07:30", "-")]
+
+
+# Intent: a weekly rule that spells out `INTERVAL=1` maps to the same weekdays as one without it; any other interval,
+#         COUNT or UNTIL is still refused.
+# Why: 1.13.2 review - `INTERVAL=1` is the default weekly repeat and some calendar clients write it explicitly.
+@pytest.mark.parametrize(
+    ("rrule", "expected"),
+    [
+        ("FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE", ["Monday", "Wednesday"]),
+        ("FREQ=WEEKLY;BYDAY=MO,WE", ["Monday", "Wednesday"]),
+        ("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO", None),
+        ("FREQ=WEEKLY;INTERVAL=1;COUNT=3", None),
+    ],
+)
+def test_event_weekdays_accepts_interval_one(rrule: str, expected: list[str] | None) -> None:
+    start = datetime(2026, 11, 2, 7, 0)
+    if expected is None:
+        with pytest.raises(HomeAssistantError):
+            CALENDAR._event_weekdays(start, rrule)
+    else:
+        assert CALENDAR._event_weekdays(start, rrule) == expected

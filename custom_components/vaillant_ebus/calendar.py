@@ -352,7 +352,9 @@ def _event_weekdays(start: Any, rrule: str | None) -> list[str]:
         key.strip().upper(): value.strip()
         for key, _, value in (part.partition("=") for part in (rrule or "").split(";") if part.strip())
     }
-    if rules and (rules.get("FREQ", "").upper() != "WEEKLY" or {"INTERVAL", "COUNT", "UNTIL"} & rules.keys()):
+    # `INTERVAL=1` is the default weekly repeat; some clients write it out, so only another interval is refused.
+    interval = rules.get("INTERVAL", "1").strip()
+    if rules and (rules.get("FREQ", "").upper() != "WEEKLY" or interval != "1" or {"COUNT", "UNTIL"} & rules.keys()):
         raise HomeAssistantError("Time slots repeat every week without end; use a plain weekly rule or none")
     for code in rules.get("BYDAY", "").split(","):
         key = code.strip()[-2:].upper()

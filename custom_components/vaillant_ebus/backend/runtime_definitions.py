@@ -9,7 +9,14 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .hardware_profiles import HMU00_HW5103, HMUX0_B509_MONITORING, node_matches, scan_matches
+from .hardware_profiles import (
+    CTLV2_SW0514,
+    HMU00_HW5103,
+    HMUX0_B509_MONITORING,
+    node_matches,
+    profile_owner,
+    scan_matches,
+)
 from .mapping import (
     HMUX0_SW0407_ENVYIELD_REGISTERS,
     b516_date_bytes,
@@ -122,6 +129,50 @@ VWZIO_SW0500_ANY_MASTER_REGISTERS = (
 # ebusd never polls plain `r` messages and their entities are off by default, so the energy poll re-reads them.
 HMUX0_COMPRESSOR_COUNTER_NAMES = frozenset({"CompressorHc", "CompressorHwc"})
 
+# Controller registers defined as plain `r` that the integration reads itself on the energy interval.
+# Issue #193 - as `r5` ebusd polled them on its own, about 76,000 bus errors a day on a stuck adapter, and the bus
+# guard could not pause that. The integration's reads go through the guard.
+INTEGRATION_POLLED_CONTROLLER_REGISTERS = frozenset(
+    {"z1RoomHumidity", "ManualCoolingStartDate", "ManualCoolingEndDate"}
+)
+
+# Hot water timer slots 1 and 2 per weekday, read with `B555 a5 00 02 <day> <slot>` (issue #208).
+# The 7-byte answer is status, from HH MM, to HH MM and 2 bytes (probably the slot temperature). The status byte is
+# ignored like in the shipped slot-0 message: a missing slot (status 02) answers 00:00-00:00, which reads as empty.
+# The temperature is left out on purpose so slots 1 and 2 match slot 0 and the `index;count;from;to` write message.
+HWC_TIMER_SLOT_FIELDS = "ign,,IGN:1,,,,from,,HTM,,,,to,,HTM,,,"
+HWC_TIMER_EXTRA_SLOTS = (1, 2)
+# Day byte order of the slot request. Tuesday = 01 is captured (issue #208); Monday = 00 follows the generic
+# `HwcTimer_<Day>` read in flexocompact_find.txt (`a5000200` Monday ... `a5000203` Thursday).
+TIMER_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+# Build the slot 1 and 2 reads of the hot water timer for a CTLV2 SW0514 whose configuration decodes only slot 0.
+# Gated on the scan identity and on the `HwcTimer_Timeslots` layout; the `HwcTimer_Timeframes` layout (the owner's
+# CTLV2) already ships slots 0-2 with a temperature, so nothing is defined there. Absent hardware gets nothing.
+def hwc_timer_slot_definitions(graph: DeviceGraph | None) -> list[str]:
+    if graph is None:
+        return []
+    controller = graph.heating_controller_result()
+    owner = profile_owner(graph, CTLV2_SW0514)
+    if (
+        controller.status != ResolutionStatus.UNIQUE
+        or controller.node is None
+        or owner is None
+        or owner.casefold() != controller.node.circuit.casefold()
+    ):
+        return []
+    circuit = controller.node.circuit
+    keys = {key.casefold() for key in (*graph.raw_registers, *graph.placeholder_registers)}
+    if f"{circuit}.hwctimer_timeslots".casefold() not in keys or f"{circuit}.hwctimer_timeframes".casefold() in keys:
+        return []
+    return [
+        f"r,{circuit},HwcTimer_{day}{slot},HwcTimer_{day}{slot},31,15,B555,a50002{index:02x}{slot:02x},"
+        + HWC_TIMER_SLOT_FIELDS
+        for index, day in enumerate(TIMER_WEEKDAYS)
+        for slot in HWC_TIMER_EXTRA_SLOTS
+    ]
+
 
 # Runtime definitions of the HMUX0 precise flow/return temperatures and the yield/COP statistics.
 # ebusd's own CSV lacks them for SW0303 (issue #171) and for a SW0406 bus without an hmux0 configuration (#185);
@@ -222,7 +273,7 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
     withheld_registers = withheld if withheld is not None else set()
     date_bytes = b516_date_bytes(now)
     defines = [
-        "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800,value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity",
+        "r,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800,value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity",
         # eloBLOCK B510 thermostat override. It is harmless on hardware
         # without BAI; ebusd reports it unavailable and filters it out.
         "wi,bai,SetModeOverride,Operation Mode,,08,B510,00"
@@ -264,8 +315,8 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
         "r,hmu,RunDataElPowerConsumption,RunDataElPowerConsumption,31,8,B509"
         ",5402005b0d,value,,IGN:4,,,,value,,EXP,,W,"
         "HMUX0 electrical power consumption",
-        "r5,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524,02000000da00,value,,IGN:4,,,,value,,HDA:3",
-        "r5,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524,02000000db00,value,,IGN:4,,,,value,,HDA:3",
+        "r,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524,02000000da00,value,,IGN:4,,,,value,,HDA:3",
+        "r,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524,02000000db00,value,,IGN:4,,,,value,,HDA:3",
         "w,ctlv2,ManualCoolingStartDate,ManualCoolingStartDate,31,15,B524,02010000da00,value,m,HDA:3",
         "w,ctlv2,ManualCoolingEndDate,ManualCoolingEndDate,31,15,B524,02010000db00,value,m,HDA:3",
         "r,hmu,CoolEnvYieldTotal,CoolEnvYieldTotal,31,08,B516"
@@ -452,6 +503,7 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
             )
 
     defines = [definition for definition in (_resolve_definition_circuit(item) for item in defines) if definition]
+    defines.extend(hwc_timer_slot_definitions(graph))
     if is_hmux0_0303_0504:
         sw0303 = hmux0_sw0303_circuit
         assert sw0303 is not None

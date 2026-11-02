@@ -102,8 +102,12 @@ Keep all runtime definitions in `backend/runtime_definitions.py` (`build_runtime
 The confirmed `z1RoomHumidity` definition is:
 
 ```text
-r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800,value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity
+r,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800,value,,IGN:4,,,,value,,EXP,,%,z1 Room Humidity
 ```
+
+It is plain `r`, not `r5` (issue #193): ebusd's own polling cannot be paused by the bus guard. The integration
+re-reads it, `ManualCoolingStartDate` and `ManualCoolingEndDate` on the energy interval
+(`INTEGRATION_POLLED_CONTROLLER_REGISTERS`).
 
 Use `EbusService.define_register()` for runtime definitions. Do not replace them with CSV uploads or an addon `--configpath` override.
 

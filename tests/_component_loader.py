@@ -381,6 +381,7 @@ def _homeassistant_root() -> MagicMock:
     root.helpers.event = MagicMock()
     root.helpers.update_coordinator = MagicMock()
     root.helpers.update_coordinator.DataUpdateCoordinator = _MockDataUpdateCoordinator
+    root.helpers.update_coordinator.UpdateFailed = type("UpdateFailed", (Exception,), {})
     root.helpers.entity_registry = MagicMock()
     root.helpers.entity_registry.RegistryEntryDisabler = MagicMock(INTEGRATION="integration")
     return root
@@ -400,6 +401,13 @@ def _register_homeassistant(root: MagicMock) -> None:
     sys.modules["homeassistant.const"] = MagicMock()
     root.config_entries.ConfigEntry = object
     root.core.HomeAssistant = object
+
+    # Mirror homeassistant.core.callback: it marks the function and returns it unchanged, so a test can check the mark.
+    def _callback(func):
+        func._hass_callback = True
+        return func
+
+    root.core.callback = _callback
     entity_platform = _stub_module("homeassistant.helpers.entity_platform")
     entity_platform.AddEntitiesCallback = object
     sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
