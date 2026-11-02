@@ -953,6 +953,16 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         icon="mdi:clock",
         entity_category="diagnostic",
     ),
+    "hmu.DateTime.dcfstate": RegisterMeta(friendly_name="Date/Time State", entity_category="diagnostic"),
+    "hmu.DateTime.time": RegisterMeta(friendly_name="Time", icon="mdi:clock", entity_category="diagnostic"),
+    "hmu.DateTime.date": RegisterMeta(friendly_name="Date", icon="mdi:calendar", entity_category="diagnostic"),
+    "hmu.DateTime.outsidetemp": RegisterMeta(
+        friendly_name="Outside Temperature (Date/Time message)",
+        device_class="temperature",
+        unit="°C",
+        state_class="measurement",
+        enabled=False,
+    ),
 }
 
 # Gas consumption counters of the controller (`PrFuelSum*`, discussion 31: b7v of an ecoTEC with a VRC 720, live values

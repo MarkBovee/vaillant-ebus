@@ -6,6 +6,7 @@ the discovered device graph and passes the per-hardware polling restrictions.
 
 from __future__ import annotations
 
+import re
 from collections import deque
 from collections.abc import Callable, Collection, Mapping, Sequence
 
@@ -27,6 +28,7 @@ from .models import (
     RegisterMeta,
     is_controller_circuit,
     is_heat_pump_circuit,
+    zone_circuit_declared_inactive,
 )
 from .runtime_definitions import (
     HMUX0_COMPRESSOR_COUNTER_NAMES,
@@ -36,6 +38,8 @@ from .runtime_definitions import (
 
 # Register names of the HMUX0 precise (1/16 degC) temperatures that need an explicit active read.
 HMUX0_PRECISE_TEMPERATURE_NAMES = ("RunDataFlowTemp", "RunDataReturnTemp")
+# Heating-circuit state registers the climate entity derives `hvac_action` from (issue #207).
+ZONE_STATE_REGISTER = re.compile(r"^Hc(\d+)(?:Pump)?Status$", re.IGNORECASE)
 
 
 # Select a unique discovered owner for a logical register map entry.
@@ -86,6 +90,22 @@ def fallback_candidate(
     if expected_type is None and len(candidates) == 1:
         return candidates[0]
     return None
+
+
+# Nominate `Hc<N>Status`/`Hc<N>PumpStatus` of the discovered controller for an active read.
+# Only keys the graph lists under the controller circuit count, and a circuit the controller reports as inactive is
+# skipped: it has no climate entity, so reading it would only cost bus time.
+def _add_zone_state_reads(graph: DeviceGraph, add: Callable[[str, str], None]) -> None:
+    controller = graph.heating_controller_result().node
+    if controller is None:
+        return
+    prefix = f"{controller.circuit}.".casefold()
+    for key in graph.raw_registers:
+        if not key.casefold().startswith(prefix):
+            continue
+        match = ZONE_STATE_REGISTER.match(key.split(".", 1)[1])
+        if match and not zone_circuit_declared_inactive(graph, controller.circuit, match.group(1)):
+            add(controller.circuit, key.split(".", 1)[1])
 
 
 # List the (circuit, register) pairs to read actively, in order, without duplicates.
@@ -194,6 +214,12 @@ def plan_fallback_reads(
         for name in HMUX0_PRECISE_TEMPERATURE_NAMES:
             if f"{hmux0_precise_temperature}.{name}".casefold() in discovered_keys:
                 _add(hmux0_precise_temperature, name)
+
+    # Zone state for the climate action (issue #207): ebusd's own CSV defines `Hc<N>Status` and `Hc<N>PumpStatus` as
+    # plain `r`, so ebusd never polls them and the map-driven pass skips them once `find` lists them. Without this
+    # read `hvac_action` keeps its first value. Read them every cycle from the discovered controller only.
+    if graph:
+        _add_zone_state_reads(graph, _add)
 
     # Map-driven reads: registers with metadata not yet in the graph.
     graph_key_folds = {key.casefold() for key in graph_keys}

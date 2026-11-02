@@ -277,6 +277,24 @@ def _setmode_release_cooling(values: Mapping[str, str | None], hp_circuit: str) 
     return len(parts) > SETMODE_RELEASE_COOLING_INDEX and parts[SETMODE_RELEASE_COOLING_INDEX].strip() == "1"
 
 
+# SetMode field indexes of the heating request: flowtempdesired and disablehc (see the field order above).
+SETMODE_FLOW_TEMP_DESIRED_INDEX = 1
+SETMODE_DISABLE_HC_INDEX = 4
+
+
+# Whether SetMode carries a heating request: heating is not disabled and the flow target is above 0 degC.
+# Issue #102 (HMU00 SW0308): standby reads `auto;0.0;-;-;1;...`, heating `auto;31.0;-;-;0;...`.
+def _setmode_heating_request(values: Mapping[str, str | None], hp_circuit: str) -> bool:
+    raw = _value_lookup(values, f"{hp_circuit}.SetMode.value")
+    parts = str(raw or "").split(";")
+    if len(parts) <= SETMODE_DISABLE_HC_INDEX or parts[SETMODE_DISABLE_HC_INDEX].strip() != "0":
+        return False
+    try:
+        return float(parts[SETMODE_FLOW_TEMP_DESIRED_INDEX]) > 0
+    except ValueError:
+        return False
+
+
 # Derive one Energy Manager State from the protocol data the integration
 # already polls. This is a direct mapping of the compressor status and heater
 # bits the controller reports, not an invented state machine:
@@ -339,6 +357,14 @@ def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | N
     # explicit Status00 compressor-off or a literal "off" status.
     if release_cooling and compressor not in ("off", "0") and status != "off":
         return OPERATING_STATE_COOLING
+    # Same units, heating side (issue #102): RunDataStatuscode stays 0, so a heating request in SetMode together with
+    # the building pump running is the only heating signal. It shows demand, not proof that the compressor runs.
+    if (
+        compressor not in ("off", "0")
+        and _setmode_heating_request(values, hp_circuit)
+        and _value_is_on(_value_lookup(values, f"{hp_circuit}.Status01.pumpstate"))
+    ):
+        return OPERATING_STATE_HEATING
     if status in ("off", "0") or compressor in ("off", "0"):
         return OPERATING_STATE_STANDBY
     return OPERATING_STATE_STANDBY
@@ -840,12 +866,12 @@ def zone_is_valid(graph: DeviceGraph, circuit: str, zone: str) -> bool:
     if any(zone_value_has_data(raw) for key, raw in graph.raw_registers.items() if key.casefold() in live_keys):
         return True
     unreadable = any(key.casefold() in live_keys for key in graph.error_registers)
-    return unreadable and not _zone_circuit_declared_inactive(graph, circuit, zone_upper[1:])
+    return unreadable and not zone_circuit_declared_inactive(graph, circuit, zone_upper[1:])
 
 
 # Whether the controller reports `HcNCircuitType = inactive` for the heating circuit of zone N.
 # Only this explicit answer may overrule an unreadable zone; a missing or unreadable type never does.
-def _zone_circuit_declared_inactive(graph: DeviceGraph, circuit: str, number: str) -> bool:
+def zone_circuit_declared_inactive(graph: DeviceGraph, circuit: str, number: str) -> bool:
     expected = f"{circuit}.Hc{number}CircuitType".casefold()
     value = next((raw for key, raw in graph.raw_registers.items() if key.casefold() == expected), None)
     return value is not None and value.strip().casefold() == "inactive"

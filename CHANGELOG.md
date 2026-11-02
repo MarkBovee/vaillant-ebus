@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.13.4 - 2026-11-02
+
+The climate action follows the heat pump again on controllers that report the circuit state as plain reads. The Energy
+Manager State shows heating on HMU00 units that never reported it, and the heat pump's date and time message is split
+into readable parts.
+
+### Fixed
+
+- **The climate action no longer sticks to its first value (issue #207).** ebusd's configuration defines
+  `Hc<N>Status` and `Hc<N>PumpStatus` as plain reads, which ebusd never refreshes on its own. The integration read
+  them once and then kept the first value, so a zone could show "heating" long after the pump stopped. It now reads
+  them on every poll, from the controller that was discovered on the bus. Circuits that the controller reports as
+  inactive are not read. A plain read can still be answered from ebusd's cache, so the action can lag by up to
+  ebusd's cache age.
+- **Energy Manager State shows Heating on HMU00 units (issue #102).** Some units (HMU00 firmware 0308) keep
+  `RunDataStatuscode` at `0` while heating, so the sensor stayed on Standby. It now reports Heating when `SetMode`
+  requests heat (heating enabled, flow target above 0 °C) and the building pump runs (`Status01.pumpstate = on`).
+  This shows a heating request; it does not prove that the compressor runs.
+- **The heat pump's Date/Time is split into parts (issue #205).** `hmu.DateTime` showed the raw text
+  `valid;07:45:36;29.10.2026;8.184`. It now also gives separate sensors for the state, time and date, and a
+  disabled-by-default outside temperature sensor.
+- **Heat Curve Adaption is numeric (issue #205).** `Hc<N>HeatCurveAdaption` now has a graph and statistics instead of
+  showing as text.
+
 ## 1.13.3 - 2026-10-29
 
 The hot water calendar can hold more than one slot per day on CTLV2 controllers that only read the first slot. On a

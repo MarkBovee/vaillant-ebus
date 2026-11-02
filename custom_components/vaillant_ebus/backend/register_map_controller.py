@@ -357,6 +357,7 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
     "ctlv2.Hc1HeatCurveAdaption": RegisterMeta(
         friendly_name="Heat Curve Adaption (HC1)",
         icon="mdi:chart-bell-curve-cumulative",
+        state_class="measurement",
     ),
     "ctlv2.Hc1MixerMovement": RegisterMeta(
         friendly_name="Mixer Movement (HC1)",
@@ -464,6 +465,7 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
     "ctlv2.Hc2HeatCurveAdaption": RegisterMeta(
         friendly_name="Heat Curve Adaption (HC2)",
         icon="mdi:chart-bell-curve-cumulative",
+        state_class="measurement",
     ),
     "ctlv2.Hc2RoomTempSwitchOn": RegisterMeta(
         friendly_name="Room Temp Threshold (HC2)",
@@ -574,6 +576,7 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
     "ctlv2.Hc3HeatCurveAdaption": RegisterMeta(
         friendly_name="Heat Curve Adaption (HC3)",
         icon="mdi:chart-bell-curve-cumulative",
+        state_class="measurement",
     ),
     "ctlv2.Hc3RoomTempSwitchOn": RegisterMeta(
         friendly_name="Room Temp Threshold (HC3)",

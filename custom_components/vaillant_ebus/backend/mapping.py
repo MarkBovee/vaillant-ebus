@@ -266,6 +266,8 @@ ELOBLOCK_GAS_REGISTERS: frozenset[str] = frozenset(
 # raw ebusd value. Field names follow the ebusd CSV definitions.
 # Source: ebusd vaillant CSV (08.hmu.csv) + community dumps.
 MULTI_FIELD_FIELDS: dict[str, list[str]] = {
+    # Issue #205: ebusd answers `valid;07:45:36;29.10.2026;8.184`, the standard dcfstate/time/date/outside-temp layout.
+    "hmu.DateTime": ["dcfstate", "time", "date", "outsidetemp"],
     "hmu.Status01": ["temp", "temp_1", "temp_2", "temp_3", "temp_4", "pumpstate"],
     # VWZIO/VWZ Hydraulikstation Status01 (upstream PR #598) reuses the HMU
     # layout on address 0x76; the fields are parsed the same way.
