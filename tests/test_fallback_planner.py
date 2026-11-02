@@ -281,3 +281,27 @@ def test_controller_registers_moved_off_r5_are_reread_on_the_energy_interval() -
     assert expected <= set(_plan(graph, definitions, include_energy=True))
     assert not expected & set(_plan(graph, {}, include_energy=True)) - set(_plan(graph, {}))
     assert not any(item.startswith("r5,") and item.split(",")[2] in expected for item in defines)
+
+
+# Intent: the zone state registers of active heating circuits are read every cycle from the discovered controller,
+#         and an inactive circuit or a graph without them adds no read.
+# Why: issue #207 - ebusd's CSV defines `Hc<N>Status`/`Hc<N>PumpStatus` as plain `r`, so once `find` lists them nothing
+#      re-reads them and `hvac_action` keeps its first value.
+def test_zone_state_registers_are_reread_every_cycle_for_active_circuits() -> None:
+    graph = _graph("community/flexotherm_ctlv2_cooling_discovery.yaml")
+    controller = graph.heating_controller_result().node.circuit
+    planned = set(_plan(graph))
+
+    assert {(controller, "Hc1Status"), (controller, "Hc1PumpStatus")} <= planned
+    inactive = {"Hc2Status", "Hc2PumpStatus", "Hc3Status", "Hc3PumpStatus"}
+    assert not {name for _, name in planned} & inactive
+    # Absent case: the flexotherm controller lists no Hc1Status, so no read is invented for it.
+    assert not any(name == "Hc1Status" for _, name in _plan(_graph(FLEXOTHERM)))
+
+
+# Intent: the heat pump's DateTime value is split into state, time, date and outside temperature.
+# Why: issue #205 - the sensor showed the raw `valid;07:45:36;29.10.2026;8.184` text.
+def test_hmu_datetime_is_split_into_fields() -> None:
+    fields = MAPPING.split_multi_field("hmux0.DateTime", "valid;07:45:36;29.10.2026;8.184")
+    assert fields["time"] == "07:45:36" and fields["date"] == "29.10.2026" and fields["outsidetemp"] == "8.184"
+    assert MAPPING.get_meta("hmux0", "DateTime", "outsidetemp").unit == "°C"

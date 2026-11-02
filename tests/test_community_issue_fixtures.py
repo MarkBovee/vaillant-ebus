@@ -41,6 +41,23 @@ def test_issue102_cooling_capture_derives_cooling_state() -> None:
     assert derive_operating_state(values, "hmu") == "Cooling"
 
 
+# Intent: issue #102 heating start (HMU00 SW0308): Standby before 09:00, Heating once SetMode requests heat and the
+#         building pump runs.
+# Why: these units keep RunDataStatuscode at 0 while heating, so without the SetMode request the sensor never showed
+#      Heating.
+@pytest.mark.parametrize(("after", "expected"), [(False, "Standby"), (True, "Heating")])
+def test_issue102_heating_start_derives_heating_state(after: bool, expected: str) -> None:
+    from tests.test_compressor_power import derive_operating_state
+
+    lines = load_find_lines("community/hmu00_issue102_heating_start_2026-10-25_090329_discovery.yaml", after=after)
+    graph = DiscoveryService.build_device_graph(lines)
+    values = {f"{key}.value": value for key, value in graph.raw_registers.items()}
+    values["hmu.Status01.pumpstate"] = graph.raw_registers["hmu.Status01"].split(";")[5]
+
+    assert graph.raw_registers["hmu.RunDataStatuscode"] == "0"
+    assert derive_operating_state(values, "hmu") == expected
+
+
 # Intent: the derived Energy Manager State honours a real DHW-active capture.
 # Why: issue #102 - DHW demand must map to the DHW state from live compressor data.
 def test_dhw_capture_derives_dhw_operating_state() -> None:
