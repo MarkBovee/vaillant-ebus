@@ -11,7 +11,8 @@ several values no longer get an extra entity with their combined text.
   `Status01`, `Status00`, `Status07` "Display Status", `DateTime`, `CompressorHc`) were also shown as one text entity,
   for example `valid;07:45:36;29.10.2026;8.184`. That entity only repeated the separate fields and changed on almost
   every poll. It is no longer created; the separate fields stay. The stale-entities repair offers to remove the old
-  ones. A YAML override with `enabled: true` for the register brings it back.
+  ones. A YAML override with `enabled: true` for the register brings it back. If you switched on such a text entity
+  yourself (for example the compressor counters as text), it is listed there too; its separate fields replace it.
 
 ### Fixed
 
@@ -20,7 +21,7 @@ several values no longer get an extra entity with their combined text.
   without a value became a sensor and the same bit with a value became a binary sensor. Each bit then appeared twice,
   named only "Status07". They are now binary sensors with their own name (for example "Display Status Display Bit
   1"), off by default for new installations. The leftover sensor copies stop updating, and the stale-entities repair
-  offers to remove them.
+  offers to remove them. The integration no longer switches those old copies back on.
 
 ## 1.13.4 - 2026-11-02
 

@@ -5823,7 +5823,40 @@ async def test_enable_registry_entities_expands_multi_field_uids() -> None:
         c.ebus = MagicMock()
         c.ebus.is_connected = True
         result = await c._enable_registry_entities(["hmu.CompressorHc"])
-        assert sorted(result) == ["sensor.base", "sensor.cycles", "sensor.runtime"]
+        # The combined-text base row has no entity since 1.13.5, so it stays disabled.
+        assert sorted(result) == ["sensor.cycles", "sensor.runtime"]
+
+
+# Intent: an old registry row on another platform than the one generated now stays disabled.
+# Why: the owner's heat pump had `sensor.*` copies of Status07 bits that are binary sensors today; re-enabling them
+#      would show unavailable leftovers with the same unique id.
+async def test_enable_registry_entities_skips_rows_on_another_platform() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+
+        class _Entry:
+            def __init__(self, uid: str) -> None:
+                self.unique_id = uid
+                self.config_entry_id = "entry-1"
+                self.disabled_by = "integration"
+
+        updated: list[str] = []
+        registry = MagicMock()
+        registry.entities = {
+            "sensor.bit_copy": _Entry("entry-1_ebusd_hmu_status07_display_b1"),
+            "binary_sensor.bit": _Entry("entry-1_ebusd_hmu_status07_display_b1"),
+        }
+        registry.async_update_entity = MagicMock(side_effect=lambda entity_id, **kwargs: updated.append(entity_id))
+        from homeassistant.helpers import entity_registry
+
+        entity_registry.async_get = MagicMock(return_value=registry)
+
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        c.entities = [MagicMock(unique_id="ebusd_hmu_status07_display_b1", entity_type="binary_sensor")]
+        result = await c._enable_registry_entities(["hmu.Status07"])
+        assert result == ["binary_sensor.bit"]
 
 
 # Intent: the no-data disable pass must not undo an entity the user enabled
