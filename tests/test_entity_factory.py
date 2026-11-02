@@ -505,7 +505,7 @@ class TestYamlOverrides:
     def test_yaml_override_changes_entity_type(self) -> None:
         graph = _build_graph()
         svc = EntityFactoryService()
-        yaml = {"hmu.Status01": {"entity_type": "number"}}
+        yaml = {"hmu.Status01": {"entity_type": "number", "enabled": True}}
         result = svc.generate(graph, yaml_overrides=yaml)
         entity = [e for e in result if e.key == "hmu.Status01.value"][0]
         assert entity.entity_type == "number", f"Expected number, got {entity.entity_type}"
@@ -640,7 +640,7 @@ class TestBackwardCompatibility:
         assert hasattr(e, "device_circuit") and isinstance(e.device_circuit, str)
         assert hasattr(e, "entity_type") and isinstance(e.entity_type, str)
         assert hasattr(e, "enabled_by_default")
-        assert e.field == "value"
+        assert isinstance(e.field, str)
 
 
 class TestResolveDeviceCircuit:
@@ -840,14 +840,15 @@ class TestMultiFieldParsing:
             e.field == "temp_2" and e.raw_value == "-" for e in entities if e.name == "Status01"
         )
 
-    # Intent: the original hmu.Status01.value entity is retained alongside the split fields.
-    # Why: issue #51: splitting must not remove the raw register entity.
-    def test_status01_original_string_entity_kept(self) -> None:
+    # Intent: the combined hmu.Status01 text gets no entity; its split fields do.
+    # Why: the owner asked for 1.13.5 to drop multi-value composite entities, which only repeat the fields (this
+    #      replaces the issue #51 rule that kept the raw entity).
+    def test_status01_composite_entity_is_dropped(self) -> None:
         svc = EntityFactoryService()
         entities = svc.generate(self._status01_graph())
-        original = [e for e in entities if e.key == "hmu.Status01.value"]
-        assert original, "Original Status01 value entity must be kept"
-        assert original[0].meta.friendly_name == "Status"
+        keys = {e.key for e in entities}
+        assert "hmu.Status01.value" not in keys
+        assert "hmu.Status01.temp" in keys
 
 
 class TestPowerConsumptionUnit:
@@ -1382,9 +1383,9 @@ class TestOutsideTempDeviceClass:
         assert len(uids) == len(set(uids)), f"duplicate unique IDs: {uids}"
 
 
-# Intent: a YAML override that enables a composite Status parent is honoured.
-# Why: the default-disable of Status parents must not silently ignore an explicit user choice.
-def test_status_parent_override_enabled_wins_over_default_disable() -> None:
+# Intent: a YAML override that enables a composite Status parent brings its entity back.
+# Why: dropping composite parents must not silently ignore an explicit user choice.
+def test_status_parent_override_enabled_wins_over_default_drop() -> None:
     graph = DiscoveryService.build_device_graph(["vwzio Status01 = 20;21;18;45;42;off"])
 
     default = {e.key: e for e in EntityFactoryService().generate(graph)}
@@ -1392,7 +1393,7 @@ def test_status_parent_override_enabled_wins_over_default_disable() -> None:
         e.key: e for e in EntityFactoryService().generate(graph, yaml_overrides={"vwzio.Status01": {"enabled": True}})
     }
 
-    assert default["vwzio.Status01.value"].enabled_by_default is False
+    assert "vwzio.Status01.value" not in default
     assert forced["vwzio.Status01.value"].enabled_by_default is True
 
 
@@ -1483,3 +1484,22 @@ def test_secondary_zone_registers_copy_the_readable_metadata(zone: int) -> None:
 )
 def test_readable_zone_and_clock_entries_do_not_add_fallback_reads(key: str) -> None:
     assert REGISTER_MAP[key].fallback_read is False
+
+
+# Intent: every Status07 field keeps one entity type and a name, with or without a value.
+# Why: bits without metadata classified as `sensor` while empty and as `binary_sensor` with data, so the owner's heat
+#      pump showed each unknown bit twice, named only "Status07".
+def test_status07_fields_keep_one_type_and_a_name_with_and_without_data() -> None:
+    fields = MAPPING.MULTI_FIELD_FIELDS["hmu.Status07"]
+    live = "0;11.4;on;off;off;off;off;off;off;on;off;off;off;on;off;off;off;off;1.60;off;off;off;off;off;off;off;off"
+    types: dict[str, set[str]] = {field: set() for field in fields}
+    for raw in (live, "-"):
+        graph = DiscoveryService.build_device_graph(["scan.08  = Vaillant;HMU00;0522;5103", f"hmu Status07 = {raw}"])
+        for entity in EntityFactoryService().generate(graph):
+            if entity.name == "Status07" and entity.field in types:
+                types[entity.field].add(entity.meta.entity_type)
+                assert entity.meta.friendly_name, entity.field
+
+    assert all(len(found) == 1 for found in types.values() if found), types
+    assert types["display_b1"] == {"binary_sensor"}
+    assert not MAPPING.REGISTER_MAP["hmu.Status07.heaterbackup_b0"].enabled

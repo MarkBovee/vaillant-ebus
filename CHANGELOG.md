@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.13.5 - 2026-11-02
+
+The heat pump no longer shows each unknown status bit twice under the bare name "Status07", and registers made of
+several values no longer get an extra entity with their combined text.
+
+### Changed
+
+- **No entity for combined multi-value text.** Registers that ebusd reports as several values in one line (such as
+  `Status01`, `Status00`, `Status07` "Display Status", `DateTime`, `CompressorHc`) were also shown as one text entity,
+  for example `valid;07:45:36;29.10.2026;8.184`. That entity only repeated the separate fields and changed on almost
+  every poll. It is no longer created; the separate fields stay. The stale-entities repair offers to remove the old
+  ones. A YAML override with `enabled: true` for the register brings it back. If you switched on such a text entity
+  yourself (for example the compressor counters as text), it is listed there too; its separate fields replace it.
+
+### Fixed
+
+- **No more duplicate "Status07" entities.** The heat pump's `Status07` message has 15 bits without a known meaning
+  (`display_b1/b3/b4/b7`, `heatermain_b0/b2/b6` and the eight `heaterbackup_*` bits). They had no metadata, so a bit
+  without a value became a sensor and the same bit with a value became a binary sensor. Each bit then appeared twice,
+  named only "Status07". They are now binary sensors with their own name (for example "Display Status Display Bit
+  1"), off by default for new installations. The leftover sensor copies stop updating, and the stale-entities repair
+  offers to remove them. The integration no longer switches those old copies back on.
+
 ## 1.13.4 - 2026-11-02
 
 The climate action follows the heat pump again on controllers that report the circuit state as plain reads. The Energy

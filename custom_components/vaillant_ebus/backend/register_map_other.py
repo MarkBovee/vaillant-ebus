@@ -4,6 +4,20 @@ from __future__ import annotations
 
 from .models import RegisterMeta
 
+# Status07 bits without a known meaning, with the display label of each (field name -> label).
+_STATUS07_UNKNOWN_BITS: dict[str, str] = {
+    **{f"display_b{bit}": f"Display Bit {bit}" for bit in (1, 3, 4, 7)},
+    **{f"heatermain_b{bit}": f"Main Heater Bit {bit}" for bit in (0, 2, 6)},
+    "heaterbackup_b0": "Backup Heater Bit 0",
+    "heaterbackup_b1_error": "Backup Heater Error",
+    "heaterbackup_b2": "Backup Heater Bit 2",
+    "heaterbackup_b3_heating": "Backup Heater Heating",
+    "heaterbackup_b4_cooling": "Backup Heater Cooling",
+    "heaterbackup_b5_pressureloss": "Backup Heater Pressure Loss",
+    "heaterbackup_b6": "Backup Heater Bit 6",
+    "heaterbackup_b7_warmwater": "Backup Heater Warm Water",
+}
+
 SYSTEM_AND_OTHER_REGISTERS: dict[str, RegisterMeta] = {
     # Broadcast (System)
     "Broadcast.Outsidetemp": RegisterMeta(
@@ -334,4 +348,15 @@ SYSTEM_AND_OTHER_REGISTERS: dict[str, RegisterMeta] = {
     "hmu.Status07.displaypressure": RegisterMeta(
         friendly_name="Display System Pressure", device_class="pressure", unit="bar"
     ),
+    # Status07 bits whose meaning is unknown. Without an explicit type a bit without a value classified as `sensor`
+    # and with a value as `binary_sensor`, so each bit appeared twice, named only "Status07". They stay off by default.
+    **{
+        f"hmu.Status07.{field}": RegisterMeta(
+            friendly_name=f"Display Status {label}",
+            entity_type="binary_sensor",
+            entity_category="diagnostic",
+            enabled=False,
+        )
+        for field, label in _STATUS07_UNKNOWN_BITS.items()
+    },
 }

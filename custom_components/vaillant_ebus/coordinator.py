@@ -1269,17 +1269,34 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         for key in register_keys:
             circuit, name = key.split(".", 1)
             suffix = name.lower().replace(" ", "_")
-            desired_uids.add(f"ebusd_{circuit}_{suffix}")
+            fields = multi_field_fields(key) or []
+            # A multi-field register has no entity for its combined text any more (1.13.5); re-enabling that old row
+            # would only bring back an unavailable leftover.
+            if not any(field != "value" for field in fields):
+                desired_uids.add(f"ebusd_{circuit}_{suffix}")
             # Multi-field registers also expose per-field entities whose
             # unique ids carry a _{field} suffix; include those candidates so
             # they are auto-enabled as well.
-            for field in multi_field_fields(key) or []:
+            for field in fields:
                 desired_uids.add(f"ebusd_{circuit}_{suffix}_{field}")
+        # A row on another platform than the one generated now (an old `sensor.*` copy of a Status07 bit that is a
+        # binary sensor today) shares the unique id but no longer has an entity, so it must stay disabled.
+        generated_platforms = {entity.unique_id: entity.entity_type or "sensor" for entity in self.entities}
         enabled: list[str] = []
         for entity_id, entry in registry.entities.items():
             if entry.config_entry_id != self._entry.entry_id:
                 continue
             if not any(_registry_matches_description(entry.unique_id, uid) for uid in desired_uids):
+                continue
+            platform = next(
+                (
+                    kind
+                    for uid, kind in generated_platforms.items()
+                    if _registry_matches_description(entry.unique_id, uid)
+                ),
+                None,
+            )
+            if platform is not None and entity_id.split(".", 1)[0] != platform:
                 continue
             if entry.disabled_by != "integration":
                 continue
