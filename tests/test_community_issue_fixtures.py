@@ -689,16 +689,16 @@ def test_pr164_ctlv0_dump_exposes_controls_and_keeps_absent_path_safe() -> None:
 
 
 # Intent: discussion #31 (aroTHERM split plus VWL 77/8.2, HMUX0 SW0303/HW0504, Modbus link) keeps its
-# per-field hydraulic-station entities while the composite Status string is no longer enabled by default.
+# per-field hydraulic-station entities while the composite Status string gets no entity at all.
 # Why: the "a;b;c;-;d;off" parent repeats the per-field values and flooded the recorder history.
-def test_discussion31_hydraulic_station_composite_status_is_disabled_by_default() -> None:
+def test_discussion31_hydraulic_station_composite_status_has_no_entity() -> None:
     graph = DiscoveryService.build_device_graph(
         load_find_lines("community/hmux0_discussion31_vwl77_2026-10-02_205648_discovery.yaml")
     )
     entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
 
-    assert entities["vwzio.Status01.value"].raw_value == "27.0;24.5;16.867;-;67.0;off"
-    assert entities["vwzio.Status01.value"].enabled_by_default is False
+    assert graph.raw_registers["vwzio.Status01"] == "27.0;24.5;16.867;-;67.0;off"
+    assert "vwzio.Status01.value" not in entities
     assert entities["vwzio.Status01.temp"].enabled_by_default is True
     assert entities["vwzio.Status01.pumpstate"].enabled_by_default is True
 
@@ -726,8 +726,8 @@ def test_issue152_f34_zero_valued_counters_are_sensors_not_binary_sensors() -> N
     assert entities["bass.YieldTotal.value"].entity_type == "sensor"
     assert entities["bai.PumpPower.value"].entity_type == "sensor"
     assert entities["bai.StorageLoadPumpHours.value"].entity_type == "sensor"
-    # The composite boiler Status string is hidden by default; per-field entities remain.
-    assert entities["bai.Status01.value"].enabled_by_default is False
+    # The composite boiler Status string gets no entity; per-field entities remain.
+    assert "bai.Status01.value" not in entities
 
 
 # Intent: issue #171 - a valid 1/16 degC HMUX0 flow temperature becomes an extra precise sensor.

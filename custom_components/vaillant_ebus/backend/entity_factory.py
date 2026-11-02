@@ -599,10 +599,11 @@ class EntityFactoryService:
                     entity_enabled = True
                 if eloblock and circuit.lower() == "bai" and name in ELOBLOCK_GAS_REGISTERS:
                     entity_enabled = False
-                # The composite "a;b;c" Status string repeats values that the per-field entities
-                # already expose and changes on almost every poll, which floods the recorder history.
-                if name_lower.startswith("status") and multi_field_fields(rk) and override.get("enabled") is not True:
-                    entity_enabled = False
+                # The composite "a;b;c" text of a multi-field register repeats what the per-field entities expose and
+                # changes on almost every poll, so it gets no entity of its own; a YAML `enabled: true` still adds it.
+                field_names = multi_field_fields(rk)
+                composite = bool(field_names) and any(field != "value" for field in field_names or ())
+                skip_composite = composite and override.get("enabled") is not True
 
                 dummy_reg = EbusdRegister(
                     circuit=circuit,
@@ -626,9 +627,9 @@ class EntityFactoryService:
                     enabled_by_default=entity_enabled,
                     device_circuit=dc,
                 )
-                entities.append(entity)
+                if not skip_composite:
+                    entities.append(entity)
 
-                field_names = multi_field_fields(rk)
                 if field_names:
                     field_values = split_multi_field(rk, raw)
                     for field_name in field_names:
