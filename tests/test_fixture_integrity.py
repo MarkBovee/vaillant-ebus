@@ -71,6 +71,12 @@ RELEASE_1120_CAPTURE_PROVENANCE = {
         "fbe9d12562c57595e1077ceff5313ec3aea29b63ecf2aff1366c6843681cdd7a",
         "MF=Vaillant;ID=HMUX0;SW=0406;HW=0504",
     ),
+    # Release 1.13.4: issue #102 heating start, a byte-for-byte copy of the reporter's attachment.
+    "community/hmu00_issue102_heating_start_2026-10-25_090329_discovery.yaml": (
+        "https://github.com/user-attachments/files/34155524/discovery_dump_2026-10-25_090329.yaml",
+        "eebf8d40c225f2ac5d653317e8b3f11426818d3292cf64a85d940b6ad1c038b2",
+        "MF=Vaillant;ID=HMU00;SW=0308;HW=0403",
+    ),
 }
 # Byte-exact copies of community captures taken from a zip attachment: fixture -> (zip URL, member, sha256).
 ZIP_CAPTURE_PROVENANCE = {
