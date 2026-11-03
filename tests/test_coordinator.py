@@ -1088,8 +1088,8 @@ async def test_issue161_hmux0_sw0407_fallback_skips_unverified_b51a_and_passive_
             "CompressorHwc",
             "HeaterYieldHwcTotal",
         }
+        # BuildingCircuitFlow left this set with discussion #213: SW0407 now defines and reads it itself.
         blocked_b51a_names = {
-            "BuildingCircuitFlow",
             "CopCooling",
             "CopCoolingMonth",
             "CopHc",
@@ -1127,6 +1127,86 @@ async def test_issue161_hmux0_sw0407_fallback_skips_unverified_b51a_and_passive_
             assert ("hmux0", register) in [call.args for call in read_calls]
         for register in MAPPING.HMUX0_SW0407_ENVYIELD_REGISTERS:
             assert ("hmux0", register) in [call.args for call in read_calls]
+        assert [call.args for call in read_calls].count(("hmux0", "BuildingCircuitFlow")) == 1
+
+
+# Intent: a confirmed HMUX0 SW0407 owner defines BuildingCircuitFlow as B51A 05ff323c and reads it on every cycle.
+# Why: discussion #213 - `ebusctl hex 08b51a0405ff323c` answered 645/580 l/h while heating and 0 while idle, but ebusd
+# has no hmux0 configuration, so without the define the flow never appears; plain `r` is never polled by ebusd.
+async def test_discussion213_sw0407_defines_and_reads_building_circuit_flow() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fixture = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
+        graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.define_register = AsyncMock(return_value="done")
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._graph = graph
+
+        await coordinator._define_custom_registers()
+        definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
+        flow = [definition for definition in definitions if ",BuildingCircuitFlow," in definition]
+        assert flow == [
+            "r,hmux0,BuildingCircuitFlow,BuildingCircuitFlow,31,08,B51A,05ff323c"
+            ",value,,IGN:3,,,,value,,UIN,,l/h,HMUX0 building circuit flow"
+        ]
+        fields = flow[0].split(",")
+        # The define id excludes the length byte, so the rebuilt request must equal the command the owner ran.
+        assert f"{fields[5]}{fields[6]}{len(fields[7]) // 2:02x}{fields[7]}".lower() == "08b51a0405ff323c"
+
+        # Once `find` lists the defined register, the map-driven pass skips it; the explicit read must not.
+        coordinator._last_find_keys = {"hmux0.BuildingCircuitFlow"}
+        for _ in range(2):
+            coordinator.ebus.read_register.reset_mock()
+            await coordinator._fallback_read()
+            reads = [call.args for call in coordinator.ebus.read_register.await_args_list]
+            assert reads.count(("hmux0", "BuildingCircuitFlow")) == 1
+
+
+# Intent: the discussion #213 replies decode to the reported flows with the defined IGN:3 + UIN layout.
+# Why: the layout is the evidence for the define; a shifted offset would show a wrong flow without any error.
+def test_discussion213_flow_replies_decode_with_the_defined_layout() -> None:
+    replies = {"0aff080e85020000000000": 645, "0aff080e44020000000000": 580, "0aff080e00000000000000": 0}
+    for reply, flow in replies.items():
+        payload = bytes.fromhex(reply)
+        assert payload[0] == len(payload) - 1
+        assert struct.unpack_from("<H", payload, 1 + 3)[0] == flow
+    # The SW0406 holiday capture answers the same request with the same header bytes.
+    capture = (FIXTURES_DIR / "community/arotherm_hmux0_dhw_holiday_discovery.yaml").read_text(encoding="utf-8")
+    assert "3108b51a0405ff323c / 0aff080e00000000000000" in capture
+
+
+# Intent: BuildingCircuitFlow is neither defined nor read on an uncertain HMUX0 scan or when ebusd refuses the define,
+# and SW0406 does not get the SW0407 definition.
+# Why: discussion #213 proves the message for SW0407 only; uncertain scans keep their fail-closed blocklist, and a
+# refused define (no `--enabledefine`) leaves ebusd unable to read the register at all. SW0406 keeps its existing
+# map-driven read, which this change does not touch.
+async def test_discussion213_flow_read_absent_without_sw0407_owner_or_accepted_define() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sw0407_lines = load_find_lines("community/hmux0_issue161_2026-09-28_154109_discovery.yaml", after=True)
+        sw0406_lines = load_find_lines("community/hmux0_sw0406_issue188_2026-10-13_092007_discovery.yaml", after=True)
+        cases = (
+            (sw0407_lines, "ERR: command not enabled", True),
+            ([*sw0407_lines, "scan.08 = MF=Vaillant;ID=HMUX0;SW=;HW="], "done", True),
+            (sw0406_lines, "done", False),
+        )
+        for find_lines, define_answer, read_must_be_absent in cases:
+            coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+            coordinator.ebus = MagicMock(spec=EbusService)
+            coordinator.ebus.is_connected = True
+            coordinator.ebus.define_register = AsyncMock(return_value=define_answer)
+            coordinator.ebus.read_register = AsyncMock(return_value=None)
+            coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(find_lines)
+
+            await coordinator._define_custom_registers()
+            assert not any(",B51A,05ff323c," in item for item in coordinator._runtime_definitions.values())
+            if not read_must_be_absent:
+                continue
+            coordinator._last_find_keys = set()
+            await coordinator._fallback_read(include_placeholders=True)
+            reads = [call.args for call in coordinator.ebus.read_register.await_args_list]
+            assert not [read for read in reads if read[0].casefold() == "hmux0" and read[1] == "BuildingCircuitFlow"]
 
 
 # Intent: the captured HMUX0 SW0407 and VWZIO SW0500 frames get passive definitions for power, counters and heater heat.

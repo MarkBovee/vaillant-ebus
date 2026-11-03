@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.13.6 - 2026-11-03
+
+aroTHERM heat pumps that report themselves as HMUX0 with firmware 0407 now show the heating circuit flow rate.
+
+### Added
+
+- **Heating circuit flow on HMUX0 firmware 0407.** ebusd has no configuration for these units, so "Building Circuit
+  Flow" never appeared. The integration now defines the message itself (`B51A 05ff323c`) and reads it on every poll.
+  The value is in l/h and reads 0 while the pump is idle. A user with this firmware confirmed the message on their
+  unit (discussion #213). Like the other definitions, it needs `--enabledefine` in the ebusd add-on options.
+
 ## 1.13.5 - 2026-11-02
 
 The heat pump no longer shows each unknown status bit twice under the bare name "Status07", and registers made of
