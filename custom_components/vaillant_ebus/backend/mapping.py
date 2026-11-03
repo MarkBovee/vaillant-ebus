@@ -86,6 +86,11 @@ HMUX0_SW0407_ENVYIELD_REGISTERS: frozenset[str] = frozenset(
         "HwcEnvYieldMonth",
     }
 )
+# SW0407 registers the integration defines and reads itself, although their name stays in the blocklist above.
+# Discussion #213: `ebusctl hex 08b51a0405ff323c` answered 645 and 580 l/h while heating and 0 while idle; ebusd has no
+# hmux0 configuration, so the map probe can only report `element not found`. The blocklist keeps guarding every
+# uncertain HMUX0 scan; only the confirmed SW0407 owner gets this active read.
+HMUX0_SW0407_ACTIVE_READ_REGISTERS: frozenset[str] = frozenset({"BuildingCircuitFlow"})
 VWZIO_SW0500_FALLBACK_BLOCKLIST: frozenset[str] = frozenset(
     {"PowerConsumptionVwz", "RunStatsImmersionHeaterHwc", "HeaterYieldHwcTotal", "Status01", "StationTemperatures"}
 )

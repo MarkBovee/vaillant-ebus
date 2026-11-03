@@ -18,6 +18,7 @@ from .hardware_profiles import (
     scan_matches,
 )
 from .mapping import (
+    HMUX0_SW0407_ACTIVE_READ_REGISTERS,
     HMUX0_SW0407_ENVYIELD_REGISTERS,
     b516_date_bytes,
     hmux0_candidate_circuits,
@@ -382,6 +383,10 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
                 f"r,{circuit},HwcEnvYieldMonth,HwcEnvYieldMonth,31,08,B516"
                 f",1002ffff0204{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
                 ",HMUX0 DHW environmental yield this month",
+                # Discussion #213: the reply `0aff080e8502...` holds three header bytes and the flow as UIN l/h.
+                # The id excludes the length byte (telegram `08b51a04 05ff323c`).
+                f"r,{circuit},BuildingCircuitFlow,BuildingCircuitFlow,31,08,B51A,05ff323c"
+                ",value,,IGN:3,,,,value,,UIN,,l/h,HMUX0 building circuit flow",
             ]
         )
     hmux0_owner = hmux0_owner_scan(graph)
@@ -426,7 +431,7 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
         if (
             hmux0_sw0407_owner
             and parts[1].casefold() == hmux0_sw0407_owner.casefold()
-            and parts[2] in HMUX0_SW0407_ENVYIELD_REGISTERS
+            and parts[2] in HMUX0_SW0407_ENVYIELD_REGISTERS | HMUX0_SW0407_ACTIVE_READ_REGISTERS
         ):
             return definition
         resolution = (

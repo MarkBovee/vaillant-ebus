@@ -11,11 +11,13 @@ from collections import deque
 from collections.abc import Callable, Collection, Mapping, Sequence
 
 from .mapping import (
+    HMUX0_SW0407_ACTIVE_READ_REGISTERS,
     HMUX0_SW0407_FALLBACK_NAMES,
     VWZIO_SW0500_FALLBACK_NAMES,
     hmux0_candidate_circuits,
     hmux0_fallback_blocked_circuits,
     hmux0_precise_temperature_owner,
+    hmux0_sw0407_circuit,
     is_field_key,
     metadata_circuits,
     vwz_station_scan_76_circuit,
@@ -108,6 +110,25 @@ def _add_zone_state_reads(graph: DeviceGraph, add: Callable[[str, str], None]) -
             add(controller.circuit, key.split(".", 1)[1])
 
 
+# List the SW0407 registers the integration defined itself and must read actively, on the confirmed owner only.
+# Without its runtime definition ebusd cannot read the register, so nothing is nominated when the define is absent.
+def _hmux0_sw0407_active_reads(graph: DeviceGraph, runtime_definitions: Mapping[str, str]) -> list[tuple[str, str]]:
+    owner = hmux0_sw0407_circuit(graph)
+    if owner is None:
+        return []
+    reads: list[tuple[str, str]] = []
+    for definition in runtime_definitions.values():
+        parts = definition.split(",", 3)
+        if (
+            len(parts) >= 3
+            and parts[0] == "r"
+            and parts[1].casefold() == owner.casefold()
+            and parts[2] in HMUX0_SW0407_ACTIVE_READ_REGISTERS
+        ):
+            reads.append((owner, parts[2]))
+    return reads
+
+
 # List the (circuit, register) pairs to read actively, in order, without duplicates.
 # Fallback probes must not bypass per-register polling restrictions.
 def plan_fallback_reads(
@@ -148,6 +169,8 @@ def plan_fallback_reads(
     hmux0_precise_temperature = hmux0_precise_temperature_owner(graph)
     vwzio_sw0500 = vwzio_sw0500_circuit(graph)
     vwz_station_76 = vwz_station_scan_76_circuit(graph)
+    sw0407_active_reads = _hmux0_sw0407_active_reads(graph, runtime_definitions)
+    sw0407_active_keys = {(circuit.casefold(), name.casefold()) for circuit, name in sw0407_active_reads}
 
     # Add each resolved fallback candidate once.
     # map, passive-definition, and placeholder paths can nominate the same register.
@@ -171,7 +194,11 @@ def plan_fallback_reads(
             and (vwz_station_76 is None or circuit_key != vwz_station_76.casefold())
         ):
             return
-        if circuit_key in hmux0_blocked_circuits and name_key in HMUX0_SW0407_FALLBACK_NAMES:
+        if (
+            circuit_key in hmux0_blocked_circuits
+            and name_key in HMUX0_SW0407_FALLBACK_NAMES
+            and (circuit_key, name_key) not in sw0407_active_keys
+        ):
             return
         if name_key in HMUX0_PRECISE_TEMPERATURE_REGISTERS and circuit_key in hmux0_candidates:
             if hmux0_precise_temperature is None or circuit_key != hmux0_precise_temperature.casefold():
@@ -214,6 +241,11 @@ def plan_fallback_reads(
         for name in HMUX0_PRECISE_TEMPERATURE_NAMES:
             if f"{hmux0_precise_temperature}.{name}".casefold() in discovered_keys:
                 _add(hmux0_precise_temperature, name)
+
+    # SW0407 registers the integration defines itself as plain `r` (discussion #213): ebusd never polls them and
+    # `find` lists them after the define, so the map-driven pass would read them only once.
+    for circuit, name in sw0407_active_reads:
+        _add(circuit, name)
 
     # Zone state for the climate action (issue #207): ebusd's own CSV defines `Hc<N>Status` and `Hc<N>PumpStatus` as
     # plain `r`, so ebusd never polls them and the map-driven pass skips them once `find` lists them. Without this
