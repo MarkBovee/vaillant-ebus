@@ -366,7 +366,9 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self._cancel_delayed_rediscovery: Callable[[], None] | None = None
         self._delayed_rediscovery_scheduled = False
         self._delayed_rediscovery_retry_count = 0
-        self._prune_deferred = False
+        # Whether ebusd's bus scan was settled at the last check. Until it is, nothing is pruned or switched off for
+        # missing data (issue #221). True at start so a cache-seeded setup behaves as before; discovery re-checks it.
+        self._bus_scan_settled = True
         self._live_since_analysis: set[str] = set()
         self._cancel_analysis: Callable[[], None] | None = None
         self._analysis_scheduled = False
@@ -828,12 +830,11 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # switched off (issue #221). Sentinels still clear, and the first delayed rediscovery with a settled scan runs
         # the skipped prune once against the merged graph.
         if source == "initial":
-            prune_allowed = await self._async_bus_scan_settled()
-            self._prune_deferred = not prune_allowed
-            self._prune_absent_registers(graph, prune_allowed)
-        elif self._prune_deferred and await self._async_bus_scan_settled():
+            self._bus_scan_settled = await self._async_bus_scan_settled()
+            self._prune_absent_registers(graph, self._bus_scan_settled)
+        elif not self._bus_scan_settled and await self._async_bus_scan_settled():
             # The startup prune was skipped while ebusd scanned; run it once now that the scan is settled.
-            self._prune_deferred = False
+            self._bus_scan_settled = True
             self._prune_absent_registers(graph, True)
 
         try:
@@ -1229,6 +1230,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # The supported CTLV2 room-temperature threshold sensor also stays enabled
     # as unknown while its register has no current value.
     def _disable_no_data_registry_entities(self, descriptions: list[EntityDescription]) -> None:
+        # Why: while ebusd still scans, a missing value only means "not read yet"; switching the entity off then left
+        # 19 Zone 1 settings disabled after an ebusd restart (issue #221). The next settled discovery decides.
+        if not self._bus_scan_settled:
+            return
         registry = entity_registry.async_get(self.hass)
         disabled = 0
         runtime_defined = self.runtime_defined_key_folds()
