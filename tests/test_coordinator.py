@@ -2529,6 +2529,32 @@ async def test_initial_discovery_prunes_stale_cache_registers() -> None:
         assert "hmu.SourceTempInput" in c.registers
 
 
+# Intent: while ebusd still scans the bus, initial discovery keeps cached registers that find does not list yet.
+# Why: issue #221 - after an ebusd restart the integration discovered before ebusd's first scan finished, pruned 161
+# controller registers and left the climate entities unavailable. A settled scan still prunes; unreadable info does not.
+@pytest.mark.parametrize(
+    ("ebusd_info", "expected_pruned"),
+    [({"scan": "running"}, False), ({"scan": "finished"}, True), ({"version": "ebusd 26.1"}, True), ({}, False)],
+)
+async def test_issue221_initial_discovery_does_not_prune_while_ebusd_scans(
+    ebusd_info: dict[str, str], expected_pruned: bool
+) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.get_info = AsyncMock(return_value=ebusd_info)
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c.registers["hmux0.ZZTest"] = EbusdRegister(
+            circuit="hmux0", name="ZZTest", fields=["value"], value={"value": "-0.06"}, has_data=True
+        )
+        graph = DISCOVERY.DiscoveryService.build_device_graph(["hmu OutsideTemp = 18.5"])
+
+        await c._apply_discovery_graph(graph, "initial")
+
+        assert ("hmux0.ZZTest" not in c.registers) is expected_pruned
+
+
 # Intent: entities of registers the integration defined at runtime survive a post-define no-data placeholder.
 # Why: issue #175 - `define` drops ebusd's cached value, so the next find listed the env-yield registers as no-data
 # placeholders and discovery pruned and disabled user-enabled entities; without a definition they stay pruned.

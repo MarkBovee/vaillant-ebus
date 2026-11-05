@@ -24,7 +24,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from . import cleanup, repairs
 from .backend.analysis_service import AnalysisResult, AnalysisService
-from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService
+from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService, bus_scan_settled
 from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, BusErrorGuard, EbusService
 from .backend.entity_factory import EntityDescription, EntityFactoryService, unused_zone_numbers
 from .backend.fallback_planner import fallback_candidate, plan_fallback_reads
@@ -822,8 +822,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # REGISTER_MAP entry are pruned so ghost devices cannot survive on
         # cached leftovers. Only on initial discovery: delayed rediscovery blends
         # into a growing graph and must not drop registers that were merely slow
-        # to appear.
+        # to appear. While ebusd still scans the bus, a missing register is only not read yet, so nothing is removed or
+        # switched off (issue #221); sentinels still clear and the delayed rediscovery adds the late registers.
         if source == "initial":
+            prune_allowed = await self._async_bus_scan_settled()
             live_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
             # Registers the integration defined on this bus keep their entities while ebusd has no value.
             # `define` can drop the cached value, so a post-define find lists them as no-data placeholders
@@ -833,7 +835,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             stale = [
                 rk
                 for rk in self.registers
-                if rk.casefold() not in runtime_defined_key_folds
+                if prune_allowed
+                and rk.casefold() not in runtime_defined_key_folds
                 and not _cache_register_is_supported(rk, live_keys, graph)
             ]
             for rk in stale:
@@ -856,7 +859,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     register.has_data = False
             omitted_runtime_folds = runtime_defined_key_folds - listed_folds
             pruneable_placeholder_keys = {
-                key for key in placeholder_keys if key.casefold() not in runtime_defined_key_folds
+                key for key in placeholder_keys if prune_allowed and key.casefold() not in runtime_defined_key_folds
             }
             non_exposable_placeholder_keys = {
                 key for key in pruneable_placeholder_keys if _register_disables_fallback_placeholder(key)
@@ -985,6 +988,21 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             await self._apply_discovery_graph(discovered, "delayed")
         elif self._graph is not None:
             self._graph = merge_device_graphs(self._graph, discovered)
+
+    # Ask ebusd whether its bus scan is settled; an unreadable `info` counts as not settled so nothing is pruned.
+    # Without an ebusd client there is no scan to wait for (a graph applied from cache or in tests).
+    async def _async_bus_scan_settled(self) -> bool:
+        if self.ebus is None:
+            return True
+        try:
+            ebusd_info = await self.ebus.get_info()
+        except Exception as exc:
+            _LOGGER.debug("ebusd info unavailable before pruning: %s", exc)
+            return False
+        if bus_scan_settled(ebusd_info):
+            return True
+        _LOGGER.info("ebusd is still scanning the bus; keeping registers missing from find until the next discovery")
+        return False
 
     # Keep at most one delayed discovery callback pending.
     # One bounded retry handles transient find failures without polling continuously.
