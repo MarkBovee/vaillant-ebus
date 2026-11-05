@@ -17,7 +17,8 @@ and flexoTHERM units stop showing a near-zero "Return Temperature" and "Air Inle
   `FanSpeed` with the burner off and `RemainingBoilerblocktime` were reported; `HydraulicScheme`, the
   `Deactivations*` counters, `RunDataStatuscode` and `RunDataEEVPositionAbs` had the same problem. They are now always
   sensors. Only values that ebusd reports as words (`on`/`off`, `yes`/`no`) still make a binary sensor. The old binary
-  sensor stops updating, and the stale-entities repair offers to remove it. A YAML override with `entity_type` still
+  sensor stops updating, and the stale-entities repair offers to remove it. Automations
+  and dashboards that use the old `binary_sensor.*` entity need the new `sensor.*` entity instead. A YAML override with `entity_type` still
   wins.
 - **No more 9.8e-42 °C on flexoTHERM** (issue #217). HMU00 SW0308, VWF 117/4 and flexoTHERM 133 units answer the
   `RunDataReturnTemp` and `RunDataAirInletTemp` reads with a shorter layout, and ebusd decoded that as a tiny number.
