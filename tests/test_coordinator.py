@@ -6081,6 +6081,57 @@ async def test_disable_no_data_preserves_user_enabled_optional_entities() -> Non
         assert updated == ["sensor.default_no_data"]
 
 
+# Intent: while ebusd still scans, the no-data pass switches nothing off; after a settled check it does again.
+# Why: issue #221 - after an ebusd restart 1.13.9 kept the registers but this pass disabled 29 Zone 1 entities whose
+# values ebusd had not read yet; most came back only on the 15-minute cycle about 20 minutes later.
+@pytest.mark.parametrize(("scan_settled", "expected"), [(False, []), (True, ["sensor.default_no_data"])])
+async def test_issue221_no_data_pass_waits_for_settled_scan(scan_settled: bool, expected: list[str]) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+
+        class _Description:
+            unique_id = "ebusd_hmu_outside_temp"
+            enabled_by_default = True
+            raw_value = None
+
+        entry_row = MagicMock(unique_id="ebusd_hmu_outside_temp", config_entry_id="entry-1", disabled_by=None)
+        updated: list[str] = []
+        registry = MagicMock()
+        registry.entities = {"sensor.default_no_data": entry_row}
+        registry.async_update_entity = MagicMock(side_effect=lambda entity_id, **kwargs: updated.append(entity_id))
+        from homeassistant.helpers import entity_registry
+
+        entity_registry.async_get = MagicMock(return_value=registry)
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(_hass(tmpdir), entry)
+        c._bus_scan_settled = scan_settled
+
+        c._disable_no_data_registry_entities([_Description()])
+
+        assert updated == expected
+
+
+# Intent: initial discovery during an ebusd scan marks it unsettled; the first settled delayed discovery clears it.
+# Why: issue #221 - the no-data pass and the prune share this flag, so it must turn settled exactly when ebusd is ready.
+async def test_issue221_scan_flag_follows_initial_and_delayed_discovery() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c.ebus.get_info = AsyncMock(return_value={"scan": "finished", "scan_pending": "yes"})
+        graph = DISCOVERY.DiscoveryService.build_device_graph(["hmu OutsideTemp = 18.5"])
+
+        await c._apply_discovery_graph(graph, "initial")
+        assert c._bus_scan_settled is False
+        await c._apply_discovery_graph(graph, "delayed")
+        assert c._bus_scan_settled is False
+
+        c.ebus.get_info = AsyncMock(return_value={"scan": "finished"})
+        await c._apply_discovery_graph(graph, "delayed")
+        assert c._bus_scan_settled is True
+
+
 # Intent: a default-enabled entity of a register the integration defined itself keeps its registry state without data.
 # Why: issues #171/#175 - every disabled_by flip makes Home Assistant reload the whole entry, and a passive register
 # has no value until the gateway's next telegram.

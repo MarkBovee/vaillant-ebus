@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.13.10 - 2026-11-05
+
+After an ebusd restart, the zone settings stay switched on while ebusd is still reading them.
+
+### Fixed
+
+- **No more switched-off zone settings after an ebusd restart** (issue #221). 1.13.9 already kept the registers while
+  ebusd scanned the bus, but a second step still switched off every entity without a value at that moment. On the
+  owner's system that was 29 Zone 1 entities, such as the night temperature, the heat curve and the quick veto; most
+  came back on only about 20 minutes later. That step now waits for the same settled scan, so the entities stay on
+  and show their values as soon as ebusd has read them.
+
 ## 1.13.9 - 2026-11-05
 
 The 1.13.8 fix for lost registers after an ebusd restart now also works when ebusd reports its scan as finished while
