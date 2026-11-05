@@ -822,11 +822,11 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # longer exposes (e.g. a stale test register from an old CSV or session).
         # Registers explained by neither the discovered graph nor an enabled
         # REGISTER_MAP entry are pruned so ghost devices cannot survive on
-        # cached leftovers. Only on initial discovery: delayed rediscovery blends
+        # cached leftovers. Normally only on initial discovery: delayed rediscovery blends
         # into a growing graph and must not drop registers that were merely slow
         # to appear. While ebusd still scans the bus, a missing register is only not read yet, so nothing is removed or
-        # switched off (issue #221). Sentinels still clear, the delayed rediscovery adds the late registers, and the
-        # next start with a settled scan prunes.
+        # switched off (issue #221). Sentinels still clear, and the first delayed rediscovery with a settled scan runs
+        # the skipped prune once against the merged graph.
         if source == "initial":
             prune_allowed = await self._async_bus_scan_settled()
             self._prune_deferred = not prune_allowed
@@ -1012,7 +1012,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return False
         if bus_scan_settled(ebusd_info):
             return True
-        _LOGGER.info("ebusd is still scanning the bus; keeping registers missing from find until the next restart")
+        _LOGGER.info("ebusd is still scanning the bus; keeping registers missing from find for now")
         return False
 
     # Keep at most one delayed discovery callback pending.
