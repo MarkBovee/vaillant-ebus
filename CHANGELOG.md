@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.13.9 - 2026-11-05
+
+The 1.13.8 fix for lost registers after an ebusd restart now also works when ebusd reports its scan as finished while
+some devices still have to answer.
+
+### Fixed
+
+- **Registers no longer go missing while ebusd still waits for a device** (issue #221). After a pass over the bus,
+  ebusd reports `scan: finished, some messages pending` when a device (for example the controller after a lost
+  arbitration) hasn't answered yet. 1.13.8 only looked at `finished` and removed that device's registers, which left
+  the climate entities unavailable. The integration now waits until ebusd reports a finished scan with nothing
+  pending, and it no longer removes anything when ebusd reports no scan state at all.
+
 ## 1.13.8 - 2026-11-05
 
 After ebusd restarts, the zones and the controller settings no longer disappear until you reload the integration, and

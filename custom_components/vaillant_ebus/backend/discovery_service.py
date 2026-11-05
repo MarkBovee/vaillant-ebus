@@ -445,14 +445,16 @@ class DiscoveryService:
 
 
 # Whether ebusd's bus scan is settled enough to treat a register missing from `find` as gone.
-# ebusd reports `scan: running` while it still reads device identities and has not polled every message yet (issue
-# #221: the controller registers were missing for a minute after an ebusd restart and the prune dropped them). The line
-# is absent when ebusd does no scan at all; an empty mapping means `info` could not be read, so nothing is pruned.
+# ebusd prints `scan: running` while it reads device identities, and `scan: finished, some messages pending` after a
+# pass in which some devices still have to answer (issue #221: the controller lost arbitration, so its registers were
+# missing and the prune dropped them). Only `finished` without pending reads is settled. Without a scan line ebusd has
+# not started scanning (or never scans, and then loads no device configuration), and an empty or unreadable `info`
+# is unknown; neither allows pruning.
 def bus_scan_settled(ebusd_info: Mapping[str, object]) -> bool:
-    """Return False while ebusd's scan is running or its state is unknown."""
+    """Return True only when ebusd reports a finished scan with no pending scan reads."""
     if not isinstance(ebusd_info, Mapping) or not ebusd_info:
         return False
-    return ebusd_info.get("scan") != "running"
+    return ebusd_info.get("scan") == "finished" and "scan_pending" not in ebusd_info
 
 
 # Accept find rows that discovery can parse into registers or scan observations.
