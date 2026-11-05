@@ -242,9 +242,9 @@ Things to know when you write overrides:
 
 Generates a complete register dump for troubleshooting hardware-specific issues (new models, unknown registers, weird values):
 
-1. In HA, go to **Developer Tools → Services**
+1. In HA, go to **Settings → Tools → Actions** (in older HA versions: **Developer Tools → Services**)
 2. Select **`vaillant_ebus.export_discovery_dump`** (no fields needed)
-3. Click **Call Service**
+3. Click **Perform action** (in older HA versions: **Call Service**)
 4. Check the persistent notification for the file path (e.g. `/config/vaillant_ebus/discovery_dump_2026-07-26_143000.yaml`)
 5. Retrieve the file via **SMB** or **HA Samba addon** from `/config/vaillant_ebus/`
 6. Review the file for sensitive info before sharing, then attach to a GitHub issue or discussion
