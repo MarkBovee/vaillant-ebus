@@ -135,6 +135,10 @@ def _classify_register(
             return "sensor"
         if register.writable:
             return "switch"
+        # Why: a read-only number that happens to be 0 or 1 at load (FanSpeed with the burner off, a block time that
+        # ran out) must not become a binary_sensor, or its type changes with every reload (issue #216).
+        if low in ("0", "1"):
+            return "sensor"
         return "binary_sensor"
     if register.writable and _is_numeric(raw_value):
         meta_min = meta.min_value

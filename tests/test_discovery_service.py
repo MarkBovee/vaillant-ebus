@@ -1996,3 +1996,36 @@ def test_parse_register_keeps_valid_hmux0_flow_temperature(raw: str) -> None:
     _, _, value = DiscoveryService._parse_register(f"hmux0 RunDataFlowTemp = {raw}")
 
     assert value == raw
+
+
+# Intent: the flexoTHERM B509 float temperatures that decode as tiny numbers (9.8e-42) become unavailable.
+# Why: issue #217 - HMU00 SW0308, VWF 117/4 and flexoTHERM 133 answer with a shorter layout, so "Return Temperature"
+# and "Air Inlet Temperature" showed a nonsense value as if it were data.
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "community/hmu00_issue102_heating_start_2026-10-25_090329_discovery.yaml",
+        "community/flexotherm_vwf1174_issue134_2026-09-15_162647.yaml",
+        "community/flexotherm_133_cooling_discovery.yaml",
+    ],
+)
+def test_issue217_hmu_float_temperature_wrong_decode_is_unavailable(fixture: str) -> None:
+    graph = DiscoveryService.build_device_graph(load_find_lines(fixture))
+
+    for key in ("hmu.RunDataReturnTemp", "hmu.RunDataAirInletTemp"):
+        assert graph.raw_registers.get(key) is None, key
+
+
+# Intent: a plausible HMU float temperature, including exactly 0.0, stays available; only the vanishing decode goes.
+# Why: issue #217 - the guard must reject the specific wrong decode, never clamp or hide a real reading.
+def test_issue217_hmu_float_temperature_keeps_plausible_values() -> None:
+    graph = DiscoveryService.build_device_graph(
+        ["hmu RunDataAirInletTemp = 23.3857", "hmu RunDataReturnTemp = 0.0", "hmu FlowTemp = 9.8231e-42"]
+    )
+
+    assert graph.raw_registers["hmu.RunDataAirInletTemp"] == "23.3857"
+    assert graph.raw_registers["hmu.RunDataReturnTemp"] == "0.0"
+    assert graph.raw_registers["hmu.FlowTemp"] == "9.8231e-42"
+    assert MODELS.is_valid_hmu_float_temperature("9.8231e-42") is False
+    assert MODELS.is_valid_hmu_float_temperature("-12.5") is True
+    assert MODELS.is_valid_hmu_float_temperature("1.5e3") is False

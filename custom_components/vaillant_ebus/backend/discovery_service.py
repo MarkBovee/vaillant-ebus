@@ -8,14 +8,13 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, NamedTuple
 
 from .models import (
-    HMUX0_PRECISE_TEMPERATURE_REGISTERS,
     DeviceGraph,
     DeviceNode,
     DeviceType,
     ScanIdentity,
     is_ebusd_error_value,
     is_no_data_value,
-    is_valid_hmux0_return_temperature,
+    is_plausible_decode,
 )
 
 if TYPE_CHECKING:
@@ -127,15 +126,8 @@ class DiscoveryService:
         val = rhs.strip()
         if is_no_data_value(val):
             return ParsedRegister(circuit, name, None)
-        if circuit.lower() == "hmu" and name.lower() == "sourcetempinput":
-            try:
-                if float(val) < -100:
-                    return ParsedRegister(circuit, name, None)
-            except ValueError:
-                return ParsedRegister(circuit, name, None)
-        if circuit.lower() == "hmux0" and name.lower() in HMUX0_PRECISE_TEMPERATURE_REGISTERS:
-            if not is_valid_hmux0_return_temperature(val):
-                return ParsedRegister(circuit, name, None)
+        if not is_plausible_decode(circuit, name, val):
+            return ParsedRegister(circuit, name, None)
         return ParsedRegister(circuit, name, val)
 
     # Accept only ebusd's address-qualified scan metadata row shape.

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.13.7 - 2026-11-05
+
+Vaillant eBUS is now in the default HACS catalog. Sensors that read 0 at startup no longer turn into on/off sensors,
+and flexoTHERM units stop showing a near-zero "Return Temperature" and "Air Inlet Temperature".
+
+### Changed
+
+- **Install from the default HACS catalog.** Search for Vaillant eBUS in HACS; adding a custom repository is no longer
+  needed. The README keeps the custom repository steps as a fallback.
+
+### Fixed
+
+- **Number sensors keep their type when they read 0** (issue #216). A read-only register without a unit that read `0`
+  or `1` at startup became a binary sensor, and a reload while it read something else turned it back into a sensor.
+  `FanSpeed` with the burner off and `RemainingBoilerblocktime` were reported; `HydraulicScheme`, the
+  `Deactivations*` counters, `RunDataStatuscode` and `RunDataEEVPositionAbs` had the same problem. They are now always
+  sensors. Only values that ebusd reports as words (`on`/`off`, `yes`/`no`) still make a binary sensor. The old binary
+  sensor stops updating, and the stale-entities repair offers to remove it. Automations
+  and dashboards that use the old `binary_sensor.*` entity need the new `sensor.*` entity instead. A YAML override with `entity_type` still
+  wins.
+- **No more 9.8e-42 °C on flexoTHERM** (issue #217). HMU00 SW0308, VWF 117/4 and flexoTHERM 133 units answer the
+  `RunDataReturnTemp` and `RunDataAirInletTemp` reads with a shorter layout, and ebusd decoded that as a tiny number.
+  Those values are now unavailable. Readings between -50 and 100 °C, 0.0 included, stay as they are.
+
 ## 1.13.6 - 2026-11-03
 
 aroTHERM heat pumps that report themselves as HMUX0 with firmware 0407 now show the heating circuit flow rate.
