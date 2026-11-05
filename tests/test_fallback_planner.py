@@ -118,6 +118,18 @@ def test_skip_reads_and_error_registers_are_excluded() -> None:
     assert target not in _plan(errored)
 
 
+# Intent: a register whose cached ebusd value is an error is planned again when the caller asks for a retry.
+# Why: issue #223 - one `ERR: read timeout` stayed in ebusd's cache, so the register was skipped on every poll and
+# never read again; the placeholder interval now retries it.
+def test_issue223_error_registers_are_planned_again_on_retry() -> None:
+    graph = dataclasses.replace(_graph(FLEXOTHERM), error_registers={"hmu.SourceTempInput"})
+    target = ("hmu", "SourceTempInput")
+
+    assert target not in _plan(graph)
+    assert target in _plan(graph, retry_reads={"HMU.sourcetempinput"})
+    assert target not in _plan(graph, retry_reads={"hmu.FlowTemp"})
+
+
 # Intent: the candidate circuit comes from where the register was discovered, filtered by role.
 # Why: registers live under basv3/ctlv3/vwzio too; the literal map circuit must never be assumed.
 def test_fallback_candidate_uses_discovered_owner_and_role() -> None:
