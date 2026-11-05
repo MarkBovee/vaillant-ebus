@@ -823,7 +823,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # cached leftovers. Only on initial discovery: delayed rediscovery blends
         # into a growing graph and must not drop registers that were merely slow
         # to appear. While ebusd still scans the bus, a missing register is only not read yet, so nothing is removed or
-        # switched off (issue #221); sentinels still clear and the delayed rediscovery adds the late registers.
+        # switched off (issue #221). Sentinels still clear, the delayed rediscovery adds the late registers, and the
+        # next start with a settled scan prunes.
         if source == "initial":
             prune_allowed = await self._async_bus_scan_settled()
             live_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
@@ -1001,7 +1002,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return False
         if bus_scan_settled(ebusd_info):
             return True
-        _LOGGER.info("ebusd is still scanning the bus; keeping registers missing from find until the next discovery")
+        _LOGGER.info("ebusd is still scanning the bus; keeping registers missing from find until the next restart")
         return False
 
     # Keep at most one delayed discovery callback pending.
