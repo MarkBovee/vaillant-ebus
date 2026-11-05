@@ -2031,14 +2031,16 @@ def test_issue217_hmu_float_temperature_keeps_plausible_values() -> None:
     assert MODELS.is_valid_hmu_float_temperature("1.5e3") is False
 
 
-# Intent: only a settled or absent scan state allows treating a register missing from find as gone.
-# Why: issue #221 - ebusd reports `scan: running` until its first scan finishes; an unreadable info must not prune.
+# Intent: only a finished scan without pending reads allows treating a register missing from find as gone.
+# Why: issue #221 - after a restart ebusd printed `scan: finished, some messages pending` while the controller had not
+# answered yet, and 1.13.8 pruned its registers. Running, pending, absent and unreadable states must not prune.
 @pytest.mark.parametrize(
     ("ebusd_info", "settled"),
     [
         ({"scan": "running"}, False),
         ({"scan": "finished"}, True),
-        ({"version": "ebusd 26.1"}, True),
+        ({"scan": "finished", "scan_pending": "yes"}, False),
+        ({"version": "ebusd 26.1"}, False),
         ({}, False),
         (None, False),
     ],

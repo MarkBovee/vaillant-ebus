@@ -271,3 +271,16 @@ def test_live_vwzio_status01_candidate_preserves_correlated_telegram() -> None:
     assert status["sub"] == "0101"
     assert status["unique_requests"] == ["1076b5110101"]
     assert status["unique_responses"] == ["092e2dfb0fff4c0000ff"]
+
+
+# Intent: the scan line's ", some messages pending" suffix survives parsing next to the scan state.
+# Why: issue #221 - the owner's ebusd printed exactly this after a restart while the controller had not answered;
+# dropping the suffix made 1.13.8 treat the scan as settled and prune the controller registers.
+def test_issue221_parse_info_keeps_pending_scan_marker() -> None:
+    pending = parse_info_data("signal: acquired\nscan: finished, some messages pending\nmasters: 6\n")
+    settled = parse_info_data("signal: acquired\nscan: finished\nmasters: 6\n")
+
+    assert pending["scan"] == "finished"
+    assert pending["scan_pending"] == "yes"
+    assert "scan_pending" not in settled
+    assert pending["masters"] == "6"

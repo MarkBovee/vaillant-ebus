@@ -210,6 +210,11 @@ def _parse_info_data(data: str) -> dict[str, str | dict[str, AddressConfig]]:
     info: dict[str, str | dict[str, AddressConfig]] = {}
     for line in data.splitlines():
         for part in line.split(", "):
+            # Why: ebusd appends a bare ", some messages pending" to the scan line while scan reads are still out
+            # (issue #221); it has no "key: value" shape, so it is kept under its own key instead of being dropped.
+            if part.strip() == "some messages pending":
+                info["scan_pending"] = "yes"
+                continue
             pair = part.split(": ", 1)
             if len(pair) == 2:
                 info[pair[0].strip()] = pair[1].strip()

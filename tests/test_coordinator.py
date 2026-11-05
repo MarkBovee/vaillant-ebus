@@ -2534,7 +2534,13 @@ async def test_initial_discovery_prunes_stale_cache_registers() -> None:
 # controller registers and left the climate entities unavailable. A settled scan still prunes; unreadable info does not.
 @pytest.mark.parametrize(
     ("ebusd_info", "expected_pruned"),
-    [({"scan": "running"}, False), ({"scan": "finished"}, True), ({"version": "ebusd 26.1"}, True), ({}, False)],
+    [
+        ({"scan": "running"}, False),
+        ({"scan": "finished"}, True),
+        ({"scan": "finished", "scan_pending": "yes"}, False),
+        ({"version": "ebusd 26.1"}, False),
+        ({}, False),
+    ],
 )
 async def test_issue221_initial_discovery_does_not_prune_while_ebusd_scans(
     ebusd_info: dict[str, str], expected_pruned: bool
