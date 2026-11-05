@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, NamedTuple
 
 from .models import (
@@ -442,6 +442,17 @@ class DiscoveryService:
                 identity for line in find_lines if (identity := DiscoveryService._parse_scan_identity(line)) is not None
             ),
         )
+
+
+# Whether ebusd's bus scan is settled enough to treat a register missing from `find` as gone.
+# ebusd reports `scan: running` while it still reads device identities and has not polled every message yet (issue
+# #221: the controller registers were missing for a minute after an ebusd restart and the prune dropped them). The line
+# is absent when ebusd does no scan at all; an empty mapping means `info` could not be read, so nothing is pruned.
+def bus_scan_settled(ebusd_info: Mapping[str, object]) -> bool:
+    """Return False while ebusd's scan is running or its state is unknown."""
+    if not isinstance(ebusd_info, Mapping) or not ebusd_info:
+        return False
+    return ebusd_info.get("scan") != "running"
 
 
 # Accept find rows that discovery can parse into registers or scan observations.

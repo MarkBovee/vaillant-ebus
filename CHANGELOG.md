@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.13.8 - 2026-11-05
+
+After ebusd restarts, the zones and the controller settings no longer disappear until you reload the integration, and
+a register that failed one read is read again instead of staying unknown.
+
+### Fixed
+
+- **No more lost registers while ebusd is still scanning** (issue #221). When ebusd restarted (an add-on update, the
+  watchdog, an adapter that reconnected), the integration often ran its discovery before ebusd had finished its first
+  bus scan. Registers ebusd had not read yet were treated as gone: on the owner's system 161 controller registers were
+  removed and the climate entities became unavailable until a manual reload. The integration now asks ebusd first.
+  While ebusd reports `scan: running`, or when that state can't be read, nothing is removed or switched off; values
+  that are not there yet still show as unavailable, and the next discovery adds them back. Once the scan is finished,
+  the next discovery (about five minutes later) does the cleanup it skipped, so old leftovers don't wait for a restart.
+- **A failed read no longer stops a register for good** (issue #223). When an active read failed once (for example
+  `ERR: read timeout` on a busy bus), ebusd kept that error as the register's value, and the integration skipped the
+  register from then on. `Z1ActualRoomTempDesired` stayed unknown until a manual `read_parameter`. A register whose
+  last read failed on the bus (read timeout, arbitration lost, SYN received, wrong symbol, no signal) is now read
+  again every 15 minutes, so it recovers by itself. Errors that mean the message doesn't fit the device, such as
+  `invalid position`, are still not read.
+
 ## 1.13.7 - 2026-11-05
 
 Vaillant eBUS is now in the default HACS catalog. Sensors that read 0 at startup no longer turn into on/off sensors,

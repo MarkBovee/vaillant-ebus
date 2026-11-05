@@ -24,7 +24,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from . import cleanup, repairs
 from .backend.analysis_service import AnalysisResult, AnalysisService
-from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService
+from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService, bus_scan_settled
 from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, BusErrorGuard, EbusService
 from .backend.entity_factory import EntityDescription, EntityFactoryService, unused_zone_numbers
 from .backend.fallback_planner import fallback_candidate, plan_fallback_reads
@@ -49,6 +49,7 @@ from .backend.models import (
     is_heat_pump_circuit,
     is_no_data_value,
     is_plausible_decode,
+    is_transient_ebusd_error,
     valid_zone_owners,
     zero_idle_registers,
 )
@@ -365,6 +366,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self._cancel_delayed_rediscovery: Callable[[], None] | None = None
         self._delayed_rediscovery_scheduled = False
         self._delayed_rediscovery_retry_count = 0
+        self._prune_deferred = False
         self._live_since_analysis: set[str] = set()
         self._cancel_analysis: Callable[[], None] | None = None
         self._analysis_scheduled = False
@@ -820,71 +822,19 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # longer exposes (e.g. a stale test register from an old CSV or session).
         # Registers explained by neither the discovered graph nor an enabled
         # REGISTER_MAP entry are pruned so ghost devices cannot survive on
-        # cached leftovers. Only on initial discovery: delayed rediscovery blends
+        # cached leftovers. Normally only on initial discovery: delayed rediscovery blends
         # into a growing graph and must not drop registers that were merely slow
-        # to appear.
+        # to appear. While ebusd still scans the bus, a missing register is only not read yet, so nothing is removed or
+        # switched off (issue #221). Sentinels still clear, and the first delayed rediscovery with a settled scan runs
+        # the skipped prune once against the merged graph.
         if source == "initial":
-            live_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
-            # Registers the integration defined on this bus keep their entities while ebusd has no value.
-            # `define` can drop the cached value, so a post-define find lists them as no-data placeholders
-            # or omits them until the next telegram or read; pruning them disabled user-enabled entities (#175)
-            # and, once the fallback read re-enabled them, made Home Assistant reload the entry in a loop (#171).
-            runtime_defined_key_folds = self.runtime_defined_key_folds()
-            stale = [
-                rk
-                for rk in self.registers
-                if rk.casefold() not in runtime_defined_key_folds
-                and not _cache_register_is_supported(rk, live_keys, graph)
-            ]
-            for rk in stale:
-                del self.registers[rk]
-            if stale:
-                _LOGGER.info(
-                    "Pruned %d stale cache register(s) absent from the bus: %s",
-                    len(stale),
-                    ", ".join(sorted(stale)),
-                )
-            stale_keys = set(stale)
-            raw_key_folds = {key.casefold() for key in graph.raw_registers}
-            placeholder_keys = {key for key in graph.placeholder_registers if key.casefold() not in raw_key_folds}
-            # A runtime-defined register that find omits must not show its previous-session value.
-            # It is kept for its entity, but no telegram has arrived since `define`, so it is unavailable.
-            listed_folds = raw_key_folds | {key.casefold() for key in graph.placeholder_registers}
-            for register_key, register in self.registers.items():
-                if register_key.casefold() in runtime_defined_key_folds and register_key.casefold() not in listed_folds:
-                    register.value = _register_values(register_key, None)
-                    register.has_data = False
-            omitted_runtime_folds = runtime_defined_key_folds - listed_folds
-            pruneable_placeholder_keys = {
-                key for key in placeholder_keys if key.casefold() not in runtime_defined_key_folds
-            }
-            non_exposable_placeholder_keys = {
-                key for key in pruneable_placeholder_keys if _register_disables_fallback_placeholder(key)
-            }
-            pruneable_placeholder_folds = {key.casefold() for key in pruneable_placeholder_keys}
-            for entity in self.entities:
-                entity_key = f"{entity.circuit}.{entity.name}"
-                if entity_key.casefold() in {key.casefold() for key in placeholder_keys} | omitted_runtime_folds:
-                    # A sentinel is unavailable, never the stale cached number, even for runtime-defined registers.
-                    entity.raw_value = ""
-                    if entity_key.casefold() in pruneable_placeholder_folds:
-                        entity.enabled_by_default = False
-            stale_entity_key_folds = {
-                key.casefold() for key in (stale_keys - placeholder_keys) | non_exposable_placeholder_keys
-            }
-            stale_entities = [
-                entity
-                for entity in self.entities
-                if f"{entity.circuit}.{entity.name}".casefold() in stale_entity_key_folds
-            ]
-            if stale_entities:
-                self.entities = [
-                    entity
-                    for entity in self.entities
-                    if f"{entity.circuit}.{entity.name}".casefold() not in stale_entity_key_folds
-                ]
-                _disable_stale_registry_entities(self.hass, self._entry.entry_id, stale_entities)
-                _LOGGER.info("Pruned %d stale cache entit(y/ies) after discovery", len(stale_entities))
+            prune_allowed = await self._async_bus_scan_settled()
+            self._prune_deferred = not prune_allowed
+            self._prune_absent_registers(graph, prune_allowed)
+        elif self._prune_deferred and await self._async_bus_scan_settled():
+            # The startup prune was skipped while ebusd scanned; run it once now that the scan is settled.
+            self._prune_deferred = False
+            self._prune_absent_registers(graph, True)
 
         try:
             await self._fallback_read()
@@ -985,6 +935,85 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             await self._apply_discovery_graph(discovered, "delayed")
         elif self._graph is not None:
             self._graph = merge_device_graphs(self._graph, discovered)
+
+    # Remove cached registers the bus no longer explains and switch off their entities; clear sentinel values.
+    # `prune_allowed` False keeps every register and entity (ebusd still scans, issue #221) but still clears sentinels.
+    def _prune_absent_registers(self, graph: DeviceGraph, prune_allowed: bool) -> None:
+        live_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
+        # Registers the integration defined on this bus keep their entities while ebusd has no value.
+        # `define` can drop the cached value, so a post-define find lists them as no-data placeholders
+        # or omits them until the next telegram or read; pruning them disabled user-enabled entities (#175)
+        # and, once the fallback read re-enabled them, made Home Assistant reload the entry in a loop (#171).
+        runtime_defined_key_folds = self.runtime_defined_key_folds()
+        stale = [
+            rk
+            for rk in self.registers
+            if prune_allowed
+            and rk.casefold() not in runtime_defined_key_folds
+            and not _cache_register_is_supported(rk, live_keys, graph)
+        ]
+        for rk in stale:
+            del self.registers[rk]
+        if stale:
+            _LOGGER.info(
+                "Pruned %d stale cache register(s) absent from the bus: %s",
+                len(stale),
+                ", ".join(sorted(stale)),
+            )
+        stale_keys = set(stale)
+        raw_key_folds = {key.casefold() for key in graph.raw_registers}
+        placeholder_keys = {key for key in graph.placeholder_registers if key.casefold() not in raw_key_folds}
+        # A runtime-defined register that find omits must not show its previous-session value.
+        # It is kept for its entity, but no telegram has arrived since `define`, so it is unavailable.
+        listed_folds = raw_key_folds | {key.casefold() for key in graph.placeholder_registers}
+        for register_key, register in self.registers.items():
+            if register_key.casefold() in runtime_defined_key_folds and register_key.casefold() not in listed_folds:
+                register.value = _register_values(register_key, None)
+                register.has_data = False
+        omitted_runtime_folds = runtime_defined_key_folds - listed_folds
+        pruneable_placeholder_keys = {
+            key for key in placeholder_keys if prune_allowed and key.casefold() not in runtime_defined_key_folds
+        }
+        non_exposable_placeholder_keys = {
+            key for key in pruneable_placeholder_keys if _register_disables_fallback_placeholder(key)
+        }
+        pruneable_placeholder_folds = {key.casefold() for key in pruneable_placeholder_keys}
+        for entity in self.entities:
+            entity_key = f"{entity.circuit}.{entity.name}"
+            if entity_key.casefold() in {key.casefold() for key in placeholder_keys} | omitted_runtime_folds:
+                # A sentinel is unavailable, never the stale cached number, even for runtime-defined registers.
+                entity.raw_value = ""
+                if entity_key.casefold() in pruneable_placeholder_folds:
+                    entity.enabled_by_default = False
+        stale_entity_key_folds = {
+            key.casefold() for key in (stale_keys - placeholder_keys) | non_exposable_placeholder_keys
+        }
+        stale_entities = [
+            entity for entity in self.entities if f"{entity.circuit}.{entity.name}".casefold() in stale_entity_key_folds
+        ]
+        if stale_entities:
+            self.entities = [
+                entity
+                for entity in self.entities
+                if f"{entity.circuit}.{entity.name}".casefold() not in stale_entity_key_folds
+            ]
+            _disable_stale_registry_entities(self.hass, self._entry.entry_id, stale_entities)
+            _LOGGER.info("Pruned %d stale cache entit(y/ies) after discovery", len(stale_entities))
+
+    # Ask ebusd whether its bus scan is settled; an unreadable `info` counts as not settled so nothing is pruned.
+    # Without an ebusd client there is no scan to wait for (a graph applied from cache or in tests).
+    async def _async_bus_scan_settled(self) -> bool:
+        if self.ebus is None:
+            return True
+        try:
+            ebusd_info = await self.ebus.get_info()
+        except Exception as exc:
+            _LOGGER.debug("ebusd info unavailable before pruning: %s", exc)
+            return False
+        if bus_scan_settled(ebusd_info):
+            return True
+        _LOGGER.info("ebusd is still scanning the bus; keeping registers missing from find for now")
+        return False
 
     # Keep at most one delayed discovery callback pending.
     # One bounded retry handles transient find failures without polling continuously.
@@ -1625,6 +1654,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         include_energy: bool = False,
         skip_cache: set[str] | None = None,
         skip_reads: set[str] | None = None,
+        retry_reads: set[str] | None = None,
     ) -> None:
         if not self.ebus or not self.ebus.is_connected or self._graph is None:
             return
@@ -1647,6 +1677,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             include_energy=include_energy,
             skip_reads=skip_reads,
             withheld=self._withheld_runtime_registers,
+            retry_reads=retry_reads or set(),
         )
         if not candidates:
             return
@@ -1882,6 +1913,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 invalid_values: set[str] = set()
                 no_data_values: set[str] = set()
                 error_values: set[str] = set()
+                transient_error_values: set[str] = set()
                 batch_with_data: set[str] = set()
                 for line in lines:
                     # Shared parser: sentinel/no-data values come back as None.
@@ -1897,6 +1929,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         no_data_values.add(key)
                         if is_ebusd_error_value(line.partition("=")[2]) and key not in batch_with_data:
                             error_values.update((source_key, key))
+                            if is_transient_ebusd_error(line.partition("=")[2]):
+                                transient_error_values.update((source_key, key))
                         if key.lower().partition(".")[::2] in _HMUX0_PRECISE_TEMPERATURE_KEYS:
                             raw = line.split("=", 1)[1].strip()
                             if not is_no_data_value(raw):
@@ -1948,6 +1982,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                         continue
                     error_values.discard(source_key)
                     error_values.discard(key)
+                    transient_error_values.discard(source_key)
+                    transient_error_values.discard(key)
                     self._live_since_analysis.add(key)
                     batch_with_data.add(key)
                     if key not in self.registers:
@@ -1973,7 +2009,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     include_placeholders=poll_placeholders,
                     include_energy=poll_energy,
                     skip_cache=invalid_values | no_data_values,
-                    skip_reads=error_values,
+                    # Why: a register cached with a transient bus error (read timeout) is read again on the placeholder
+                    # interval, so one failure does not stop it for good (issue #223). Layout errors stay skipped.
+                    skip_reads=error_values - transient_error_values if poll_placeholders else error_values,
+                    retry_reads=transient_error_values if poll_placeholders else None,
                 )
                 if self._stopped or self._unload_requested:
                     return {"ebusd": await self._async_values_from_registers()}

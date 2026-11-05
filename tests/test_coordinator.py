@@ -2529,6 +2529,61 @@ async def test_initial_discovery_prunes_stale_cache_registers() -> None:
         assert "hmu.SourceTempInput" in c.registers
 
 
+# Intent: while ebusd still scans the bus, initial discovery keeps cached registers that find does not list yet.
+# Why: issue #221 - after an ebusd restart the integration discovered before ebusd's first scan finished, pruned 161
+# controller registers and left the climate entities unavailable. A settled scan still prunes; unreadable info does not.
+@pytest.mark.parametrize(
+    ("ebusd_info", "expected_pruned"),
+    [({"scan": "running"}, False), ({"scan": "finished"}, True), ({"version": "ebusd 26.1"}, True), ({}, False)],
+)
+async def test_issue221_initial_discovery_does_not_prune_while_ebusd_scans(
+    ebusd_info: dict[str, str], expected_pruned: bool
+) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.get_info = AsyncMock(return_value=ebusd_info)
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c.registers["hmux0.ZZTest"] = EbusdRegister(
+            circuit="hmux0", name="ZZTest", fields=["value"], value={"value": "-0.06"}, has_data=True
+        )
+        graph = DISCOVERY.DiscoveryService.build_device_graph(["hmu OutsideTemp = 18.5"])
+
+        await c._apply_discovery_graph(graph, "initial")
+
+        assert ("hmux0.ZZTest" not in c.registers) is expected_pruned
+
+
+# Intent: a prune skipped while ebusd scanned runs once on the first delayed discovery with a settled scan.
+# Why: issue #221 follow-up - without the retry, cache leftovers stayed until the next restart with a finished scan.
+async def test_issue221_skipped_prune_runs_once_on_settled_delayed_discovery() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+        c.ebus = MagicMock(spec=EbusService)
+        c.ebus.is_connected = True
+        c.ebus.get_info = AsyncMock(return_value={"scan": "running"})
+        c.ebus.read_register = AsyncMock(return_value=None)
+        c.registers["hmux0.ZZTest"] = EbusdRegister(
+            circuit="hmux0", name="ZZTest", fields=["value"], value={"value": "-0.06"}, has_data=True
+        )
+        graph = DISCOVERY.DiscoveryService.build_device_graph(["hmu OutsideTemp = 18.5"])
+
+        await c._apply_discovery_graph(graph, "initial")
+        await c._apply_discovery_graph(graph, "delayed")
+        assert "hmux0.ZZTest" in c.registers
+
+        c.ebus.get_info = AsyncMock(return_value={"scan": "finished"})
+        await c._apply_discovery_graph(graph, "delayed")
+        assert "hmux0.ZZTest" not in c.registers
+
+        c.registers["hmux0.ZZTest"] = EbusdRegister(
+            circuit="hmux0", name="ZZTest", fields=["value"], value={"value": "-0.06"}, has_data=True
+        )
+        await c._apply_discovery_graph(graph, "delayed")
+        assert "hmux0.ZZTest" in c.registers, "delayed discovery prunes only once, after a skipped startup prune"
+
+
 # Intent: entities of registers the integration defined at runtime survive a post-define no-data placeholder.
 # Why: issue #175 - `define` drops ebusd's cached value, so the next find listed the env-yield registers as no-data
 # placeholders and discovery pruned and disabled user-enabled entities; without a definition they stay pruned.
@@ -3907,6 +3962,33 @@ async def test_fallback_read_skips_probes_after_unusable_find_with_retained_grap
         assert coordinator._graph is graph
         assert coordinator._last_find_keys == {"hmu.Status"}
         assert coordinator.registers == original_registers
+
+
+# Intent: a register cached with a transient read timeout is read again on the placeholder interval, not in between.
+# Why: issue #223 - one `ERR: read timeout` stayed in ebusd's cache and the register was skipped on every poll for good.
+@pytest.mark.parametrize(("placeholder_due", "expected_reads"), [(True, [("ctlv2", "HwcOpMode")]), (False, [])])
+async def test_issue223_transient_error_register_is_retried_on_placeholder_interval(
+    monkeypatch: pytest.MonkeyPatch, placeholder_due: bool, expected_reads: list[tuple[str, str]]
+) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lines = ["scan.15 = Vaillant;CTLV2;0514;1104", "ctlv2 Z1OpMode = auto", "ctlv2 HwcOpMode = (ERR: read timeout)"]
+        monkeypatch.setattr(
+            COORDINATOR, "REGISTER_MAP", {"ctlv2.HwcOpMode": MAPPING.RegisterMeta(enabled=True, fallback_read=True)}
+        )
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+        coordinator._cache_seeded = coordinator._ebusd_connected = True
+        coordinator._last_energy_poll = datetime.now()
+        coordinator._last_placeholder_poll = datetime.now() - (timedelta(days=1) if placeholder_due else timedelta(0))
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.last_find_usable = True
+        coordinator.ebus.find_registers = AsyncMock(return_value=lines)
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+
+        await coordinator._async_update_data()
+
+        assert [call.args[:2] for call in coordinator.ebus.read_register.await_args_list] == expected_reads
 
 
 # Intent: keep error placeholders visible while skipping their active fallback reads.

@@ -130,7 +130,9 @@ def _hmux0_sw0407_active_reads(graph: DeviceGraph, runtime_definitions: Mapping[
 
 
 # List the (circuit, register) pairs to read actively, in order, without duplicates.
-# Fallback probes must not bypass per-register polling restrictions.
+# Fallback probes must not bypass per-register polling restrictions. Registers whose cached ebusd value is an error are
+# skipped, except the keys in `retry_reads`: ebusd keeps a transient error until the next read, so without an occasional
+# retry one read timeout would stop the register for good (issue #223).
 def plan_fallback_reads(
     graph: DeviceGraph,
     last_find_keys: Collection[str],
@@ -142,6 +144,7 @@ def plan_fallback_reads(
     include_energy: bool = False,
     skip_reads: Collection[str] | None = None,
     withheld: Collection[tuple[str, str]] = (),
+    retry_reads: Collection[str] = (),
 ) -> list[tuple[str, str]]:
     graph_keys = last_find_keys
 
@@ -158,6 +161,7 @@ def plan_fallback_reads(
     seen: set[tuple[str, str]] = set()
     skipped_read_keys = {key.casefold() for key in (skip_reads or set())}
     skipped_read_keys.update(key.casefold() for key in graph.error_registers)
+    skipped_read_keys.difference_update(key.casefold() for key in retry_reads)
     withheld_keys = set(withheld)
     passive_register_keys = {
         (parts[1].casefold(), parts[2].casefold())

@@ -45,6 +45,19 @@ def is_ebusd_error_value(raw: str | None) -> bool:
     return low.startswith(("err:", "(err:")) or "(err" in low
 
 
+# ebusd errors that come from the bus at that moment, not from the message layout. A register cached with one of these
+# answered before and may answer again; `invalid position` or `element not found` mean the layout does not fit.
+_TRANSIENT_EBUSD_ERRORS = ("read timeout", "arbitration lost", "syn received", "wrong symbol", "no signal")
+
+
+# Whether an ebusd error value is a transient bus failure worth one more read later (issue #223).
+def is_transient_ebusd_error(raw: str | None) -> bool:
+    if not is_ebusd_error_value(raw):
+        return False
+    low = (raw or "").casefold()
+    return any(marker in low for marker in _TRANSIENT_EBUSD_ERRORS)
+
+
 # Lower-cased names of the HMUX0 B509 1/16 degC flow/return temperature registers.
 # Both share one layout, so they must share the same plausibility guard and fallback restriction.
 HMUX0_PRECISE_TEMPERATURE_REGISTERS: frozenset[str] = frozenset({"rundataflowtemp", "rundatareturntemp"})
