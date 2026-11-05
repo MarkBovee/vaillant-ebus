@@ -48,7 +48,7 @@ from .backend.models import (
     is_ebusd_error_value,
     is_heat_pump_circuit,
     is_no_data_value,
-    is_valid_hmux0_return_temperature,
+    is_plausible_decode,
     valid_zone_owners,
     zero_idle_registers,
 )
@@ -184,18 +184,8 @@ def _usable_register_value(register_key: str, raw: str | None) -> str | None:
     """Reject ebusd sentinels and known invalid temperature decodes."""
     if raw is None or is_no_data_value(raw):
         return None
-    if register_key.lower() == "hmu.sourcetempinput":
-        try:
-            if float(raw) < -100:
-                return None
-        except ValueError:
-            return None
-    circuit, _, register_name = register_key.lower().partition(".")
-    if (
-        circuit == "hmux0"
-        and register_name in HMUX0_PRECISE_TEMPERATURE_REGISTERS
-        and not is_valid_hmux0_return_temperature(raw)
-    ):
+    circuit, _, register_name = register_key.partition(".")
+    if not is_plausible_decode(circuit, register_name, raw):
         return None
     return raw
 

@@ -486,7 +486,7 @@ class TestMetadataIsolation:
                     has_data=True,
                 )
             },
-            raw_registers={"custom.Value": "1"},
+            raw_registers={"custom.Value": "on"},
             placeholder_registers=set(),
         )
         first = EntityFactoryService().generate(graph)[0]
@@ -1407,8 +1407,23 @@ def test_zero_one_classification_keeps_flags_and_switches() -> None:
         return FACTORY._classify_register(reg, "value", "0", MAPPING.RegisterMeta())
 
     assert classify("YieldTotal", False) == "sensor"
-    assert classify("SummerModeActive", False) == "binary_sensor"
     assert classify("YieldTotal", True) == "switch"
+
+
+# Intent: a read-only register keeps one platform whether it reads 0, 1 or a larger number at load.
+# Why: issue #216 - FanSpeed and RemainingBoilerblocktime became binary sensors when the burner was off, and switched
+# to sensors after a reload while it ran. Only explicit flag words (on/off, yes/no) make a binary sensor.
+@pytest.mark.parametrize("name", ["FanSpeed", "RemainingBoilerblocktime", "SummerModeActive"])
+def test_issue216_read_only_number_platform_does_not_depend_on_the_value_at_load(name: str) -> None:
+    from tests.test_entity_factory import FACTORY
+
+    def classify(raw: str) -> str:
+        reg = MODELS.EbusdRegister(circuit="bai", name=name, fields=["value"], value={"value": raw})
+        return FACTORY._classify_register(reg, "value", raw, MAPPING.RegisterMeta())
+
+    assert {classify(raw) for raw in ("0", "1", "12", "1585")} == {"sensor"}
+    assert classify("on") == "binary_sensor"
+    assert classify("yes") == "binary_sensor"
 
 
 # Intent: the HC1-HC3 mixer movement is a signed percent measurement, not a text sensor.

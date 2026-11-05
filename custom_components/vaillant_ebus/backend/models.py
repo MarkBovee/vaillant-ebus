@@ -60,6 +60,45 @@ def is_valid_hmux0_return_temperature(raw: str) -> bool:
         return False
 
 
+# Lower-cased names of the HMU B509 float temperatures that flexoTHERM units (HMU00 SW0308, VWF 117/4, flexoTHERM 133)
+# answer with a shorter layout. ebusd then decodes a tiny number such as 9.8e-42 instead of a temperature (issue #217).
+HMU_FLOAT_TEMPERATURE_REGISTERS: frozenset[str] = frozenset({"rundatareturntemp", "rundataairinlettemp"})
+
+# Below this size a non-zero float decode is a wrong layout, never a temperature or reading.
+_DENORMAL_DECODE_LIMIT = 1e-6
+
+
+# Plausibility check for an HMU float temperature: a real reading lies between -50 and 100 degC and is not a vanishing
+# non-zero float. 0.0 stays valid; 9.8e-42 does not.
+def is_valid_hmu_float_temperature(raw: str) -> bool:
+    """Return whether an HMU B509 float temperature decode is physically plausible."""
+    try:
+        value = float(raw)
+    except ValueError:
+        return False
+    if value != 0 and abs(value) < _DENORMAL_DECODE_LIMIT:
+        return False
+    return -50 <= value <= 100
+
+
+# Whether a register value ebusd decoded is plausible, so a known wrong decode becomes unavailable instead of data.
+# Only the specific registers with evidence of a bad decode are checked; every other value passes unchanged.
+def is_plausible_decode(circuit: str, name: str, raw: str) -> bool:
+    """Return False for a known wrong decode of the given circuit/register, True otherwise."""
+    circuit_key = circuit.casefold()
+    name_key = name.casefold()
+    if circuit_key == "hmu" and name_key == "sourcetempinput":
+        try:
+            return float(raw) >= -100
+        except ValueError:
+            return False
+    if circuit_key == "hmux0" and name_key in HMUX0_PRECISE_TEMPERATURE_REGISTERS:
+        return is_valid_hmux0_return_temperature(raw)
+    if circuit_key == "hmu" and name_key in HMU_FLOAT_TEMPERATURE_REGISTERS:
+        return is_valid_hmu_float_temperature(raw)
+    return True
+
+
 COMPRESSOR_ACTIVE_STATUS_CODES = {104, 114, 134}
 COMPRESSOR_STATUS_CODES = {
     34,
