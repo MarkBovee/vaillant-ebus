@@ -78,7 +78,6 @@ The normal data flow is: connect to ebusd, discover the device graph, define any
 - Climate entities with quick veto and away mode (calendar-based scheduling) — one thermostat and flow-temperature-range per discovered heating zone on multi-zone systems
 - **Cooling control** — read and write the manual cooling period ("cool until [date]") via the climate COOL mode and dedicated datetime entities
 - Water heater entities with DHW boost and temperature control
-- Room humidity (CTLV2) — not available via standard ebusd MQTT
 - Read & write any register via HA services (`vaillant_ebus.read_parameter`, `vaillant_ebus.write_parameter`)
 - Custom registers via `--enabledefine` (e.g. room humidity, manual cooling dates)
 - YAML overrides for entity metadata (names, icons, units)
