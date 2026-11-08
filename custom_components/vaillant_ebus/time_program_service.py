@@ -103,8 +103,6 @@ async def async_write_time_program(
             read = await access.inspect_day(day)
             if read.readable == 0:
                 raise HomeAssistantError(f"{program}_{day} is not available on this controller")
-            # Check before writing: the count write would otherwise drop slots this configuration cannot read.
-            access.ensure_no_hidden_slots(day, read)
             stored = await access.write_day(
                 day,
                 requested,

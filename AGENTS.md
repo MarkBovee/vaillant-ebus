@@ -30,7 +30,7 @@
 ## Architecture
 
 - `custom_components/vaillant_ebus/coordinator.py` owns connection lifecycle, discovery, polling and caching. It sends the runtime definitions and performs fallback reads, but does not decide them.
-- `backend/runtime_definitions.py` (`build_runtime_defines`) is the single pure builder of runtime `define` strings. `backend/fallback_planner.py` plans active fallback reads. `backend/graph_merge.py` merges graphs and entity lists. All three are pure and testable without HA.
+- `backend/runtime_definitions.py` (`build_runtime_defines`) is the single pure builder of runtime `define` strings. `backend/fallback_planner.py` plans active fallback reads; `backend/reread_plan.py` holds the table of plain-`r` registers it re-reads. `backend/graph_merge.py` merges graphs and entity lists. All four are pure and testable without HA.
 - `backend/hardware_profiles.py` is the one table of firmware/hardware gates (`HMUX0_SW0407`, `VWZIO_SW0500`, ...), each with evidence. Add a revision there, with a capture and a gate test, never as a literal `scan_sw ==` condition elsewhere.
 - `custom_components/vaillant_ebus/backend/ebus_service.py` provides the ebusd transport and handles register reads and writes (writes are verified by read-back). `BusErrorGuard` in the same module pauses the cyclic active reads after repeated bus errors on at least two circuits (issue #193); only a rediscovery requested by the owner resets it, a transport reconnect does not. The fallback plan is interleaved by circuit (`interleave_by_circuit`) so the guard sees a second circuit within its first reads.
 - `custom_components/vaillant_ebus/cleanup.py` finds and removes registry entities that no entity provides any more, and lists enabled entities without data that the discovery switches off by default (`find_dormant`; they are switched off, never deleted, and switch on again by themselves when data arrives). It holds no Home Assistant imports; the options purge and the `stale_entities` repair (`repairs.py`) share it, and nothing changes before a confirmation. Registry fakes in tests must mirror the live shape: since Home Assistant 2026.10 every row has `aliases = [COMPUTED_NAME]` and `DeviceRegistry.devices` is iterated for device entries.
@@ -132,7 +132,8 @@ Climate behavior must follow the corresponding `mypyllant` implementation.
 ## Write Safety Guards
 
 - A guard that protects a write (hidden timer slots, read-back, value range) belongs inside the function that writes,
-  or in one shared helper that every write path calls before the first bus write. Never rely on each caller to
+  or in one shared helper that every write path calls before the first bus write. `TimerProgramAccess.write_day`
+  is the example: it checks its last inspection of the day and refuses a day it never read. Never rely on each caller to
   remember it: the PR #229 write action skipped the hidden-slot check the calendar ran, and a count write would have
   dropped slots the integration could not see.
 - Every write path gets a test that refuses the unsafe case and asserts that nothing was written.
@@ -211,9 +212,10 @@ Hard-won facts from the 1.10.x line. Read these before touching `_define_custom_
   (`RunDataFlowTemp`, `RunDataReturnTemp`) have that explicit block; the v1.10.3 regression (#171) was a gate that
   stopped it for SW0406. `RunDataReturnTemp` was historically read only through the `hmu.` alias map key.
 - **A frozen value is almost always a plain-`r` register nobody re-reads.** This bug class came back six times
-  (#171, #193, #207, #213, #223, #227). Before adding another named set to `fallback_planner.py`, check whether the
-  register fits an existing re-read pass (energy interval, every poll, retry after error), and add a fallback-planner
-  test with a positive, an absent and a passive case. Do not add a new ad-hoc list when an existing one fits.
+  (#171, #193, #207, #213, #223, #227). Every re-read lives in one table, `REREAD_RULES` in `backend/reread_plan.py`
+  (issue, cadence, nominator). Add a register to an existing rule, or add one rule there; never add a pass to
+  `fallback_planner.py`. Each nomination still goes through the planner's `_add` gate. Test a positive, an absent and a
+  passive case, and prove unrelated plans unchanged with `tools/differential.py`.
 - **Passive `u` definitions** decode traffic the owner's myVaillant gateway (`f1`) already generates. Prefer them for
   telegrams seen in captures; they cost no bus traffic, so they stay unavailable until the gateway sends the frame.
 - **Firmware gates are explicit.** `hmux0_precise_temperature_owner` admits only a complete, unique HMUX0 scan with

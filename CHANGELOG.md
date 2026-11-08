@@ -22,6 +22,14 @@ on HMU00 units whose ebusd configuration defines it.
   now shows the integer ebusd reports. Measurements are unchanged. A template that compares such a sensor with
   `"8.0"` must now compare with `"8"`.
 
+### Changed
+
+- **One table for re-reads.** The registers the integration re-reads itself, because ebusd never polls plain reads,
+  now live in one table (`backend/reread_plan.py`) instead of six separate passes. The planned reads are identical for
+  every community capture.
+- **Time program writes check the day themselves.** The hidden-slot check now runs inside the shared write step, so
+  the calendar, the new actions and any later write path refuse a day with slots they can't read.
+
 ### Documentation
 
 - How to export a discovery dump in current Home Assistant versions (PR #219, thanks @cmarqu).

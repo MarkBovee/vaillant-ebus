@@ -332,3 +332,16 @@ def test_timer_program_handles_24_00() -> None:
     assert TIMER.build_day_writes([slot], True, None) == ["0;1;22:00;24:00;20.0"]
     assert TIMER.slot_to_output(slot) == {"start": "22:00", "end": "24:00", "temperature": 20.0}
     assert TIMER.slot_from_input("22:00", "24:00") == TIMER.TimeSlot(time(22, 0), TIMER.END_OF_DAY)
+
+
+# Intent: `write_day` refuses a day it has not inspected, before any bus write.
+# Why: the hidden-slot guard lives inside `write_day`; a new write path that forgets to read the day first must fail
+#      instead of writing blind (lesson from the PR #229 review).
+async def test_write_day_refuses_a_day_it_never_read() -> None:
+    program = _FakeProgram()
+    access = SERVICE.TimerProgramAccess(_coordinator(program), "Z1Timer", "ctlv2")
+    slot = TIMER.slot_from_input("06:00", "08:00", 21.0)
+
+    with pytest.raises(HomeAssistantError, match="was not read before the change"):
+        await access.write_day("Monday", [slot], True, 21.0)
+    assert program.writes == []

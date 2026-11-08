@@ -6,18 +6,15 @@ the discovered device graph and passes the per-hardware polling restrictions.
 
 from __future__ import annotations
 
-import re
 from collections import deque
 from collections.abc import Callable, Collection, Mapping, Sequence
 
 from .mapping import (
-    HMUX0_SW0407_ACTIVE_READ_REGISTERS,
     HMUX0_SW0407_FALLBACK_NAMES,
     VWZIO_SW0500_FALLBACK_NAMES,
     hmux0_candidate_circuits,
     hmux0_fallback_blocked_circuits,
     hmux0_precise_temperature_owner,
-    hmux0_sw0407_circuit,
     is_field_key,
     metadata_circuits,
     vwz_station_scan_76_circuit,
@@ -30,19 +27,8 @@ from .models import (
     RegisterMeta,
     is_controller_circuit,
     is_heat_pump_circuit,
-    zone_circuit_declared_inactive,
 )
-from .runtime_definitions import (
-    DISCOVERED_PLAIN_READ_POLLED_REGISTERS,
-    HMUX0_COMPRESSOR_COUNTER_NAMES,
-    HWC_TIMER_SLOT_FIELDS,
-    INTEGRATION_POLLED_CONTROLLER_REGISTERS,
-)
-
-# Register names of the HMUX0 precise (1/16 degC) temperatures that need an explicit active read.
-HMUX0_PRECISE_TEMPERATURE_NAMES = ("RunDataFlowTemp", "RunDataReturnTemp")
-# Heating-circuit state registers the climate entity derives `hvac_action` from (issue #207).
-ZONE_STATE_REGISTER = re.compile(r"^Hc(\d+)(?:Pump)?Status$", re.IGNORECASE)
+from .reread_plan import hmux0_sw0407_active_reads, plan_rereads
 
 
 # Select a unique discovered owner for a logical register map entry.
@@ -95,41 +81,6 @@ def fallback_candidate(
     return None
 
 
-# Nominate `Hc<N>Status`/`Hc<N>PumpStatus` of the discovered controller for an active read.
-# Only keys the graph lists under the controller circuit count, and a circuit the controller reports as inactive is
-# skipped: it has no climate entity, so reading it would only cost bus time.
-def _add_zone_state_reads(graph: DeviceGraph, add: Callable[[str, str], None]) -> None:
-    controller = graph.heating_controller_result().node
-    if controller is None:
-        return
-    prefix = f"{controller.circuit}.".casefold()
-    for key in graph.raw_registers:
-        if not key.casefold().startswith(prefix):
-            continue
-        match = ZONE_STATE_REGISTER.match(key.split(".", 1)[1])
-        if match and not zone_circuit_declared_inactive(graph, controller.circuit, match.group(1)):
-            add(controller.circuit, key.split(".", 1)[1])
-
-
-# List the SW0407 registers the integration defined itself and must read actively, on the confirmed owner only.
-# Without its runtime definition ebusd cannot read the register, so nothing is nominated when the define is absent.
-def _hmux0_sw0407_active_reads(graph: DeviceGraph, runtime_definitions: Mapping[str, str]) -> list[tuple[str, str]]:
-    owner = hmux0_sw0407_circuit(graph)
-    if owner is None:
-        return []
-    reads: list[tuple[str, str]] = []
-    for definition in runtime_definitions.values():
-        parts = definition.split(",", 3)
-        if (
-            len(parts) >= 3
-            and parts[0] == "r"
-            and parts[1].casefold() == owner.casefold()
-            and parts[2] in HMUX0_SW0407_ACTIVE_READ_REGISTERS
-        ):
-            reads.append((owner, parts[2]))
-    return reads
-
-
 # List the (circuit, register) pairs to read actively, in order, without duplicates.
 # Fallback probes must not bypass per-register polling restrictions. Registers whose cached ebusd value is an error are
 # skipped, except the keys in `retry_reads`: ebusd keeps a transient error until the next read, so without an occasional
@@ -174,7 +125,7 @@ def plan_fallback_reads(
     hmux0_precise_temperature = hmux0_precise_temperature_owner(graph)
     vwzio_sw0500 = vwzio_sw0500_circuit(graph)
     vwz_station_76 = vwz_station_scan_76_circuit(graph)
-    sw0407_active_reads = _hmux0_sw0407_active_reads(graph, runtime_definitions)
+    sw0407_active_reads = hmux0_sw0407_active_reads(graph, runtime_definitions)
     sw0407_active_keys = {(circuit.casefold(), name.casefold()) for circuit, name in sw0407_active_reads}
 
     # Add each resolved fallback candidate once.
@@ -219,50 +170,10 @@ def plan_fallback_reads(
             seen.add(key)
             candidates.append(key)
 
-    # Plain-r B516 definitions are not polled by ebusd. Re-read supported
-    # counters even after find has cached their first value (#53/#97).
-    # The same holds for the controller registers moved from `r5` to `r` (#193) and the hot water timer slots
-    # defined for issue #208: without this pass their value would freeze at the first read.
-    if include_energy and graph:
-        for definition in runtime_definitions.values():
-            access, circuit, name, _, _, _, message = definition.split(",", 7)[:7]
-            if (
-                access == "r"
-                and (
-                    message == "B516"
-                    or (message == "B511" and name in HMUX0_COMPRESSOR_COUNTER_NAMES)
-                    or (message == "B524" and name in INTEGRATION_POLLED_CONTROLLER_REGISTERS)
-                    or (message == "B555" and definition.endswith(HWC_TIMER_SLOT_FIELDS))
-                )
-                and any(node_key.casefold() == circuit.casefold() for node_key in graph.nodes)
-            ):
-                _add(circuit, name)
-        # Issue #227 - the same holds for plain-`r` registers ebusd's own CSV defines. `_add` still drops passive
-        # (HMUX0 SW0407) and withheld keys, so only a register ebusd can actually read is requested.
-        for key in (*graph.raw_registers, *graph.placeholder_registers):
-            circuit, _, name = key.partition(".")
-            if name in DISCOVERED_PLAIN_READ_POLLED_REGISTERS:
-                _add(circuit, name)
-
-    # The HMUX0 precise temperatures are plain-`r` messages that ebusd never polls. Their register_map key
-    # matches the graph key, so the map-driven pass below skips them once `find` lists them; read them
-    # explicitly for the evidenced firmware so the value follows the heat pump instead of ebusd's cache (#171).
-    if hmux0_precise_temperature is not None and graph:
-        discovered_keys = {key.casefold() for key in (*graph.raw_registers, *graph.placeholder_registers)}
-        for name in HMUX0_PRECISE_TEMPERATURE_NAMES:
-            if f"{hmux0_precise_temperature}.{name}".casefold() in discovered_keys:
-                _add(hmux0_precise_temperature, name)
-
-    # SW0407 registers the integration defines itself as plain `r` (discussion #213): ebusd never polls them and
-    # `find` lists them after the define, so the map-driven pass would read them only once.
-    for circuit, name in sw0407_active_reads:
+    # Plain-`r` registers ebusd never polls: every rule lives in `reread_plan.REREAD_RULES` (#171, #193, #207,
+    # #213, #227). Each read still passes `_add`, so a rule cannot bypass a passive, withheld or hardware gate.
+    for circuit, name in plan_rereads(graph, runtime_definitions, include_energy=include_energy):
         _add(circuit, name)
-
-    # Zone state for the climate action (issue #207): ebusd's own CSV defines `Hc<N>Status` and `Hc<N>PumpStatus` as
-    # plain `r`, so ebusd never polls them and the map-driven pass skips them once `find` lists them. Without this
-    # read `hvac_action` keeps its first value. Read them every cycle from the discovered controller only.
-    if graph:
-        _add_zone_state_reads(graph, _add)
 
     # Map-driven reads: registers with metadata not yet in the graph.
     graph_key_folds = {key.casefold() for key in graph_keys}

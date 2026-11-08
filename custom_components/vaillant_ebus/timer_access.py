@@ -59,6 +59,8 @@ class TimerProgramAccess:
         self.circuit = circuit
         # Slots per weekday that this configuration can read, learned at each read of the day.
         self.readable_slots: dict[str, int] = {}
+        # The last inspection of each weekday. `write_day` checks it for hidden slots before its first bus write.
+        self._last_reads: dict[str, DayRead] = {}
 
     # Read one weekday without judging it: slots, layout, count and how many slot messages decode.
     # `force` reads past ebusd's cache; a read for display may use the cache.
@@ -67,22 +69,26 @@ class TimerProgramAccess:
         slots = [slot for slot in (parse_slot(value) for value in raw) if slot is not None]
         readable = sum(value is not None for value in raw)
         self.readable_slots[day] = readable
-        return DayRead(
+        read = DayRead(
             slots=slots,
             with_temperature=any(has_temperature_column(value) for value in raw if value),
             counted=await self._slot_count(day, force),
             readable=readable,
         )
+        self._last_reads[day] = read
+        return read
 
     # Read every slot of a weekday straight from the controller and check that none is hidden.
     # Returns the visible slots in order and whether the layout carries a temperature per slot.
     async def read_day(self, day: str) -> tuple[list[TimeSlot], bool]:
         read = await self.inspect_day(day)
         self.ensure_no_hidden_slots(day, read)
-        return read.slots, read.with_temperature
+        # A copy: callers edit the list in place (the calendar pops a slot), and the guard in `write_day` must still
+        # see what the controller answered.
+        return list(read.slots), read.with_temperature
 
     # Refuse a change to a day that holds a slot this configuration cannot read, because rewriting the day would
-    # drop it. Shared by the calendar and the write action, so both refuse before anything is written.
+    # drop it. `write_day` runs it before its first write, so every write path refuses before anything is written.
     @staticmethod
     def ensure_no_hidden_slots(day: str, read: DayRead) -> None:
         if read.counted is None and read.readable < MAX_SLOTS_PER_DAY:
@@ -106,6 +112,13 @@ class TimerProgramAccess:
         default_temperature: float | None,
         compare_temperature: bool = False,
     ) -> list[TimeSlot]:
+        # The hidden-slot guard lives here, not in the callers: the PR #229 action skipped it once, and the count
+        # write would have dropped slots this configuration cannot read. Without an inspection there is nothing to
+        # check, so the write is refused.
+        last_read = self._last_reads.get(day)
+        if last_read is None:
+            raise HomeAssistantError(f"{self.prefix}_{day} was not read before the change; nothing was changed")
+        self.ensure_no_hidden_slots(day, last_read)
         readable = self.readable_slots.get(day, MAX_SLOTS_PER_DAY)
         if len(slots) > readable:
             # A slot the configuration cannot read back could neither be checked nor shown (issue #208 config).
