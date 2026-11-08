@@ -2463,6 +2463,8 @@ async def test_async_setup_registers_all_services_with_entry_selector() -> None:
     hass = MagicMock()
     registered: dict[str, object] = {}
 
+    # Intent: record each registered service schema by name.
+    # Why: the test compares the full set of services.
     def _register(domain, name, handler, schema=None, supports_response=None):  # noqa: ARG001
         registered[name] = schema
 
@@ -2489,6 +2491,8 @@ async def test_registered_service_handlers_are_async_callbacks() -> None:
     hass = MagicMock()
     registered: dict[str, object] = {}
 
+    # Intent: record each registered service handler by name.
+    # Why: the test checks that every handler is async.
     def _register(domain, name, handler, schema=None, supports_response=None):  # noqa: ARG001
         registered[name] = handler
 

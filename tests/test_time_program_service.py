@@ -259,6 +259,21 @@ async def test_write_reports_an_ignored_day_and_the_days_before_it() -> None:
     assert program.days["Wednesday"] == []
 
 
+# Intent: writing a day that holds a slot the configuration cannot read is refused before anything is written,
+#         and the hidden slots stay stored.
+# Why: review of PR #229 - the write action skipped the hidden-slot check, so on the issue #208 configuration the
+#      count write `0;1;...` silently dropped the two slots the integration could not see.
+async def test_write_refuses_a_day_with_hidden_slots() -> None:
+    program = _FakeProgram(prefix="HwcTimer", with_temperature=False, readable=1, count_name="Timeslots")
+    program.days["Tuesday"] = [("03:00", "03:10", "-"), ("03:20", "03:30", "-")]
+    slot = [{"start": "06:00", "end": "08:00"}]
+
+    with pytest.raises(HomeAssistantError, match="days already written: none"):
+        await SERVICE.async_write_time_program(_coordinator(program), "HwcTimer", ["tuesday"], slot)
+    assert program.writes == []
+    assert len(program.days["Tuesday"]) == 2
+
+
 # Intent: a stored temperature that differs from the requested one fails the write.
 # Why: the card's promise is that what it shows is what the controller has; a dropped temperature must not pass.
 async def test_write_checks_the_temperature() -> None:

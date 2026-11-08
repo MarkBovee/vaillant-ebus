@@ -33,9 +33,9 @@ from .models import (
     zone_circuit_declared_inactive,
 )
 from .runtime_definitions import (
+    DISCOVERED_PLAIN_READ_POLLED_REGISTERS,
     HMUX0_COMPRESSOR_COUNTER_NAMES,
     HWC_TIMER_SLOT_FIELDS,
-    DISCOVERED_PLAIN_READ_POLLED_REGISTERS,
     INTEGRATION_POLLED_CONTROLLER_REGISTERS,
 )
 

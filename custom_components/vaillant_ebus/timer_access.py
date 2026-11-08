@@ -78,6 +78,13 @@ class TimerProgramAccess:
     # Returns the visible slots in order and whether the layout carries a temperature per slot.
     async def read_day(self, day: str) -> tuple[list[TimeSlot], bool]:
         read = await self.inspect_day(day)
+        self.ensure_no_hidden_slots(day, read)
+        return read.slots, read.with_temperature
+
+    # Refuse a change to a day that holds a slot this configuration cannot read, because rewriting the day would
+    # drop it. Shared by the calendar and the write action, so both refuse before anything is written.
+    @staticmethod
+    def ensure_no_hidden_slots(day: str, read: DayRead) -> None:
         if read.counted is None and read.readable < MAX_SLOTS_PER_DAY:
             # Without a count message, an undefined slot read could hide a slot; only a fully readable day is safe.
             raise HomeAssistantError(
@@ -87,7 +94,6 @@ class TimerProgramAccess:
             ensure_all_slots_visible(day, read.slots, read.counted)
         except TimerProgramError as exc:
             raise HomeAssistantError(str(exc)) from exc
-        return read.slots, read.with_temperature
 
     # Write one weekday slot by slot, then read it back and refresh the coordinator.
     # A write the controller acknowledges but ignores is caught by comparing the read-back with the request.
