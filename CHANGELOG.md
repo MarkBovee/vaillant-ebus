@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.14.0 - 2026-11-08
+
+Read and write whole time programs from automations and dashboards, and the heat pump's momentary power now updates
+on HMU00 units whose ebusd configuration defines it.
+
+### Added
+
+- **Time program actions** (PR #229, thanks @citoki). `vaillant_ebus.read_time_program` returns all seven weekdays of
+  a controller program (`Z1Timer`, `HwcTimer`, `CcTimer`, ...) with start, end and target temperature per slot.
+  `vaillant_ebus.write_time_program` replaces the slots of one or more weekdays, reads each day back and fails with
+  the days already written when the controller did not store them. A slot that ends at midnight (`24:00`) is now kept
+  instead of being read as empty.
+
+### Fixed
+
+- **Power Consumption (HMU) stays unknown** (issue #227). On HMU00 units whose ebusd configuration defines
+  `PowerConsumptionHmu` as a plain read (for example `08.hmu.HW5103.csv`), nothing ever requested it, so the entity
+  never got a value. The integration now reads it on the energy interval. The entity is still off by default.
+- **Integer text sensors show `8` instead of `8.0`** (issue #205). A sensor without a unit, such as Hydraulic Scheme,
+  now shows the integer ebusd reports. Measurements are unchanged.
+
+### Documentation
+
+- How to export a discovery dump in current Home Assistant versions (PR #219, thanks @cmarqu).
+- Room humidity is no longer listed as unique to this integration, since upstream ebusd defines it too (PR #228,
+  thanks @citoki).
+
 ## 1.13.10 - 2026-11-05
 
 After an ebusd restart, the zone settings stay switched on while ebusd is still reading them.

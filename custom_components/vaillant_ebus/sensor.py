@@ -139,6 +139,10 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
         # Numeric registers become floats; unitless text registers (status
         # codes) keep their raw string so the UI still shows something useful.
         val: float | str | None
+        # Issue #205 - a sensor without unit or state class is shown as text, so ebusd's `8` must not become `8.0`
+        # (Hydraulic Scheme). Measurements keep the float so their statistics do not change type.
+        if self._shows_as_text() and raw.lstrip("-").isdigit():
+            return str(int(raw))
         try:
             val = float(raw)
         except ValueError, TypeError:
@@ -151,6 +155,11 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
             if divisor:
                 val = val / divisor
         return val
+
+    # True when Home Assistant shows this sensor's state as plain text: no unit, state class, device class or divisor.
+    def _shows_as_text(self) -> bool:
+        meta = self._desc.meta
+        return not (meta.unit or meta.state_class or meta.device_class or meta.divisor)
 
     # Available while coordinator updates succeed. A missing register key shows as unknown (native_value None) without
     # flipping availability, so idle 'no data stored' registers do not flicker.

@@ -295,6 +295,26 @@ def test_controller_registers_moved_off_r5_are_reread_on_the_energy_interval() -
     assert not any(item.startswith("r5,") and item.split(",")[2] in expected for item in defines)
 
 
+# Intent: a `PowerConsumptionHmu` that ebusd's own CSV lists is re-read on the energy interval under its discovered
+#         circuit, not on the normal poll, and nothing is planned when the register is absent or passive.
+# Why: issue #227 - on HMU00 HW5103 it is a plain `r` message in `08.hmu.HW5103.csv`; ebusd never polls it and the
+#      map-driven pass skipped it because `find` lists it, so the entity stayed unknown forever.
+def test_issue227_discovered_power_consumption_is_reread_on_energy_interval() -> None:
+    hmu = _node("hmu", MODELS.DeviceType.HEAT_PUMP)
+    graph = _mini_graph({"hmu": hmu}, raw={"hmu.PowerConsumptionHmu": "0.4508"})
+
+    assert ("hmu", "PowerConsumptionHmu") in _plan_mini(graph, include_energy=True)
+    assert ("hmu", "PowerConsumptionHmu") not in _plan_mini(graph)
+    absent = _mini_graph({"hmu": hmu}, raw={"hmu.FlowTemp": "30.0"})
+    assert not any(name == "PowerConsumptionHmu" for _, name in _plan_mini(absent, include_energy=True))
+    passive = {"u.hmu.PowerConsumptionHmu": "u,hmu,PowerConsumptionHmu,PowerConsumptionHmu,f1,08,B516,14,ign"}
+    find_keys = set(graph.raw_registers)
+    planned = PLANNER.plan_fallback_reads(
+        graph, find_keys, passive, lambda _c: None, MAPPING.REGISTER_MAP, include_energy=True
+    )
+    assert ("hmu", "PowerConsumptionHmu") not in planned
+
+
 # Intent: the zone state registers of active heating circuits are read every cycle from the discovered controller,
 #         and an inactive circuit or a graph without them adds no read.
 # Why: issue #207 - ebusd's CSV defines `Hc<N>Status`/`Hc<N>PumpStatus` as plain `r`, so once `find` lists them nothing

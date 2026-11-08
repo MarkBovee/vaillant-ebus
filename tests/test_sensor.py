@@ -79,3 +79,12 @@ def test_sensor_availability_tracks_coordinator_not_register() -> None:
     assert s.available is True
     c.last_update_success = False
     assert s.available is False
+
+
+# Intent: an integer from ebusd on a text-style sensor (no unit or state class) stays an integer string, while a
+#         decimal value and a sensor with a unit keep the float.
+# Why: issue #205 - Hydraulic Scheme showed `8.0` for ebusd's `8`; measurements must not change type in statistics.
+def test_issue205_integer_text_sensor_is_not_shown_as_float() -> None:
+    assert _sensor(_coordinator({"hmu.HydraulicScheme.value": "8"}), _desc("HydraulicScheme", "")).native_value == "8"
+    assert _sensor(_coordinator({"hmu.HydraulicScheme.value": "8.5"}), _desc("HydraulicScheme", "")).native_value == 8.5
+    assert _sensor(_coordinator({"hmu.OutsideTemp.value": "8"})).native_value == 8.0

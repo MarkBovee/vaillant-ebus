@@ -137,6 +137,11 @@ INTEGRATION_POLLED_CONTROLLER_REGISTERS = frozenset(
     {"z1RoomHumidity", "ManualCoolingStartDate", "ManualCoolingEndDate"}
 )
 
+# Heat-pump registers that ebusd's own CSV defines as plain `r` (issue #227: `PowerConsumptionHmu`, `b516 14` in
+# `08.hmu.HW5103.csv`). ebusd never polls them and `find` lists them, so the map-driven pass skips them; the energy
+# poll re-reads them on the circuit where they were discovered.
+DISCOVERED_PLAIN_READ_POLLED_REGISTERS = frozenset({"PowerConsumptionHmu"})
+
 # Hot water timer slots 1 and 2 per weekday, read with `B555 a5 00 02 <day> <slot>` (issue #208).
 # The 7-byte answer is status, from HH MM, to HH MM and 2 bytes (probably the slot temperature). The status byte is
 # ignored like in the shipped slot-0 message: a missing slot (status 02) answers 00:00-00:00, which reads as empty.

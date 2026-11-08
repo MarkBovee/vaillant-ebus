@@ -35,6 +35,7 @@ from .models import (
 from .runtime_definitions import (
     HMUX0_COMPRESSOR_COUNTER_NAMES,
     HWC_TIMER_SLOT_FIELDS,
+    DISCOVERED_PLAIN_READ_POLLED_REGISTERS,
     INTEGRATION_POLLED_CONTROLLER_REGISTERS,
 )
 
@@ -235,6 +236,12 @@ def plan_fallback_reads(
                 )
                 and any(node_key.casefold() == circuit.casefold() for node_key in graph.nodes)
             ):
+                _add(circuit, name)
+        # Issue #227 - the same holds for plain-`r` registers ebusd's own CSV defines. `_add` still drops passive
+        # (HMUX0 SW0407) and withheld keys, so only a register ebusd can actually read is requested.
+        for key in (*graph.raw_registers, *graph.placeholder_registers):
+            circuit, _, name = key.partition(".")
+            if name in DISCOVERED_PLAIN_READ_POLLED_REGISTERS:
                 _add(circuit, name)
 
     # The HMUX0 precise temperatures are plain-`r` messages that ebusd never polls. Their register_map key
