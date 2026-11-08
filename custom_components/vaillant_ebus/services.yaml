@@ -44,6 +44,82 @@ write_parameter:
       selector:
         text:
 
+read_time_program:
+  name: Read Time Program
+  description: >-
+    Read all seven weekdays of a controller time program and return the time slots
+    (start, end and the target temperature, if the program has one). Days whose slots
+    cannot all be read are listed under `incomplete`.
+  fields:
+    program:
+      name: Program
+      description: ebusd message prefix of the program, for example Z1Timer, Z2Timer, HwcTimer or CcTimer.
+      required: true
+      example: Z1Timer
+      selector:
+        text:
+    circuit:
+      name: Circuit
+      description: ebusd circuit of the program. Leave empty to use the discovered heating controller.
+      advanced: true
+      selector:
+        text:
+    force:
+      name: Force
+      description: Read every slot from the controller instead of ebusd's cache.
+      default: false
+      selector:
+        boolean:
+    entry_id:
+      name: Config Entry
+      description: Select the integration config entry when multiple are loaded. Optional with a single entry.
+      advanced: true
+      selector:
+        text:
+
+write_time_program:
+  name: Write Time Program
+  description: >-
+    Replace the time slots of one or more weekdays of a controller time program with the
+    same slots (at most three per day, on the 10-minute grid). Each day is read back after
+    writing; the call fails when the controller did not store the slots. An empty slot
+    list clears the days.
+  fields:
+    program:
+      name: Program
+      description: ebusd message prefix of the program, for example Z1Timer, Z2Timer, HwcTimer or CcTimer.
+      required: true
+      example: Z1Timer
+      selector:
+        text:
+    days:
+      name: Days
+      description: Weekdays to write, for example monday or mon.
+      required: true
+      example: '["monday", "tuesday"]'
+      selector:
+        object:
+    slots:
+      name: Slots
+      description: >-
+        Time slots of each day: start and end as HH:MM (24:00 is a valid end) and, for
+        heating zones and hot water, the target temperature.
+      example: '[{"start": "06:00", "end": "22:00", "temperature": 21.0}]'
+      selector:
+        object:
+    circuit:
+      name: Circuit
+      description: ebusd circuit of the program. Leave empty to use the discovered heating controller.
+      advanced: true
+      selector:
+        text:
+    entry_id:
+      name: Config Entry
+      description: Select the integration config entry when multiple are loaded. Optional with a single entry.
+      advanced: true
+      selector:
+        text:
+
 set_mode_override:
   name: Set Mode Override
   description: Write eloBLOCK B510 thermostat override and optionally keep it alive.

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
@@ -14,6 +16,9 @@ from .backend.entity_factory import EntityDescription
 from .backend.models import derive_operating_state
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator, get_register_value
+
+# A plain ASCII integer from ebusd such as `8` or `-3` (issue #205); zero-padded codes like `0407` do not match.
+_INTEGER_TEXT = re.compile(r"-?(?:0|[1-9][0-9]*)")
 
 
 # Create sensor entities from coordinator entity descriptions
@@ -139,6 +144,10 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
         # Numeric registers become floats; unitless text registers (status
         # codes) keep their raw string so the UI still shows something useful.
         val: float | str | None
+        # Issue #205 - a sensor without unit or state class is shown as text, so ebusd's `8` must not become `8.0`
+        # (Hydraulic Scheme). Measurements keep the float so their statistics do not change type.
+        if self._shows_as_text() and _INTEGER_TEXT.fullmatch(raw):
+            return str(int(raw))
         try:
             val = float(raw)
         except ValueError, TypeError:
@@ -151,6 +160,11 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
             if divisor:
                 val = val / divisor
         return val
+
+    # True when Home Assistant shows this sensor's state as plain text: no unit, state class, device class or divisor.
+    def _shows_as_text(self) -> bool:
+        meta = self._desc.meta
+        return not (meta.unit or meta.state_class or meta.device_class or meta.divisor)
 
     # Available while coordinator updates succeed. A missing register key shows as unknown (native_value None) without
     # flipping availability, so idle 'no data stored' registers do not flicker.
