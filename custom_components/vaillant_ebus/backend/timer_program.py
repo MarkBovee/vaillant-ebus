@@ -15,6 +15,9 @@ WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", 
 MAX_SLOTS_PER_DAY = 3
 # Message suffixes that hold the slot count per weekday; the name differs between ebusd configurations.
 SLOT_COUNT_SUFFIXES = ("Timeframes", "Timeslots")
+# A slot that runs until midnight ends at `24:00` on the controller; `time` has no such value, so the last moment of
+# the day stands for it.
+END_OF_DAY = time.max
 
 
 @dataclass(frozen=True, order=True)
@@ -107,9 +110,12 @@ def ensure_all_slots_visible(day: str, visible: list[TimeSlot], counted: int | N
         )
 
 
-# Parse `HH:MM` into a time.
+# Parse `HH:MM` into a time. The controller ends a slot at midnight with `24:00`, which `time` cannot hold, so that
+# end is kept as `END_OF_DAY` (it still sorts after every other time of the day).
 def _parse_time(text: str) -> time:
     hours, minutes = text.split(":")
+    if int(hours) == 24 and int(minutes) == 0:
+        return END_OF_DAY
     return time(int(hours), int(minutes))
 
 
@@ -121,11 +127,39 @@ def _parse_temperature(text: str) -> float | None:
         return None
 
 
-# Format a time the way ebusd's HTM type expects it.
+# Format a time the way ebusd's HTM type expects it, with `END_OF_DAY` as `24:00`.
 def _format_time(value: time) -> str:
+    if value == END_OF_DAY:
+        return "24:00"
     return f"{value.hour:02d}:{value.minute:02d}"
 
 
 # Format a temperature with one decimal, as the controller stores tenths of a degree.
 def _format_temperature(value: float | None) -> str:
     return "-" if value is None else f"{value:.1f}"
+
+
+# Build a slot from service input: `HH:MM` start and end on the controller's 10-minute grid, optional temperature.
+# Input from a service call is checked strictly, so a typo fails before anything is written.
+def slot_from_input(start: str, end: str, temperature: float | None = None) -> TimeSlot:
+    return TimeSlot(_parse_input_time(start, allow_end_of_day=False), _parse_input_time(end), temperature)
+
+
+# Turn a slot into the plain values a service response carries: `HH:MM` strings and the temperature or None.
+def slot_to_output(slot: TimeSlot) -> dict[str, str | float | None]:
+    return {"start": _format_time(slot.start), "end": _format_time(slot.end), "temperature": slot.temperature}
+
+
+# Check one `HH:MM` time from service input; `24:00` is only valid as an end.
+def _parse_input_time(text: str, allow_end_of_day: bool = True) -> time:
+    parts = str(text).strip().split(":")
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        raise TimerProgramError(f"{text!r} is not a time in HH:MM format")
+    hours, minutes = int(parts[0]), int(parts[1])
+    if hours == 24 and minutes == 0 and allow_end_of_day:
+        return END_OF_DAY
+    if hours > 23 or minutes > 59:
+        raise TimerProgramError(f"{text!r} is not a valid time of day")
+    if minutes % 10:
+        raise TimerProgramError(f"{text!r} is not on the controller's 10-minute grid")
+    return time(hours, minutes)

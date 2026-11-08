@@ -2463,7 +2463,7 @@ async def test_async_setup_registers_all_services_with_entry_selector() -> None:
     hass = MagicMock()
     registered: dict[str, object] = {}
 
-    def _register(domain, name, handler, schema=None):  # noqa: ARG001
+    def _register(domain, name, handler, schema=None, supports_response=None):  # noqa: ARG001
         registered[name] = schema
 
     hass.services.async_register.side_effect = _register
@@ -2471,6 +2471,8 @@ async def test_async_setup_registers_all_services_with_entry_selector() -> None:
     expected = {
         "read_parameter",
         "write_parameter",
+        "read_time_program",
+        "write_time_program",
         "refresh",
         "rediscover",
         "analyze_registers",
@@ -2487,7 +2489,7 @@ async def test_registered_service_handlers_are_async_callbacks() -> None:
     hass = MagicMock()
     registered: dict[str, object] = {}
 
-    def _register(domain, name, handler, schema=None):  # noqa: ARG001
+    def _register(domain, name, handler, schema=None, supports_response=None):  # noqa: ARG001
         registered[name] = handler
 
     hass.services.async_register.side_effect = _register

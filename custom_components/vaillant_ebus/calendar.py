@@ -14,19 +14,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .backend.timer_program import (
-    MAX_SLOTS_PER_DAY,
-    SLOT_COUNT_SUFFIXES,
-    TimerProgramError,
-    TimeSlot,
-    build_day_writes,
-    ensure_all_slots_visible,
-    has_temperature_column,
-    parse_slot,
-    parse_slot_counts,
-)
+from .backend.timer_program import TimeSlot
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator, get_register_value
+from .timer_access import TimerProgramAccess
 
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 SCHEDULES = {
@@ -116,8 +107,8 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         self._attr_device_info = coordinator.get_device_info(device_circuit or self._circuit)
         # One change at a time: each edit reads a whole day and writes it back.
         self._edit_lock = asyncio.Lock()
-        # Slots per weekday that this configuration can read, learned at each read of the day.
-        self._readable_slots: dict[str, int] = {}
+        # Reads and writes of single weekdays, shared with the time program services.
+        self._access = TimerProgramAccess(coordinator, prefix, self._circuit or "")
         if prefix in WRITABLE_PREFIXES:
             self._attr_supported_features = (
                 CalendarEntityFeature.CREATE_EVENT
@@ -211,67 +202,11 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
     # Read every slot of a weekday straight from the controller and check that none is hidden.
     # Returns the visible slots in order and whether the layout carries a temperature per slot.
     async def _read_day(self, day: str) -> tuple[list[TimeSlot], bool]:
-        raw = [await self._read(f"{self._prefix}_{day}{index}") for index in range(MAX_SLOTS_PER_DAY)]
-        slots = [slot for slot in (parse_slot(value) for value in raw) if slot is not None]
-        counted = await self._slot_count(day)
-        if counted is None and any(value is None for value in raw):
-            # Without a count message, an undefined slot read could hide a slot; only a fully readable day is safe.
-            raise HomeAssistantError(
-                f"Not every time slot of {day} can be read on this controller; nothing was changed"
-            )
-        try:
-            ensure_all_slots_visible(day, slots, counted)
-        except TimerProgramError as exc:
-            raise HomeAssistantError(str(exc)) from exc
-        self._readable_slots[day] = sum(value is not None for value in raw)
-        return slots, any(has_temperature_column(value) for value in raw if value)
+        return await self._access.read_day(day)
 
-    # Write one weekday slot by slot, then read it back and refresh the calendar.
-    # A write the controller acknowledges but ignores is caught by comparing the read-back with the request.
+    # Write one weekday slot by slot; the shared access reads it back and refreshes the coordinator.
     async def _write_day(self, day: str, slots: list[TimeSlot], with_temperature: bool) -> None:
-        readable = self._readable_slots.get(day, MAX_SLOTS_PER_DAY)
-        if len(slots) > readable:
-            # A slot the configuration cannot read back could neither be checked nor shown (issue #208 config).
-            raise HomeAssistantError(
-                f"This controller configuration can only read {readable} time slot(s) per day; nothing was changed"
-            )
-        try:
-            writes = build_day_writes(slots, with_temperature, self._default_temperature(slots))
-        except TimerProgramError as exc:
-            raise HomeAssistantError(str(exc)) from exc
-        name = f"{self._prefix}_{day}"
-        for value in writes:
-            ok = await self.coordinator.async_write_register(
-                self._circuit or "", name, value, strict_verify=False, refresh=False, require_discovered=False
-            )
-            if not ok:
-                raise HomeAssistantError(f"ebusd did not accept writing {value!r} to {name}")
-        stored, _ = await self._read_day(day)
-        if [(slot.start, slot.end) for slot in stored] != [(slot.start, slot.end) for slot in sorted(slots)]:
-            raise HomeAssistantError(f"The controller did not store the new time slots for {day}")
-        await self.coordinator.async_request_refresh()
-
-    # Read one register past ebusd's cache; a message this configuration does not define reads as no value.
-    # Any other failure stops the change: a slot that could not be read would look free, and rewriting the day
-    # would then drop it.
-    async def _read(self, name: str) -> str | None:
-        value = await self.coordinator.async_read_register(self._circuit or "", name, force=True)
-        if value is None or (value.startswith("ERR:") and "element not found" not in value.casefold()):
-            # One retry: a single bus error (a read timeout on the owner's controller) should not block the change.
-            value = await self.coordinator.async_read_register(self._circuit or "", name, force=True)
-        if value is not None and "element not found" in value.casefold():
-            return None
-        if value is None or value.startswith("ERR:"):
-            raise HomeAssistantError(f"Could not read {name} from the controller; nothing was changed")
-        return value
-
-    # Read the controller's slot count for a weekday, or None when this configuration has no count message.
-    async def _slot_count(self, day: str) -> int | None:
-        for suffix in SLOT_COUNT_SUFFIXES:
-            counts = parse_slot_counts(await self._read(f"{self._prefix}_{suffix}"))
-            if counts is not None:
-                return counts[WEEKDAYS.index(day)]
-        return None
+        await self._access.write_day(day, slots, with_temperature, self._default_temperature(slots))
 
     # The temperature for a new slot: one of the day's slots, else the hot water setpoint.
     def _default_temperature(self, slots: list[TimeSlot]) -> float | None:

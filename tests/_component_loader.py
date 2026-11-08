@@ -557,6 +557,7 @@ def _load_calendar(root: MagicMock) -> None:
     sys.modules["homeassistant.util"] = ha_util
     sys.modules["homeassistant.util.dt"] = ha_util.dt
     root.helpers.update_coordinator.CoordinatorEntity = _MockCalendarCoordinatorEntity
+    _exec_source("vaillant_ebus.timer_access", COMPONENT_PATH / "timer_access.py")
     _exec_source("vaillant_ebus.calendar", COMPONENT_PATH / "calendar.py")
 
 
@@ -600,6 +601,7 @@ def _load_sensor(root: MagicMock) -> None:
 def _load_remaining_components() -> None:
     _exec_source("vaillant_ebus.dump_service", COMPONENT_PATH / "dump_service.py")
     _exec_source("vaillant_ebus.migration", COMPONENT_PATH / "migration.py")
+    _exec_source("vaillant_ebus.time_program_service", COMPONENT_PATH / "time_program_service.py")
     _exec_source("vaillant_ebus.integration_init", COMPONENT_PATH / "__init__.py")
 
 
