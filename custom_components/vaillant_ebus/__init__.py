@@ -6,7 +6,7 @@ import logging
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry
@@ -17,6 +17,7 @@ from .const import DOMAIN, PLATFORMS
 from .coordinator import VaillantCoordinator
 from .dump_service import async_export_discovery_dump
 from .migration import remove_legacy_datetime_date_entities
+from .time_program_service import PROGRAM_PATTERN, async_read_time_program, async_write_time_program
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +51,36 @@ def _service_handler(hass: HomeAssistant, handler):
         await handler(hass, call)
 
     return callback
+
+
+# Like _service_handler, for services that return data to the caller.
+def _response_handler(hass: HomeAssistant, handler):
+    # Registered service callback: return what the handler returns as the service response.
+    async def callback(call: ServiceCall) -> ServiceResponse:
+        return await handler(hass, call)
+
+    return callback
+
+
+# Read all weekdays of a timer program and return them, e.g. for a dashboard card.
+async def _svc_read_time_program(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
+    return await async_read_time_program(
+        _resolve_coordinator(hass, call),
+        call.data["program"],
+        call.data.get("circuit"),
+        call.data.get("force", False),
+    )
+
+
+# Replace the slots of one or more weekdays of a timer program and return what the controller stored.
+async def _svc_write_time_program(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
+    return await async_write_time_program(
+        _resolve_coordinator(hass, call),
+        call.data["program"],
+        call.data["days"],
+        call.data.get("slots", []),
+        call.data.get("circuit"),
+    )
 
 
 # Read a single register by circuit and name.
@@ -149,6 +180,46 @@ async def _register_services(hass: HomeAssistant) -> None:
                 **_ENTRY_SELECTOR,
             }
         ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "read_time_program",
+        _response_handler(hass, _svc_read_time_program),
+        schema=vol.Schema(
+            {
+                vol.Required("program"): vol.Match(PROGRAM_PATTERN),
+                vol.Optional("circuit"): cv.string,
+                vol.Optional("force", default=False): cv.boolean,
+                **_ENTRY_SELECTOR,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "write_time_program",
+        _response_handler(hass, _svc_write_time_program),
+        schema=vol.Schema(
+            {
+                vol.Required("program"): vol.Match(PROGRAM_PATTERN),
+                vol.Required("days"): vol.All(cv.ensure_list, [cv.string]),
+                vol.Optional("slots", default=[]): vol.All(
+                    cv.ensure_list,
+                    [
+                        vol.Schema(
+                            {
+                                vol.Required("start"): cv.string,
+                                vol.Required("end"): cv.string,
+                                vol.Optional("temperature"): vol.Any(None, vol.Coerce(float)),
+                            }
+                        )
+                    ],
+                ),
+                vol.Optional("circuit"): cv.string,
+                **_ENTRY_SELECTOR,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
         DOMAIN,
