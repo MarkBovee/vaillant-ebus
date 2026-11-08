@@ -88,3 +88,5 @@ def test_issue205_integer_text_sensor_is_not_shown_as_float() -> None:
     assert _sensor(_coordinator({"hmu.HydraulicScheme.value": "8"}), _desc("HydraulicScheme", "")).native_value == "8"
     assert _sensor(_coordinator({"hmu.HydraulicScheme.value": "8.5"}), _desc("HydraulicScheme", "")).native_value == 8.5
     assert _sensor(_coordinator({"hmu.OutsideTemp.value": "8"})).native_value == 8.0
+    assert _sensor(_coordinator({"hmu.Code.value": "0407"}), _desc("Code", "")).native_value == 407.0
+    assert _sensor(_coordinator({"hmu.Code.value": "--5"}), _desc("Code", "")).native_value == "--5"

@@ -19,7 +19,8 @@ on HMU00 units whose ebusd configuration defines it.
   `PowerConsumptionHmu` as a plain read (for example `08.hmu.HW5103.csv`), nothing ever requested it, so the entity
   never got a value. The integration now reads it on the energy interval. The entity is still off by default.
 - **Integer text sensors show `8` instead of `8.0`** (issue #205). A sensor without a unit, such as Hydraulic Scheme,
-  now shows the integer ebusd reports. Measurements are unchanged.
+  now shows the integer ebusd reports. Measurements are unchanged. A template that compares such a sensor with
+  `"8.0"` must now compare with `"8"`.
 
 ### Documentation
 
