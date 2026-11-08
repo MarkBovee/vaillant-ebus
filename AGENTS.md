@@ -129,6 +129,21 @@ Climate behavior must follow the corresponding `mypyllant` implementation.
 - If quick veto is already active in a time-controlled mode, update its temperature without writing a new duration.
 - Preset mapping, HVAC modes, and climate services should remain aligned with `mypyllant`.
 
+## Write Safety Guards
+
+- A guard that protects a write (hidden timer slots, read-back, value range) belongs inside the function that writes,
+  or in one shared helper that every write path calls before the first bus write. Never rely on each caller to
+  remember it: the PR #229 write action skipped the hidden-slot check the calendar ran, and a count write would have
+  dropped slots the integration could not see.
+- Every write path gets a test that refuses the unsafe case and asserts that nothing was written.
+
+## Community Pull Requests
+
+- Review a community PR with an independent reviewer before merging, even when its own tests are green; the PR #229
+  author's 22 tests missed the hidden-slot case.
+- Merge accepted PRs into the release branch, fix findings there as a separate commit, and credit the author in the
+  changelog.
+
 ## Home Assistant Event Loop (No Blocking I/O)
 
 Blocking the event loop stalls all of Home Assistant, most on slow storage such as an SD card. The HACS review of 1.12.2
@@ -195,6 +210,10 @@ Hard-won facts from the 1.10.x line. Read these before touching `_define_custom_
   register that must follow the device needs an explicit read. The HMUX0 precise temperatures
   (`RunDataFlowTemp`, `RunDataReturnTemp`) have that explicit block; the v1.10.3 regression (#171) was a gate that
   stopped it for SW0406. `RunDataReturnTemp` was historically read only through the `hmu.` alias map key.
+- **A frozen value is almost always a plain-`r` register nobody re-reads.** This bug class came back six times
+  (#171, #193, #207, #213, #223, #227). Before adding another named set to `fallback_planner.py`, check whether the
+  register fits an existing re-read pass (energy interval, every poll, retry after error), and add a fallback-planner
+  test with a positive, an absent and a passive case. Do not add a new ad-hoc list when an existing one fits.
 - **Passive `u` definitions** decode traffic the owner's myVaillant gateway (`f1`) already generates. Prefer them for
   telegrams seen in captures; they cost no bus traffic, so they stay unavailable until the gateway sends the frame.
 - **Firmware gates are explicit.** `hmux0_precise_temperature_owner` admits only a complete, unique HMUX0 scan with
@@ -256,6 +275,9 @@ Hard-won facts from the 1.10.x line. Read these before touching `_define_custom_
 Shell notes for agents: on Windows with Git Bash, never pass multi-line Python with backslashes, quotes or `$` through an
 inline heredoc. Write a script file (a scratch directory is fine) and run it. Check `git status` before and after bulk
 downloads. Foreground `sleep` is blocked; wait for CI with the PR status tool, not with a polling loop.
+`python -I` ignores `PYTHONUTF8`; read GitHub JSON with `python -I -X utf8`, or Windows decodes it as cp1252 and fails.
+Run `git fetch --tags origin` and check `git status -sb` before an inbox pass or a release: issues quote releases that a
+stale local `main` does not have.
 
 ## Known Limitations
 
