@@ -382,6 +382,14 @@ def parent_register_name(register_key: str) -> str:
     return register_key.rsplit(".", 1)[0] if is_field_key(register_key) else register_key
 
 
+# These recoVAIR registers return temperature plus a real sensor-status field,
+# not an ebusd transport suffix. The exact names avoid changing V32 boiler data.
+RECOVAIR_TEMPERATURE_REGISTERS = frozenset(
+    f"v32.{name}" for name in ("OutsideAirTemp", "SupplyAirTemp", "ExhaustAirTemp", "ExitAirTemp")
+)
+MULTI_FIELD_FIELDS.update({key: ["value", "sensor"] for key in RECOVAIR_TEMPERATURE_REGISTERS})
+
+
 # Split a raw multi-field value on ';' into named fields; the raw value stays available under 'value'.
 def split_multi_field(register_key: str, raw: str | None) -> dict[str, str | None]:
     """Split a raw register value into named fields; keep the raw value under "value"."""
@@ -391,6 +399,9 @@ def split_multi_field(register_key: str, raw: str | None) -> dict[str, str | Non
         return values
     parts = raw.split(";")
     values.update({field: parts[i] if i < len(parts) else None for i, field in enumerate(fields)})
+    if register_key.casefold() in {key.casefold() for key in RECOVAIR_TEMPERATURE_REGISTERS}:
+        if str(values.get("sensor") or "").strip().casefold() not in {"ok", "0"}:
+            values["value"] = None
     return values
 
 
