@@ -1,0 +1,7 @@
+# recoVAIR VAR 260/4, V32 SW0121/HW9802; owner capture 2026-11-13.
+# Four sequential `ebusctl read -f -v -c v32 <name>` responses, not simultaneous.
+# Only shell prompts removed. No serial numbers or network addresses included.
+v32 OutsideAirTemp temp=6.31;sensor=ok
+v32 SupplyAirTemp temp=17.69;sensor=ok
+v32 ExhaustAirTemp temp=18.50;sensor=ok
+v32 ExitAirTemp temp=7.94;sensor=ok
