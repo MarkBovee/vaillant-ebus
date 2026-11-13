@@ -177,3 +177,13 @@ def test_water_heater_has_no_heating_attribute_without_a_status(data: dict[str, 
         water_heater = EbusdWaterHeater(coordinator, _entry())
 
         assert not water_heater.extra_state_attributes
+
+
+# Intent: a binary sensor reads the CTLV2 pump running states `heat`, `cool` and `exthwc` as on and `off` as off.
+# Why: issue #233 - `Hc1PumpStatus` reports `heat` while the circuit runs, but the binary sensor only knew `on`/`1`
+#      and stayed off.
+def test_issue233_pump_status_running_words_are_on() -> None:
+    true_values = binary_sensor_platform.BINARY_TRUE_VALUES
+
+    assert {"heat", "cool", "exthwc", "on"} <= true_values
+    assert "off" not in true_values

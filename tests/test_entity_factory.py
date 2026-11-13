@@ -1518,3 +1518,19 @@ def test_status07_fields_keep_one_type_and_a_name_with_and_without_data() -> Non
     assert all(len(found) == 1 for found in types.values() if found), types
     assert types["display_b1"] == {"binary_sensor"}
     assert not MAPPING.REGISTER_MAP["hmu.Status07.heaterbackup_b0"].enabled
+
+
+# Intent: a multi-field mapping that lists `value` keeps its base entity next to the other fields; one without `value`
+#         still drops the composite text.
+# Why: issue #237 - `["value", "sensor"]` was treated as composite text, and the field loop skips `value` because the
+#      base entity represents it, so the primary temperature of a recoVAIR register had no entity at all.
+def test_issue237_mapping_with_value_field_keeps_the_base_entity(monkeypatch: pytest.MonkeyPatch) -> None:
+    fields = {"v32.outsideairtemp": ["value", "sensor"], "v32.exitairtemp": ["temp", "sensor"]}
+    monkeypatch.setattr(MAPPING, "_multi_field_lookup", lambda key: fields.get(key.casefold()))
+    graph = DiscoveryService.build_device_graph(["v32 OutsideAirTemp = 11.25;ok", "v32 ExitAirTemp = 9.5;ok"])
+
+    keys = {e.key for e in EntityFactoryService().generate(graph)}
+
+    assert {"v32.OutsideAirTemp.value", "v32.OutsideAirTemp.sensor"} <= keys
+    assert "v32.ExitAirTemp.value" not in keys
+    assert {"v32.ExitAirTemp.temp", "v32.ExitAirTemp.sensor"} <= keys

@@ -36,10 +36,10 @@ def test_rules_name_their_issue_and_keep_planning_order() -> None:
     issues = [rule.issue for rule in REREAD.REREAD_RULES]
 
     assert all(issue.startswith("#") for issue in issues)
-    assert issues == ["#53/#97/#193/#208", "#227", "#171", "#213", "#207"]
+    assert issues == ["#53/#97/#193/#208", "#227", "#233", "#171", "#213", "#207", "#233"]
     cadences = [rule.cadence for rule in REREAD.REREAD_RULES]
-    assert cadences[:2] == [REREAD.Cadence.ENERGY_INTERVAL] * 2
-    assert set(cadences[2:]) == {REREAD.Cadence.EVERY_POLL}
+    assert cadences[:3] == [REREAD.Cadence.ENERGY_INTERVAL] * 3
+    assert set(cadences[3:]) == {REREAD.Cadence.EVERY_POLL}
 
 
 # Intent: only the listed B511/B524/B555 definitions are re-read; other plain-`r` definitions of the same messages and
@@ -57,3 +57,26 @@ def test_energy_polled_definitions_follow_the_name_filters() -> None:
     assert polled("r", "HwcTimer_Monday1", "B555", slot)
     assert not polled("r", "HwcTimer_Monday", "B555", "r,ctlv2,HwcTimer_Monday,x,,15,B555,a500,other,,HTM")
     assert not polled("u", "PowerConsumptionHmu", "B516", "")
+
+
+# Intent: the HMU00 source temperatures are re-read on every poll and its counters on the energy interval, under the
+#         discovered circuit; nothing is nominated when they are absent.
+# Why: issue #233 - these are plain `r` messages in ebusd's HMU CSV, so ebusd never polls them and the values froze
+#      at the first read after a restart.
+def test_issue233_hmu_plain_reads_follow_their_cadence() -> None:
+    hmu = MODELS.DeviceNode(circuit="hmu", device_type=MODELS.DeviceType.HEAT_PUMP)
+    raw = {"hmu.SourceTempOutput": "23.88", "hmu.RunStatsCompressorStarts": "499", "hmu.StatElectricEnergySum": "1"}
+    graph = MODELS.DeviceGraph(nodes={"hmu": hmu}, raw_registers=raw, placeholder_registers=set())
+    absent = MODELS.DeviceGraph(nodes={"hmu": hmu}, raw_registers={"hmu.FlowTemp": "30"}, placeholder_registers=set())
+
+    every_poll = REREAD.plan_rereads(graph, {}, include_energy=False)
+    energy = REREAD.plan_rereads(graph, {}, include_energy=True)
+
+    assert every_poll == [("hmu", "SourceTempOutput")]
+    assert {("hmu", "RunStatsCompressorStarts"), ("hmu", "StatElectricEnergySum")} <= set(energy)
+    assert REREAD.plan_rereads(absent, {}, include_energy=True) == []
+    boiler = MODELS.DeviceNode(circuit="bai", device_type=MODELS.DeviceType.UNKNOWN)
+    on_boiler = MODELS.DeviceGraph(
+        nodes={"bai": boiler}, raw_registers={"bai.StatElectricEnergySum": "1"}, placeholder_registers=set()
+    )
+    assert REREAD.plan_rereads(on_boiler, {}, include_energy=True) == []

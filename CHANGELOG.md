@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.14.1 - 2026-11-13
+
+Fixes for frozen flexoTHERM values, a pump sensor that never turned on, a coarse heat curve step and a missing
+multi-field value.
+
+### Fixed
+
+- **flexoTHERM source temperatures and counters freeze** (issue #233, thanks @szflo). `SourceTempInput` and
+  `SourceTempOutput` are now read on every poll, and `RunStatsCompressorStarts`, `StatElectricEnergySum` and
+  `StatEnvironmentEnergySum` on the energy interval. ebusd's HMU configuration defines them as plain reads that it
+  never polls, so they kept their first value until a restart.
+- **Pump Status (HC) never turns on** (issue #233). On CTLV2 the controller reports the running pump as `heat`,
+  `cool` or `exthwc`; the binary sensor now treats these as on.
+- **Heat curve accepts 0.01 steps** (issue #234, thanks @T3le). `Hc1HeatCurve`, `Hc2HeatCurve` and `Hc3HeatCurve`
+  used a 0.05 step, while the controller stores finer values such as 0.28.
+- **A multi-field register loses its main value** (issue #237, thanks @elowi). A field mapping that lists `value`
+  together with other fields, such as `["value", "sensor"]`, again creates the entity for `value`. Mappings without
+  `value` still drop the combined text, as in 1.13.5.
+
 ## 1.14.0 - 2026-11-08
 
 Read and write whole time programs from automations and dashboards, and the heat pump's momentary power now updates

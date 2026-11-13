@@ -13,6 +13,7 @@ DISCOVERY = load_backend("discovery_service")
 MAPPING = load_backend("mapping")
 MODELS = load_backend("models")
 PLANNER = load_backend("fallback_planner")
+RUNTIME = load_backend("runtime_definitions")
 
 HMUX0_SW0406 = "community/hmux0_issue171_2026-10-03_094933_discovery.yaml"
 FLEXOTHERM = "community/flexotherm_discovery.yaml"
@@ -88,7 +89,9 @@ def test_energy_counter_rereads_require_active_b516_definition_on_known_circuit(
     without_flag = _plan(graph, definitions)
     with_flag = _plan(graph, definitions, include_energy=True)
 
-    assert set(with_flag) - set(without_flag) == {("hmu", "ZzEnergy")}
+    # The discovered heat pump counters of issue #233 also run on the energy interval; they are not definitions.
+    discovered = {("hmu", name) for name in RUNTIME.HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS}
+    assert set(with_flag) - set(without_flag) - discovered == {("hmu", "ZzEnergy")}
     assert set(without_flag) <= set(with_flag)
 
 
