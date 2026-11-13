@@ -86,7 +86,8 @@ async def async_setup_entry(
     coordinator.register_entity_adder("binary_sensor", lambda descriptions: async_add_entities(_build(descriptions)))
 
 
-BINARY_TRUE_VALUES = {"on", "1", "true", "yes", "running", "day"}
+# `heat`, `cool` and `exthwc` are the running states of CTLV2 `Hc<N>PumpStatus` (`off` is the idle state, issue #233).
+BINARY_TRUE_VALUES = {"on", "1", "true", "yes", "running", "day", "heat", "cool", "exthwc"}
 
 
 class EbusdBinarySensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntity):

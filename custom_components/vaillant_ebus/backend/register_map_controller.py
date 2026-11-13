@@ -163,7 +163,8 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
         writable=True,
         min_value=0.1,
         max_value=4.0,
-        step=0.05,
+        # The controller accepts 0.01 steps (issue #234); 0.05 is about 17 % of a low slope such as 0.3.
+        step=0.01,
         entity_type="number",
         entity_category="config",
     ),
@@ -387,7 +388,8 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
         writable=True,
         min_value=0.1,
         max_value=4.0,
-        step=0.05,
+        # The controller accepts 0.01 steps (issue #234); 0.05 is about 17 % of a low slope such as 0.3.
+        step=0.01,
         entity_type="number",
         entity_category="config",
     ),
@@ -498,7 +500,8 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
         writable=True,
         min_value=0.1,
         max_value=4.0,
-        step=0.05,
+        # The controller accepts 0.01 steps (issue #234); 0.05 is about 17 % of a low slope such as 0.3.
+        step=0.01,
         entity_type="number",
         entity_category="config",
     ),

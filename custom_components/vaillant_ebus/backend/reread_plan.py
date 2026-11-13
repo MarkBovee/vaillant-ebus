@@ -20,6 +20,8 @@ from .mapping import HMUX0_SW0407_ACTIVE_READ_REGISTERS, hmux0_precise_temperatu
 from .models import DeviceGraph, zone_circuit_declared_inactive
 from .runtime_definitions import (
     DISCOVERED_PLAIN_READ_POLLED_REGISTERS,
+    HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS,
+    HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS,
     HMUX0_COMPRESSOR_COUNTER_NAMES,
     HWC_TIMER_SLOT_FIELDS,
     INTEGRATION_POLLED_CONTROLLER_REGISTERS,
@@ -75,14 +77,38 @@ def _energy_polled_definitions(graph: DeviceGraph, runtime_definitions: Mapping[
     return reads
 
 
-# Nominate plain-`r` registers that ebusd's own CSV defines (issue #227), on the circuit where they were discovered.
-def _discovered_plain_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
+# Nominate the discovered registers whose name is in `names`, on the circuit where they were discovered. With
+# `circuit`, only registers of that circuit are nominated.
+def _discovered_reads(graph: DeviceGraph, names: frozenset[str], circuit: str | None = None) -> list[Read]:
     reads: list[Read] = []
     for key in (*graph.raw_registers, *graph.placeholder_registers):
-        circuit, _, name = key.partition(".")
-        if name in DISCOVERED_PLAIN_READ_POLLED_REGISTERS:
-            reads.append((circuit, name))
+        key_circuit, _, name = key.partition(".")
+        if name in names and (circuit is None or key_circuit.casefold() == circuit.casefold()):
+            reads.append((key_circuit, name))
     return reads
+
+
+# Nominate plain-`r` registers that ebusd's own CSV defines (issue #227), on the circuit where they were discovered.
+def _discovered_plain_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
+    return _discovered_reads(graph, DISCOVERED_PLAIN_READ_POLLED_REGISTERS)
+
+
+# Nominate the plain-`r` registers in `names` on the unique discovered heat pump only (issue #233).
+def _heat_pump_reads(graph: DeviceGraph, names: frozenset[str]) -> list[Read]:
+    heat_pump = graph.heat_pump_result().node
+    if heat_pump is None:
+        return []
+    return _discovered_reads(graph, names, heat_pump.circuit)
+
+
+# Nominate the heat pump counters of issue #233 for the energy interval.
+def _heat_pump_energy_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
+    return _heat_pump_reads(graph, HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS)
+
+
+# Nominate the heat pump source temperatures of issue #233 for every poll.
+def _heat_pump_every_poll_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
+    return _heat_pump_reads(graph, HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS)
 
 
 # Nominate the HMUX0 precise temperatures on the evidenced firmware owner only (#171), when the graph lists them.
@@ -136,9 +162,11 @@ def _zone_state_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> li
 REREAD_RULES: tuple[RereadRule, ...] = (
     RereadRule("#53/#97/#193/#208", Cadence.ENERGY_INTERVAL, _energy_polled_definitions),
     RereadRule("#227", Cadence.ENERGY_INTERVAL, _discovered_plain_reads),
+    RereadRule("#233", Cadence.ENERGY_INTERVAL, _heat_pump_energy_reads),
     RereadRule("#171", Cadence.EVERY_POLL, _hmux0_precise_temperatures),
     RereadRule("#213", Cadence.EVERY_POLL, hmux0_sw0407_active_reads),
     RereadRule("#207", Cadence.EVERY_POLL, _zone_state_reads),
+    RereadRule("#233", Cadence.EVERY_POLL, _heat_pump_every_poll_reads),
 )
 
 

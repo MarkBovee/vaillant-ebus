@@ -605,8 +605,10 @@ class EntityFactoryService:
                     entity_enabled = False
                 # The composite "a;b;c" text of a multi-field register repeats what the per-field entities expose and
                 # changes on almost every poll, so it gets no entity of its own; a YAML `enabled: true` still adds it.
+                # A mapping that lists `value` itself keeps the base entity: the field loop skips `value` because the
+                # base entity represents it, so dropping the base would lose that measurement (issue #237).
                 field_names = multi_field_fields(rk)
-                composite = bool(field_names) and any(field != "value" for field in field_names or ())
+                composite = bool(field_names) and "value" not in (field_names or ())
                 skip_composite = composite and override.get("enabled") is not True
 
                 dummy_reg = EbusdRegister(

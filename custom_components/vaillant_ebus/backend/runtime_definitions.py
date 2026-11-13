@@ -141,6 +141,13 @@ INTEGRATION_POLLED_CONTROLLER_REGISTERS = frozenset(
 # `08.hmu.HW5103.csv`). ebusd never polls them and `find` lists them, so the map-driven pass skips them; the energy
 # poll re-reads them on the circuit where they were discovered.
 DISCOVERED_PLAIN_READ_POLLED_REGISTERS = frozenset({"PowerConsumptionHmu"})
+# Heat pump counters that ebusd's HMU CSV defines as plain `r` (issue #233), re-read on the energy interval. Only on
+# the discovered heat pump: boilers and hydraulic stations list the same names with other layouts and costs.
+HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS = frozenset(
+    {"RunStatsCompressorStarts", "StatElectricEnergySum", "StatEnvironmentEnergySum"}
+)
+# Heat pump temperatures that ebusd's HMU CSV defines as plain `r` (issue #233), re-read on every poll.
+HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS = frozenset({"SourceTempInput", "SourceTempOutput"})
 
 # Hot water timer slots 1 and 2 per weekday, read with `B555 a5 00 02 <day> <slot>` (issue #208).
 # The 7-byte answer is status, from HH MM, to HH MM and 2 bytes (probably the slot temperature). The status byte is
