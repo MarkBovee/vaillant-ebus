@@ -102,12 +102,15 @@ SYSTEM_AND_OTHER_REGISTERS: dict[str, RegisterMeta] = {
         state_class="measurement",
         entity_type="sensor",
     ),
+    # Only recoVAIR units list `ExitAirTemp`; probing it from the map would read it on every poll on every V32 coupler
+    # whose bus does not have it (for example the boiler-only `v32_boiler_discovery` capture).
     "v32.ExitAirTemp": RegisterMeta(
         friendly_name="Discharge Air Temperature",
         device_class="temperature",
         unit="°C",
         state_class="measurement",
         entity_type="sensor",
+        fallback_read=False,
     ),
     **{
         f"v32.{name}.sensor": RegisterMeta(

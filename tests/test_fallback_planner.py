@@ -370,3 +370,12 @@ def test_issue233_hwc_circulation_pump_status_is_reread_every_poll() -> None:
 
     assert ("ctlv2", "HwcCircPumpStatus") in _plan(listed)
     assert not any(name == "HwcCircPumpStatus" for _, name in _plan(absent, include_energy=True))
+
+
+# Intent: a V32 bus that does not list `ExitAirTemp` gets no read for it from the register map.
+# Why: PR #241 mapped the recoVAIR discharge temperature; without `fallback_read=False` the map-driven pass probed it
+#      on every poll on boiler-only V32 couplers.
+def test_pr241_exit_air_temp_is_not_probed_on_a_boiler_only_v32() -> None:
+    graph = _graph("community/v32_boiler_discovery.yaml")
+
+    assert ("v32", "ExitAirTemp") not in _plan(graph, include_energy=True)
