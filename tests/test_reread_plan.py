@@ -36,10 +36,10 @@ def test_rules_name_their_issue_and_keep_planning_order() -> None:
     issues = [rule.issue for rule in REREAD.REREAD_RULES]
 
     assert all(issue.startswith("#") for issue in issues)
-    assert issues == ["#53/#97/#193/#208", "#227", "#233", "#171", "#213", "#207", "#233"]
+    assert issues == ["#53/#97/#193/#208", "#227", "#233", "#233 SW0308", "#171", "#213", "#207", "#233", "#233 HWC"]
     cadences = [rule.cadence for rule in REREAD.REREAD_RULES]
-    assert cadences[:3] == [REREAD.Cadence.ENERGY_INTERVAL] * 3
-    assert set(cadences[3:]) == {REREAD.Cadence.EVERY_POLL}
+    assert cadences[:4] == [REREAD.Cadence.ENERGY_INTERVAL] * 4
+    assert set(cadences[4:]) == {REREAD.Cadence.EVERY_POLL}
 
 
 # Intent: only the listed B511/B524/B555 definitions are re-read; other plain-`r` definitions of the same messages and

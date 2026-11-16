@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.14.2 - 2026-11-16
+
+Entities on Saunier Duval F34 systems no longer drop out after a day or two, flexoTHERM SW0308 gets a working
+compressor start counter, and recoVAIR units keep their air temperatures.
+
+### Fixed
+
+- **Entities go unknown and the stale-entities repair grows over time** (issue #152, thanks @TheMagnificent7). The
+  F34 boiler and BASS controller sometimes answer a read with a single byte. ebusd then keeps `ERR: invalid position
+  ... / 0101` for that register, and the integration treated it as a permanent layout error: it never read the
+  register again and switched its entity off. Such an answer is now read again on the placeholder interval, so the
+  value comes back by itself. A layout error with a real answer length still stays skipped. This also explains the
+  ghost Zone 3: its circuit type was stuck on that error.
+- **Compressor Starts jumps up and down on flexoTHERM HMU00 SW0308** (issue #233, thanks @szflo). On that firmware
+  `RunStatsCompressorStarts` is not a start counter. It no longer gets an entity or a read there; the integration
+  reads `StatCompressorStarts` on the energy interval instead. Other firmware keeps `RunStatsCompressorStarts`. On
+  SW0308 the old Compressor Starts entity stops updating; the stale-entities repair offers to remove it.
+- **DHW circulation pump status goes unknown** (issue #233). `HwcCircPumpStatus` of the controller is now read on
+  every poll.
+
+### Added
+
+- **recoVAIR air temperatures and sensor status** (PR #241, thanks @elowi). `SupplyAirTemp`, `ExhaustAirTemp`,
+  `OutsideAirTemp` and `ExitAirTemp` keep their temperature entity and get a diagnostic sensor-status entity. A
+  temperature whose sensor does not report `ok` is unavailable instead of a wrong number.
+
 ## 1.14.1 - 2026-11-13
 
 Fixes for frozen flexoTHERM values, a pump sensor that never turned on, a coarse heat curve step and a missing

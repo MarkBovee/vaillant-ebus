@@ -113,6 +113,29 @@ CTLV2_SW0514 = HardwareProfile(
 HMU00_HW5103 = HardwareProfile(
     name="hmu00_hw5103", scan_type="hmu00", hw=frozenset({"5103"}), evidence="upstream PR #614"
 )
+# flexoTHERM HMU00 SW0308/HW0403: B509 `RunStatsCompressorStarts` is no start counter there. Re-read on 1.14.1 it rose
+# about 4 per 5 minutes while the compressor ran and fell by 2 while it was off (issue #233 timeline); three captures
+# of the same unit show 624 and 560 weeks apart. The B51A `StatCompressorStarts` matches `CompressorStarts` instead.
+# On HMU00 SW0522/HW5103 (owner) the B509 counter rises by exactly one per start, so the gate stays on SW0308.
+HMU00_SW0308 = HardwareProfile(
+    name="hmu00_sw0308",
+    scan_type="hmu00",
+    device_type="HEAT_PUMP",
+    sw=frozenset({"0308"}),
+    hw=frozenset({"0403"}),
+    evidence="issue #233 timeline; flexotherm_issue102 and hmu00_issue102 captures",
+)
+
+# Registers a firmware reports with a layout that does not match their name. They get no entity and no active read on
+# the profile's owner; a YAML `enabled: true` override still creates the entity.
+UNRELIABLE_REGISTERS: tuple[tuple[HardwareProfile, frozenset[str]], ...] = (
+    (HMU00_SW0308, frozenset({"RunStatsCompressorStarts"})),
+)
+# Plain-`r` registers a firmware's owner re-reads on the energy interval instead of an unreliable one: on SW0308 the
+# B51A `StatCompressorStarts` is the start counter (2982, equal to `CompressorStarts`, issue #233).
+FIRMWARE_ENERGY_REREADS: tuple[tuple[HardwareProfile, frozenset[str]], ...] = (
+    (HMU00_SW0308, frozenset({"StatCompressorStarts"})),
+)
 
 
 # Return a node's identity check against a profile, including node type and scan address.
@@ -123,6 +146,16 @@ def node_matches(profile: HardwareProfile, node: DeviceNode) -> bool:
     if profile.scan_address and node.scan_address.casefold() != profile.scan_address:
         return False
     return profile.matches_scan(node.scan_type, node.scan_sw, node.scan_hw)
+
+
+# Return the casefolded `circuit.name` keys of registers whose owner firmware reports them unreliably.
+def unreliable_register_keys(graph: DeviceGraph | None) -> frozenset[str]:
+    keys: set[str] = set()
+    for profile, names in UNRELIABLE_REGISTERS:
+        owner = profile_owner(graph, profile)
+        if owner is not None:
+            keys.update(f"{owner}.{name}".casefold() for name in names)
+    return frozenset(keys)
 
 
 # Return the one circuit that matches a profile with a current, unique scan identity.

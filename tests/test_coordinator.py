@@ -7305,3 +7305,40 @@ async def test_issue193_probe_that_loses_the_connection_pauses_again() -> None:
             await coordinator._fallback_read(include_placeholders=True, include_energy=True)
 
         assert coordinator._bus_guard.allow() is False
+
+
+# Intent: a register cached with a one-byte `invalid position` answer (`/ 0101`) is read again on the placeholder
+#         interval, while a layout error with its own answer length (`/ 00`, empty) stays skipped.
+# Why: issue #152 - the F34 boiler and BASS controller sometimes answer `0101`; ebusd kept that error, the integration
+#      never read the register again and switched its entity off until a manual `ebusctl read`.
+@pytest.mark.parametrize(
+    ("error", "expected_reads"),
+    [
+        ("(ERR: invalid position for 3115b524060200000200 / 0101)", [("ctlv2", "HwcOpMode")]),
+        ("(ERR: invalid position for 3115b524060200000200 / 00)", []),
+        ("(ERR: invalid position for 3115b524060200000200 / )", []),
+        ("(ERR: invalid position for 3115b524060200000200 / 020105)", []),
+    ],
+)
+async def test_issue152_one_byte_invalid_position_is_retried(
+    monkeypatch: pytest.MonkeyPatch, error: str, expected_reads: list[tuple[str, str]]
+) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lines = ["scan.15 = Vaillant;CTLV2;0514;1104", "ctlv2 Z1OpMode = auto", f"ctlv2 HwcOpMode = {error}"]
+        monkeypatch.setattr(
+            COORDINATOR, "REGISTER_MAP", {"ctlv2.HwcOpMode": MAPPING.RegisterMeta(enabled=True, fallback_read=True)}
+        )
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+        coordinator._cache_seeded = coordinator._ebusd_connected = True
+        coordinator._last_energy_poll = datetime.now()
+        coordinator._last_placeholder_poll = datetime.now() - timedelta(days=1)
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.last_find_usable = True
+        coordinator.ebus.find_registers = AsyncMock(return_value=lines)
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+
+        await coordinator._async_update_data()
+
+        assert [call.args[:2] for call in coordinator.ebus.read_register.await_args_list] == expected_reads

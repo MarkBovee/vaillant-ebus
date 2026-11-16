@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable, Collection, Mapping, Sequence
 
+from .hardware_profiles import unreliable_register_keys
 from .mapping import (
     HMUX0_SW0407_FALLBACK_NAMES,
     VWZIO_SW0500_FALLBACK_NAMES,
@@ -121,6 +122,7 @@ def plan_fallback_reads(
         if len(parts := definition.split(",", 3)) >= 3 and parts[0].startswith("u")
     }
     hmux0_blocked_circuits = {circuit.casefold() for circuit in hmux0_fallback_blocked_circuits(graph)}
+    unreliable_keys = unreliable_register_keys(graph)
     hmux0_candidates = {circuit.casefold() for circuit in hmux0_candidate_circuits(graph)}
     hmux0_precise_temperature = hmux0_precise_temperature_owner(graph)
     vwzio_sw0500 = vwzio_sw0500_circuit(graph)
@@ -134,6 +136,9 @@ def plan_fallback_reads(
         circuit_key = circuit.casefold()
         name_key = name.casefold()
         if "." in name or f"{circuit}.{name}".casefold() in skipped_read_keys:
+            return
+        # A register the owner's firmware reports with another layout is never read (issue #233, HMU00 SW0308).
+        if f"{circuit_key}.{name_key}" in unreliable_keys:
             return
         if (circuit_key, name_key) in passive_register_keys:
             return

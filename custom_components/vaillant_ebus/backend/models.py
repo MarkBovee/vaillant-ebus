@@ -50,12 +50,18 @@ def is_ebusd_error_value(raw: str | None) -> bool:
 _TRANSIENT_EBUSD_ERRORS = ("read timeout", "arbitration lost", "syn received", "wrong symbol", "no signal")
 
 
-# Whether an ebusd error value is a transient bus failure worth one more read later (issue #223).
+# An `invalid position` error whose answer is a single data byte (`/ 01xx`). The F34 boiler and BASS controller of
+# issue #152 sometimes answer B509/B524 reads with `0101` and give the full value on the next read; ebusd then keeps the
+# error until someone reads again. A real layout mismatch answers with its own length (or nothing) on every read.
+_SHORT_ANSWER_INVALID_POSITION = re.compile(r"invalid position for [0-9a-f]+ / 01[0-9a-f]{2}\)?$")
+
+
+# Whether an ebusd error value is a transient bus failure worth one more read later (issues #223, #152).
 def is_transient_ebusd_error(raw: str | None) -> bool:
     if not is_ebusd_error_value(raw):
         return False
-    low = (raw or "").casefold()
-    return any(marker in low for marker in _TRANSIENT_EBUSD_ERRORS)
+    low = (raw or "").strip().casefold()
+    return any(marker in low for marker in _TRANSIENT_EBUSD_ERRORS) or bool(_SHORT_ANSWER_INVALID_POSITION.search(low))
 
 
 # Lower-cased names of the HMUX0 B509 1/16 degC flow/return temperature registers.
