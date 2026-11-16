@@ -523,8 +523,9 @@ class EntityFactoryService:
                 if override.get("enabled") is not True:
                     if circuit.casefold() in ghost_solar:
                         continue
-                    # The owner's firmware reports this register with another layout (issue #233, HMU00 SW0308);
-                    # living here, the rule also covers entities seeded from the cache.
+                    # The owner's firmware reports this register with another layout (issue #233, HMU00 SW0308).
+                    # It needs the scan identity, so a cache-seeded graph without scan rows keeps the entity until
+                    # the first live discovery removes it.
                     if rk.casefold() in unreliable_keys:
                         continue
                     # The date platform owns the date registers of the heating controller; a text sensor repeats them.

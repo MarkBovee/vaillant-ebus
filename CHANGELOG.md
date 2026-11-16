@@ -15,7 +15,8 @@ compressor start counter, and recoVAIR units keep their air temperatures.
   ghost Zone 3: its circuit type was stuck on that error.
 - **Compressor Starts jumps up and down on flexoTHERM HMU00 SW0308** (issue #233, thanks @szflo). On that firmware
   `RunStatsCompressorStarts` is not a start counter. It no longer gets an entity or a read there; the integration
-  reads `StatCompressorStarts` on the energy interval instead. Other firmware keeps `RunStatsCompressorStarts`.
+  reads `StatCompressorStarts` on the energy interval instead. Other firmware keeps `RunStatsCompressorStarts`. On
+  SW0308 the old Compressor Starts entity stops updating; the stale-entities repair offers to remove it.
 - **DHW circulation pump status goes unknown** (issue #233). `HwcCircPumpStatus` of the controller is now read on
   every poll.
 
