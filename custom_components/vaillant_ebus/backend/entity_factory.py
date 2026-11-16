@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from copy import copy
 from typing import Any
 
+from .hardware_profiles import unreliable_register_keys
 from .mapping import (
     ELOBLOCK_GAS_REGISTERS,
     REGISTER_MAP,
@@ -450,6 +451,7 @@ class EntityFactoryService:
         unused_zones = declared_unused_zones(graph)
         ghost_solar = ghost_solar_circuits(graph)
         valid_zones = valid_zone_owners(graph)
+        unreliable_keys = unreliable_register_keys(graph)
 
         reg_to_node: dict[str, DeviceNode] = {}
         for node in graph.nodes.values():
@@ -520,6 +522,10 @@ class EntityFactoryService:
                 # A mirrored solar controller and zones the controller declares inactive only add dead entities.
                 if override.get("enabled") is not True:
                     if circuit.casefold() in ghost_solar:
+                        continue
+                    # The owner's firmware reports this register with another layout (issue #233, HMU00 SW0308);
+                    # living here, the rule also covers entities seeded from the cache.
+                    if rk.casefold() in unreliable_keys:
                         continue
                     # The date platform owns the date registers of the heating controller; a text sensor repeats them.
                     if _served_by_date_platform(graph, controller, valid_zones, circuit, name_lower):

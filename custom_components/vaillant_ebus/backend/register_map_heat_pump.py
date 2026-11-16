@@ -763,6 +763,16 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         entity_category="diagnostic",
         entity_type="sensor",
     ),
+    # The start counter of HMU00 SW0308, where `RunStatsCompressorStarts` is no counter (issue #233). Only that firmware
+    # re-reads it (`FIRMWARE_ENERGY_REREADS`), so the map-driven pass must not probe it on every other heat pump.
+    "hmu.StatCompressorStarts": RegisterMeta(
+        friendly_name="Compressor Starts",
+        icon="mdi:counter",
+        state_class="total_increasing",
+        entity_category="diagnostic",
+        entity_type="sensor",
+        fallback_read=False,
+    ),
     "hmu.RunStatsFan1Hours": RegisterMeta(
         friendly_name="Fan 1 Runtime",
         device_class="duration",

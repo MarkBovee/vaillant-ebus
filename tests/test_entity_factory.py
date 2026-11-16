@@ -1534,3 +1534,28 @@ def test_issue237_mapping_with_value_field_keeps_the_base_entity(monkeypatch: py
     assert {"v32.OutsideAirTemp.value", "v32.OutsideAirTemp.sensor"} <= keys
     assert "v32.ExitAirTemp.value" not in keys
     assert {"v32.ExitAirTemp.temp", "v32.ExitAirTemp.sensor"} <= keys
+
+
+# Intent: on HMU00 SW0308 `RunStatsCompressorStarts` gets no entity, also when the value comes from the cache, while a
+#         YAML `enabled: true` override still creates it; another HMU00 keeps the entity.
+# Why: issue #233 - on SW0308 the value is no start counter; cache seeding generates entities from cached values, so
+#      the rule must live in the factory, not only in the live path.
+def test_issue233_sw0308_runstats_compressor_starts_has_no_entity() -> None:
+    sw0308 = DiscoveryService.build_device_graph(
+        load_find_lines("community/hmu00_issue102_heating_start_2026-10-25_090329_discovery.yaml", after=True)
+    )
+    other = DiscoveryService.build_device_graph(
+        load_find_lines("community/hmu_e7000_discussion31_2026-10-04_113747_discovery.yaml", after=True)
+    )
+
+    keys = {e.key for e in EntityFactoryService().generate(sw0308)}
+    forced = {
+        e.key
+        for e in EntityFactoryService().generate(
+            sw0308, yaml_overrides={"hmu.RunStatsCompressorStarts": {"enabled": True}}
+        )
+    }
+
+    assert "hmu.RunStatsCompressorStarts.value" not in keys
+    assert "hmu.RunStatsCompressorStarts.value" in forced
+    assert "hmu.RunStatsCompressorStarts.value" in {e.key for e in EntityFactoryService().generate(other)}

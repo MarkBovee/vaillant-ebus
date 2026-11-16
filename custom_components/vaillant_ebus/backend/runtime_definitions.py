@@ -148,6 +148,8 @@ HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS = frozenset(
 )
 # Heat pump temperatures that ebusd's HMU CSV defines as plain `r` (issue #233), re-read on every poll.
 HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS = frozenset({"SourceTempInput", "SourceTempOutput"})
+# Controller hot water circulation pump state, a plain `r` message in ebusd's CTLV2 configuration (issue #233).
+HWC_CIRCULATION_PUMP_STATUS = "HwcCircPumpStatus"
 
 # Hot water timer slots 1 and 2 per weekday, read with `B555 a5 00 02 <day> <slot>` (issue #208).
 # The 7-byte answer is status, from HH MM, to HH MM and 2 bytes (probably the slot temperature). The status byte is
