@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- **Two config entries overwrite each other's register cache.** Every entry wrote
+- **Two config entries overwrite each other's register cache** (issue #243). Every entry wrote
   `vaillant_ebus/register_cache.json`, so with two ebusd instances one device showed the other's cached values after
   a restart. Each entry now has its own `register_cache_<entry_id>.json`. An entry without its own file still reads
   the old shared file once, so cached values survive the update.
