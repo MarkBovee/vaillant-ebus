@@ -1418,9 +1418,15 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return {}
         return values
 
-    # Path of the JSON file that stores the last register values.
+    # Path of the JSON file that stores the last register values of this config entry.
+    # Each entry has its own file: two entries (two ebusd instances) used to overwrite one shared cache.
     @property
     def _cache_path(self) -> str:
+        return self.hass.config.path(DOMAIN, f"register_cache_{self._entry.entry_id}.json")
+
+    # Path of the cache file that all entries shared before each entry got its own file. It is only read.
+    @property
+    def _legacy_cache_path(self) -> str:
         return self.hass.config.path(DOMAIN, "register_cache.json")
 
     # Path of the optional user-edited entity metadata override file.
@@ -1550,9 +1556,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     # Read the register cache in the executor; a missing or unreadable file gives an empty cache.
     async def _async_load_cache(self) -> dict[str, str]:
         try:
-            # Executor job: read the cache file as JSON.
+            # Executor job: read the cache file as JSON. An entry without its own file yet starts from the
+            # shared file of earlier versions, so an update does not drop the cached values.
             def _read():
-                with open(self._cache_path) as f:
+                try:
+                    cache_file = open(self._cache_path)
+                except FileNotFoundError:
+                    cache_file = open(self._legacy_cache_path)
+                with cache_file as f:
                     return json.load(f)
 
             return await self.hass.async_add_executor_job(_read)

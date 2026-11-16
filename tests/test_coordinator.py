@@ -80,6 +80,7 @@ def _hass(cache_dir: str) -> MagicMock:
 
 def _entry(host: str = "127.0.0.1", port: int = 8888, scan: int = 60) -> MagicMock:
     e = MagicMock()
+    e.entry_id = "test-entry"
     e.data = {
         "ebusd_host": host,
         "ebusd_port": port,
@@ -276,6 +277,45 @@ async def test_coordinator_seeds_from_cache_with_cached_values() -> None:
         assert c.registers.get("ctlv2.Z1DayTemp")
         assert c.registers["ctlv2.Z1DayTemp"].value.get("value") == "21.0"
         assert c.registers["ctlv2.Z1DayTemp"].has_data is True
+
+
+# Intent: two config entries keep separate register caches.
+# Why: two ebusd instances (two boilers) used to share register_cache.json and showed each other's values after a
+# restart.
+async def test_register_cache_is_separate_per_config_entry() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        first_entry, second_entry = _entry(), _entry()
+        first_entry.entry_id = "entry-house-1"
+        second_entry.entry_id = "entry-house-2"
+        first = VaillantCoordinator(_hass(tmpdir), first_entry)
+        second = VaillantCoordinator(_hass(tmpdir), second_entry)
+
+        await first._async_save_cache({"bai.HcStarts.value": "100"})
+        await second._async_save_cache({"bai.HcStarts.value": "83900"})
+
+        assert first._cache_path != second._cache_path
+        assert await first._async_load_cache() == {"bai.HcStarts.value": "100"}
+        assert await second._async_load_cache() == {"bai.HcStarts.value": "83900"}
+
+
+# Intent: an entry without its own cache file reads the shared file of earlier versions, and its first save goes to
+# its own file without touching the shared one.
+# Why: an update must not drop the cached values of existing installations, and the old file stays as it was for a
+# downgrade.
+async def test_register_cache_falls_back_to_legacy_shared_file() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        legacy_path = Path(tmpdir) / "vaillant_ebus" / "register_cache.json"
+        legacy_path.parent.mkdir(parents=True, exist_ok=True)
+        legacy_path.write_text(json.dumps({"hmu.FlowTemp.value": "38.5"}))
+        c = VaillantCoordinator(_hass(tmpdir), _entry())
+
+        assert await c._async_load_cache() == {"hmu.FlowTemp.value": "38.5"}
+
+        await c._async_save_cache({"hmu.FlowTemp.value": "40.0"})
+
+        assert Path(c._cache_path) != legacy_path
+        assert await c._async_load_cache() == {"hmu.FlowTemp.value": "40.0"}
+        assert json.loads(legacy_path.read_text()) == {"hmu.FlowTemp.value": "38.5"}
 
 
 # Intent: sentinel cache values (unknown/unavailable) are skipped while real values are kept.

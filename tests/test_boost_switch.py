@@ -46,6 +46,7 @@ def _coordinator(dhw_boost_desired=None, sfmode="load") -> MagicMock:
 
 def _entry() -> MagicMock:
     e = MagicMock()
+    e.entry_id = "test-entry"
     e.entry_id = "entry-1"
     e.options = {}
     e.data = {}
