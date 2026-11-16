@@ -85,17 +85,43 @@ SYSTEM_AND_OTHER_REGISTERS: dict[str, RegisterMeta] = {
         friendly_name="Supply Air Temperature",
         device_class="temperature",
         unit="°C",
+        state_class="measurement",
+        entity_type="sensor",
     ),
     "v32.ExhaustAirTemp": RegisterMeta(
         friendly_name="Exhaust Air Temperature",
         device_class="temperature",
         unit="°C",
+        state_class="measurement",
+        entity_type="sensor",
     ),
     "v32.OutsideAirTemp": RegisterMeta(
         friendly_name="Outside Air Temperature (Ventilation)",
         device_class="temperature",
         unit="°C",
+        state_class="measurement",
+        entity_type="sensor",
     ),
+    "v32.ExitAirTemp": RegisterMeta(
+        friendly_name="Discharge Air Temperature",
+        device_class="temperature",
+        unit="°C",
+        state_class="measurement",
+        entity_type="sensor",
+    ),
+    **{
+        f"v32.{name}.sensor": RegisterMeta(
+            friendly_name=f"{label} Sensor Status",
+            entity_category="diagnostic",
+            entity_type="sensor",
+        )
+        for name, label in (
+            ("OutsideAirTemp", "Outside Air Temperature (Ventilation)"),
+            ("SupplyAirTemp", "Supply Air Temperature"),
+            ("ExhaustAirTemp", "Exhaust Air Temperature"),
+            ("ExitAirTemp", "Discharge Air Temperature"),
+        )
+    },
     "v32.VentilationLevelDay": RegisterMeta(
         friendly_name="Ventilation Level Day",
         icon="mdi:fan",

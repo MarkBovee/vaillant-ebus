@@ -10,6 +10,7 @@ from collections.abc import Callable
 from typing import TypedDict
 
 from .discovery_service import has_usable_find_records
+from .mapping import RECOVAIR_TEMPERATURE_REGISTERS
 from .models import SendResult, WriteResult, is_no_data_value
 
 _LOGGER = logging.getLogger(__name__)
@@ -625,6 +626,10 @@ class EbusService:
                 raise ConnectionError(f"ebusd read failed for {circuit}.{name}: {result.error}")
             return None
         raw = result.data.strip()
+        # For recoVAIR temperatures, `ok` is the second measurement field.
+        # Retain it so splitting can expose status and reject a faulty sensor.
+        if not field and f"{circuit}.{name}".casefold() in {key.casefold() for key in RECOVAIR_TEMPERATURE_REGISTERS}:
+            return raw if raw else None
         return _strip_suffix(raw) if raw else None
 
     # Write a value to an ebusd register, verify by a forced bus read-back.
