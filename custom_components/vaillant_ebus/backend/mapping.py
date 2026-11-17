@@ -339,6 +339,12 @@ MULTI_FIELD_FIELDS: dict[str, list[str]] = {
     "v32.WaterPressure": ["value"],
     "v32.HwcTemp": ["value"],
     "v32.OutdoorstempSensor": ["value"],
+    # VR 70 / VR 71 sensor inputs (issue #246, discussion #232). Upstream 52.vr_70 `SensorData` is s1..s6 and
+    # 26.vr_71 `SensorData1` is s1..s7 and `SensorData2` is s8..s12 plus `Sx`, all DATA2B/16 temperatures, each
+    # followed by a status HEX blob. The HEX blob is not listed, so it gets no entity; an unconnected input is `-`.
+    "vr_70.SensorData": ["s1", "s2", "s3", "s4", "s5", "s6"],
+    "vr_71.SensorData1": ["s1", "s2", "s3", "s4", "s5", "s6", "s7"],
+    "vr_71.SensorData2": ["s8", "s9", "s10", "s11", "s12", "sx"],
 }
 
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **One temperature sensor per VR 70 and VR 71 input** (issue #246, discussion #232). The modules report their sensor
+  inputs as one text, such as `56.00;-;-;-;56.50;25.88;c8 7c 00`, and the integration showed that text as a single
+  "Mixer Sensors 1-7" entity (VR 70: no entity at all). Each input is now its own temperature sensor, "Sensor S1
+  Temperature" and so on: S1–S6 on the VR 70, S1–S12 on the VR 71. An input without a sensor (`-`) starts disabled
+  and shows unknown. S12 and Sx on the VR 71 read 0.00 and 8.00 in every capture we have, also without a sensor, so
+  they start disabled. The old combined "Mixer Sensors" entities are gone; the stale-entities repair offers to remove
+  them.
+
+### Fixed
+
+- **Fields without data were switched on again after discovery.** When a register with several fields had live data,
+  the integration enabled all of its fields, including fields without data and fields that should start disabled.
+  It now only switches on the fields that would start enabled. Fields you enabled yourself stay as they are.
+
 ## 1.14.3 - 2026-11-17
 
 Two ebusd instances in one Home Assistant no longer mix up each other's cached values, and Home Assistant 2026.11 no

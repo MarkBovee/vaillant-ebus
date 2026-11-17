@@ -6035,6 +6035,53 @@ async def test_enable_registry_entities_expands_multi_field_uids() -> None:
         assert sorted(result) == ["sensor.cycles", "sensor.runtime"]
 
 
+# Intent: a live multi-field register re-enables only the fields the factory starts enabled; an unconnected VR 71
+# input (`-`) and an unproven input (metadata enabled=False) stay disabled.
+# Why: every field of a live register used to be switched on, so issue #246's `-` inputs would show as unknown sensors.
+async def test_enable_registry_entities_keeps_fields_disabled_by_default_off() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        hass = _hass(tmpdir)
+
+        class _Entry:
+            def __init__(self, uid: str) -> None:
+                self.unique_id = uid
+                self.config_entry_id = "entry-1"
+                self.disabled_by = "integration"
+
+        updated: list[str] = []
+        registry = MagicMock()
+        registry.entities = {f"sensor.s{n}": _Entry(f"entry-1_ebusd_vr_71_sensordata1_s{n}") for n in (1, 4)} | {
+            "sensor.s12": _Entry("entry-1_ebusd_vr_71_sensordata2_s12")
+        }
+        registry.async_update_entity = MagicMock(side_effect=lambda entity_id, **kwargs: updated.append(entity_id))
+        from homeassistant.helpers import entity_registry
+
+        entity_registry.async_get = MagicMock(return_value=registry)
+
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(hass, entry)
+        c.entities = [
+            MagicMock(unique_id=uid, field=field, entity_type="sensor", enabled_by_default=enabled)
+            for uid, field, enabled in (
+                ("ebusd_vr_71_sensordata1_s1", "s1", True),
+                ("ebusd_vr_71_sensordata1_s4", "s4", False),
+                ("ebusd_vr_71_sensordata2_s12", "s12", False),
+            )
+        ]
+        result = await c._enable_registry_entities(["vr_71.SensorData1", "vr_71.SensorData2"])
+        assert result == ["sensor.s1"]
+        assert updated == ["sensor.s1"]
+
+        # A sensor now connected to S4: discovery passes its fresh generation before merging it into c.entities, and
+        # the stale "off" in c.entities must not keep the row disabled for another discovery cycle.
+        registry.entities["sensor.s1"].disabled_by = None  # enabled by the first pass
+        fresh = [
+            MagicMock(unique_id="ebusd_vr_71_sensordata1_s4", field="s4", entity_type="sensor", enabled_by_default=True)
+        ]
+        assert await c._enable_registry_entities(["vr_71.SensorData1"], fresh) == ["sensor.s4"]
+
+
 # Intent: an old registry row on another platform than the one generated now stays disabled.
 # Why: the owner's heat pump had `sensor.*` copies of Status07 bits that are binary sensors today; re-enabling them
 #      would show unavailable leftovers with the same unique id.
