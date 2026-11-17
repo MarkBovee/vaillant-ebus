@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.15.0 - 2026-11-17
+
+The VR 70 and VR 71 modules now show each sensor input as its own temperature, and fields without data no longer
+switch themselves on after a discovery.
 
 ### Added
 
