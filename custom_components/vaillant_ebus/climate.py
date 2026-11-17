@@ -31,8 +31,12 @@ from .const import (
     HA_TO_EBUSD_HVAC,
 )
 from .coordinator import VaillantCoordinator, get_register_value
+from .temperature_compat import temperature_aliases_for
 
 _LOGGER = logging.getLogger(__name__)
+
+# Old temperature names for Home Assistant versions before the native climate temperature API (2026.11).
+_ClimateTemperatureAliases = temperature_aliases_for(ClimateEntity)
 
 HEATING_STATES = frozenset(
     {
@@ -147,9 +151,9 @@ async def async_setup_entry(
     coordinator.register_post_discovery_callback(_ensure_zone_entities)
 
 
-class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
+class EbusdClimate(CoordinatorEntity[VaillantCoordinator], _ClimateTemperatureAliases, ClimateEntity):
     _attr_has_entity_name = True
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = 5
     _attr_max_temp = 30
     _attr_target_temperature_step = 0.5
@@ -270,13 +274,13 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Current room temperature from the zone's room temp register
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         return _float(_value(self.coordinator, f"{self._zn}RoomTemp", self._circuit))
 
     # Target temperature: optimistic value after a write, then quick veto temp
     # (boost), actual/target, filtered to valid range, finally day temp.
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         now = datetime.now()
         if (
             self._optimistic_target is not None
@@ -736,10 +740,10 @@ class EbusdClimate(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
         return await self.coordinator.async_write_register(self._circuit, name, value)
 
 
-class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
+class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], _ClimateTemperatureAliases, ClimateEntity):
     _attr_has_entity_name = True
     _attr_hvac_modes = [HVACMode.AUTO]
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = 5
     _attr_max_temp = 75
     _attr_target_temperature_step = 1
@@ -773,17 +777,17 @@ class EbusdFlowTempRange(CoordinatorEntity[VaillantCoordinator], ClimateEntity):
 
     # Current flow temperature from the zone's circuit flow temp register
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         return _float(_value(self.coordinator, f"{self._hc}FlowTemp", self._circuit))
 
     # Minimum flow temperature target
     @property
-    def target_temperature_low(self) -> float | None:
+    def native_target_temperature_low(self) -> float | None:
         return _float(_value(self.coordinator, f"{self._hc}MinFlowTempDesired", self._circuit))
 
     # Maximum flow temperature target
     @property
-    def target_temperature_high(self) -> float | None:
+    def native_target_temperature_high(self) -> float | None:
         return _float(_value(self.coordinator, f"{self._hc}MaxFlowTempDesired", self._circuit))
 
     # HVAC action from heat-pump-global compressor status (heating/cooling/idle/off)

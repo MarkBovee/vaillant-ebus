@@ -2,7 +2,8 @@
 
 ## 1.14.3 - 2026-11-17
 
-Two ebusd instances in one Home Assistant no longer mix up each other's cached values.
+Two ebusd instances in one Home Assistant no longer mix up each other's cached values, and Home Assistant 2026.11 no
+longer warns about the climate and water heater temperatures.
 
 ### Fixed
 
@@ -12,6 +13,9 @@ Two ebusd instances in one Home Assistant no longer mix up each other's cached v
   the old shared file once, so cached values survive the update. With two entries, that first start after the update
   can briefly show the old shared values until the first poll replaces them. The old file stays in place, so a
   downgrade keeps working; you can delete it by hand.
+- **Deprecation warnings for climate and water heater temperatures** in Home Assistant 2026.11. The entities used the
+  old temperature names, which stop working in Home Assistant 2027.11. They now use the new `native_*` names. Older
+  Home Assistant versions down to 2026.3 still get the old names through a small compatibility layer.
 
 ## 1.14.2 - 2026-11-16
 
