@@ -28,6 +28,7 @@ SCHEDULES = CALENDAR.SCHEDULES
 
 def _entry() -> MagicMock:
     e = MagicMock()
+    e.entry_id = "test-entry"
     e.entry_id = "entry-1"
     e.options = {}
     e.data = {}
