@@ -32,7 +32,6 @@ from vaillant_ebus.coordinator import VaillantCoordinator  # noqa: E402
 
 def _entry(entry_id: str = "entry-1", options: dict | None = None) -> MagicMock:
     e = MagicMock()
-    e.entry_id = "test-entry"
     e.entry_id = entry_id
     e.options = options or {}
     e.data = {}
