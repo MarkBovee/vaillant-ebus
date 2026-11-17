@@ -15,8 +15,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .backend.models import derive_dhw_heating
 from .const import CONF_AWAY_DURATION, DEFAULT_AWAY_DURATION, DOMAIN
 from .coordinator import VaillantCoordinator, get_register_value
+from .temperature_compat import temperature_aliases_for
 
 ZONE = "dhw"
+
+# Old temperature names for Home Assistant versions before the native water heater temperature API (2026.11).
+_WaterHeaterTemperatureAliases = temperature_aliases_for(WaterHeaterEntity)
 
 EBUSD_TO_HA_OPMODE = {
     "off": "off",
@@ -83,10 +87,10 @@ async def async_setup_entry(
     coordinator.register_post_discovery_callback(_ensure_entity)
 
 
-class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity):
+class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], _WaterHeaterTemperatureAliases, WaterHeaterEntity):
     _attr_has_entity_name = True
     _attr_name = "Domestic Hot Water"
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = 35
     _attr_max_temp = 70
     _attr_target_temperature_step = 1
@@ -139,12 +143,12 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], WaterHeaterEntity
 
     # Current DHW storage temperature from HwcStorageTemp
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         return _float(_value(self.coordinator, "HwcStorageTemp"))
 
     # Target temperature from HwcTempDesired, filtered to valid range
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         value = _float(_value(self.coordinator, "HwcTempDesired"))
         return value if value is not None and 30 <= value <= 70 else None
 
