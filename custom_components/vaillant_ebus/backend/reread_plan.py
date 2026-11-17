@@ -16,6 +16,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 
+from .hardware_profiles import FIRMWARE_ENERGY_REREADS, profile_owner
 from .mapping import HMUX0_SW0407_ACTIVE_READ_REGISTERS, hmux0_precise_temperature_owner, hmux0_sw0407_circuit
 from .models import DeviceGraph, zone_circuit_declared_inactive
 from .runtime_definitions import (
@@ -23,6 +24,7 @@ from .runtime_definitions import (
     HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS,
     HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS,
     HMUX0_COMPRESSOR_COUNTER_NAMES,
+    HWC_CIRCULATION_PUMP_STATUS,
     HWC_TIMER_SLOT_FIELDS,
     INTEGRATION_POLLED_CONTROLLER_REGISTERS,
 )
@@ -106,6 +108,25 @@ def _heat_pump_energy_reads(graph: DeviceGraph, _definitions: Mapping[str, str])
     return _heat_pump_reads(graph, HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS)
 
 
+# Nominate the firmware-specific counters of `FIRMWARE_ENERGY_REREADS` on their profile's owner (issue #233).
+def _firmware_energy_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
+    reads: list[Read] = []
+    for profile, names in FIRMWARE_ENERGY_REREADS:
+        owner = profile_owner(graph, profile)
+        if owner is not None:
+            reads.extend(_discovered_reads(graph, names, owner))
+    return reads
+
+
+# Nominate the hot water circulation pump state of the discovered controller for every poll (issue #233). ebusd
+# defines it as a plain `r` message, so it froze or went unknown and the discovery switched the entity off.
+def _hwc_circulation_pump_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
+    controller = graph.heating_controller_result().node
+    if controller is None:
+        return []
+    return _discovered_reads(graph, frozenset({HWC_CIRCULATION_PUMP_STATUS}), controller.circuit)
+
+
 # Nominate the heat pump source temperatures of issue #233 for every poll.
 def _heat_pump_every_poll_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
     return _heat_pump_reads(graph, HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS)
@@ -163,10 +184,12 @@ REREAD_RULES: tuple[RereadRule, ...] = (
     RereadRule("#53/#97/#193/#208", Cadence.ENERGY_INTERVAL, _energy_polled_definitions),
     RereadRule("#227", Cadence.ENERGY_INTERVAL, _discovered_plain_reads),
     RereadRule("#233", Cadence.ENERGY_INTERVAL, _heat_pump_energy_reads),
+    RereadRule("#233 SW0308", Cadence.ENERGY_INTERVAL, _firmware_energy_reads),
     RereadRule("#171", Cadence.EVERY_POLL, _hmux0_precise_temperatures),
     RereadRule("#213", Cadence.EVERY_POLL, hmux0_sw0407_active_reads),
     RereadRule("#207", Cadence.EVERY_POLL, _zone_state_reads),
     RereadRule("#233", Cadence.EVERY_POLL, _heat_pump_every_poll_reads),
+    RereadRule("#233 HWC", Cadence.EVERY_POLL, _hwc_circulation_pump_reads),
 )
 
 

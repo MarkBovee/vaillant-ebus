@@ -89,8 +89,9 @@ def test_energy_counter_rereads_require_active_b516_definition_on_known_circuit(
     without_flag = _plan(graph, definitions)
     with_flag = _plan(graph, definitions, include_energy=True)
 
-    # The discovered heat pump counters of issue #233 also run on the energy interval; they are not definitions.
-    discovered = {("hmu", name) for name in RUNTIME.HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS}
+    # The discovered heat pump counters of issue #233 (and the SW0308 start counter of this capture) also run on the
+    # energy interval; they are not definitions.
+    discovered = {("hmu", name) for name in RUNTIME.HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS | {"StatCompressorStarts"}}
     assert set(with_flag) - set(without_flag) - discovered == {("hmu", "ZzEnergy")}
     assert set(without_flag) <= set(with_flag)
 
@@ -340,3 +341,41 @@ def test_hmu_datetime_is_split_into_fields() -> None:
     fields = MAPPING.split_multi_field("hmux0.DateTime", "valid;07:45:36;29.10.2026;8.184")
     assert fields["time"] == "07:45:36" and fields["date"] == "29.10.2026" and fields["outsidetemp"] == "8.184"
     assert MAPPING.get_meta("hmux0", "DateTime", "outsidetemp").unit == "°C"
+
+
+# Intent: on HMU00 SW0308 the B509 `RunStatsCompressorStarts` is never read, and the B51A `StatCompressorStarts` is
+#         re-read on the energy interval instead; another HMU00 keeps reading `RunStatsCompressorStarts`.
+# Why: issue #233 - on SW0308 the B509 value rose while the compressor ran and fell while it was off, so the
+#      `total_increasing` sensor saw a reset every hour; on SW0522 (owner) the same register counts one per start.
+def test_issue233_sw0308_reads_stat_compressor_starts_instead_of_runstats() -> None:
+    sw0308 = _graph("community/hmu00_issue102_heating_start_2026-10-25_090329_discovery.yaml")
+    other = _graph("community/hmu_e7000_discussion31_2026-10-04_113747_discovery.yaml")
+
+    energy = set(_plan(sw0308, include_energy=True))
+
+    assert ("hmu", "StatCompressorStarts") in energy
+    assert ("hmu", "RunStatsCompressorStarts") not in energy
+    assert ("hmu", "StatCompressorStarts") not in set(_plan(sw0308))
+    other_energy = set(_plan(other, include_energy=True))
+    assert ("hmu", "StatCompressorStarts") not in other_energy
+    assert ("hmu", "RunStatsCompressorStarts") in other_energy
+
+
+# Intent: the controller's `HwcCircPumpStatus` is re-read on every poll where `find` lists it, and nothing is read
+#         when the controller does not list it.
+# Why: issue #233 - it is a plain `r` message; without a read it went unknown and the discovery switched it off.
+def test_issue233_hwc_circulation_pump_status_is_reread_every_poll() -> None:
+    listed = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines("community/flexocompact_find.txt"))
+    absent = _graph(FLEXOTHERM)
+
+    assert ("ctlv2", "HwcCircPumpStatus") in _plan(listed)
+    assert not any(name == "HwcCircPumpStatus" for _, name in _plan(absent, include_energy=True))
+
+
+# Intent: a V32 bus that does not list `ExitAirTemp` gets no read for it from the register map.
+# Why: PR #241 mapped the recoVAIR discharge temperature; without `fallback_read=False` the map-driven pass probed it
+#      on every poll on boiler-only V32 couplers.
+def test_pr241_exit_air_temp_is_not_probed_on_a_boiler_only_v32() -> None:
+    graph = _graph("community/v32_boiler_discovery.yaml")
+
+    assert ("v32", "ExitAirTemp") not in _plan(graph, include_energy=True)
