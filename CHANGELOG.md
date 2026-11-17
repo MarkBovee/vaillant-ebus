@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.14.3 - 2026-11-17
+
+Two ebusd instances in one Home Assistant no longer mix up each other's cached values.
+
+### Fixed
+
+- **Two config entries overwrite each other's register cache** (issue #243, PR #244, thanks @zigul). Every entry wrote
+  `vaillant_ebus/register_cache.json`, so with two ebusd instances one device showed the other's cached values after
+  a restart. Each entry now has its own `register_cache_<entry_id>.json`. An entry without its own file still reads
+  the old shared file once, so cached values survive the update. With two entries, that first start after the update
+  can briefly show the old shared values until the first poll replaces them. The old file stays in place, so a
+  downgrade keeps working; you can delete it by hand.
+
 ## 1.14.2 - 2026-11-16
 
 Entities on Saunier Duval F34 systems no longer drop out after a day or two, flexoTHERM SW0308 gets a working
