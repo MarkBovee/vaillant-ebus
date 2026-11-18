@@ -146,6 +146,10 @@ DISCOVERED_PLAIN_READ_POLLED_REGISTERS = frozenset({"PowerConsumptionHmu"})
 HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS = frozenset(
     {"RunStatsCompressorStarts", "StatElectricEnergySum", "StatEnvironmentEnergySum"}
 )
+# Boiler fuel counters (B516 `StatFuelSum*`, upstream `b516_inc.tsp`) that ebusd defines as plain `r` (discussion
+# #242): they froze for days and then jumped by the missed consumption. Re-read on the energy interval, only where the
+# integration maps the register (the boiler); other devices list the same B516 names without a meaning we show.
+BOILER_PLAIN_READ_ENERGY_REGISTERS = frozenset({"StatFuelSum", "StatFuelSumHc", "StatFuelSumHwc"})
 # Heat pump temperatures that ebusd's HMU CSV defines as plain `r` (issue #233), re-read on every poll.
 HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS = frozenset({"SourceTempInput", "SourceTempOutput"})
 # Controller hot water circulation pump state, a plain `r` message in ebusd's CTLV2 configuration (issue #233).

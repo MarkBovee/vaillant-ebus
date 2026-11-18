@@ -17,9 +17,15 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .hardware_profiles import FIRMWARE_ENERGY_REREADS, profile_owner
-from .mapping import HMUX0_SW0407_ACTIVE_READ_REGISTERS, hmux0_precise_temperature_owner, hmux0_sw0407_circuit
+from .mapping import (
+    HMUX0_SW0407_ACTIVE_READ_REGISTERS,
+    REGISTER_MAP,
+    hmux0_precise_temperature_owner,
+    hmux0_sw0407_circuit,
+)
 from .models import DeviceGraph, zone_circuit_declared_inactive
 from .runtime_definitions import (
+    BOILER_PLAIN_READ_ENERGY_REGISTERS,
     DISCOVERED_PLAIN_READ_POLLED_REGISTERS,
     HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS,
     HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS,
@@ -108,6 +114,16 @@ def _heat_pump_energy_reads(graph: DeviceGraph, _definitions: Mapping[str, str])
     return _heat_pump_reads(graph, HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS)
 
 
+# Nominate the boiler fuel counters of discussion #242 where the integration maps them (exact REGISTER_MAP key), so a
+# heat pump or module that lists the same B516 names gets no extra reads.
+def _boiler_fuel_energy_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
+    return [
+        (circuit, name)
+        for circuit, name in _discovered_reads(graph, BOILER_PLAIN_READ_ENERGY_REGISTERS)
+        if f"{circuit}.{name}" in REGISTER_MAP
+    ]
+
+
 # Nominate the firmware-specific counters of `FIRMWARE_ENERGY_REREADS` on their profile's owner (issue #233).
 def _firmware_energy_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
     reads: list[Read] = []
@@ -185,6 +201,7 @@ REREAD_RULES: tuple[RereadRule, ...] = (
     RereadRule("#227", Cadence.ENERGY_INTERVAL, _discovered_plain_reads),
     RereadRule("#233", Cadence.ENERGY_INTERVAL, _heat_pump_energy_reads),
     RereadRule("#233 SW0308", Cadence.ENERGY_INTERVAL, _firmware_energy_reads),
+    RereadRule("#242", Cadence.ENERGY_INTERVAL, _boiler_fuel_energy_reads),
     RereadRule("#171", Cadence.EVERY_POLL, _hmux0_precise_temperatures),
     RereadRule("#213", Cadence.EVERY_POLL, hmux0_sw0407_active_reads),
     RereadRule("#207", Cadence.EVERY_POLL, _zone_state_reads),
