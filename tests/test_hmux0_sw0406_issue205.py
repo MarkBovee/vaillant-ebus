@@ -94,4 +94,3 @@ def test_issue205_definitions_absent_on_other_revisions(fixture: str, expected: 
 
     assert defined == expected
     assert sw0406_reads == []
-
