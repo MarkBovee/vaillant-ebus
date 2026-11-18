@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.15.0 - 2026-11-18
+
+The VR 70 and VR 71 modules now show each sensor input as its own temperature, aroTHERM units with HMUX0 firmware
+SW0406 get four more readings, the boiler fuel energy no longer stands still for days, and fields without data no
+longer switch themselves on after a discovery.
+
+### Added
+
+- **One temperature sensor per VR 70 and VR 71 input** (issue #246, discussion #232). The modules report their sensor
+  inputs as one text, such as `56.00;-;-;-;56.50;25.88;c8 7c 00`, and the integration showed that text as a single
+  "Mixer Sensors 1-7" entity (VR 70: no entity at all). Each input is now its own temperature sensor, "Sensor S1
+  Temperature" and so on: S1–S6 on the VR 70, S1–S12 on the VR 71. An input without a sensor (`-`) starts disabled
+  and shows unknown. S12 and Sx on the VR 71 read 0.00 and 8.00 in every capture we have, also without a sensor, so
+  they start disabled. The old combined "Mixer Sensors" entities are gone; the stale-entities repair offers to remove
+  them.
+- **Four more readings on HMUX0 SW0406** (issue #205, thanks @Zapgla and @Roan-V): building circuit flow (l/h),
+  desired flow temperature, condenser outlet temperature and the energy integral (°min). ebusd has no configuration
+  for them on this firmware, so the integration defines and reads them itself, but only on SW0406/HW0504 with a stock
+  ebusd configuration. Two units answered all four with plausible values, both while running and while idle. If you
+  load your own hmux0 CSV, nothing changes. The EEV position stays out for now: its unit can't be proven yet.
+
+### Fixed
+
+- **Boiler fuel energy stood still for days and then jumped** (discussion #242, thanks @xavan83). "Fuel Energy",
+  "Fuel Energy (Heating)" and "Fuel Energy (DHW)" (`StatFuelSum*` on the boiler) are messages that ebusd only reads
+  when asked, and the integration asked once. They are now read again on the energy interval, so the energy
+  dashboard spreads the use over the day instead of one big step. Other devices that list the same names get no
+  extra reads.
+- **Fields without data were switched on again after discovery.** When a register with several fields had live data,
+  the integration enabled all of its fields, including fields without data and fields that should start disabled.
+  It now only switches on the fields that would start enabled. Fields you enabled yourself stay as they are.
+
 ## 1.14.3 - 2026-11-17
 
 Two ebusd instances in one Home Assistant no longer mix up each other's cached values, and Home Assistant 2026.11 no

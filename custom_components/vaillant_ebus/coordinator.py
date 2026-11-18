@@ -890,7 +890,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 DOMAIN,
                 {f"{self._entry.entry_id}_{unique_id}" for unique_id in room_temp_sensor_unique_ids},
             )
-        await self._enable_registry_entities(list(graph.raw_registers))
+        # The generated list is merged into self.entities only below, so pass it: the enable rules need this generation.
+        await self._enable_registry_entities(list(graph.raw_registers), generated_entities)
         existing_entity_keys = {(entity.entity_type, entity.unique_id.casefold()) for entity in self.entities}
         additions = [
             entity
@@ -1287,9 +1288,20 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
 
     # Enable entities that map to recently live registers (respect user choice).
-    async def _enable_registry_entities(self, register_keys: list[str]) -> list[str]:
+    # `entities` is the freshly generated list when the caller has not merged it into self.entities yet.
+    async def _enable_registry_entities(
+        self, register_keys: list[str], entities: list[EntityDescription] | None = None
+    ) -> list[str]:
         registry = entity_registry.async_get(self.hass)
+        current_entities = self.entities if entities is None else entities
         desired_uids: set[str] = set()
+        # A field the factory starts disabled (no data such as an unconnected VR 70/71 input `-`, or metadata with
+        # enabled=False) stays off: a live parent register says nothing about that one field (issue #246).
+        fields_off_by_default = {
+            entity.unique_id.casefold()
+            for entity in current_entities
+            if entity.field != "value" and entity.enabled_by_default is False
+        }
         for key in register_keys:
             circuit, name = key.split(".", 1)
             suffix = name.lower().replace(" ", "_")
@@ -1302,10 +1314,12 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             # unique ids carry a _{field} suffix; include those candidates so
             # they are auto-enabled as well.
             for field in fields:
-                desired_uids.add(f"ebusd_{circuit}_{suffix}_{field}")
+                field_uid = f"ebusd_{circuit}_{suffix}_{field}"
+                if field_uid.casefold() not in fields_off_by_default:
+                    desired_uids.add(field_uid)
         # A row on another platform than the one generated now (an old `sensor.*` copy of a Status07 bit that is a
         # binary sensor today) shares the unique id but no longer has an entity, so it must stay disabled.
-        generated_platforms = {entity.unique_id: entity.entity_type or "sensor" for entity in self.entities}
+        generated_platforms = {entity.unique_id: entity.entity_type or "sensor" for entity in current_entities}
         enabled: list[str] = []
         for entity_id, entry in registry.entities.items():
             if entry.config_entry_id != self._entry.entry_id:

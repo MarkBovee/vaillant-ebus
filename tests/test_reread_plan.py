@@ -36,10 +36,22 @@ def test_rules_name_their_issue_and_keep_planning_order() -> None:
     issues = [rule.issue for rule in REREAD.REREAD_RULES]
 
     assert all(issue.startswith("#") for issue in issues)
-    assert issues == ["#53/#97/#193/#208", "#227", "#233", "#233 SW0308", "#171", "#213", "#207", "#233", "#233 HWC"]
+    assert issues == [
+        "#53/#97/#193/#208",
+        "#227",
+        "#233",
+        "#233 SW0308",
+        "#242",
+        "#171",
+        "#213",
+        "#205 SW0406",
+        "#207",
+        "#233",
+        "#233 HWC",
+    ]
     cadences = [rule.cadence for rule in REREAD.REREAD_RULES]
-    assert cadences[:4] == [REREAD.Cadence.ENERGY_INTERVAL] * 4
-    assert set(cadences[4:]) == {REREAD.Cadence.EVERY_POLL}
+    assert cadences[:5] == [REREAD.Cadence.ENERGY_INTERVAL] * 5
+    assert set(cadences[5:]) == {REREAD.Cadence.EVERY_POLL}
 
 
 # Intent: only the listed B511/B524/B555 definitions are re-read; other plain-`r` definitions of the same messages and
@@ -80,3 +92,24 @@ def test_issue233_hmu_plain_reads_follow_their_cadence() -> None:
         nodes={"bai": boiler}, raw_registers={"bai.StatElectricEnergySum": "1"}, placeholder_registers=set()
     )
     assert REREAD.plan_rereads(on_boiler, {}, include_energy=True) == []
+
+
+# Intent: the boiler fuel counters are re-read on the energy interval on the boiler of a real capture, and on no other
+#         circuit that lists the same B516 names.
+# Why: discussion #242 - `StatFuelSum*` are plain `r`, so the fuel energy froze for days and then jumped ~400 kWh in
+#      one update; heat pumps and modules list the names too, and reading them there would only cost bus time.
+def test_discussion242_boiler_fuel_counters_reread_on_energy_interval() -> None:
+    from tests.fake_ebusd import load_find_lines
+    from tests.test_entity_factory import DiscoveryService
+
+    capture = "community/ecotec_vrt380_issue109_2026-09-13_033552.yaml"
+    boiler = DiscoveryService.build_device_graph(load_find_lines(capture))
+    energy = REREAD.plan_rereads(boiler, {}, include_energy=True)
+    fuel = [read for read in energy if read[1].startswith("StatFuelSum")]
+
+    assert fuel == [("bai", "StatFuelSum"), ("bai", "StatFuelSumHc"), ("bai", "StatFuelSumHwc")]
+    assert not [read for read in REREAD.plan_rereads(boiler, {}, include_energy=False) if "StatFuel" in read[1]]
+    heat_pump = DiscoveryService.build_device_graph(load_find_lines("community/arotherm_plus_basv3_discovery.yaml"))
+    listed = [key for key in (*heat_pump.raw_registers, *heat_pump.placeholder_registers) if ".StatFuelSum" in key]
+    assert listed and not [key for key in listed if key.startswith("bai.")]
+    assert not [read for read in REREAD.plan_rereads(heat_pump, {}, include_energy=True) if "StatFuel" in read[1]]

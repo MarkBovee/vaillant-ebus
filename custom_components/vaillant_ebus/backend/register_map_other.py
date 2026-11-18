@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from .models import RegisterMeta
 
 # Status07 bits without a known meaning, with the display label of each (field name -> label).
@@ -17,6 +19,23 @@ _STATUS07_UNKNOWN_BITS: dict[str, str] = {
     "heaterbackup_b6": "Backup Heater Bit 6",
     "heaterbackup_b7_warmwater": "Backup Heater Warm Water",
 }
+
+
+# Temperature metadata for the numbered sensor inputs of a VR 70 / VR 71 sensor message (field `s1` -> "Sensor S1").
+# An unconnected input reads `-`, so its entity is unknown and starts disabled through the usual no-data rule.
+def _sensor_input_fields(register: str, inputs: Iterable[int | str], enabled: bool = True) -> dict[str, RegisterMeta]:
+    return {
+        f"{register}.s{str(sensor).lower()}": RegisterMeta(
+            friendly_name=f"Sensor S{sensor} Temperature",
+            icon="mdi:thermometer",
+            device_class="temperature",
+            unit="°C",
+            state_class="measurement",
+            enabled=enabled,
+        )
+        for sensor in inputs
+    }
+
 
 SYSTEM_AND_OTHER_REGISTERS: dict[str, RegisterMeta] = {
     # Broadcast (System)
@@ -318,6 +337,7 @@ SYSTEM_AND_OTHER_REGISTERS: dict[str, RegisterMeta] = {
         icon="mdi:water-pump",
         entity_category="diagnostic",
     ),
+    # The combined text of the sensor messages only shows with a YAML `enabled: true`; each input is a field below.
     "vr_71.SensorData1": RegisterMeta(
         friendly_name="Mixer Sensors 1-7",
         icon="mdi:thermometer",
@@ -328,6 +348,11 @@ SYSTEM_AND_OTHER_REGISTERS: dict[str, RegisterMeta] = {
         icon="mdi:thermometer",
         entity_category="diagnostic",
     ),
+    **_sensor_input_fields("vr_70.SensorData", range(1, 7)),
+    **_sensor_input_fields("vr_71.SensorData1", range(1, 8)),
+    **_sensor_input_fields("vr_71.SensorData2", range(8, 12)),
+    # s12 and Sx read 0.00 and 8.00 in every capture, also without a sensor; they stay off until a user proves them.
+    **_sensor_input_fields("vr_71.SensorData2", (12, "x"), enabled=False),
     "vr_71.Currenterror": RegisterMeta(
         friendly_name="Error",
         icon="mdi:alert",
