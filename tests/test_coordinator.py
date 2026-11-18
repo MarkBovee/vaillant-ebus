@@ -6043,6 +6043,8 @@ async def test_enable_registry_entities_keeps_fields_disabled_by_default_off() -
         hass = _hass(tmpdir)
 
         class _Entry:
+            # Intent: a registry row the integration disabled, with the live unique id shape.
+            # Why: only rows with disabled_by == "integration" are candidates for re-enabling.
             def __init__(self, uid: str) -> None:
                 self.unique_id = uid
                 self.config_entry_id = "entry-1"
