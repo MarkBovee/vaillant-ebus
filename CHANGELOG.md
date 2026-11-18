@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.15.0 - 2026-11-17
+## 1.15.0 - 2026-11-18
 
 The VR 70 and VR 71 modules now show each sensor input as its own temperature, aroTHERM units with HMUX0 firmware
 SW0406 get four more readings, the boiler fuel energy no longer stands still for days, and fields without data no
