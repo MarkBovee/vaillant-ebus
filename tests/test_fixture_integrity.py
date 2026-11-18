@@ -77,6 +77,18 @@ RELEASE_1120_CAPTURE_PROVENANCE = {
         "eebf8d40c225f2ac5d653317e8b3f11426818d3292cf64a85d940b6ad1c038b2",
         "MF=Vaillant;ID=HMU00;SW=0308;HW=0403",
     ),
+    # Release 1.15.0: issue #205 and discussion #31, two SW0406 units on a stock ebusd configuration, byte-for-byte
+    # copies of the reporters' attachments. They back the SW0406 active definitions of issue #205.
+    "community/hmux0_sw0406_issue205_2026-11-17_155315_discovery.yaml": (
+        "https://github.com/user-attachments/files/34977017/discovery_dump_2026-11-17_155315.yaml",
+        "c8199c07ea298b12420a5c471cfc4eaa61dac4feb1581c1256d54692a6bf2099",
+        "MF=Vaillant;ID=HMUX0;SW=0406;HW=0504",
+    ),
+    "community/hmux0_sw0406_discussion31_2026-11-17_153929_discovery.yaml": (
+        "https://github.com/user-attachments/files/34976421/discovery_dump_2026-11-17_153929.yaml",
+        "9501cc20eaadd60fd2b6c5f390b2cc87a10e14109b339aca79c9ee28c4c53ee5",
+        "MF=Vaillant;ID=HMUX0;SW=0406;HW=0504",
+    ),
 }
 # Byte-exact copies of community captures taken from a zip attachment: fixture -> (zip URL, member, sha256).
 ZIP_CAPTURE_PROVENANCE = {

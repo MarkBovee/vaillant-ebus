@@ -146,6 +146,10 @@ DISCOVERED_PLAIN_READ_POLLED_REGISTERS = frozenset({"PowerConsumptionHmu"})
 HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS = frozenset(
     {"RunStatsCompressorStarts", "StatElectricEnergySum", "StatEnvironmentEnergySum"}
 )
+# Registers of `_hmux0_sw0406_active_definitions` (issue #205), re-read on every poll on the SW0406 owner.
+HMUX0_SW0406_ACTIVE_READ_REGISTERS = frozenset(
+    {"BuildingCircuitFlow", "RunDataFlowTempDesired", "RunDataCondensorOutletTemp", "EnergyIntegral"}
+)
 # Boiler fuel counters (B516 `StatFuelSum*`, upstream `b516_inc.tsp`) that ebusd defines as plain `r` (discussion
 # #242): they froze for days and then jumped by the missed consumption. Re-read on the energy interval, only where the
 # integration maps the register (the boiler); other devices list the same B516 names without a meaning we show.
@@ -246,6 +250,33 @@ def _hmux0_compressor_counter_definitions(circuit: str) -> list[str]:
     ]
 
 
+# Active definition of the HMUX0 building circuit flow (discussion #213 on SW0407, issue #205 on SW0406).
+# The reply `0aff080e8502...` holds three header bytes and the flow as UIN l/h. The id excludes the length byte
+# (telegram `08b51a04 05ff323c`).
+def _hmux0_building_circuit_flow_definition(circuit: str) -> str:
+    return (
+        f"r,{circuit},BuildingCircuitFlow,BuildingCircuitFlow,31,08,B51A,05ff323c"
+        ",value,,IGN:3,,,,value,,UIN,,l/h,HMUX0 building circuit flow"
+    )
+
+
+# Active SW0406 definitions of issue #205. Two SW0406/HW0504 units answered `ebusctl hex` while running and idle:
+# flow 683/689 and 1275/1276 l/h; desired flow 28.0/24.5 and 45.0/0.0 degC; condenser outlet 24.25/18.25 and
+# 39.69/27.38 degC (B509 floats after the 4-byte echo, like the other SW0406 B509 registers); energy integral -139/0 and
+# -76/99 degmin (upstream `08.hmu.tsp` EnergyIntegral ext 0x21, type `integral` = SIN, after three header bytes).
+# ebusd has no hmux0 configuration for them, and the gateway never asks for them, so they are read actively.
+def _hmux0_sw0406_active_definitions(circuit: str) -> list[str]:
+    return [
+        _hmux0_building_circuit_flow_definition(circuit),
+        f"r,{circuit},RunDataFlowTempDesired,RunDataFlowTempDesired,31,08,B509,5402004a0d"
+        ",value,,IGN:4,,,,value,,EXP,,°C,HMUX0 desired flow temperature",
+        f"r,{circuit},RunDataCondensorOutletTemp,RunDataCondensorOutletTemp,31,08,B509,540200b608"
+        ",value,,IGN:4,,,,value,,EXP,,°C,HMUX0 condenser outlet temperature",
+        f"r,{circuit},EnergyIntegral,EnergyIntegral,31,08,B51A,05ff3221"
+        ",value,,IGN:3,,,,value,,SIN,,°min,HMUX0 energy integral",
+    ]
+
+
 # Passive definition of the electrical power frame that the myVAILLANT gateway polls from the heat pump.
 # Issue #188 - the SW0406 answer to `B509 5402005b0d` is a 4-byte float in watts (33.2 idle, 1341.4 running,
 # 961.27 in the gateway frame), the same layout the SW0407 passive set uses. Passive means it only decodes the
@@ -267,6 +298,7 @@ def _hmux0_sw0406_definitions(graph: DeviceGraph, circuit: str, defines: list[st
         *_hmux0_b509_monitor_definitions(circuit),
         *_hmux0_compressor_counter_definitions(circuit),
         _hmux0_passive_power_definition(circuit),
+        *_hmux0_sw0406_active_definitions(circuit),
     ]
     own_names = {
         parts[2].casefold()
@@ -401,10 +433,7 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
                 f"r,{circuit},HwcEnvYieldMonth,HwcEnvYieldMonth,31,08,B516"
                 f",1002ffff0204{date_bytes},value,,IGN:7,,,,value,,EXP,,Wh"
                 ",HMUX0 DHW environmental yield this month",
-                # Discussion #213: the reply `0aff080e8502...` holds three header bytes and the flow as UIN l/h.
-                # The id excludes the length byte (telegram `08b51a04 05ff323c`).
-                f"r,{circuit},BuildingCircuitFlow,BuildingCircuitFlow,31,08,B51A,05ff323c"
-                ",value,,IGN:3,,,,value,,UIN,,l/h,HMUX0 building circuit flow",
+                _hmux0_building_circuit_flow_definition(circuit),
             ]
         )
     hmux0_owner = hmux0_owner_scan(graph)

@@ -21,6 +21,7 @@ from .mapping import (
     HMUX0_SW0407_ACTIVE_READ_REGISTERS,
     REGISTER_MAP,
     hmux0_precise_temperature_owner,
+    hmux0_sw0406_owner,
     hmux0_sw0407_circuit,
 )
 from .models import DeviceGraph, zone_circuit_declared_inactive
@@ -30,6 +31,7 @@ from .runtime_definitions import (
     HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS,
     HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS,
     HMUX0_COMPRESSOR_COUNTER_NAMES,
+    HMUX0_SW0406_ACTIVE_READ_REGISTERS,
     HWC_CIRCULATION_PUMP_STATUS,
     HWC_TIMER_SLOT_FIELDS,
     INTEGRATION_POLLED_CONTROLLER_REGISTERS,
@@ -176,6 +178,25 @@ def hmux0_sw0407_active_reads(graph: DeviceGraph, runtime_definitions: Mapping[s
     return reads
 
 
+# Nominate the SW0406 registers the integration defined itself as plain `r` (issue #205), on the SW0406 owner. When
+# ebusd loads its own hmux0 CSV the integration defines nothing for SW0406, so nothing is nominated then.
+def _hmux0_sw0406_active_reads(graph: DeviceGraph, runtime_definitions: Mapping[str, str]) -> list[Read]:
+    owner = hmux0_sw0406_owner(graph)
+    if owner is None:
+        return []
+    reads: list[Read] = []
+    for definition in runtime_definitions.values():
+        parts = definition.split(",", 3)
+        if (
+            len(parts) >= 3
+            and parts[0] == "r"
+            and parts[1].casefold() == owner.casefold()
+            and parts[2] in HMUX0_SW0406_ACTIVE_READ_REGISTERS
+        ):
+            reads.append((owner, parts[2]))
+    return reads
+
+
 # Nominate `Hc<N>Status`/`Hc<N>PumpStatus` of the discovered controller (#207). A circuit the controller reports as
 # inactive is skipped: it has no climate entity, so reading it would only cost bus time.
 def _zone_state_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
@@ -204,6 +225,7 @@ REREAD_RULES: tuple[RereadRule, ...] = (
     RereadRule("#242", Cadence.ENERGY_INTERVAL, _boiler_fuel_energy_reads),
     RereadRule("#171", Cadence.EVERY_POLL, _hmux0_precise_temperatures),
     RereadRule("#213", Cadence.EVERY_POLL, hmux0_sw0407_active_reads),
+    RereadRule("#205 SW0406", Cadence.EVERY_POLL, _hmux0_sw0406_active_reads),
     RereadRule("#207", Cadence.EVERY_POLL, _zone_state_reads),
     RereadRule("#233", Cadence.EVERY_POLL, _heat_pump_every_poll_reads),
     RereadRule("#233 HWC", Cadence.EVERY_POLL, _hwc_circulation_pump_reads),

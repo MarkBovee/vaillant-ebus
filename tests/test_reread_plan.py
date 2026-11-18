@@ -44,6 +44,7 @@ def test_rules_name_their_issue_and_keep_planning_order() -> None:
         "#242",
         "#171",
         "#213",
+        "#205 SW0406",
         "#207",
         "#233",
         "#233 HWC",
