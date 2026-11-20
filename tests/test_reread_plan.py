@@ -113,3 +113,19 @@ def test_discussion242_boiler_fuel_counters_reread_on_energy_interval() -> None:
     listed = [key for key in (*heat_pump.raw_registers, *heat_pump.placeholder_registers) if ".StatFuelSum" in key]
     assert listed and not [key for key in listed if key.startswith("bai.")]
     assert not [read for read in REREAD.plan_rereads(heat_pump, {}, include_energy=True) if "StatFuel" in read[1]]
+
+
+# Intent: the brine pressure joins the every-poll source reads on the discovered heat pump and is absent elsewhere.
+# Why: issue #251 - a plain `r` register nobody re-reads freezes; it belongs to the existing #233 rule, not a new pass.
+def test_issue251_source_pressure_follows_the_every_poll_rule() -> None:
+    hmu = MODELS.DeviceNode(circuit="hmu", device_type=MODELS.DeviceType.HEAT_PUMP)
+    graph = MODELS.DeviceGraph(
+        nodes={"hmu": hmu}, raw_registers={"hmu.SourcePressure": "no data stored"}, placeholder_registers=set()
+    )
+    boiler = MODELS.DeviceNode(circuit="bai", device_type=MODELS.DeviceType.UNKNOWN)
+    on_boiler = MODELS.DeviceGraph(
+        nodes={"bai": boiler}, raw_registers={"bai.SourcePressure": "1.5"}, placeholder_registers=set()
+    )
+
+    assert REREAD.plan_rereads(graph, {}, include_energy=False) == [("hmu", "SourcePressure")]
+    assert REREAD.plan_rereads(on_boiler, {}, include_energy=False) == []

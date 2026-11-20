@@ -154,8 +154,10 @@ HMUX0_SW0406_ACTIVE_READ_REGISTERS = frozenset(
 # #242): they froze for days and then jumped by the missed consumption. Re-read on the energy interval, only where the
 # integration maps the register (the boiler); other devices list the same B516 names without a meaning we show.
 BOILER_PLAIN_READ_ENERGY_REGISTERS = frozenset({"StatFuelSum", "StatFuelSumHc", "StatFuelSumHwc"})
-# Heat pump temperatures that ebusd's HMU CSV defines as plain `r` (issue #233), re-read on every poll.
-HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS = frozenset({"SourceTempInput", "SourceTempOutput"})
+# Heat pump source values that ebusd's HMU CSV defines as plain `r`, re-read on every poll: the temperatures of issue
+# #233 and the brine pressure of issue #251. Air/water units answer the B51A source reads with a 3-byte stub; the failed
+# read puts the register in the graph's error registers, so it is not read again.
+HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS = frozenset({"SourceTempInput", "SourceTempOutput", "SourcePressure"})
 # Controller hot water circulation pump state, a plain `r` message in ebusd's CTLV2 configuration (issue #233).
 HWC_CIRCULATION_PUMP_STATUS = "HwcCircPumpStatus"
 

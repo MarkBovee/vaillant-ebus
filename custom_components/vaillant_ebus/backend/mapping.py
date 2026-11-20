@@ -41,6 +41,7 @@ HMUX0_SW0407_FALLBACK_BLOCKLIST: frozenset[str] = frozenset(
         "FlowTemperature",
         "HoursCool",
         "LiveMonitorCurrentConsumedPower",
+        "SourcePressure",
         "SourceTempInput",
         "SourceTempOutput",
         "TotalEnergyUsage",

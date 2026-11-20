@@ -379,3 +379,28 @@ def test_pr241_exit_air_temp_is_not_probed_on_a_boiler_only_v32() -> None:
     graph = _graph("community/v32_boiler_discovery.yaml")
 
     assert ("v32", "ExitAirTemp") not in _plan(graph, include_energy=True)
+
+
+# Intent: the brine pressure is read on every poll on a flexoTHERM capture that lists it, never on an air/water HMUX0
+#         whose B51A answer is the 3-byte stub, and not on SW0407, which does not list it.
+# Why: issue #251 - `SourcePressure` is a plain `r` message in ebusd's HMU CSV, so ebusd never polled it and the value
+#      stayed at `no data stored`; a failed read must stop at the error registers instead of repeating every poll.
+def test_issue251_source_pressure_is_read_only_where_the_heat_pump_can_answer() -> None:
+    flexotherm = _graph(FLEXOTHERM)
+    air_water = _graph("community/hmux0_issue99_2026-09-10_170850.yaml")
+    sw0407 = _graph("community/hmux0_sw0407_issue175_2026-10-09_115534_discovery.yaml")
+
+    assert ("hmu", "SourcePressure") in _plan(flexotherm)
+    assert "hmux0.SourcePressure" in air_water.error_registers
+    assert not [read for read in _plan(air_water) if read[1] == "SourcePressure"]
+    assert not [read for read in _plan(sw0407) if read[1] == "SourcePressure"]
+    assert "SourcePressure" in MAPPING.HMUX0_SW0407_FALLBACK_BLOCKLIST
+
+
+# Intent: the brine pressure entity is a pressure measurement in bar, the unit ebusd already reports.
+# Why: issue #251 - the reporter had to add the unit through entities.yaml to get a graph; ebusd's definition applies
+#      the divisor of 4 itself, so the integration must not scale it again.
+def test_issue251_source_pressure_metadata_is_a_bar_measurement() -> None:
+    meta = MAPPING.REGISTER_MAP["hmu.SourcePressure"]
+
+    assert (meta.unit, meta.device_class, meta.state_class, meta.divisor) == ("bar", "pressure", "measurement", None)
