@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.15.1 - 2026-11-20
+
+The brine pressure of flexoTHERM units now updates by itself, and entities no longer jump between platforms (for
+example a sensor and a number) when their register reads no data for a moment.
+
+### Fixed
+
+- **Brine pressure never updated** (issue #251, thanks @airthusiast). `SourcePressure` is a message that ebusd only
+  reads when asked, so it stayed at "no data" unless you changed the ebusd CSV. The integration now reads it on every
+  poll, like the source temperatures, and shows it as "Source Pressure" in bar. Air/water heat pumps list the same
+  message but can't answer it; after the first failed read it isn't read again and the entity stays unavailable.
+- **Entities that exist were listed as "no longer provided"** (issue #152, thanks @TheMagnificent7). When a register
+  read "no data stored", the integration created its entity on a different platform: the Zone 2 controls became
+  plain sensors whenever the zone's room temperature had no value, and the boiler "Flame" moved between a sensor and
+  a binary sensor. Home Assistant kept both entries, and the stale-entities repair listed the one that was left
+  behind. An entity now keeps the platform a real value gave it, and a Zone 2 control stays a control. Leftover
+  entries from earlier versions still show up in the repair once; remove them there. A register whose first entry
+  was created while it had no data can still move once, when its first real value arrives.
+
+### Documentation
+
+- **Changing the unit of an existing entity** (issue #250, thanks @fevo21). Setting `unit: kWh` with `divisor: 1000`
+  on an entity that already exists seems to do nothing, because Home Assistant keeps the unit the entity first had
+  and converts the value back. The setup guide now explains how to pick the new display unit.
+
 ## 1.15.0 - 2026-11-18
 
 The VR 70 and VR 71 modules now show each sensor input as its own temperature, aroTHERM units with HMUX0 firmware

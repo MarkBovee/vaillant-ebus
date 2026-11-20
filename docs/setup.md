@@ -59,6 +59,11 @@ Things to know when you write overrides:
   configuration and `ctlv2` when a local configuration renames it, so the key is `ctlv3.Z2OpMode` in one setup and
   `ctlv2.Z2OpMode` in the other. Changing the ebusd configuration also changes the entity unique IDs, which creates
   duplicate `_2` entities until the old ones are removed.
+- Changing the `unit` of an energy, power or other measurement entity that already exists (for example `Wh` to `kWh`
+  together with `divisor: 1000`) seems to do nothing. Home Assistant remembers the unit the entity first had and
+  converts the new value back into it, so you still see the old number in Wh. Open the entity in Home Assistant, go to
+  its settings and pick the new display unit, or set `unit` and `divisor` before the entity is created for the first
+  time.
 - A changed `options` list for an entity that already exists only takes effect after a full Home Assistant restart.
   Reloading the integration or calling `vaillant_ebus.rediscover` is not enough.
 - The `Yield` sensors of the heat pump report the environmental yield (the heat taken from the air or ground). The

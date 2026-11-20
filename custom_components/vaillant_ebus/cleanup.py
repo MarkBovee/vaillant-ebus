@@ -209,6 +209,23 @@ def register_key_fold(description: Any) -> str:
     return f"{getattr(description, 'circuit', '')}.{getattr(description, 'name', '')}".casefold()
 
 
+# Map each generated unique id (casefolded, without the config-entry prefix) to the platform its registry rows use.
+# The entity factory keeps that platform while a register has no data (issue #152). A unique id whose rows sit on
+# different platforms is ambiguous and left out: one of them is a leftover (for example a binary_sensor row from
+# before issue #216 next to the current sensor), and guessing would bring the flip back.
+def registry_platforms(registry: Any, entry_id: str) -> dict[str, str]:
+    prefix = f"{entry_id}_"
+    platforms: dict[str, set[str]] = {}
+    # Read all rows like the coordinator's registry passes do; the prefix and the config entry keep other entries out.
+    for entry in list(registry.entities.values()):
+        unique_id = str(entry.unique_id)
+        if not unique_id.startswith(prefix) or getattr(entry, "config_entry_id", entry_id) != entry_id:
+            continue
+        domain = str(entry.entity_id).partition(".")[0]
+        platforms.setdefault(unique_id[len(prefix) :].casefold(), set()).add(domain)
+    return {unique_id: next(iter(domains)) for unique_id, domains in platforms.items() if len(domains) == 1}
+
+
 # Build the cleanup report for one config entry, or refuse when the report would not be trustworthy.
 # Before ebusd is connected and entities are generated, every registry row looks orphaned; removing rows then
 # would delete live entities. The generated unique ids carry the config entry prefix Home Assistant puts on them.

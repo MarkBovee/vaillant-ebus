@@ -26,7 +26,12 @@ from . import cleanup, repairs
 from .backend.analysis_service import AnalysisResult, AnalysisService
 from .backend.discovery_service import HIDDEN_DEVICE_KEYWORDS, DiscoveryService, bus_scan_settled
 from .backend.ebus_service import EBUSD_STATUS_SUFFIXES, BusErrorGuard, EbusService
-from .backend.entity_factory import EntityDescription, EntityFactoryService, unused_zone_numbers
+from .backend.entity_factory import (
+    EntityDescription,
+    EntityFactoryService,
+    determined_platforms,
+    unused_zone_numbers,
+)
 from .backend.fallback_planner import fallback_candidate, plan_fallback_reads
 from .backend.graph_merge import is_stale_legacy_alias, merge_device_graphs, merge_entities
 from .backend.mapping import (
@@ -359,6 +364,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         self.ebus: EbusService | None = None
         self.discovery: DiscoveryService | None = None
         self.entity_factory = EntityFactoryService()
+        # Platform each entity got from a real value, by casefolded unique id (issue #152); see _generate_entities.
+        self._determined_platforms: dict[str, str] = {}
         self.registers: dict[str, EbusdRegister] = {}
         self.entities: list[EntityDescription] = []
         self._graph: DeviceGraph | None = None
@@ -592,7 +599,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         yaml_overrides = await self._async_load_yaml_overrides()
         if self._stopped or self._unload_requested:
             return
-        cached_entities = self.entity_factory.generate(graph, yaml_overrides=yaml_overrides)
+        cached_entities = self._generate_entities(graph, yaml_overrides)
         self.registers.update(cached_registers)
         if graph.nodes:
             self._graph = graph
@@ -846,7 +853,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         if self._stopped or self._unload_requested:
             return
 
-        generated_entities = self.entity_factory.generate(graph, yaml_overrides=await self._async_load_yaml_overrides())
+        generated_entities = self._generate_entities(graph, await self._async_load_yaml_overrides())
         if self._stopped or self._unload_requested:
             return
         room_temp_select_unique_ids = {
@@ -1469,6 +1476,19 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return DEFAULT_ENERGY_DIVISOR
         return value if value > 0 else DEFAULT_ENERGY_DIVISOR
 
+    # Generate the entity descriptions with a platform hint per unique id, then record the platforms real values chose.
+    # A register that reads `no data stored` keeps the platform it had (issue #152): the factory used to fall back to
+    # `sensor`, Home Assistant kept both registry rows and the stale-entity repair listed the abandoned one. The hints
+    # are rebuilt on every call because the registry changes between the cache seed, discovery and fallback passes.
+    def _generate_entities(
+        self, graph: DeviceGraph, yaml_overrides: dict[str, dict[str, object]]
+    ) -> list[EntityDescription]:
+        hints = cleanup.registry_platforms(entity_registry.async_get(self.hass), self._entry.entry_id)
+        hints.update(self._determined_platforms)
+        entities = self.entity_factory.generate(graph, yaml_overrides=yaml_overrides, known_platforms=hints)
+        self._determined_platforms.update(determined_platforms(entities))
+        return entities
+
     # Load the user's entities.yaml metadata overrides in the executor, so reading the file never blocks the event loop.
     async def _async_load_yaml_overrides(self) -> dict[str, dict[str, object]]:
         """Load ``config/vaillant_ebus/entities.yaml`` metadata overrides.
@@ -1836,7 +1856,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     self._last_find_keys.add(key)
                 if graph_additions:
                     _LOGGER.info("Fallback read added %d register(s) to discovery", len(graph_additions))
-                    generated = self.entity_factory.generate(graph, yaml_overrides=yaml_overrides)
+                    generated = self._generate_entities(graph, yaml_overrides)
                     if self._stopped or self._unload_requested:
                         return
                     known = {(entity.entity_type, entity.unique_id) for entity in self.entities}

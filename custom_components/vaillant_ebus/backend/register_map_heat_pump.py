@@ -306,6 +306,14 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         device_class="temperature",
         unit="°C",
     ),
+    # Brine pressure of ground-source units (issue #251). ebusd's HMU definition already applies the divisor of 4 and
+    # reports bar. Air/water units list it but answer with a 3-byte stub, so the entity stays unavailable there.
+    "hmu.SourcePressure": RegisterMeta(
+        friendly_name="Source Pressure",
+        device_class="pressure",
+        unit="bar",
+        state_class="measurement",
+    ),
     "hmu.TotalEnergyUsage": RegisterMeta(
         friendly_name="Total Energy",
         device_class="energy",

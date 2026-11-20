@@ -62,10 +62,7 @@ class EntityDescription:
     @property
     def unique_id(self) -> str:
         """Globally unique entity identifier for HA registry."""
-        suffix = self.name.lower().replace(" ", "_")
-        if self.field != "value":
-            suffix += f"_{self.field}"
-        return f"ebusd_{self.circuit}_{suffix}"
+        return description_unique_id(self.circuit, self.name, self.field)
 
     # Dot-separated circuit.name.field key used to look up the entity's data.
     @property
@@ -111,19 +108,55 @@ _NUMERIC_MEASURE_NAME_PATTERN = re.compile(
 )
 
 
+# Build the registry unique id of an entity description (circuit, name and, for multi-field registers, the field).
+# Kept outside the class so the factory can look up a platform hint before the description exists.
+def description_unique_id(circuit: str, name: str, field: str = "value") -> str:
+    suffix = name.lower().replace(" ", "_")
+    if field != "value":
+        suffix += f"_{field}"
+    return f"ebusd_{circuit}_{suffix}"
+
+
+# True when a raw value says something about the register's shape. None, empty, `-` and every no-data or error
+# sentinel do not: the platform chosen from them is only a guess.
+def value_has_shape(raw_value: str | None) -> bool:
+    if raw_value is None or raw_value == "" or raw_value == "-":
+        return False
+    return not is_no_data_value(raw_value)
+
+
+# Report whether a platform hint fits the register shape, so a hint can never create a control the register does not
+# support (write safety) or bring back a binary_sensor that issue #216 turned into a sensor.
+def _hint_fits_register(platform: str, register: EbusdRegister, meta: RegisterMeta) -> bool:
+    if platform == "binary_sensor":
+        return not (
+            register.writable or meta.unit or meta.device_class or _NUMERIC_MEASURE_NAME_PATTERN.search(register.name)
+        )
+    if platform == "switch":
+        return register.writable
+    if platform == "number":
+        return register.writable and meta.min_value is not None and meta.max_value is not None
+    return False
+
+
 # Pick the Home Assistant platform for a register: an explicit entity type wins, otherwise the platform follows the
-# shape of the value and whether the register is writable.
+# shape of the value and whether the register is writable. A value without shape keeps the platform the register had
+# before (`known_platform`, issue #152): otherwise every `no data stored` turned a binary_sensor into a sensor, Home
+# Assistant kept both registry rows and the stale-entity repair listed the one that was left behind.
 def _classify_register(
     register: EbusdRegister,
     field: str,
     raw_value: str | None,
     meta: RegisterMeta,
+    known_platform: str | None = None,
 ) -> str:
     """Auto-detect HA platform type for a register+value."""
     if meta.entity_type:
         return meta.entity_type
 
-    if raw_value is None or raw_value == "" or raw_value == "-":
+    if raw_value is None or not value_has_shape(raw_value):
+        if known_platform and _hint_fits_register(known_platform, register, meta):
+            return known_platform
         return "sensor"
 
     low = raw_value.strip().lower()
@@ -432,6 +465,21 @@ def _redistribute_device_assignments(
     return redistributed
 
 
+# Record the platform of every entity whose platform rests on evidence, keyed by casefolded unique id: a value with a
+# shape, or the platform its REGISTER_MAP entry names (a zone control the placeholder rule did not demote). The
+# coordinator keeps this between generations so a later `no data stored` keeps that platform (issue #152).
+def determined_platforms(entities: list[EntityDescription]) -> dict[str, str]:
+    return {
+        entity.unique_id.casefold(): entity.entity_type
+        for entity in entities
+        if entity.entity_type
+        and (
+            value_has_shape(entity.raw_value)
+            or entity.entity_type == get_meta(entity.circuit, entity.name, entity.field).entity_type
+        )
+    }
+
+
 class EntityFactoryService:
     """Pure mapper: device graph + REGISTER_MAP → EntityDescription list."""
 
@@ -441,9 +489,15 @@ class EntityFactoryService:
         self,
         graph: DeviceGraph,
         yaml_overrides: dict[str, dict[str, Any]] | None = None,
+        known_platforms: Mapping[str, str] | None = None,
     ) -> list[EntityDescription]:
-        """Generate HA entity descriptions from a device graph."""
+        """Generate HA entity descriptions from a device graph.
+
+        ``known_platforms`` maps casefolded unique ids to the platform the entity had before; it is consulted only for
+        values without shape (issue #152).
+        """
         overrides = yaml_overrides or {}
+        hints = known_platforms or {}
         eloblock = _is_eloblock(graph)
         seen: set[str] = set()
         entities: list[EntityDescription] = []
@@ -477,10 +531,14 @@ class EntityFactoryService:
                     continue
                 base_meta = copy(get_meta(circuit, name))
                 zone_setting_number = secondary_zone_setting_number(name)
+                # Why: a zone whose setting already had its control platform keeps it while the room temperature
+                # reads no data for a moment. Deciding again from that one value turned the zone 2 controls into
+                # sensors and back, and the stale-entity repair listed the abandoned rows (issue #152).
                 if (
                     zone_setting_number is not None
                     and base_meta.writable
                     and not _zone_reports_room_temperature(graph, circuit, zone_setting_number)
+                    and hints.get(description_unique_id(circuit, name).casefold()) != base_meta.entity_type
                 ):
                     base_meta = _placeholder_zone_meta()
                 if (
@@ -628,7 +686,8 @@ class EntityFactoryService:
                 )
 
                 if not meta.entity_type:
-                    meta.entity_type = _classify_register(dummy_reg, "value", raw, meta)
+                    hint = hints.get(description_unique_id(circuit, name).casefold())
+                    meta.entity_type = _classify_register(dummy_reg, "value", raw, meta, hint)
 
                 entity = EntityDescription(
                     circuit=circuit,
@@ -665,7 +724,10 @@ class EntityFactoryService:
                             writable=field_meta.writable,
                         )
                         if not field_meta.entity_type:
-                            field_meta.entity_type = _classify_register(field_reg, field_name, field_raw, field_meta)
+                            field_hint = hints.get(description_unique_id(circuit, name, field_name).casefold())
+                            field_meta.entity_type = _classify_register(
+                                field_reg, field_name, field_raw, field_meta, field_hint
+                            )
                         entities.append(
                             EntityDescription(
                                 circuit=circuit,
