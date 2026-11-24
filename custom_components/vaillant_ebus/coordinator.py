@@ -58,7 +58,7 @@ from .backend.models import (
     valid_zone_owners,
     zero_idle_registers,
 )
-from .backend.runtime_definitions import build_runtime_defines
+from .backend.runtime_definitions import build_runtime_defines, read_only_timer_programs
 from .const import (
     CONF_EBUSD_HOST,
     CONF_EBUSD_PORT,
@@ -529,6 +529,12 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             or key in self._graph.placeholder_registers
             or any(rk.casefold() == key.casefold() for rk in self._last_find_keys)
         )
+
+    # Whether a weekly program is read over the integration's own B555 definitions without a tested write message
+    # (silent mode on CTLV3, BASS3 programs). Decided from the current graph, so it follows a rediscovery.
+    def timer_program_read_only(self, circuit: str, prefix: str) -> bool:
+        resolved = (self.resolve_register_circuit(circuit) or circuit).casefold()
+        return (resolved, prefix) in read_only_timer_programs(self._graph)
 
     # Whether a controller-owned register exists on the discovered controller circuit.
     def has_controller_register(self, name: str) -> bool:

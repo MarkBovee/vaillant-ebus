@@ -112,6 +112,10 @@ class TimerProgramAccess:
         default_temperature: float | None,
         compare_temperature: bool = False,
     ) -> list[TimeSlot]:
+        # A program the integration reads over its own B555 definitions has no tested write message on that
+        # controller (silent mode on CTLV3, every BASS3 program): refuse before the first bus write.
+        if self.coordinator.timer_program_read_only(self.circuit, self.prefix):
+            raise HomeAssistantError(f"{self.prefix} can only be read on this controller; nothing was changed")
         # The hidden-slot guard lives here, not in the callers: the PR #229 action skipped it once, and the count
         # write would have dropped slots this configuration cannot read. Without an inspection there is nothing to
         # check, so the write is refused.

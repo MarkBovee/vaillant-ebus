@@ -3,8 +3,8 @@
 ## 1.16.0 - 2026-11-24
 
 aroTHERM units with HMUX0 firmware get more readings from a community-made ebusd configuration, the compressor
-modulation no longer shows double values, and the Energy Manager State also works on units that only report the
-gateway's status code.
+modulation no longer shows double values, heat pumps show their compressor start and hysteresis settings, and the
+silent mode and BASS3 time programs appear as calendars.
 
 ### Added
 
@@ -22,6 +22,27 @@ gateway's status code.
   evaporation temperature, condenser liquid outlet temperature, and heat output. Their values look right in the
   captures, but nobody has checked them against a display yet, so they start disabled. Switch them on in Home
   Assistant if you want them.
+
+- **Heat pump installer settings** (issue #218, thanks @cmarqu): "Compressor Start Heating (D.230)" and "Compressor
+  Start Cooling (D.233)" in °min, the compressor hysteresis for heating (D.267) and cooling (D.363), and the maximum
+  residual pump head (D.231). These are the energy integral thresholds that decide when the compressor starts. They
+  were read on the owner's flexoTHERM (HMU00 SW0522) and match the display values in the community configuration; on
+  HMUX0 SW0407/SW0502 they come from that configuration, and on HMU00 SW0308 only D.230 is read (the value from
+  issue #218). The integration reads them every 5 minutes; it can't change them.
+- **Silent mode calendar** on sensoCOMFORT VRC 720 controllers with CTLV3 SW0808 (issue #256, thanks @T3le). ebusd
+  only reads the first time slot of the silent mode program; the integration now reads all slots and shows the program
+  as a "Silent Mode Program" calendar. It can't be edited yet: the write message has not been tested.
+- **Time program calendars on BASS3** (Saunier Duval MiPro Sense, SW0708; issue #235, thanks @jlrosende). The BASS3
+  answers its time programs only through another message (`B555`) than the one ebusd's configuration uses, so the
+  calendars and `read_time_program` found nothing. Zone 1 heating, cooling, hot water and circulation programs are now
+  read the way @jlrosende verified against the remote. They are read-only for now; writing is refused before anything
+  is sent.
+- **Current error of the outdoor unit** on HMUX0 SW0407/SW0502 as "Error": `none` when there is no error, otherwise the
+  F-code number (for example 22 for F.22).
+- **Refrigerant circuit temperatures on HMUX0 SW0406, off by default** (issue #205, thanks @Zapgla): air inlet,
+  compressor inlet and outlet, and EEV outlet temperature. Other SW0406 readings and the owner's heat pump use the same
+  number format for these messages, but nobody has read these four on SW0406 yet, so they start disabled. They are read
+  every 5 minutes and only on SW0406 units whose ebusd has no hmux0 configuration of its own.
 
 These come from the ebusd configuration that @R91g wrote for these heat pumps
 ([R91g/arotherm-genia-ebusd](https://github.com/R91g/arotherm-genia-ebusd), proposed upstream as

@@ -87,6 +87,7 @@ HMUX0_SW0407_PASSIVE_REGISTER_NAMES: frozenset[str] = frozenset(
         "RunDataCondensateTemp",
         "RunDataHeatOutput",
         "HMUStatusCode",
+        "Currenterror",
     }
 )
 HMUX0_SW0407_FALLBACK_NAMES: frozenset[str] = frozenset(

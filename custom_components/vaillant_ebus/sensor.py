@@ -141,6 +141,10 @@ class EbusdSensor(CoordinatorEntity[VaillantCoordinator], SensorEntity, RestoreE
             # value. Do not conflate this with an idle register's "no data
             # stored" sentinel, which also yields None here.
             return None
+        # A raw value the metadata labels (an error code's `-1` = no error) shows as that label.
+        labels = self._desc.meta.value_labels
+        if labels and raw.strip() in labels:
+            return labels[raw.strip()]
         # Numeric registers become floats; unitless text registers (status
         # codes) keep their raw string so the UI still shows something useful.
         val: float | str | None

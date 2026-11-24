@@ -123,6 +123,8 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         friendly_name="Error",
         icon="mdi:alert",
         entity_category="diagnostic",
+        # The HMUX0 passive definition decodes the first error slot as SIN, so an empty slot (`ffff`) reads `-1`.
+        value_labels={"-1": "none"},
     ),
     "hmu.FlowTemp": RegisterMeta(
         friendly_name="Flow Temperature",
@@ -846,6 +848,43 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         unit="W",
         state_class="measurement",
         enabled=False,
+        fallback_read=False,
+    ),
+    # Installer settings (display D-codes), read over B51A 05ff on the heat pumps with evidence (`HEAT_PUMP_SETTINGS`).
+    # Settings, not measurements: diagnostic, no state class. Never probed by the map-driven pass.
+    "hmu.CompressorStartHeating": RegisterMeta(
+        friendly_name="Compressor Start Heating (D.230)",
+        icon="mdi:sigma",
+        unit="°min",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    "hmu.CompressorStartCooling": RegisterMeta(
+        friendly_name="Compressor Start Cooling (D.233)",
+        icon="mdi:sigma",
+        unit="°min",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    # The two hysteresis names exist in ebusd's hmu CSV on other units; they keep the default fallback flag so the
+    # entity that CSV creates there stays as it was (a metadata-only entry would hide it until a value arrives).
+    "hmu.CompressorHysteresisHc": RegisterMeta(
+        friendly_name="Compressor Hysteresis Heating (D.267)",
+        icon="mdi:thermometer-lines",
+        unit="K",
+        entity_category="diagnostic",
+    ),
+    "hmu.CompressorHysteresisCooling": RegisterMeta(
+        friendly_name="Compressor Hysteresis Cooling (D.363)",
+        icon="mdi:thermometer-lines",
+        unit="K",
+        entity_category="diagnostic",
+    ),
+    "hmu.MaxResidualHead": RegisterMeta(
+        friendly_name="Maximum Residual Pump Head (D.231)",
+        icon="mdi:pump",
+        unit="mbar",
+        entity_category="diagnostic",
         fallback_read=False,
     ),
     # Confirmed community row: the gateway's status code equals `B509 5402008813` in every capture with both.

@@ -592,6 +592,9 @@ class RegisterMeta:
     device_circuit: str | None = None
     divisor: float | None = None
     fallback_read: bool = True
+    # Raw values shown under another label, for a value ebusd cannot name itself (its value lists reject the
+    # replacement and negative values). Example: the error code `-1` (`ffff`, no error) shows as `none`.
+    value_labels: dict[str, str] | None = None
 
 
 @dataclass

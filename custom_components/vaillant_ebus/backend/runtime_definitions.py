@@ -10,9 +10,14 @@ from __future__ import annotations
 from datetime import datetime
 
 from .hardware_profiles import (
+    BASS3_SW0708,
     CTLV2_SW0514,
+    CTLV3_SW0808,
     HMU00_HW5103,
+    HMU00_SW0308,
+    HMU00_SW0522,
     HMUX0_B509_MONITORING,
+    HardwareProfile,
     node_matches,
     profile_owner,
     scan_matches,
@@ -128,10 +133,53 @@ HMUX0_SW0407_PASSIVE_REGISTERS = (
             ("RunStatsCoolingStarts", "e20b", ""),
         )
     ),
+    # Current error of the outdoor unit (`B503 0001`, the Vaillant error layout ebusd uses for every device; community
+    # CSV row Currenterror). The first slot as SIN: an empty slot (`ffff`) reads -1, shown as `none`; F.22 reads 22.
+    ("Currenterror", "B503", "0001", "error,,SIN,,,,ign,,IGN:8,,,"),
     ("RunDataEvaporationTemp", "B509", "540200d110", "value,,IGN:4,,,,value,,D2C,,°C,temperature"),
     ("RunDataCondensateTemp", "B509", "540200db10", "value,,IGN:4,,,,value,,D2C,,°C,temperature"),
     ("RunDataHeatOutput", "B509", "5402005e0d", "value,,IGN:4,,,,value,,EXP,,W,"),
 )
+
+# Installer settings of the heat pump (display D-codes), read over `B51A 05ff <id>`. The answer is three header bytes,
+# the value, then minimum, maximum and step (owner live: `-60` with `9c ff e2 ff 05` = -100..-30 step 5). Names and
+# D-codes follow the community CSV (R91g, display-checked); the owner's HMU00 SW0522 answered every row with the
+# CSV's display values, and issue #218 read D.230 on HMU00 SW0308 (-119 degmin). The hysteresis names are the ones
+# ebusd's hmu CSV uses on other units, so an entity that CSV already creates keeps its identity. Only owners without
+# that CSV message get a definition. (name, id, value fields, profiles)
+HEAT_PUMP_SETTING_LIMITS = "limits,,IGN:5,,,"
+HEAT_PUMP_SETTINGS: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
+    ("CompressorStartHeating", "05ff341e", "value,,SIN,,°min,", ("hmu00_sw0522", "hmux0_sw0407", "hmu00_sw0308")),
+    ("CompressorStartCooling", "05ff3421", "value,,SIN,,°min,", ("hmu00_sw0522", "hmux0_sw0407")),
+    ("CompressorHysteresisHc", "05ff3443", "value,,SIN,16,K,", ("hmu00_sw0522", "hmux0_sw0407")),
+    ("CompressorHysteresisCooling", "05ff353f", "value,,SIN,16,K,", ("hmu00_sw0522", "hmux0_sw0407")),
+    ("MaxResidualHead", "05ff341f", "value,,UIN,,mbar,", ("hmu00_sw0522", "hmux0_sw0407")),
+)
+HEAT_PUMP_SETTING_NAMES = frozenset(name for name, *_ in HEAT_PUMP_SETTINGS)
+
+
+# Build the installer setting reads for the heat pump owners with evidence (owner HMU00, HMUX0 SW0407 profile, and
+# D.230 on HMU00 SW0308). Plain `r`: the energy poll re-reads them, nobody else asks for them.
+def heat_pump_setting_definitions(graph: DeviceGraph | None) -> list[str]:
+    if graph is None:
+        return []
+    owners = {
+        "hmu00_sw0522": profile_owner(graph, HMU00_SW0522),
+        "hmux0_sw0407": hmux0_sw0407_circuit(graph),
+        "hmu00_sw0308": profile_owner(graph, HMU00_SW0308),
+    }
+    listed = {key.casefold() for key in (*graph.raw_registers, *graph.placeholder_registers)}
+    definitions: list[str] = []
+    for name, ident, fields, profiles in HEAT_PUMP_SETTINGS:
+        for profile in profiles:
+            circuit = owners[profile]
+            # A name ebusd's own CSV already defines there is left to that CSV (`define -r` would replace it).
+            if circuit is not None and f"{circuit}.{name}".casefold() not in listed:
+                definitions.append(
+                    f"r,{circuit},{name},{name},31,08,B51A,{ident},ign,,IGN:3,,,,{fields},{HEAT_PUMP_SETTING_LIMITS}"
+                )
+    return list(dict.fromkeys(definitions))
+
 
 # Outdoor unit status code (community CSV row HMUStatusCode, R91g; upstream PR #707). The 10-byte answer is the status
 # as UIN and eight more bytes. Every capture with both frames shows the same value as `B509 5402008813`.
@@ -238,31 +286,139 @@ HWC_TIMER_EXTRA_SLOTS = (1, 2)
 TIMER_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
-# Build the slot 1 and 2 reads of the hot water timer for a CTLV2 SW0514 whose configuration decodes only slot 0.
-# Gated on the scan identity and on the `HwcTimer_Timeslots` layout; the `HwcTimer_Timeframes` layout (the owner's
-# CTLV2) already ships slots 0-2 with a temperature, so nothing is defined there. Absent hardware gets nothing.
-def hwc_timer_slot_definitions(graph: DeviceGraph | None) -> list[str]:
-    if graph is None:
-        return []
+# Slot reads of one weekly program over `B555 a5 00 <program> <day> <slot>`, named `<prefix>_<Day><slot>` like the
+# messages the calendar and the time program services read. One builder for every controller that needs them.
+def b555_slot_definitions(circuit: str, prefix: str, program: int, slots: tuple[int, ...], fields: str) -> list[str]:
+    return [
+        f"r,{circuit},{prefix}_{day}{slot},{prefix}_{day}{slot},31,15,B555,a500{program:02x}{index:02x}{slot:02x},"
+        + fields
+        for index, day in enumerate(TIMER_WEEKDAYS)
+        for slot in slots
+    ]
+
+
+# Slot count read of one weekly program over `B555 a4 00 <program>`: a status byte, one count per weekday and a
+# trailing byte (issue #256 capture `09 00 02 02 02 02 02 02 02 00`; issue #235 table).
+def b555_slot_count_definition(circuit: str, prefix: str, program: int) -> str:
+    days = ",".join(f"{day[:2].lower()},,UCH,,," for day in TIMER_WEEKDAYS)
+    return (
+        f"r,{circuit},{prefix}_Timeslots,{prefix}_Timeslots,31,15,B555,a400{program:02x}"
+        f",ign,,IGN:1,,,,{days},end,,IGN:1,,,"
+    )
+
+
+# Return the heating controller circuit when it is the unique controller and matches the profile, else None.
+def _controller_for_profile(graph: DeviceGraph, profile: HardwareProfile) -> str | None:
     controller = graph.heating_controller_result()
-    owner = profile_owner(graph, CTLV2_SW0514)
+    owner = profile_owner(graph, profile)
     if (
         controller.status != ResolutionStatus.UNIQUE
         or controller.node is None
         or owner is None
         or owner.casefold() != controller.node.circuit.casefold()
     ):
+        return None
+    return controller.node.circuit
+
+
+# Build the slot 1 and 2 reads of the hot water timer for a CTLV2 SW0514 whose configuration decodes only slot 0.
+# Gated on the scan identity and on the `HwcTimer_Timeslots` layout; the `HwcTimer_Timeframes` layout (the owner's
+# CTLV2) already ships slots 0-2 with a temperature, so nothing is defined there. Absent hardware gets nothing.
+def hwc_timer_slot_definitions(graph: DeviceGraph | None) -> list[str]:
+    if graph is None:
         return []
-    circuit = controller.node.circuit
+    circuit = _controller_for_profile(graph, CTLV2_SW0514)
+    if circuit is None:
+        return []
     keys = {key.casefold() for key in (*graph.raw_registers, *graph.placeholder_registers)}
     if f"{circuit}.hwctimer_timeslots".casefold() not in keys or f"{circuit}.hwctimer_timeframes".casefold() in keys:
         return []
-    return [
-        f"r,{circuit},HwcTimer_{day}{slot},HwcTimer_{day}{slot},31,15,B555,a50002{index:02x}{slot:02x},"
-        + HWC_TIMER_SLOT_FIELDS
-        for index, day in enumerate(TIMER_WEEKDAYS)
-        for slot in HWC_TIMER_EXTRA_SLOTS
-    ]
+    return b555_slot_definitions(circuit, "HwcTimer", 0x02, HWC_TIMER_EXTRA_SLOTS, HWC_TIMER_SLOT_FIELDS)
+
+
+# Build the silent mode slot 1 and 2 reads for a CTLV3 SW0808 whose configuration decodes slot 0 only (issue #256).
+# Gated on the scan identity and on ebusd listing its own `SilentTimer_Timeslots` and slot 0. The gate must not look
+# at slot 1: after the first define ebusd lists our own slot 1, and the next discovery would drop the set (and with it
+# the read-only guard).
+def silent_timer_slot_definitions(graph: DeviceGraph | None) -> list[str]:
+    if graph is None:
+        return []
+    circuit = _controller_for_profile(graph, CTLV3_SW0808)
+    if circuit is None:
+        return []
+    keys = {key.casefold() for key in (*graph.raw_registers, *graph.placeholder_registers)}
+    if not all(key in keys for key in (f"{circuit}.silenttimer_timeslots", f"{circuit}.silenttimer_monday0")):
+        return []
+    return b555_slot_definitions(circuit, "SilentTimer", 0x04, HWC_TIMER_EXTRA_SLOTS, HWC_TIMER_SLOT_FIELDS)
+
+
+# BASS3 weekly programs and their `B555` program byte (issue #235). Each slot answer carries the slot temperature in
+# 0.1 degC (`d2 00` = 21.0); the circulation program answers `ffff`, which reads as no temperature.
+BASS3_B555_PROGRAMS = (("Z1Timer", 0x00), ("Z1CoolingTimer", 0x01), ("HwcTimer", 0x02), ("CcTimer", 0x03))
+B555_SLOT_FIELDS_WITH_TEMPERATURE = HWC_TIMER_SLOT_FIELDS + ",temp,,UIN,10,°C,"
+B555_ALL_SLOTS = (0, 1, 2)
+
+
+# Build the B555 slot and count reads of the BASS3 weekly programs (issue #235), read-only.
+# Gated on the scan identity and on ebusd listing the B524 day message `Z1Timer_Monday` that the BASS3 answers empty.
+# The gate never looks at the slot names: ebusd lists ours after the first define, and the set (with the read-only
+# guard) must survive the next discovery.
+def bass3_timer_definitions(graph: DeviceGraph | None) -> list[str]:
+    if graph is None:
+        return []
+    circuit = _controller_for_profile(graph, BASS3_SW0708)
+    if circuit is None:
+        return []
+    keys = {key.casefold() for key in (*graph.raw_registers, *graph.placeholder_registers)}
+    if f"{circuit}.z1timer_monday" not in keys:
+        return []
+    definitions: list[str] = []
+    for prefix, program in BASS3_B555_PROGRAMS:
+        definitions.extend(
+            b555_slot_definitions(circuit, prefix, program, B555_ALL_SLOTS, B555_SLOT_FIELDS_WITH_TEMPERATURE)
+        )
+        definitions.append(b555_slot_count_definition(circuit, prefix, program))
+    return definitions
+
+
+# The `circuit.name` keys (casefolded) of registers the integration defines under a strong assumption, so their
+# entities start disabled (docs/register-discovery.md); a YAML `enabled: true` override still wins. Only where the
+# integration defines them: on a SW0406 bus whose ebusd loads its own hmux0 CSV the same names come from that CSV.
+# SW0406 refrigerant temperatures (#205): floats on SW0406 (flow, condenser outlet) and on the owner's HMU00, but no
+# SW0406 frame of these four ids exists yet.
+def strong_assumption_register_keys(graph: DeviceGraph | None) -> frozenset[str]:
+    if graph is None:
+        return frozenset()
+    if hmux0_sw0406_owner(graph) is None:
+        return frozenset()
+    # The full build decides, because the "own CSV" check needs every name the integration defines on the circuit.
+    # The date only enters the B516 day/month ids, never a name.
+    names = {name.casefold() for name in HMUX0_SW0406_ENERGY_READ_REGISTERS}
+    return frozenset(
+        ".".join(parts[1:3]).casefold()
+        for definition in build_runtime_defines(graph, datetime(2026, 1, 1))
+        if (parts := definition.split(",", 3))[0] == "r" and parts[2].casefold() in names
+    )
+
+
+# The `circuit.name` keys (casefolded) of the slot and count messages the integration defines for a calendar. The
+# entity factory creates no sensors for them; ebusd's own slot messages are not in this set and keep their entities.
+def calendar_slot_register_keys(graph: DeviceGraph | None) -> frozenset[str]:
+    return frozenset(
+        ".".join(definition.split(",", 3)[1:3]).casefold()
+        for definition in (*silent_timer_slot_definitions(graph), *bass3_timer_definitions(graph))
+    )
+
+
+# Weekly programs that the integration reads over its own `B555` definitions but must not write: their write
+# message was never tested on that controller (silent mode on CTLV3, every BASS3 program). `TimerProgramAccess`
+# refuses a write to these before the first bus write. Returns (casefolded circuit, prefix) pairs.
+def read_only_timer_programs(graph: DeviceGraph | None) -> frozenset[tuple[str, str]]:
+    programs: set[tuple[str, str]] = set()
+    for definition in (*silent_timer_slot_definitions(graph), *bass3_timer_definitions(graph)):
+        circuit, name = definition.split(",", 3)[1:3]
+        programs.add((circuit.casefold(), name.split("_", 1)[0]))
+    return frozenset(programs)
 
 
 # Runtime definitions of the HMUX0 precise flow/return temperatures and the yield/COP statistics.
@@ -345,6 +501,26 @@ def _hmux0_sw0406_active_definitions(circuit: str) -> list[str]:
     ]
 
 
+# SW0406 refrigerant circuit temperatures (issue #205, strong assumption: see `STRONG_ASSUMPTION_REGISTERS`). B509
+# type-08 ids answer a 4-byte float after the 4-byte echo on SW0406 and on the owner's HMU00. Read on the energy
+# interval (`HMUX0_SW0406_ENERGY_READ_REGISTERS`): diagnostics, not worth four reads on every poll.
+HMUX0_SW0406_REFRIGERANT_TEMPERATURES = (
+    ("RunDataAirInletTemp", "de08"),
+    ("RunDataCompressorInletTemp", "9808"),
+    ("RunDataCompressorOutletTemp", "a208"),
+    ("RunDataEEVOutletTemp", "ac08"),
+)
+HMUX0_SW0406_ENERGY_READ_REGISTERS = frozenset(name for name, _ in HMUX0_SW0406_REFRIGERANT_TEMPERATURES)
+
+
+# Build the SW0406 refrigerant circuit temperature reads (issue #205).
+def _hmux0_sw0406_refrigerant_definitions(circuit: str) -> list[str]:
+    return [
+        f"r,{circuit},{name},{name},31,08,B509,540200{ext},value,,IGN:4,,,,value,,EXP,,°C,temperature"
+        for name, ext in HMUX0_SW0406_REFRIGERANT_TEMPERATURES
+    ]
+
+
 # Read definition of the SW0406 electrical power, with a blank source so it also decodes the gateway's frame.
 # Issue #188 - the SW0406 answer to `B509 5402005b0d` is a 4-byte float in watts (33.2 idle, 1341.4 running,
 # 961.27 in the gateway frame), the same layout the SW0407 passive set uses. Issue #255 - without a myVAILLANT
@@ -378,6 +554,7 @@ def _hmux0_sw0406_definitions(graph: DeviceGraph, circuit: str, defines: list[st
         _hmux0_power_definition(circuit),
         *_hmux0_sw0406_active_definitions(circuit),
         *_hmux0_sw0406_any_master_definitions(circuit),
+        *_hmux0_sw0406_refrigerant_definitions(circuit),
     ]
     if _ebusd_supplies_heat_pump_config(graph, circuit, (*defines, *candidates)):
         return []
@@ -643,6 +820,9 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
 
     defines = [definition for definition in (_resolve_definition_circuit(item) for item in defines) if definition]
     defines.extend(hwc_timer_slot_definitions(graph))
+    defines.extend(silent_timer_slot_definitions(graph))
+    defines.extend(bass3_timer_definitions(graph))
+    defines.extend(heat_pump_setting_definitions(graph))
     if is_hmux0_0303_0504:
         sw0303 = hmux0_sw0303_circuit
         assert sw0303 is not None

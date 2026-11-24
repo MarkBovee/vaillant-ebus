@@ -50,6 +50,10 @@ async def async_setup_entry(
             "Heating Program": ("CcTimer", coordinator.heating_circuit, coordinator.heating_circuit),
             "Domestic Hot Water Program": ("HwcTimer", coordinator.heating_circuit, "dhw"),
         }
+        # The silent mode program (issue #256) only where all its slots can be read: ebusd's own configuration
+        # decodes slot 0 only, so a calendar from slot 0 alone would hide the second slot.
+        if coordinator.has_controller_register("SilentTimer_Monday1"):
+            schedules["Silent Mode Program"] = ("SilentTimer", coordinator.heating_circuit, coordinator.heating_circuit)
         for zone in coordinator.zone_circuits():
             number = zone[1:]
             circuit = coordinator.zone_circuits()[zone]

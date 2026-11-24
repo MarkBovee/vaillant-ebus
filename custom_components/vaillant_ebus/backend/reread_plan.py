@@ -30,8 +30,10 @@ from .runtime_definitions import (
     DISCOVERED_PLAIN_READ_POLLED_REGISTERS,
     HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS,
     HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS,
+    HEAT_PUMP_SETTING_NAMES,
     HMUX0_COMPRESSOR_COUNTER_NAMES,
     HMUX0_SW0406_ACTIVE_READ_REGISTERS,
+    HMUX0_SW0406_ENERGY_READ_REGISTERS,
     HWC_CIRCULATION_PUMP_STATUS,
     HWC_TIMER_SLOT_FIELDS,
     INTEGRATION_POLLED_CONTROLLER_REGISTERS,
@@ -63,8 +65,8 @@ class RereadRule:
 
 
 # True when a runtime definition is one of the plain-`r` messages the energy poll re-reads: B516 energy counters
-# (#53/#97), the HMUX0 compressor counters, the controller registers moved off `r5` (#193) and the hot water timer
-# slots (#208).
+# (#53/#97), the HMUX0 compressor counters, the controller registers moved off `r5` (#193), the hot water timer
+# slots (#208), the heat pump installer settings (#218) and the SW0406 refrigerant temperatures (#205).
 def _is_energy_polled_definition(access: str, name: str, message: str, definition: str) -> bool:
     if access != "r":
         return False
@@ -72,7 +74,11 @@ def _is_energy_polled_definition(access: str, name: str, message: str, definitio
         message == "B516"
         or (message == "B511" and name in HMUX0_COMPRESSOR_COUNTER_NAMES)
         or (message == "B524" and name in INTEGRATION_POLLED_CONTROLLER_REGISTERS)
-        or (message == "B555" and definition.endswith(HWC_TIMER_SLOT_FIELDS))
+        or (message == "B51A" and name in HEAT_PUMP_SETTING_NAMES)
+        or (message == "B509" and name in HMUX0_SW0406_ENERGY_READ_REGISTERS)
+        # Only the hot water slots of issue #208: the silent mode and BASS3 slot reads serve the calendar, which reads
+        # them itself, and re-reading 88 BASS3 slots each interval would only cost bus time.
+        or (message == "B555" and name.startswith("HwcTimer_") and definition.endswith(HWC_TIMER_SLOT_FIELDS))
     )
 
 
