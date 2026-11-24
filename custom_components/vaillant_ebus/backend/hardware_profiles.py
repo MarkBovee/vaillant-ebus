@@ -43,13 +43,19 @@ class HardwareProfile:
 
 # The single table of firmware/hardware gates; evidence names the capture or upstream thread.
 # Gates were scattered literals; one table makes the supported matrix reviewable and testable.
+# SW0502 (issue #252) shares the profile: ebusd loads no hmux0 CSV for it either, and its gateway frames carry the same
+# B509/B511/B516 ids with values that match the reporter's own readings (power 1267.7 W against 1232 W in the cloud,
+# outside 8.95 degC against 8.9 degC, status 104 while heating).
 HMUX0_SW0407 = HardwareProfile(
     name="hmux0_sw0407",
     scan_type="hmux0",
     device_type="HEAT_PUMP",
-    sw=frozenset({"0407"}),
+    sw=frozenset({"0407", "0502"}),
     hw=frozenset({"0504"}),
-    evidence="community captures (5 fixtures); map probes unavailable, passive B509/B51A/B516/B511 set",
+    evidence=(
+        "community captures (5 SW0407 fixtures, issue #252 SW0502); map probes unavailable, "
+        "passive B509/B51A/B516/B511 set"
+    ),
 )
 # SW0303 needs the runtime define for RunDataFlowTemp/RunDataReturnTemp (issue #171, live-confirmed).
 HMUX0_SW0303 = HardwareProfile(

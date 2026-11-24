@@ -45,12 +45,16 @@ ANALYSIS = sys.modules["vaillant_ebus.backend.analysis_service"]
 from vaillant_ebus.backend.ebus_service import EbusService, WriteResult  # noqa: E402
 from vaillant_ebus.backend.entity_factory import EntityFactoryService  # noqa: E402
 from vaillant_ebus.backend.models import (  # noqa: E402
+    OPERATING_STATE_DEFROST,
+    OPERATING_STATE_HEATING,
     DeviceGraph,
     DeviceNode,
     DeviceType,
     EbusdRegister,
     ResolutionStatus,
+    derive_operating_state,
 )
+from vaillant_ebus.backend.reread_plan import plan_rereads  # noqa: E402
 
 mock_homeassistant = sys.modules["homeassistant"]
 repairs_module = sys.modules["vaillant_ebus.repairs"]
@@ -6798,9 +6802,12 @@ def _decode_definition_fields(fields: str, payload: bytes) -> dict[str, object]:
         elif kind == "EXP":
             value, offset = struct.unpack("<f", payload[offset : offset + 4])[0], offset + 4
             raw = value
+        elif kind == "UIN":
+            raw, offset = int.from_bytes(payload[offset : offset + 2], "little"), offset + 2
+            value = raw
         else:
             raise AssertionError(f"unsupported field type {kind} in {fields}")
-        if kind == "UCH" and "=" in divisor_or_values:
+        if kind in {"UCH", "UIN"} and "=" in divisor_or_values:
             value = dict(item.split("=") for item in divisor_or_values.split(";")).get(str(value), value)
         elif kind == "UCH" and divisor_or_values.isdigit():
             value = raw / int(divisor_or_values)
@@ -6862,12 +6869,12 @@ async def test_issue175_sw0407_defines_passive_status_registers_that_match_the_c
     assert (heater["storagetemp"], heater["flowtemp"]) == (46.5625, 30.0)
 
 
-# Intent: the passive HMUX0 definitions exist only for SW0407/HW0504, the VWZIO one only for SW0500/HW0504.
-# Why: SW0406, SW0303 and a bus without that VWZIO must stay untouched; the layouts have no evidence there.
+# Intent: the passive HMUX0 definitions exist only where a capture proves them, the VWZIO one only for SW0500/HW0504.
+# Why: SW0303, a SW0406 bus whose ebusd loads its own hmux0 CSV and a bus without that VWZIO must stay untouched.
+#      (A SW0406 bus without an hmux0 CSV gets the status blocks since issue #254; see its own test.)
 @pytest.mark.parametrize(
     ("fixture", "expect_station"),
     [
-        ("community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml", False),  # VWZIO SW0406
         ("community/hmux0_issue171_2026-10-03_094933_discovery.yaml", True),  # HMUX0 SW0406 + VWZIO SW0500
         ("community/hmux0_issue99_2026-09-10_173229.yaml", False),
         ("community/flexotherm_issue102_2026-09-12_161841_discovery.yaml", False),
@@ -6938,8 +6945,10 @@ async def test_issue185_sw0406_without_hmux0_config_defines_runtime_registers() 
         assert defined[name] == sw0303[f"r.hmux0.{name}"], name
     assert defined["CompressorHc"].startswith("r,hmux0,CompressorHc,CompressorHc,31,08,B511,1801,")
     assert defined["CompressorHwc"].startswith("r,hmux0,CompressorHwc,CompressorHwc,31,08,B511,1802,")
-    # Not defined as active reads on SW0406: the power draw (passive only, #188) and the registers that answered ERR.
-    assert not {"RunDataElPowerConsumption", "Status00", "RunDataStatuscode"} & set(defined)
+    # Not defined as active reads on SW0406: the registers that answered ERR with the HMU CSV layout. Status00 is
+    # decoded passively from the controller's polls instead (issue #254).
+    assert not {"Status00", "RunDataStatuscode"} & set(defined)
+    assert "RunDataElPowerConsumption" in defined
 
 
 # Intent: the SW0406 flow and return temperature definitions decode the captured 4-byte float answers.
@@ -7236,26 +7245,110 @@ async def test_stale_entities_issue_is_raised_for_entities_without_data() -> Non
         repairs_stub.async_dismiss_stale_entities.assert_not_awaited()
 
 
-# Intent: a SW0406 bus without hmux0 registers of its own decodes the gateway power frame passively.
+# Intent: a SW0406 bus without hmux0 registers of its own reads the power and still decodes the gateway's frame.
 # Why: issue #188 - the gateway polls `B509 5402005b0d` and the answer `09 51 70 44` is 961.27 W while the unit runs;
 #      the reporter read 33.2 W idle and 1341.4 W under load from the same register, so layout and unit are proven.
-async def test_issue188_sw0406_decodes_the_gateway_power_frame_passively() -> None:
+#      Issue #255 - without a gateway nobody sends that frame, so the power is read actively; a blank source keeps
+#      decoding the gateway's frame where there is one.
+async def test_issue188_sw0406_power_reads_and_decodes_the_gateway_frame() -> None:
     definitions = await _runtime_definitions_for(
         "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
     )
     dump = load_discovery_dump("community/hmux0_sw0406_issue188_2026-10-13_092007_discovery.yaml")
     responses = {row["request"]: row["resp"] for row in dump["labeled_telegrams"]}
 
-    power = definitions["u.hmux0.RunDataElPowerConsumption"].split(",", 8)
-    # A passive definition listens to the gateway frame, so it needs the gateway as source and costs no bus traffic.
-    assert power[:4] == ["u", "hmux0", "RunDataElPowerConsumption", "RunDataElPowerConsumption"]
-    assert power[4:8] == ["f1", "08", "B509", "5402005b0d"]
-    request = f"{power[4]}{power[5]}{power[6]}{len(power[7]) // 2:02x}{power[7]}".casefold()
+    power = definitions["r.hmux0.RunDataElPowerConsumption"].split(",", 8)
+    assert power[:4] == ["r", "hmux0", "RunDataElPowerConsumption", "RunDataElPowerConsumption"]
+    # Blank source: ebusd matches the gateway's frame (source f1) as well as its own read.
+    assert power[4:8] == ["", "08", "B509", "5402005b0d"]
+    request = f"f1{power[5]}{power[6]}{len(power[7]) // 2:02x}{power[7]}".casefold()
     assert request in responses
     watts = _decode_definition_fields(power[8], bytes.fromhex(responses[request])[1:])["value"]
     assert abs(watts - 961.27) < 0.01
-    # The active read stays undefined: only the observed gateway frame is evidence for the layout.
-    assert "r.hmux0.RunDataElPowerConsumption" not in definitions
+    # One definition per name: the old passive one would clash with the read.
+    assert "u.hmux0.RunDataElPowerConsumption" not in definitions
+
+
+ISSUE252_FIXTURE = "community/hmux0_sw0502_issue252_2026-11-20_080932_discovery.yaml"
+SW0406_NO_GATEWAY_FIXTURE = "community/hmux0_sw0406_discussion31_2026-11-17_153929_discovery.yaml"
+
+
+# Intent: HMUX0 SW0502/HW0504 gets the SW0407 passive set, and every definition decodes the captured frames.
+# Why: issue #252 - ebusd loads no hmux0 CSV for SW0502, so only nine energy counters showed. The gateway and controller
+#      frames carry the SW0407 ids; the decoded values match the reporter's readings (1232 W in the cloud, outside
+#      8.9 degC, heating with the compressor running).
+async def test_issue252_sw0502_decodes_the_gateway_and_controller_frames() -> None:
+    definitions = await _runtime_definitions_for(ISSUE252_FIXTURE)
+    dump = load_discovery_dump(ISSUE252_FIXTURE)
+    responses = {row["request"]: row["resp"] for row in (*dump["labeled_telegrams"], *dump["unknown_telegrams"])}
+
+    # Decode one definition against the frame of the given source that the capture shows.
+    def decode(key: str, source: str) -> dict[str, object]:
+        fields = definitions[key].split(",", 8)
+        request = f"{source}{fields[5]}{fields[6]}{len(fields[7]) // 2:02x}{fields[7]}".casefold()
+        return _decode_definition_fields(fields[8], bytes.fromhex(responses[request])[1:])
+
+    assert abs(decode("u.hmux0.RunDataElPowerConsumption", "f1")["value"] - 1267.65) < 0.01
+    assert abs(decode("u.hmux0.RunDataCompressorSpeed", "f1")["value"] - 67.8) < 0.01
+    assert decode("u.hmux0.RunDataStatuscode", "f1")["value"] == "heat_compressor_active"
+    status = decode("u.hmux0.Status00", "10")
+    assert (status["supplytemp"], status["compressorstate"], status["defrost"]) == (30.1875, "heating", "inactive")
+    flow = decode("u.hmux0.Status01", "10")
+    assert (flow["temp"], flow["temp_1"], flow["pumpstate"]) == (30.0, 25.5, "on")
+    assert flow["temp_2"] == 8.953125
+
+
+# Intent: a SW0406 bus without an hmux0 CSV decodes the controller's Status00/Status01 polls passively.
+# Why: issue #254 - "Energy Manager State" stayed unavailable and defrost was missing. The controller polls B511/00 and
+#      B511/01 from the heat pump about every 10 s, so a passive definition costs no bus traffic; the discussion 31
+#      capture (no gateway) and the #188 capture both decode plausible values while heating.
+@pytest.mark.parametrize(
+    ("fixture", "supply", "pressure"),
+    [
+        (SW0406_NO_GATEWAY_FIXTURE, 42.6875, 1.9),
+        ("community/hmux0_sw0406_issue188_2026-10-13_092007_discovery.yaml", 33.625, 1.7),
+    ],
+)
+async def test_issue254_sw0406_decodes_status00_from_the_controller_polls(
+    fixture: str, supply: float, pressure: float
+) -> None:
+    stock = "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    definitions = await _runtime_definitions_for(stock)
+    dump = load_discovery_dump(fixture)
+    responses = {row["request"]: row["resp"] for row in (*dump["labeled_telegrams"], *dump["unknown_telegrams"])}
+
+    status00 = definitions["u.hmux0.Status00"].split(",", 8)
+    assert status00[:8] == ["u", "hmux0", "Status00", "Status00", "", "08", "B511", "00"]
+    assert definitions["u.hmux0.Status01"].split(",", 8)[4:8] == ["", "08", "B511", "01"]
+    # No active Status00 read: the HMU CSV layout answered ERR on SW0406 (#188).
+    assert "r.hmux0.Status00" not in definitions
+    status = _decode_definition_fields(status00[8], bytes.fromhex(responses["1008b5110100"])[1:])
+    assert (status["supplytemp"], status["waterpressure"]) == (supply, pressure)
+    assert (status["compressorstate"], status["heatingstate"], status["defrost"]) == ("heating", "heating", "inactive")
+
+
+# Intent: the decoded SW0406 Status00 fields drive the Energy Manager State, including defrost.
+# Why: issue #254 - the derived state reads `Status00.compressorstate`/`defrost`; without them it was unavailable.
+def test_issue254_sw0406_status00_drives_the_operating_state() -> None:
+    heating = {"hmux0.Status00.compressorstate": "heating", "hmux0.Status00.defrost": "inactive"}
+    defrost = {"hmux0.Status00.compressorstate": "defrosting", "hmux0.Status00.defrost": "active"}
+
+    assert derive_operating_state(heating, "hmux0") == OPERATING_STATE_HEATING
+    assert derive_operating_state(defrost, "hmux0") == OPERATING_STATE_DEFROST
+
+
+# Intent: the SW0406 power read is re-read on every poll, on the SW0406 owner only.
+# Why: issue #255 - a plain `r` message is never polled by ebusd, so without the re-read the value would freeze.
+async def test_issue255_sw0406_power_is_reread_every_poll() -> None:
+    definitions = await _runtime_definitions_for(SW0406_NO_GATEWAY_FIXTURE)
+    graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(SW0406_NO_GATEWAY_FIXTURE, after=True))
+
+    reads = plan_rereads(graph, definitions, include_energy=False)
+
+    assert ("hmux0", "RunDataElPowerConsumption") in reads
+    sw0407 = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE175_FIXTURE, after=True))
+    sw0407_definitions = await _runtime_definitions_for(ISSUE175_FIXTURE)
+    assert ("hmux0", "RunDataElPowerConsumption") not in plan_rereads(sw0407, sw0407_definitions, include_energy=False)
 
 
 # Intent: the passive power definition stays hardware-gated like the other SW0406 runtime registers.
@@ -7273,6 +7366,9 @@ async def test_issue188_sw0406_power_definition_stays_hardware_gated(fixture: st
     definitions = await _runtime_definitions_for(fixture)
 
     assert "u.hmux0.RunDataElPowerConsumption" not in definitions
+    # The SW0406 read has a blank source; other firmware keeps its own (or no) definition.
+    power = definitions.get("r.hmux0.RunDataElPowerConsumption", "")
+    assert ",RunDataElPowerConsumption,RunDataElPowerConsumption,,08," not in power
 
 
 # Intent: every runtime definition records ebusd's answer, and the summary log names the rejected registers.
