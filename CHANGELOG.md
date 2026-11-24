@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.15.2 - 2026-11-24
+
+aroTHERM units with HMUX0 firmware SW0502 now show their heat pump readings, and SW0406 units show the defrost state,
+the Energy Manager State and their electrical power also when there is no myVAILLANT gateway on the bus.
+
+### Fixed
+
+- **No heat pump readings on HMUX0 SW0502** (issue #252, thanks @didekoning). ebusd has no configuration for this
+  firmware, so only the nine energy counters showed up. The capture shows that SW0502 answers the same messages as
+  SW0407, so it now gets the same readings: electrical power, compressor speed, status code, flow, return and outside
+  temperature, compressor state and defrost. They're decoded from what the controller and the gateway already ask the
+  heat pump; the integration sends nothing extra for them. The values in the capture match what the reporter saw
+  (1268 W against 1232 W in the app, outside 8.95 °C against 8.9 °C).
+- **Defrost and Energy Manager State missing on HMUX0 SW0406** (issue #254, thanks @Roan-V). The controller asks the
+  heat pump for its status about every 10 seconds; the integration now decodes those answers. That gives "Defrost
+  Active", the compressor state, flow and return temperature, and an Energy Manager State that's no longer
+  unavailable. This costs no bus traffic.
+- **Electrical power always unknown on HMUX0 SW0406 without a gateway** (issue #255, thanks @Roan-V). The integration
+  only listened for the power value that the myVAILLANT gateway asks for, so without a gateway it never arrived. It
+  now reads the value itself on every poll; where a gateway is present, its answers are still used as well.
+
+### Not changed
+
+- The "no longer provided" entries in the stale-entities repair that issue #152 still reports after 1.15.1 (the boiler
+  "Flame" sensor, a short-lived "Solar Controller" and "Zone 3") are not fixed in this release. Finding the cause needs
+  a discovery dump taken while they show up.
+- The silent mode timer calendar (issue #256) is planned for a later release.
+
 ## 1.15.1 - 2026-11-20
 
 The brine pressure of flexoTHERM units now updates by itself, and entities no longer jump between platforms (for

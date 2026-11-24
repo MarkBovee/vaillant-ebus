@@ -106,10 +106,13 @@ HMUX0_SW0407_PASSIVE_REGISTERS = (
     ("CompressorHwc", "B511", "1802", "ign,,IGN:1,,,,runtime,,ULG,,min,,cycles,,ULG"),
 )
 
-# HMUX0 SW0407/HW0504 telegrams that both the controller (0x10, about every 10 s) and the gateway (0xf1) poll.
+# HMUX0/HW0504 telegrams that the controller (0x10, about every 10 s) and the gateway (0xf1) poll.
 # Issue #175 capture - a blank source address lets one passive definition decode either sender; the Status01
 # layout matches five display values (flow, return, outside, storage, setpoint) and Status00 matches flow and state.
-HMUX0_SW0407_ANY_MASTER_REGISTERS = (
+# SW0406 answers the controller's polls with the same 9-byte layouts (issue #254; #188 and discussion 31 captures:
+# 33.6 degC/1.7 bar and 42.7 degC/1.9 bar while heating). The `ERR: invalid position` seen for SW0406 in #188 came
+# from the longer HMU CSV layout, not from a missing answer.
+HMUX0_ANY_MASTER_REGISTERS = (
     ("Status01", "B511", "01", VWZ_STATUS01_FIELDS),
     ("Status00", "B511", "00", HMUX0_STATUS00_FIELDS),
 )
@@ -146,9 +149,16 @@ DISCOVERED_PLAIN_READ_POLLED_REGISTERS = frozenset({"PowerConsumptionHmu"})
 HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS = frozenset(
     {"RunStatsCompressorStarts", "StatElectricEnergySum", "StatEnvironmentEnergySum"}
 )
-# Registers of `_hmux0_sw0406_active_definitions` (issue #205), re-read on every poll on the SW0406 owner.
+# Registers of `_hmux0_sw0406_active_definitions` (issue #205) and the power read (issue #255), re-read on every poll
+# on the SW0406 owner.
 HMUX0_SW0406_ACTIVE_READ_REGISTERS = frozenset(
-    {"BuildingCircuitFlow", "RunDataFlowTempDesired", "RunDataCondensorOutletTemp", "EnergyIntegral"}
+    {
+        "BuildingCircuitFlow",
+        "RunDataFlowTempDesired",
+        "RunDataCondensorOutletTemp",
+        "EnergyIntegral",
+        "RunDataElPowerConsumption",
+    }
 )
 # Boiler fuel counters (B516 `StatFuelSum*`, upstream `b516_inc.tsp`) that ebusd defines as plain `r` (discussion
 # #242): they froze for days and then jumped by the missed consumption. Re-read on the energy interval, only where the
@@ -279,15 +289,25 @@ def _hmux0_sw0406_active_definitions(circuit: str) -> list[str]:
     ]
 
 
-# Passive definition of the electrical power frame that the myVAILLANT gateway polls from the heat pump.
+# Read definition of the SW0406 electrical power, with a blank source so it also decodes the gateway's frame.
 # Issue #188 - the SW0406 answer to `B509 5402005b0d` is a 4-byte float in watts (33.2 idle, 1341.4 running,
-# 961.27 in the gateway frame), the same layout the SW0407 passive set uses. Passive means it only decodes the
-# gateway frame and sends nothing, so it stays unavailable until that frame is seen.
-def _hmux0_passive_power_definition(circuit: str) -> str:
+# 961.27 in the gateway frame), the same layout the SW0407 passive set uses. Issue #255 - without a myVAILLANT
+# gateway nobody sends that frame, so a passive definition stayed unknown; an active read gave 2537.48 W. The
+# integration re-reads it on every poll (`HMUX0_SW0406_ACTIVE_READ_REGISTERS`).
+def _hmux0_power_definition(circuit: str) -> str:
     name, message_id, subaddress, fields = next(
         item for item in HMUX0_SW0407_PASSIVE_REGISTERS if item[0] == "RunDataElPowerConsumption"
     )
-    return f"u,{circuit},{name},{name},f1,08,{message_id},{subaddress},{fields}"
+    return f"r,{circuit},{name},{name},,08,{message_id},{subaddress},{fields}"
+
+
+# Passive any-master definitions of the B511 status blocks the controller polls from a SW0406 heat pump (issue #254).
+# They cost no bus traffic and give Status00 (compressor state, defrost) and Status01 (flow, return, outside, pump).
+def _hmux0_sw0406_any_master_definitions(circuit: str) -> list[str]:
+    return [
+        f"u,{circuit},{name},{name},,08,{message_id},{subaddress},{fields}"
+        for name, message_id, subaddress, fields in HMUX0_ANY_MASTER_REGISTERS
+    ]
 
 
 # Runtime definitions for a SW0406/HW0504 bus whose ebusd supplies no hmux0 registers of its own.
@@ -299,8 +319,9 @@ def _hmux0_sw0406_definitions(graph: DeviceGraph, circuit: str, defines: list[st
         *_hmux0_precise_and_yield_definitions(circuit, float_temperatures=True),
         *_hmux0_b509_monitor_definitions(circuit),
         *_hmux0_compressor_counter_definitions(circuit),
-        _hmux0_passive_power_definition(circuit),
+        _hmux0_power_definition(circuit),
         *_hmux0_sw0406_active_definitions(circuit),
+        *_hmux0_sw0406_any_master_definitions(circuit),
     ]
     own_names = {
         parts[2].casefold()
@@ -575,7 +596,7 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
         )
         defines.extend(
             f"u,{hmux0_sw0407_owner},{name},{name},,08,{message_id},{subaddress},{fields}"
-            for name, message_id, subaddress, fields in HMUX0_SW0407_ANY_MASTER_REGISTERS
+            for name, message_id, subaddress, fields in HMUX0_ANY_MASTER_REGISTERS
         )
     if is_vwzio_0500_0504 and vwzio is not None:
         # The dump captures the gateway's passive B516/14 station-power frame.
@@ -613,10 +634,16 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
             definition for definition in defines if not (definition.startswith("r,") and ",Status00," in definition)
         ]
     if not is_hmux0_b509_0504:
+        # The SW0406 owner's own power read (issue #255) carries its own firmware gate and stays.
+        sw0406_owner = (hmux0_sw0406_circuit or "").casefold()
         defines = [
             definition
             for definition in defines
-            if not (definition.split(",", 3)[0] == "r" and definition.split(",", 3)[2] == "RunDataElPowerConsumption")
+            if not (
+                (parts := definition.split(",", 3))[0] == "r"
+                and parts[2] == "RunDataElPowerConsumption"
+                and parts[1].casefold() != sw0406_owner
+            )
         ]
     if heat_pump and node_matches(HMU00_HW5103, heat_pump):
         # Upstream ebusd-configuration PR #614, confirmed for HW5103.

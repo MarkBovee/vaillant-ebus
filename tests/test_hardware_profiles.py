@@ -81,7 +81,9 @@ def test_scan_identity_uniqueness_table(case: str, node: object, rows: list, exp
     ("case", "profile", "nodes", "expected"),
     [
         ("HMUX0 SW0407 match", PROFILES.HMUX0_SW0407, [_node()], "hmux0"),
+        ("HMUX0 SW0502 shares the SW0407 profile (issue #252)", PROFILES.HMUX0_SW0407, [_node(sw="0502")], "hmux0"),
         ("other firmware", PROFILES.HMUX0_SW0407, [_node(sw="0406")], None),
+        ("unknown later firmware", PROFILES.HMUX0_SW0407, [_node(sw="0503")], None),
         ("other hardware", PROFILES.HMUX0_SW0407, [_node(hw="0403")], None),
         ("wrong device role", PROFILES.HMUX0_SW0407, [_node(device_type="HEATING_CONTROLLER")], None),
         ("two matching nodes", PROFILES.HMUX0_SW0407, [_node(), _node(circuit="hmu", address="scan.09")], None),
