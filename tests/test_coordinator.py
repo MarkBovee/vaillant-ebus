@@ -60,6 +60,7 @@ mock_homeassistant = sys.modules["homeassistant"]
 repairs_module = sys.modules["vaillant_ebus.repairs"]
 const_module = sys.modules["vaillant_ebus.const"]
 COORDINATOR = sys.modules["vaillant_ebus.coordinator"]
+RUNTIME_DEFINITIONS = sys.modules["vaillant_ebus.backend.runtime_definitions"]
 
 
 from vaillant_ebus.coordinator import VaillantCoordinator, _register_values, _usable_register_value  # noqa: E402
@@ -510,7 +511,9 @@ async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0 = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0) == 25
+        # 25 active SW0303 definitions plus the passive gateway status code (community CSV, 1.16.0).
+        assert len(hmux0) == 26
+        assert any(d.startswith("u,hmux0,HMUStatusCode,") for d in hmux0)
         assert all(",hmu," not in definition for definition in hmux0)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0)
         # Issue #171: upstream PR #496 flow-temperature layout (B509 ext 0xfc/0x08), 1/16 degC.
@@ -1032,7 +1035,8 @@ async def test_issue161_sw0407_passive_definitions_survive_other_heat_pump_node(
             assert any(definition.startswith(f"r,hmux0,{name},") for definition in definitions)
 
 
-# Intent: issue #32's SW0302 map retains its existing active B509 path and gains no SW0407-only passive layouts.
+# Intent: issue #32's SW0302 map retains its existing active B509 path and gains no SW0407-only passive layouts; only
+#         the gateway status code, captured on SW0302, is added.
 # Why: passive telemetry support is gated to the firmware captured in issue #161.
 async def test_issue161_passive_hmux0_definitions_do_not_generalize_to_sw0302() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -1050,7 +1054,9 @@ async def test_issue161_passive_hmux0_definitions_do_not_generalize_to_sw0302() 
         definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
         assert graph.nodes["hmux0"].scan_sw == "0302"
         assert any(",B509,5402005b0d," in definition for definition in definitions)
-        assert not any(definition.startswith("u,hmux0,") for definition in definitions)
+        # The only passive HMUX0 definition on SW0302 is the gateway status code (issue #32 capture, community CSV).
+        passive = [definition for definition in definitions if definition.startswith("u,hmux0,")]
+        assert [definition.split(",")[2] for definition in passive] == ["HMUStatusCode"]
         for name in MAPPING.HMUX0_SW0407_ENVYIELD_REGISTERS:
             assert not any(f",{name}," in definition for definition in definitions)
         coordinator.ebus.read_register = AsyncMock(return_value=None)
@@ -3289,7 +3295,9 @@ async def test_hmux0_runtime_definitions_use_issue99_fixture_metadata() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_defs = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_defs) == 25
+        # 25 active SW0303 definitions plus the passive gateway status code (community CSV, 1.16.0).
+        assert len(hmux0_defs) == 26
+        assert any(d.startswith("u,hmux0,HMUStatusCode,") for d in hmux0_defs)
         assert all(",hmu," not in definition for definition in hmux0_defs)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0_defs)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0_defs)
@@ -3488,7 +3496,9 @@ async def test_hmux0_scan_bootstrap_defines_only_confirmed_registers() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_definitions = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_definitions) == 25
+        # 25 active SW0303 definitions plus the passive gateway status code (community CSV, 1.16.0).
+        assert len(hmux0_definitions) == 26
+        assert any(d.startswith("u,hmux0,HMUStatusCode,") for d in hmux0_definitions)
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 
@@ -3527,7 +3537,8 @@ async def test_hmux0_scan_bootstrap_rediscovers_defined_registers() -> None:
 
         assert discovery.discover.await_count == 2
         definitions = [call.args[0] for call in mock_ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 25
+        # 25 active SW0303 definitions plus the passive gateway status code (community CSV, 1.16.0).
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 26
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
         assert c.heat_pump_circuit == "hmux0"
         assert c.heating_circuit == "ctlv3"
@@ -3554,7 +3565,8 @@ async def test_hmux0_scan_bootstrap_ignores_generic_hmu_alias_definitions() -> N
         await c._define_custom_registers()
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 25
+        # 25 active SW0303 definitions plus the passive gateway status code (community CSV, 1.16.0).
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 26
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 
@@ -7349,6 +7361,144 @@ async def test_issue255_sw0406_power_is_reread_every_poll() -> None:
     sw0407 = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE175_FIXTURE, after=True))
     sw0407_definitions = await _runtime_definitions_for(ISSUE175_FIXTURE)
     assert ("hmux0", "RunDataElPowerConsumption") not in plan_rereads(sw0407, sw0407_definitions, include_energy=False)
+
+
+ISSUE161_RUN_FIXTURE = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
+
+
+# Return request -> response for every labeled and unknown telegram of a fixture.
+def _fixture_responses(fixture: str) -> dict[str, str]:
+    dump = load_discovery_dump(fixture)
+    return {row["request"]: row["resp"] for row in (*dump["labeled_telegrams"], *dump["unknown_telegrams"])}
+
+
+# Decode one runtime definition against the captured frame of the given source address.
+def _decode_captured(definition: str, responses: dict[str, str], source: str) -> dict[str, object]:
+    fields = definition.split(",", 8)
+    request = f"{source}{fields[5]}{fields[6]}{len(fields[7]) // 2:02x}{fields[7]}".casefold()
+    return _decode_definition_fields(fields[8], bytes.fromhex(responses[request])[1:])
+
+
+# Intent: Status00 modulation and power decode in 0.5 % steps, so full load reads 100 %, not 200 %.
+# Why: community CSV (R91g, display check by lars077); issue #254 read 200 raw at full load and issue #252 shows 106 raw
+#      at 67.8 rps. The old layout showed the raw byte as a percentage.
+async def test_community_csv_status00_modulation_counts_half_percent_steps() -> None:
+    definitions = await _runtime_definitions_for(ISSUE252_FIXTURE)
+    responses = _fixture_responses(ISSUE252_FIXTURE)
+
+    status = _decode_captured(definitions["u.hmux0.Status00"], responses, "10")
+
+    assert status["compressormodulation"] in {53.0, 59.0}
+    assert status["compressorpower"] == status["compressormodulation"]
+    # Both fields use the explicit form issue #254 read live; `percent1` is not proven to resolve in a `define`.
+    assert "percent1" not in definitions["u.hmux0.Status00"]
+
+
+# Intent: the gateway status code is defined passively on every evidenced HMUX0 firmware and decodes the capture.
+# Why: community CSV row HMUStatusCode; in every capture with both frames it equals `B509 5402008813` (issues #32, #99,
+#      #161, #175, #252), and issue #254 read it live on SW0406.
+@pytest.mark.parametrize(
+    ("fixture", "expected"),
+    [
+        (ISSUE252_FIXTURE, "heat_compressor_active"),  # SW0502
+        (ISSUE161_RUN_FIXTURE, "standby"),  # SW0407
+        ("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml", "standby"),  # SW0302
+        ("community/hmux0_issue99_2026-09-13_173740.yaml", "standby"),  # SW0303
+    ],
+)
+async def test_community_csv_status_code_decodes_the_gateway_frame(fixture: str, expected: str) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+    responses = _fixture_responses(fixture)
+
+    definition = definitions["u.hmux0.HMUStatusCode"]
+    assert definition.split(",", 8)[4:8] == ["", "08", "B503", "0003"]
+    assert _decode_captured(definition, responses, "f1")["value"] == expected
+    mirror = "f108b509055402008813"
+    if mirror in responses:
+        assert int.from_bytes(bytes.fromhex(responses[mirror])[5:7], "little") == int.from_bytes(
+            bytes.fromhex(responses["f108b503020003"])[1:3], "little"
+        )
+
+
+# Intent: the status code stays off heat pumps without evidence (HMU00, a bus without HMUX0).
+# Why: firmware scope is the set of scan identities where the frame was decoded (community CSV rule).
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "community/flexotherm_issue102_2026-09-12_161841_discovery.yaml",
+        "community/ecotec_vrt380_issue109_2026-09-11_230710.yaml",
+    ],
+)
+async def test_community_csv_status_code_stays_hardware_gated(fixture: str) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+
+    assert not [key for key in definitions if key.endswith(".HMUStatusCode")]
+
+
+# Intent: on a SW0406 bus without an hmux0 CSV, the status code does not switch the SW0406 runtime set off later.
+# Why: `_hmux0_sw0406_definitions` returns nothing when ebusd lists an hmux0 register it did not define; after the first
+#      define pass ebusd lists `HMUStatusCode`, so it must count as one of ours.
+async def test_community_csv_status_code_keeps_the_sw0406_set_on_rediscovery() -> None:
+    stock = "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    lines = load_find_lines(stock, after=True) + ["hmux0 HMUStatusCode = no data stored"]
+    graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+
+    definitions = RUNTIME_DEFINITIONS.build_runtime_defines(graph, datetime(2026, 11, 24, 12, 0))
+
+    assert any(",hmux0,RunDataFlowTemp," in definition for definition in definitions)
+    assert any(definition.startswith("u,hmux0,HMUStatusCode,") for definition in definitions)
+
+
+# Intent: the confirmed compressor counters decode the SW0407 capture and match the B511 heating + DHW sums.
+# Why: community CSV rows RunStatsCompressorHours/Starts; issue #161 shows 15 h and 28 starts against 459 + 483 min and
+#      12 + 16 cycles from `B511 1801/1802`, which proves the meaning on this firmware.
+async def test_community_csv_compressor_counters_match_the_b511_sums() -> None:
+    definitions = await _runtime_definitions_for(ISSUE161_RUN_FIXTURE)
+    responses = _fixture_responses(ISSUE161_RUN_FIXTURE)
+
+    hours = _decode_captured(definitions["u.hmux0.RunStatsCompressorHours"], responses, "f1")["value"]
+    starts = _decode_captured(definitions["u.hmux0.RunStatsCompressorStarts"], responses, "f1")["value"]
+    heating = bytes.fromhex(responses["f108b511021801"])[2:]
+    dhw = bytes.fromhex(responses["f108b511021802"])[2:]
+    runtime = int.from_bytes(heating[0:4], "little") + int.from_bytes(dhw[0:4], "little")
+    cycles = int.from_bytes(heating[4:8], "little") + int.from_bytes(dhw[4:8], "little")
+    assert (hours, starts) == (15, 28)
+    assert hours == runtime // 60 and starts == cycles
+
+
+# Intent: strong-assumption community rows create entities that start disabled; confirmed ones stay enabled.
+# Why: the community CSV rule ships a row with a single source disabled until a second source agrees.
+def test_community_csv_strong_assumptions_start_disabled() -> None:
+    lines = load_find_lines(ISSUE175_FIXTURE, after=True) + [
+        "hmux0 RunStatsDeiceHours = 129",
+        "hmux0 RunDataEvaporationTemp = 19.25",
+        "hmux0 RunDataHeatOutput = 0.0",
+        "hmux0 HMUStatusCode = standby",
+        "hmux0 RunStatsCompressorStarts = 28",
+    ]
+    graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    disabled = ("hmux0.RunStatsDeiceHours.value", "hmux0.RunDataEvaporationTemp.value", "hmux0.RunDataHeatOutput.value")
+    for key in disabled:
+        assert entities[key].enabled_by_default is False, key
+    assert entities["hmux0.HMUStatusCode.value"].enabled_by_default is True
+    assert entities["hmux0.RunStatsCompressorStarts.value"].enabled_by_default is True
+
+
+# Intent: the gateway status code drives the Energy Manager State, with `deicing_active` as defrost.
+# Why: units without `B509 5402008813` (SW0302, SW0303, SW0502 without its own set) only carry `B503 0003`.
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        ("heat_compressor_active", OPERATING_STATE_HEATING),
+        ("deicing_active", OPERATING_STATE_DEFROST),
+        ("standby", "Standby"),
+        ("hwc_compressor_active", "DHW"),
+    ],
+)
+def test_community_csv_status_code_drives_the_operating_state(code: str, expected: str) -> None:
+    assert derive_operating_state({"hmux0.HMUStatusCode.value": code}, "hmux0") == expected
 
 
 # Intent: the passive power definition stays hardware-gated like the other SW0406 runtime registers.

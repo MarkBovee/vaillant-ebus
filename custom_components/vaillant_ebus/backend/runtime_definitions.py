@@ -23,6 +23,7 @@ from .mapping import (
     b516_date_bytes,
     hmux0_candidate_circuits,
     hmux0_owner_scan,
+    hmux0_status_code_owner,
     hmux0_sw0303_owner,
     hmux0_sw0406_owner,
     hmux0_sw0407_circuit,
@@ -37,22 +38,26 @@ from .models import (
     is_heat_pump_circuit,
 )
 
-# VWZIO/VWZ Status01 field layout (upstream PR #598); reuses the HMU layout.
+# VWZIO/VWZ Status01 field layout (upstream PR #598); reuses the HMU layout. `8=venting` comes from the community CSV
+# (R91g, upstream PR #707): without it a venting pump showed the bare number.
 # Explicit types are required: the hcmode_inc template aliases (temp1/temp2/
 # pumpstate) are not resolvable in a runtime `define`.
 VWZ_STATUS01_FIELDS = (
     "temp,,D1C,,,,temp_1,,D1C,,,,temp_2,,D2B,,,,temp_3,,D1C,,,,temp_4,,D1C,,,,"
-    "pumpstate,,UCH,0=off;1=on;2=overrun;4=hwc,,"
+    "pumpstate,,UCH,0=off;1=on;2=overrun;4=hwc;8=venting,,"
 )
 
 # Field layout of the HMUX0 B511/00 compressor status block (upstream issues #249/#522/#687, PR #330).
 # The active SW0303 read and the passive SW0407 decode share one layout so both fill the same entity fields.
+# Modulation and power count in 0.5 % steps (community CSV R91g, display check by lars077): issue #254 read 200 raw at
+# full load, and issue #252 shows 106 raw (53 %) at 67.8 rps. Both use an explicit `UCH,2`, the form issue #254 read
+# live; the earlier `percent1` template is not proven to resolve in a runtime `define`.
 HMUX0_STATUS00_FIELDS = (
     "supplytemp,,D2C,,°C,,waterpressure,,UCH,10,bar,,"
-    "compressormodulation,,UCH,,%,,compressorstate,,UCH,0=off;1=heating_prerun;"
+    "compressormodulation,,UCH,2,%,,compressorstate,,UCH,0=off;1=heating_prerun;"
     "4=heating;5=heating_overrun;24=hot_water;110=defrosting,,,"
     "heatingstate,,UCH,8=off;9=heating,,,field6,,UCH,,,,"
-    "defrost,,UCH,0=inactive;32=active,,,compressorpower,,percent1,,%,HMUX0 Status00"
+    "defrost,,UCH,0=inactive;32=active,,,compressorpower,,UCH,2,%,HMUX0 Status00"
 )
 
 HMUX0_SW0407_STATUS_VALUES = (
@@ -104,7 +109,58 @@ HMUX0_SW0407_PASSIVE_REGISTERS = (
     # with RunStatsCompressorHours.
     ("CompressorHc", "B511", "1801", "ign,,IGN:1,,,,runtime,,ULG,,min,,cycles,,ULG"),
     ("CompressorHwc", "B511", "1802", "ign,,IGN:1,,,,runtime,,ULG,,min,,cycles,,ULG"),
+    # Community CSV rows (R91g/arotherm-genia-ebusd, upstream PR #707) whose gateway frames our SW0407 captures decode.
+    # Confirmed: compressor hours/starts equal the B511 1801+1802 sums in issue #161 (15 h vs 942 min, 28 = 12 + 16);
+    # the fan counters run with the compressor (16 h, 29 starts). The rest are strong assumptions: plausible values,
+    # no second source yet, so their entities start disabled.
+    *(
+        (name, "B509", f"540200{ext}", f"value,,IGN:4,,,,value,,UIN,,{unit},")
+        for name, ext, unit in (
+            ("RunStatsCompressorHours", "c20b", "h"),
+            ("RunStatsCompressorStarts", "c30b", ""),
+            ("RunStatsFan1Hours", "d70b", "h"),
+            ("RunStatsFan1Starts", "d80b", ""),
+            ("RunStatsFan2Hours", "d90b", "h"),
+            ("RunStatsFan2Starts", "da0b", ""),
+            ("RunStatsDeiceHours", "e30b", "h"),
+            ("RunStatsDeiceStarts", "e40b", ""),
+            ("RunStatsCoolingHours", "e10b", "h"),
+            ("RunStatsCoolingStarts", "e20b", ""),
+        )
+    ),
+    ("RunDataEvaporationTemp", "B509", "540200d110", "value,,IGN:4,,,,value,,D2C,,°C,temperature"),
+    ("RunDataCondensateTemp", "B509", "540200db10", "value,,IGN:4,,,,value,,D2C,,°C,temperature"),
+    ("RunDataHeatOutput", "B509", "5402005e0d", "value,,IGN:4,,,,value,,EXP,,W,"),
 )
+
+# Outdoor unit status code (community CSV row HMUStatusCode, R91g; upstream PR #707). The 10-byte answer is the status
+# as UIN and eight more bytes. Every capture with both frames shows the same value as `B509 5402008813`.
+HMUX0_STATUS_CODE_VALUES = (
+    "34=frost_protect;100=standby;101=heat_compressor_shutdown;102=heat_compressor_blocked;103=heat_prerun;"
+    "104=heat_compressor_active;107=heat_overrun;111=cool_compressor_shutdown;112=cool_compressor_blocked;"
+    "113=cool_prerun;114=cool_compressor_active;117=cool_overrun;125=heat_immersion_heater_active;"
+    "132=hwc_compressor_blocked;133=hwc_prerun;134=hwc_compressor_active;135=hwc_immersion_heater_active;"
+    "137=hwc_overrun;141=heat_immersion_heater_shutdown;142=heat_immersion_heater_blocked;"
+    "151=hwc_immersion_heater_shutdown;152=hwc_immersion_heater_blocked;202=air_purging_program_active;"
+    "240=compressor_oil_heating_active;252=fan1_blocked;255=fan1_airinlet_too_high;256=fan1_airinlet_too_low;"
+    "260=fan2_blocked;275=building_circuit_flow_too_low;277=building_circuit_pump_fault;"
+    "280=frequency_converter_fault_compressor;281=frequency_converter_fault_mains_voltage;"
+    "282=frequency_converter_fault_overheating;283=deicing_time_too_long;284=deicing_flow_temp_too_low;"
+    "285=compressor_outlet_temp_too_high;286=hot_gas_temp_switch_open;287=fan1_wind;288=fan2_wind;"
+    "289=current_limit_active;302=high_pressure_switch_open;303=compressor_outlet_temp_too_high_1;"
+    "304=evaporation_temp_too_low;305=condensation_temp_too_low;306=evaporation_temp_too_high;"
+    "308=condensation_temp_too_high;312=building_circuit_return_temp_too_low;"
+    "314=building_circuit_return_temp_too_high;351=immersion_heater_flow_temp_too_high;516=deicing_active;"
+    "575=frequency_converter_fault;581=connection_fault_frequency_converter;590=four_port_valve_position_fault"
+)
+
+
+# Passive definition of the outdoor unit status code on the HMUX0 owner. Blank source: whichever master asks.
+def hmux0_status_code_definition(circuit: str) -> str:
+    return (
+        f"u,{circuit},HMUStatusCode,HMUStatusCode,,08,B503,0003,value,,UIN,{HMUX0_STATUS_CODE_VALUES},,,ign,,IGN:8,,,"
+    )
+
 
 # HMUX0/HW0504 telegrams that the controller (0x10, about every 10 s) and the gateway (0xf1) poll.
 # Issue #175 capture - a blank source address lets one passive definition decode either sender; the Status01
@@ -586,6 +642,10 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
     if is_hmux0_b509_0504:
         assert heat_pump is not None
         defines.extend(_hmux0_b509_monitor_definitions(heat_pump.circuit))
+    # Before the SW0406 set: its "ebusd has its own hmux0 CSV" check must see the status code as one of ours.
+    status_code_owner = hmux0_status_code_owner(graph)
+    if status_code_owner is not None:
+        defines.append(hmux0_status_code_definition(status_code_owner))
     hmux0_sw0406_circuit = hmux0_sw0406_owner(graph)
     if hmux0_sw0406_circuit is not None:
         defines.extend(_hmux0_sw0406_definitions(graph, hmux0_sw0406_circuit, defines))

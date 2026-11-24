@@ -79,6 +79,16 @@ HMUX0_PRECISE_TEMPERATURE = HardwareProfile(
     hw=frozenset({"0504"}),
     evidence="issue #171 (SW0303 live); issue #188 (SW0406 float layout); issue #99 for the excluded revisions",
 )
+# Outdoor unit status code `B503 0003` that the myVAILLANT gateway polls (community CSV R91g/arotherm-genia-ebusd,
+# upstream PR john30/ebusd-configuration#707). In every capture with both frames it equals `B509 5402008813`
+# (SW0302 issue #32, SW0303 issue #99, SW0407 issue #161/#175, SW0502 issue #252); issue #254 read it live on SW0406.
+HMUX0_STATUS_CODE = HardwareProfile(
+    name="hmux0_status_code",
+    scan_type="hmux0",
+    sw=frozenset({"0302", "0303", "0406", "0407", "0502"}),
+    hw=frozenset({"0504"}),
+    evidence="community CSV row HMUStatusCode; equals B509 8813 in issues #32/#99/#161/#175/#252; #254 live read",
+)
 # B509 monitoring block (compressor speed, building pump power, electrical power): evidence for 0302 and 0303.
 HMUX0_B509_MONITORING = HardwareProfile(
     name="hmux0_b509_monitoring",

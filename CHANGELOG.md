@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.16.0 - 2026-11-24
+
+aroTHERM units with HMUX0 firmware get more readings from a community-made ebusd configuration, the compressor
+modulation no longer shows double values, and the Energy Manager State also works on units that only report the
+gateway's status code.
+
+### Added
+
+- **Heat pump status code** for HMUX0 SW0302, SW0303, SW0406, SW0407 and SW0502. The myVAILLANT gateway asks the
+  heat pump for its status code (`B503 0003`); the integration now decodes that answer as "Heat Pump Status Code",
+  for example `heat_compressor_active` or `deicing_active`. It also feeds the Energy Manager State, which now
+  recognises a defrost from this code. In every capture we have, it shows the same value as the status code the
+  integration already knew (`B509 5402008813`). It needs a gateway on the bus, and costs no bus traffic.
+- **Compressor and fan counters on HMUX0 SW0407 and SW0502**: compressor runtime and starts, and runtime and starts of
+  both fans. In the issue #161 capture the compressor counters add up exactly to the heating and hot water counters
+  the integration already showed (15 h, 28 starts), so they mean what their names say.
+- **More readings, off by default** (HMUX0 SW0407 and SW0502): defrost runtime and starts, cooling runtime and starts,
+  evaporation temperature, condenser liquid outlet temperature, and heat output. Their values look right in the
+  captures, but nobody has checked them against a display yet, so they start disabled. Switch them on in Home
+  Assistant if you want them.
+
+These come from the ebusd configuration that @R91g wrote for these heat pumps
+([R91g/arotherm-genia-ebusd](https://github.com/R91g/arotherm-genia-ebusd), proposed upstream as
+john30/ebusd-configuration#707), with display checks by @lars077 and timer tests by @jlrosende. The integration only
+takes rows that also decode a frame in our community captures; it never installs that configuration into ebusd.
+
+### Fixed
+
+- **Compressor modulation showed double values** on HMUX0 (for example 106 % or 200 %). The heat pump counts in steps
+  of 0.5 %; "Status Compressor Modulation" and "Status Compressor Power" now show 53 % and 100 % for those cases.
+- **Pump state "venting"** now shows as `venting` instead of the number 8.
+
+### Not changed
+
+- The "immersion heater" counters from the same configuration (`B509 540200e50b/e60b`) are left out: one owner reports
+  that they don't match the heater's real runtime, and our captures show implausible values.
+- Writes from that configuration (for example the silent operation level) are not added; a write needs its own test.
+
 ## 1.15.2 - 2026-11-24
 
 aroTHERM units with HMUX0 firmware SW0502 now show their heat pump readings, and SW0406 units show the defrost state,

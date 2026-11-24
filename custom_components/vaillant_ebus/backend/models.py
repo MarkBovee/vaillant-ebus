@@ -370,7 +370,10 @@ def _setmode_heating_request(values: Mapping[str, str | None], hp_circuit: str) 
 def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | None) -> str | None:
     if not hp_circuit:
         return None
-    status = _clean(_value_lookup(values, f"{hp_circuit}.RunDataStatuscode.value"))
+    # Two status code sources, `B509 5402008813` and the gateway's `B503 0003` (community CSV), carry the same code.
+    status = _clean(_value_lookup(values, f"{hp_circuit}.RunDataStatuscode.value")) or _clean(
+        _value_lookup(values, f"{hp_circuit}.HMUStatusCode.value")
+    )
     compressor = _clean(_value_lookup(values, f"{hp_circuit}.Status00.compressorstate"))
     heating_state = _clean(_value_lookup(values, f"{hp_circuit}.Status00.heatingstate"))
     defrost_bit = _value_lookup(values, f"{hp_circuit}.Status00.defrost")
@@ -393,7 +396,9 @@ def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | N
     ):
         return None
 
-    if "defrost" in blob or _value_is_on(defrost_bit):
+    # The B503 status code names defrost `deicing_active`; the deicing fault codes (283, 284) end a defrost, not start
+    # one, so only the active state counts.
+    if "defrost" in blob or "deicing_active" in blob or _value_is_on(defrost_bit):
         return OPERATING_STATE_DEFROST
     # A shutdown/standby status string means the controller reports no active
     # demand; it always wins over any request flag.
