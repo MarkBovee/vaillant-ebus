@@ -3295,9 +3295,9 @@ async def test_hmux0_runtime_definitions_use_issue99_fixture_metadata() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_defs = [definition for definition in definitions if ",hmux0," in definition]
-        # 25 active SW0303 definitions plus the passive gateway status code (community CSV, 1.16.0).
-        assert len(hmux0_defs) == 26
-        assert any(d.startswith("u,hmux0,HMUStatusCode,") for d in hmux0_defs)
+        # The issue #99 bus loads the symlinked hmu CSV, which holds `B503 0003` itself: no status code of ours there.
+        assert len(hmux0_defs) == 25
+        assert not any(d.startswith("u,hmux0,HMUStatusCode,") for d in hmux0_defs)
         assert all(",hmu," not in definition for definition in hmux0_defs)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0_defs)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0_defs)
@@ -7366,13 +7366,15 @@ async def test_issue255_sw0406_power_is_reread_every_poll() -> None:
 ISSUE161_RUN_FIXTURE = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
 
 
-# Return request -> response for every labeled and unknown telegram of a fixture.
+# Intent: return request -> response for every labeled and unknown telegram of a fixture.
+# Why: the community CSV tests decode real captured frames, not hand-written payloads.
 def _fixture_responses(fixture: str) -> dict[str, str]:
     dump = load_discovery_dump(fixture)
     return {row["request"]: row["resp"] for row in (*dump["labeled_telegrams"], *dump["unknown_telegrams"])}
 
 
-# Decode one runtime definition against the captured frame of the given source address.
+# Intent: decode one runtime definition against the captured frame of the given source address.
+# Why: the request is rebuilt from the definition (id without the length byte), so a wrong id fails the lookup.
 def _decode_captured(definition: str, responses: dict[str, str], source: str) -> dict[str, object]:
     fields = definition.split(",", 8)
     request = f"{source}{fields[5]}{fields[6]}{len(fields[7]) // 2:02x}{fields[7]}".casefold()
@@ -7396,14 +7398,13 @@ async def test_community_csv_status00_modulation_counts_half_percent_steps() -> 
 
 # Intent: the gateway status code is defined passively on every evidenced HMUX0 firmware and decodes the capture.
 # Why: community CSV row HMUStatusCode; in every capture with both frames it equals `B509 5402008813` (issues #32, #99,
-#      #161, #175, #252), and issue #254 read it live on SW0406.
+#      #161, #175, #252), and issue #254 read it live on SW0406. (The #99 SW0303 bus loads an hmu CSV; see below.)
 @pytest.mark.parametrize(
     ("fixture", "expected"),
     [
         (ISSUE252_FIXTURE, "heat_compressor_active"),  # SW0502
         (ISSUE161_RUN_FIXTURE, "standby"),  # SW0407
         ("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml", "standby"),  # SW0302
-        ("community/hmux0_issue99_2026-09-13_173740.yaml", "standby"),  # SW0303
     ],
 )
 async def test_community_csv_status_code_decodes_the_gateway_frame(fixture: str, expected: str) -> None:
@@ -7433,6 +7434,41 @@ async def test_community_csv_status_code_stays_hardware_gated(fixture: str) -> N
     definitions = await _runtime_definitions_for(fixture)
 
     assert not [key for key in definitions if key.endswith(".HMUStatusCode")]
+
+
+# Intent: no status code definition where ebusd's own (symlinked hmu) CSV is loaded on the HMUX0 owner.
+# Why: review of 1.16.0 - that CSV holds `B503 0003` as `EnableiveMonitorMain` (issue #31 and #99 captures), so a
+#      second definition on the same id would clash and stay empty or shadow the CSV message.
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "community/basv3_issue31_2026-09-17_203723_discovery.yaml",  # SW0406 with CSV, lists EnableiveMonitorMain
+        "community/hmux0_issue99_2026-09-13_173740.yaml",  # SW0303 with CSV
+        "community/hmux0_issue171_2026-10-03_094933_discovery.yaml",  # SW0406 with CSV
+    ],
+)
+async def test_community_csv_status_code_skips_buses_with_their_own_csv(fixture: str) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+
+    assert "u.hmux0.HMUStatusCode" not in definitions
+
+
+# Intent: fault, blocked and oil-heating status codes never read as heating; operating codes still do.
+# Why: review/audit of 1.16.0 - `frequency_converter_fault_overheating` and `heat_compressor_blocked` contain "heat",
+#      and the substring match turned them into "Heating".
+@pytest.mark.parametrize(
+    "code",
+    [
+        "frequency_converter_fault_overheating",
+        "immersion_heater_flow_temp_too_high",
+        "heat_compressor_blocked",
+        "compressor_oil_heating_active",
+        "deicing_time_too_long",
+    ],
+)
+def test_community_csv_fault_status_codes_do_not_read_as_heating(code: str) -> None:
+    assert derive_operating_state({"hmux0.HMUStatusCode.value": code}, "hmux0") is None
+    assert derive_operating_state({"hmux0.HMUStatusCode.value": "heat_compressor_shutdown"}, "hmux0") == "Standby"
 
 
 # Intent: on a SW0406 bus without an hmux0 CSV, the status code does not switch the SW0406 runtime set off later.

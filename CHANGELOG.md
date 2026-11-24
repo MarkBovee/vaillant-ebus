@@ -12,7 +12,9 @@ gateway's status code.
   heat pump for its status code (`B503 0003`); the integration now decodes that answer as "Heat Pump Status Code",
   for example `heat_compressor_active` or `deicing_active`. It also feeds the Energy Manager State, which now
   recognises a defrost from this code. In every capture we have, it shows the same value as the status code the
-  integration already knew (`B509 5402008813`). It needs a gateway on the bus, and costs no bus traffic.
+  integration already knew (`B509 5402008813`). It needs a gateway on the bus, and costs no bus traffic. Where ebusd
+  loads its own heat pump configuration (for example a copied `08.hmu.csv`), that configuration already uses this
+  message, so the integration leaves it alone there.
 - **Compressor and fan counters on HMUX0 SW0407 and SW0502**: compressor runtime and starts, and runtime and starts of
   both fans. In the issue #161 capture the compressor counters add up exactly to the heating and hot water counters
   the integration already showed (15 h, 28 starts), so they mean what their names say.
@@ -29,7 +31,8 @@ takes rows that also decode a frame in our community captures; it never installs
 ### Fixed
 
 - **Compressor modulation showed double values** on HMUX0 (for example 106 % or 200 %). The heat pump counts in steps
-  of 0.5 %; "Status Compressor Modulation" and "Status Compressor Power" now show 53 % and 100 % for those cases.
+  of 0.5 %; "Status Compressor Modulation" and "Status Compressor Power" now show 53 % and 100 % for those cases. The
+  evidence comes from SW0405, SW0406, SW0407 and SW0502 units; SW0303 uses the same field and gets the same change.
 - **Pump state "venting"** now shows as `venting` instead of the number 8.
 
 ### Not changed

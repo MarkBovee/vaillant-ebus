@@ -379,9 +379,17 @@ def _hmux0_sw0406_definitions(graph: DeviceGraph, circuit: str, defines: list[st
         *_hmux0_sw0406_active_definitions(circuit),
         *_hmux0_sw0406_any_master_definitions(circuit),
     ]
+    if _ebusd_supplies_heat_pump_config(graph, circuit, (*defines, *candidates)):
+        return []
+    return candidates
+
+
+# Whether ebusd lists a heat pump register that none of the given definitions on `circuit` provides, which means its
+# own hmux0 (or copied hmu) CSV is loaded. Definitions of ours under the same message id would then clash with it.
+def _ebusd_supplies_heat_pump_config(graph: DeviceGraph, circuit: str, definitions: tuple[str, ...]) -> bool:
     own_names = {
         parts[2].casefold()
-        for definition in (*defines, *candidates)
+        for definition in definitions
         if len(parts := definition.split(",", 3)) >= 3 and parts[1].casefold() == circuit.casefold()
     }
     heat_pump_circuits = {
@@ -391,8 +399,8 @@ def _hmux0_sw0406_definitions(graph: DeviceGraph, circuit: str, defines: list[st
         key_circuit, _, key_name = key.partition(".")
         # A copied hmu CSV (issue #188) lists its registers under `hmu`, not the scanned circuit: also counts.
         if key_circuit.casefold() in heat_pump_circuits and key_name.split(".")[0].casefold() not in own_names:
-            return []
-    return candidates
+            return True
+    return False
 
 
 # Compile the full list of runtime define strings for the graph's hardware.
@@ -643,9 +651,13 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
         assert heat_pump is not None
         defines.extend(_hmux0_b509_monitor_definitions(heat_pump.circuit))
     # Before the SW0406 set: its "ebusd has its own hmux0 CSV" check must see the status code as one of ours.
+    # Only without such a CSV: the symlinked hmu CSV already holds `B503 0003` (as `EnableiveMonitorMain`, issue #31 and
+    # #99 captures), and a second definition on that id would clash with it.
     status_code_owner = hmux0_status_code_owner(graph)
     if status_code_owner is not None:
-        defines.append(hmux0_status_code_definition(status_code_owner))
+        status_code = hmux0_status_code_definition(status_code_owner)
+        if not _ebusd_supplies_heat_pump_config(graph, status_code_owner, (*defines, status_code)):
+            defines.append(status_code)
     hmux0_sw0406_circuit = hmux0_sw0406_owner(graph)
     if hmux0_sw0406_circuit is not None:
         defines.extend(_hmux0_sw0406_definitions(graph, hmux0_sw0406_circuit, defines))
