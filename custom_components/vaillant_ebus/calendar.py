@@ -113,7 +113,8 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         self._edit_lock = asyncio.Lock()
         # Reads and writes of single weekdays, shared with the time program services.
         self._access = TimerProgramAccess(coordinator, prefix, self._circuit or "")
-        if prefix in WRITABLE_PREFIXES:
+        # A program the integration reads over its own B555 set (BASS3) offers no editing: the write would be refused.
+        if prefix in WRITABLE_PREFIXES and not coordinator.timer_program_read_only(self._circuit or "", prefix):
             self._attr_supported_features = (
                 CalendarEntityFeature.CREATE_EVENT
                 | CalendarEntityFeature.UPDATE_EVENT

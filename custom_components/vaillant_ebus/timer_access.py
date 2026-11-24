@@ -113,7 +113,8 @@ class TimerProgramAccess:
         compare_temperature: bool = False,
     ) -> list[TimeSlot]:
         # A program the integration reads over its own B555 definitions has no tested write message on that
-        # controller (silent mode on CTLV3, every BASS3 program): refuse before the first bus write.
+        # controller (silent mode on CTLV3, every BASS3 program): refuse before the first bus write, with a clear
+        # message. `async_write_registers` refuses the same messages for every other write path.
         if self.coordinator.timer_program_read_only(self.circuit, self.prefix):
             raise HomeAssistantError(f"{self.prefix} can only be read on this controller; nothing was changed")
         # The hidden-slot guard lives here, not in the callers: the PR #229 action skipped it once, and the count

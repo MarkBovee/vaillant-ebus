@@ -207,6 +207,8 @@ def _merge_overrides(meta: RegisterMeta, override: dict[str, Any]) -> RegisterMe
         device_circuit=override.get("device_circuit", meta.device_circuit),
         divisor=override.get("divisor", meta.divisor),
         fallback_read=meta.fallback_read,
+        # Value labels are part of decoding (an error code's -1 = none), not presentation; an override keeps them.
+        value_labels=meta.value_labels,
     )
     return merged
 

@@ -88,6 +88,8 @@ DELAYED_REDISCOVERY_DELAY = timedelta(minutes=5)
 ANALYSIS_INTERVAL = timedelta(minutes=15)
 PLACEHOLDER_POLL_INTERVAL = timedelta(minutes=15)
 ENERGY_POLL_INTERVAL = timedelta(minutes=5)
+# The program prefix of a weekly timer message (`SilentTimer_Monday`, `Z1Timer_Tuesday1`, `HwcTimer_Timeslots`).
+_TIMER_PROGRAM_MESSAGE = re.compile(r"^([a-z][a-z0-9]*timer)_", re.IGNORECASE)
 # How long ebusd may stay unusable (no connection or no device graph) before the last values are marked unavailable.
 # Issue #193 - after an ebusd restart on a stuck adapter, setup kept failing and the old values stayed on screen.
 # Ten minutes matches the longest bus-guard pause, so a short ebusd restart still keeps the values.
@@ -531,10 +533,11 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         )
 
     # Whether a weekly program is read over the integration's own B555 definitions without a tested write message
-    # (silent mode on CTLV3, BASS3 programs). Decided from the current graph, so it follows a rediscovery.
+    # (silent mode on CTLV3, BASS3 programs). Decided from the current graph, so it follows a rediscovery. The prefix
+    # is compared without case: ebusd finds `silentTimer_Monday` as `SilentTimer_Monday`.
     def timer_program_read_only(self, circuit: str, prefix: str) -> bool:
         resolved = (self.resolve_register_circuit(circuit) or circuit).casefold()
-        return (resolved, prefix) in read_only_timer_programs(self._graph)
+        return (resolved, prefix.casefold()) in read_only_timer_programs(self._graph)
 
     # Whether a controller-owned register exists on the discovered controller circuit.
     def has_controller_register(self, name: str) -> bool:
@@ -2175,6 +2178,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             or not self.discovery_ready
         ):
             return False
+        # Every write path ends here (calendar, time program services, `write_parameter`): a message of a read-only
+        # weekly program (BASS3, CTLV3 silent mode) is refused before the first bus write.
+        for circuit, name, value in writes:
+            program = _TIMER_PROGRAM_MESSAGE.match(name)
+            if program and self.timer_program_read_only(circuit, program.group(1)):
+                _LOGGER.warning("Write refused: %s.%s belongs to a read-only time program", circuit, name)
+                self._record_write(circuit, name, value, self.resolve_register_circuit(circuit), False, "read-only")
+                return False
         if require_discovered:
             for circuit, name, value in writes:
                 resolved_circuit = self.resolve_register_circuit(circuit)

@@ -144,15 +144,15 @@ HMUX0_SW0407_PASSIVE_REGISTERS = (
 # Installer settings of the heat pump (display D-codes), read over `B51A 05ff <id>`. The answer is three header bytes,
 # the value, then minimum, maximum and step (owner live: `-60` with `9c ff e2 ff 05` = -100..-30 step 5). Names and
 # D-codes follow the community CSV (R91g, display-checked); the owner's HMU00 SW0522 answered every row with the
-# CSV's display values, and issue #218 read D.230 on HMU00 SW0308 (-119 degmin). The hysteresis names are the ones
-# ebusd's hmu CSV uses on other units, so an entity that CSV already creates keeps its identity. Only owners without
-# that CSV message get a definition. (name, id, value fields, profiles)
+# CSV's display values, and issue #218 read D.230 on HMU00 SW0308 (-119 degmin). The names appear in no ebusd CSV we
+# know (ebusd's hmu CSV on other units has `CompressorHysteresisHc/Cooling`, which stay its own), so a definition never
+# replaces a CSV message and the set does not depend on what ebusd lists. (name, id, value fields, profiles)
 HEAT_PUMP_SETTING_LIMITS = "limits,,IGN:5,,,"
 HEAT_PUMP_SETTINGS: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
     ("CompressorStartHeating", "05ff341e", "value,,SIN,,°min,", ("hmu00_sw0522", "hmux0_sw0407", "hmu00_sw0308")),
     ("CompressorStartCooling", "05ff3421", "value,,SIN,,°min,", ("hmu00_sw0522", "hmux0_sw0407")),
-    ("CompressorHysteresisHc", "05ff3443", "value,,SIN,16,K,", ("hmu00_sw0522", "hmux0_sw0407")),
-    ("CompressorHysteresisCooling", "05ff353f", "value,,SIN,16,K,", ("hmu00_sw0522", "hmux0_sw0407")),
+    ("CompressorHysteresisHeat", "05ff3443", "value,,SIN,16,K,", ("hmu00_sw0522", "hmux0_sw0407")),
+    ("CompressorHysteresisCool", "05ff353f", "value,,SIN,16,K,", ("hmu00_sw0522", "hmux0_sw0407")),
     ("MaxResidualHead", "05ff341f", "value,,UIN,,mbar,", ("hmu00_sw0522", "hmux0_sw0407")),
 )
 HEAT_PUMP_SETTING_NAMES = frozenset(name for name, *_ in HEAT_PUMP_SETTINGS)
@@ -168,13 +168,13 @@ def heat_pump_setting_definitions(graph: DeviceGraph | None) -> list[str]:
         "hmux0_sw0407": hmux0_sw0407_circuit(graph),
         "hmu00_sw0308": profile_owner(graph, HMU00_SW0308),
     }
-    listed = {key.casefold() for key in (*graph.raw_registers, *graph.placeholder_registers)}
     definitions: list[str] = []
     for name, ident, fields, profiles in HEAT_PUMP_SETTINGS:
         for profile in profiles:
             circuit = owners[profile]
-            # A name ebusd's own CSV already defines there is left to that CSV (`define -r` would replace it).
-            if circuit is not None and f"{circuit}.{name}".casefold() not in listed:
+            # No "already listed" check: ebusd lists our own definitions after the first define, and the settings
+            # must survive the next discovery (their re-read depends on it).
+            if circuit is not None:
                 definitions.append(
                     f"r,{circuit},{name},{name},31,08,B51A,{ident},ign,,IGN:3,,,,{fields},{HEAT_PUMP_SETTING_LIMITS}"
                 )
@@ -412,12 +412,12 @@ def calendar_slot_register_keys(graph: DeviceGraph | None) -> frozenset[str]:
 
 # Weekly programs that the integration reads over its own `B555` definitions but must not write: their write
 # message was never tested on that controller (silent mode on CTLV3, every BASS3 program). `TimerProgramAccess`
-# refuses a write to these before the first bus write. Returns (casefolded circuit, prefix) pairs.
+# refuses a write to these before the first bus write. Returns (casefolded circuit, casefolded prefix) pairs.
 def read_only_timer_programs(graph: DeviceGraph | None) -> frozenset[tuple[str, str]]:
     programs: set[tuple[str, str]] = set()
     for definition in (*silent_timer_slot_definitions(graph), *bass3_timer_definitions(graph)):
         circuit, name = definition.split(",", 3)[1:3]
-        programs.add((circuit.casefold(), name.split("_", 1)[0]))
+        programs.add((circuit.casefold(), name.split("_", 1)[0].casefold()))
     return frozenset(programs)
 
 

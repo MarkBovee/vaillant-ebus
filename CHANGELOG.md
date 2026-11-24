@@ -26,7 +26,7 @@ silent mode and BASS3 time programs appear as calendars.
 - **Heat pump installer settings** (issue #218, thanks @cmarqu): "Compressor Start Heating (D.230)" and "Compressor
   Start Cooling (D.233)" in °min, the compressor hysteresis for heating (D.267) and cooling (D.363), and the maximum
   residual pump head (D.231). These are the energy integral thresholds that decide when the compressor starts. They
-  were read on the owner's flexoTHERM (HMU00 SW0522) and match the display values in the community configuration; on
+  were read on the owner's aroTHERM (HMU00 SW0522) and match the display values in the community configuration; on
   HMUX0 SW0407/SW0502 they come from that configuration, and on HMU00 SW0308 only D.230 is read (the value from
   issue #218). The integration reads them every 5 minutes; it can't change them.
 - **Silent mode calendar** on sensoCOMFORT VRC 720 controllers with CTLV3 SW0808 (issue #256, thanks @T3le). ebusd
@@ -35,8 +35,8 @@ silent mode and BASS3 time programs appear as calendars.
 - **Time program calendars on BASS3** (Saunier Duval MiPro Sense, SW0708; issue #235, thanks @jlrosende). The BASS3
   answers its time programs only through another message (`B555`) than the one ebusd's configuration uses, so the
   calendars and `read_time_program` found nothing. Zone 1 heating, cooling, hot water and circulation programs are now
-  read the way @jlrosende verified against the remote. They are read-only for now; writing is refused before anything
-  is sent.
+  read the way @jlrosende verified against the remote. They are read-only for now: the calendars offer no editing,
+  and every write to these programs (also through `write_parameter`) is refused before anything is sent.
 - **Current error of the outdoor unit** on HMUX0 SW0407/SW0502 as "Error": `none` when there is no error, otherwise the
   F-code number (for example 22 for F.22).
 - **Refrigerant circuit temperatures on HMUX0 SW0406, off by default** (issue #205, thanks @Zapgla): air inlet,

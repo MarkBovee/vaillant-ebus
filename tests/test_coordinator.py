@@ -7562,8 +7562,8 @@ async def test_installer_settings_decode_the_owner_live_answers() -> None:
     answers = {
         "CompressorStartHeating": ("ff0225c4ff9cffe2ff05", -60),
         "CompressorStartCooling": ("ff02253c001e00640005", 60),
-        "CompressorHysteresisHc": ("ff022570000000f00010", 7.0),
-        "CompressorHysteresisCooling": ("ff022550000000f00010", 5.0),
+        "CompressorHysteresisHeat": ("ff022570000000f00010", 7.0),
+        "CompressorHysteresisCool": ("ff022550000000f00010", 5.0),
         "MaxResidualHead": ("ff02258403c80084030a", 900),
     }
 
@@ -7572,6 +7572,21 @@ async def test_installer_settings_decode_the_owner_live_answers() -> None:
         fields = definitions[name].split(",", 8)
         assert fields[1] == "hmu" and fields[6] == "B51A", name
         assert _decode_definition_fields(fields[8], bytes.fromhex(payload))["value"] == expected, name
+
+
+# Intent: the installer settings stay defined after a rediscovery in which ebusd lists them (our own definitions).
+# Why: review of 1.16.0 - a gate on listed names dropped them after a reconnect, so their re-read stopped and the
+#      value froze (the plain-`r` bug class of #171/#193/#207/#213/#223/#227).
+def test_installer_settings_survive_rediscovery() -> None:
+    lines = load_find_lines(ISSUE175_FIXTURE, after=True)
+    first = DISCOVERY.DiscoveryService.build_device_graph(lines)
+    again = DISCOVERY.DiscoveryService.build_device_graph(
+        lines + ["hmux0 CompressorStartHeating = no data stored", "hmux0 MaxResidualHead = 900"]
+    )
+
+    assert RUNTIME_DEFINITIONS.heat_pump_setting_definitions(
+        again
+    ) == RUNTIME_DEFINITIONS.heat_pump_setting_definitions(first)
 
 
 # Intent: HMU00 SW0308 only gets D.230 (the one setting #218 read there); other heat pumps get none.
@@ -7667,7 +7682,7 @@ async def test_silent_timer_slots_are_defined_like_the_verified_read() -> None:
     assert _decode_definition_fields(slot[8], bytes.fromhex("0015001800ffff")) == {"from": "21:00", "to": "24:00"}
     # Slot 0 and the count come from ebusd's own configuration.
     assert "r.ctlv3.SilentTimer_Monday0" not in definitions
-    assert ("ctlv3", "SilentTimer") in RUNTIME_DEFINITIONS.read_only_timer_programs(
+    assert ("ctlv3", "silenttimer") in RUNTIME_DEFINITIONS.read_only_timer_programs(
         DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE256_FIXTURE, after=True))
     )
 
@@ -7695,7 +7710,7 @@ async def test_bass3_programs_are_read_over_b555() -> None:
     programs = RUNTIME_DEFINITIONS.read_only_timer_programs(
         DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(BASS3_FIXTURE, after=True))
     )
-    assert programs == {("bass", "Z1Timer"), ("bass", "Z1CoolingTimer"), ("bass", "HwcTimer"), ("bass", "CcTimer")}
+    assert programs == {("bass", "z1timer"), ("bass", "z1coolingtimer"), ("bass", "hwctimer"), ("bass", "cctimer")}
 
 
 # Intent: the B555 timer sets stay off controllers without evidence (CTLV2, other CTLV3 firmware, BAI).
@@ -7733,6 +7748,36 @@ def test_b555_timer_sets_survive_rediscovery(fixture: str, own_lines: list[str],
     assert RUNTIME_DEFINITIONS.read_only_timer_programs(again) == RUNTIME_DEFINITIONS.read_only_timer_programs(first)
     assert any(circuit == program for circuit, _ in RUNTIME_DEFINITIONS.read_only_timer_programs(again))
     assert RUNTIME_DEFINITIONS.calendar_slot_register_keys(again)
+
+
+# Intent: the central write path refuses a read-only program's messages for every caller (`write_parameter` too) and
+#         in any letter case, before the first bus write; other writes still go through.
+# Why: audit of 1.16.0 - the guard sat only in `write_day`, so `write_parameter` and a `silentTimer` program name could
+#      still send an untested write to a BASS3 or CTLV3 silent mode program.
+@pytest.mark.parametrize(
+    ("fixture", "circuit", "name"),
+    [
+        (BASS3_FIXTURE, "bass", "Z1Timer_Monday"),
+        (BASS3_FIXTURE, "bass", "hwctimer_Sunday0"),
+        (ISSUE256_FIXTURE, "ctlv3", "silentTimer_Monday"),
+    ],
+)
+async def test_central_write_refuses_read_only_programs(fixture: str, circuit: str, name: str) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.write_register = AsyncMock(return_value=WriteResult(True, verified_value="x"))
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+        coordinator._ebusd_connected = True
+        coordinator.async_request_refresh = AsyncMock()
+
+        ok = await coordinator.async_write_register(circuit, name, "0;1;06:00;22:00", require_discovered=False)
+
+        assert ok is False
+        coordinator.ebus.write_register.assert_not_awaited()
+        assert await coordinator.async_write_register(circuit, "Z1DayTemp", "20", require_discovered=False) is True
+        coordinator.ebus.write_register.assert_awaited_once()
 
 
 # Intent: slot messages the integration defines get no sensor entity; ebusd's own slot-0 messages keep theirs.

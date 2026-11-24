@@ -866,19 +866,19 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         entity_category="diagnostic",
         fallback_read=False,
     ),
-    # The two hysteresis names exist in ebusd's hmu CSV on other units; they keep the default fallback flag so the
-    # entity that CSV creates there stays as it was (a metadata-only entry would hide it until a value arrives).
-    "hmu.CompressorHysteresisHc": RegisterMeta(
+    "hmu.CompressorHysteresisHeat": RegisterMeta(
         friendly_name="Compressor Hysteresis Heating (D.267)",
         icon="mdi:thermometer-lines",
         unit="K",
         entity_category="diagnostic",
+        fallback_read=False,
     ),
-    "hmu.CompressorHysteresisCooling": RegisterMeta(
+    "hmu.CompressorHysteresisCool": RegisterMeta(
         friendly_name="Compressor Hysteresis Cooling (D.363)",
         icon="mdi:thermometer-lines",
         unit="K",
         entity_category="diagnostic",
+        fallback_read=False,
     ),
     "hmu.MaxResidualHead": RegisterMeta(
         friendly_name="Maximum Residual Pump Head (D.231)",
