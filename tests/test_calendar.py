@@ -40,6 +40,8 @@ def _coordinator(heating_circuit: str = "basv", registers: dict | None = None) -
     c.data = {"ebusd": {}}
     c.registers = registers or {}
     c.get_device_info = MagicMock(return_value={"identifiers": {("vaillant_ebus", "basv")}})
+    # Mirrors the live coordinator: a program is writable unless the integration reads it over its own B555 set.
+    c.timer_program_read_only = MagicMock(return_value=False)
     return c
 
 

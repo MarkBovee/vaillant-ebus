@@ -27,6 +27,7 @@ from .models import (
     is_no_data_value,
     valid_zone_owners,
 )
+from .runtime_definitions import calendar_slot_register_keys, strong_assumption_register_keys
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -206,6 +207,8 @@ def _merge_overrides(meta: RegisterMeta, override: dict[str, Any]) -> RegisterMe
         device_circuit=override.get("device_circuit", meta.device_circuit),
         divisor=override.get("divisor", meta.divisor),
         fallback_read=meta.fallback_read,
+        # Value labels are part of decoding (an error code's -1 = none), not presentation; an override keeps them.
+        value_labels=meta.value_labels,
     )
     return merged
 
@@ -506,6 +509,8 @@ class EntityFactoryService:
         ghost_solar = ghost_solar_circuits(graph)
         valid_zones = valid_zone_owners(graph)
         unreliable_keys = unreliable_register_keys(graph)
+        strong_keys = strong_assumption_register_keys(graph)
+        calendar_keys = calendar_slot_register_keys(graph)
 
         reg_to_node: dict[str, DeviceNode] = {}
         for node in graph.nodes.values():
@@ -586,6 +591,10 @@ class EntityFactoryService:
                     # the first live discovery removes it.
                     if rk.casefold() in unreliable_keys:
                         continue
+                    # Slot messages the integration defines for a calendar (issues #235, #256) are no sensors: 88 BASS3
+                    # and 14 silent mode slots would be entities without meaning. ebusd's own slot messages keep theirs.
+                    if rk.casefold() in calendar_keys:
+                        continue
                     # The date platform owns the date registers of the heating controller; a text sensor repeats them.
                     if _served_by_date_platform(graph, controller, valid_zones, circuit, name_lower):
                         continue
@@ -658,6 +667,9 @@ class EntityFactoryService:
                     "enabled",
                     _determine_enabled_by_default(rk, raw, node.has_data, meta),
                 )
+                # A strong assumption on this firmware starts disabled; an explicit YAML `enabled` still decides.
+                if "enabled" not in override and rk.casefold() in strong_keys:
+                    entity_enabled = False
                 if (
                     name_lower == "hc1roomtempswitchon"
                     and override.get("entity_type", base_meta.entity_type) != "select"

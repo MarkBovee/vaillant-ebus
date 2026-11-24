@@ -60,6 +60,7 @@ mock_homeassistant = sys.modules["homeassistant"]
 repairs_module = sys.modules["vaillant_ebus.repairs"]
 const_module = sys.modules["vaillant_ebus.const"]
 COORDINATOR = sys.modules["vaillant_ebus.coordinator"]
+RUNTIME_DEFINITIONS = sys.modules["vaillant_ebus.backend.runtime_definitions"]
 
 
 from vaillant_ebus.coordinator import VaillantCoordinator, _register_values, _usable_register_value  # noqa: E402
@@ -510,7 +511,9 @@ async def test_hmux0_runtime_definitions_use_discovered_circuit() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0 = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0) == 25
+        # 25 active SW0303 definitions plus the passive gateway status code (community CSV, 1.16.0).
+        assert len(hmux0) == 26
+        assert any(d.startswith("u,hmux0,HMUStatusCode,") for d in hmux0)
         assert all(",hmu," not in definition for definition in hmux0)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0)
         # Issue #171: upstream PR #496 flow-temperature layout (B509 ext 0xfc/0x08), 1/16 degC.
@@ -1032,7 +1035,8 @@ async def test_issue161_sw0407_passive_definitions_survive_other_heat_pump_node(
             assert any(definition.startswith(f"r,hmux0,{name},") for definition in definitions)
 
 
-# Intent: issue #32's SW0302 map retains its existing active B509 path and gains no SW0407-only passive layouts.
+# Intent: issue #32's SW0302 map retains its existing active B509 path and gains no SW0407-only passive layouts; only
+#         the gateway status code, captured on SW0302, is added.
 # Why: passive telemetry support is gated to the firmware captured in issue #161.
 async def test_issue161_passive_hmux0_definitions_do_not_generalize_to_sw0302() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -1050,7 +1054,9 @@ async def test_issue161_passive_hmux0_definitions_do_not_generalize_to_sw0302() 
         definitions = [call.args[0] for call in coordinator.ebus.define_register.await_args_list]
         assert graph.nodes["hmux0"].scan_sw == "0302"
         assert any(",B509,5402005b0d," in definition for definition in definitions)
-        assert not any(definition.startswith("u,hmux0,") for definition in definitions)
+        # The only passive HMUX0 definition on SW0302 is the gateway status code (issue #32 capture, community CSV).
+        passive = [definition for definition in definitions if definition.startswith("u,hmux0,")]
+        assert [definition.split(",")[2] for definition in passive] == ["HMUStatusCode"]
         for name in MAPPING.HMUX0_SW0407_ENVYIELD_REGISTERS:
             assert not any(f",{name}," in definition for definition in definitions)
         coordinator.ebus.read_register = AsyncMock(return_value=None)
@@ -3289,7 +3295,9 @@ async def test_hmux0_runtime_definitions_use_issue99_fixture_metadata() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_defs = [definition for definition in definitions if ",hmux0," in definition]
+        # The issue #99 bus loads the symlinked hmu CSV, which holds `B503 0003` itself: no status code of ours there.
         assert len(hmux0_defs) == 25
+        assert not any(d.startswith("u,hmux0,HMUStatusCode,") for d in hmux0_defs)
         assert all(",hmu," not in definition for definition in hmux0_defs)
         assert any(",hmux0,RunDataReturnTemp," in definition for definition in hmux0_defs)
         assert any(",hmux0,YieldHc," in definition for definition in hmux0_defs)
@@ -3488,7 +3496,9 @@ async def test_hmux0_scan_bootstrap_defines_only_confirmed_registers() -> None:
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
         hmux0_definitions = [definition for definition in definitions if ",hmux0," in definition]
-        assert len(hmux0_definitions) == 25
+        # 25 active SW0303 definitions plus the passive gateway status code (community CSV, 1.16.0).
+        assert len(hmux0_definitions) == 26
+        assert any(d.startswith("u,hmux0,HMUStatusCode,") for d in hmux0_definitions)
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 
@@ -3527,7 +3537,8 @@ async def test_hmux0_scan_bootstrap_rediscovers_defined_registers() -> None:
 
         assert discovery.discover.await_count == 2
         definitions = [call.args[0] for call in mock_ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 25
+        # 25 active SW0303 definitions plus the passive gateway status code (community CSV, 1.16.0).
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 26
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
         assert c.heat_pump_circuit == "hmux0"
         assert c.heating_circuit == "ctlv3"
@@ -3554,7 +3565,8 @@ async def test_hmux0_scan_bootstrap_ignores_generic_hmu_alias_definitions() -> N
         await c._define_custom_registers()
 
         definitions = [call.args[0] for call in c.ebus.define_register.await_args_list]
-        assert len([definition for definition in definitions if ",hmux0," in definition]) == 25
+        # 25 active SW0303 definitions plus the passive gateway status code (community CSV, 1.16.0).
+        assert len([definition for definition in definitions if ",hmux0," in definition]) == 26
         assert all(definition.split(",", 3)[1] != "hmu" for definition in definitions)
 
 
@@ -6804,7 +6816,16 @@ def _decode_definition_fields(fields: str, payload: bytes) -> dict[str, object]:
             raw = value
         elif kind == "UIN":
             raw, offset = int.from_bytes(payload[offset : offset + 2], "little"), offset + 2
-            value = raw
+            value = None if raw == 0xFFFF and "=" not in divisor_or_values else raw
+            if value is not None and divisor_or_values.isdigit():
+                value = raw / int(divisor_or_values)
+        elif kind == "SIN":
+            raw, offset = int.from_bytes(payload[offset : offset + 2], "little", signed=True), offset + 2
+            value = raw / int(divisor_or_values) if divisor_or_values.isdigit() else raw
+        elif kind == "HTM":
+            hour, minute = payload[offset], payload[offset + 1]
+            offset += 2
+            value = f"{hour:02d}:{minute:02d}"
         else:
             raise AssertionError(f"unsupported field type {kind} in {fields}")
         if kind in {"UCH", "UIN"} and "=" in divisor_or_values:
@@ -7001,7 +7022,7 @@ async def test_issue185_sw0406_with_hmux0_csv_gets_no_runtime_registers() -> Non
 async def test_issue185_sw0406_definitions_stay_hardware_gated(fixture: str) -> None:
     definitions = await _runtime_definitions_for(fixture)
 
-    assert not [key for key in definitions if key.startswith("r.hmux0.CompressorH")]
+    assert not [key for key in definitions if key in {"r.hmux0.CompressorHc", "r.hmux0.CompressorHwc"}]
     assert not [key for key in definitions if key.startswith("r.hmux0.CopH")]
 
 
@@ -7349,6 +7370,442 @@ async def test_issue255_sw0406_power_is_reread_every_poll() -> None:
     sw0407 = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE175_FIXTURE, after=True))
     sw0407_definitions = await _runtime_definitions_for(ISSUE175_FIXTURE)
     assert ("hmux0", "RunDataElPowerConsumption") not in plan_rereads(sw0407, sw0407_definitions, include_energy=False)
+
+
+ISSUE161_RUN_FIXTURE = "community/hmux0_issue161_2026-09-28_154109_discovery.yaml"
+
+
+# Intent: return request -> response for every labeled and unknown telegram of a fixture.
+# Why: the community CSV tests decode real captured frames, not hand-written payloads.
+def _fixture_responses(fixture: str) -> dict[str, str]:
+    dump = load_discovery_dump(fixture)
+    return {row["request"]: row["resp"] for row in (*dump["labeled_telegrams"], *dump["unknown_telegrams"])}
+
+
+# Intent: decode one runtime definition against the captured frame of the given source address.
+# Why: the request is rebuilt from the definition (id without the length byte), so a wrong id fails the lookup.
+def _decode_captured(definition: str, responses: dict[str, str], source: str) -> dict[str, object]:
+    fields = definition.split(",", 8)
+    request = f"{source}{fields[5]}{fields[6]}{len(fields[7]) // 2:02x}{fields[7]}".casefold()
+    return _decode_definition_fields(fields[8], bytes.fromhex(responses[request])[1:])
+
+
+# Intent: Status00 modulation and power decode in 0.5 % steps, so full load reads 100 %, not 200 %.
+# Why: community CSV (R91g, display check by lars077); issue #254 read 200 raw at full load and issue #252 shows 106 raw
+#      at 67.8 rps. The old layout showed the raw byte as a percentage.
+async def test_community_csv_status00_modulation_counts_half_percent_steps() -> None:
+    definitions = await _runtime_definitions_for(ISSUE252_FIXTURE)
+    responses = _fixture_responses(ISSUE252_FIXTURE)
+
+    status = _decode_captured(definitions["u.hmux0.Status00"], responses, "10")
+
+    assert status["compressormodulation"] in {53.0, 59.0}
+    assert status["compressorpower"] == status["compressormodulation"]
+    # Both fields use the explicit form issue #254 read live; `percent1` is not proven to resolve in a `define`.
+    assert "percent1" not in definitions["u.hmux0.Status00"]
+
+
+# Intent: the gateway status code is defined passively on every evidenced HMUX0 firmware and decodes the capture.
+# Why: community CSV row HMUStatusCode; in every capture with both frames it equals `B509 5402008813` (issues #32, #99,
+#      #161, #175, #252), and issue #254 read it live on SW0406. (The #99 SW0303 bus loads an hmu CSV; see below.)
+@pytest.mark.parametrize(
+    ("fixture", "expected"),
+    [
+        (ISSUE252_FIXTURE, "heat_compressor_active"),  # SW0502
+        (ISSUE161_RUN_FIXTURE, "standby"),  # SW0407
+        ("community/ctlv3_hmux0_vwzio_issue32_2026-09-22_134029_discovery.yaml", "standby"),  # SW0302
+    ],
+)
+async def test_community_csv_status_code_decodes_the_gateway_frame(fixture: str, expected: str) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+    responses = _fixture_responses(fixture)
+
+    definition = definitions["u.hmux0.HMUStatusCode"]
+    assert definition.split(",", 8)[4:8] == ["", "08", "B503", "0003"]
+    assert _decode_captured(definition, responses, "f1")["value"] == expected
+    mirror = "f108b509055402008813"
+    if mirror in responses:
+        assert int.from_bytes(bytes.fromhex(responses[mirror])[5:7], "little") == int.from_bytes(
+            bytes.fromhex(responses["f108b503020003"])[1:3], "little"
+        )
+
+
+# Intent: the status code stays off heat pumps without evidence (HMU00, a bus without HMUX0).
+# Why: firmware scope is the set of scan identities where the frame was decoded (community CSV rule).
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "community/flexotherm_issue102_2026-09-12_161841_discovery.yaml",
+        "community/ecotec_vrt380_issue109_2026-09-11_230710.yaml",
+    ],
+)
+async def test_community_csv_status_code_stays_hardware_gated(fixture: str) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+
+    assert not [key for key in definitions if key.endswith(".HMUStatusCode")]
+
+
+# Intent: no status code definition where ebusd's own (symlinked hmu) CSV is loaded on the HMUX0 owner.
+# Why: review of 1.16.0 - that CSV holds `B503 0003` as `EnableiveMonitorMain` (issue #31 and #99 captures), so a
+#      second definition on the same id would clash and stay empty or shadow the CSV message.
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "community/basv3_issue31_2026-09-17_203723_discovery.yaml",  # SW0406 with CSV, lists EnableiveMonitorMain
+        "community/hmux0_issue99_2026-09-13_173740.yaml",  # SW0303 with CSV
+        "community/hmux0_issue171_2026-10-03_094933_discovery.yaml",  # SW0406 with CSV
+    ],
+)
+async def test_community_csv_status_code_skips_buses_with_their_own_csv(fixture: str) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+
+    assert "u.hmux0.HMUStatusCode" not in definitions
+
+
+# Intent: fault, blocked and oil-heating status codes never read as heating; operating codes still do.
+# Why: review/audit of 1.16.0 - `frequency_converter_fault_overheating` and `heat_compressor_blocked` contain "heat",
+#      and the substring match turned them into "Heating".
+@pytest.mark.parametrize(
+    "code",
+    [
+        "frequency_converter_fault_overheating",
+        "immersion_heater_flow_temp_too_high",
+        "heat_compressor_blocked",
+        "compressor_oil_heating_active",
+        "deicing_time_too_long",
+    ],
+)
+def test_community_csv_fault_status_codes_do_not_read_as_heating(code: str) -> None:
+    assert derive_operating_state({"hmux0.HMUStatusCode.value": code}, "hmux0") is None
+    assert derive_operating_state({"hmux0.HMUStatusCode.value": "heat_compressor_shutdown"}, "hmux0") == "Standby"
+
+
+# Intent: on a SW0406 bus without an hmux0 CSV, the status code does not switch the SW0406 runtime set off later.
+# Why: `_hmux0_sw0406_definitions` returns nothing when ebusd lists an hmux0 register it did not define; after the first
+#      define pass ebusd lists `HMUStatusCode`, so it must count as one of ours.
+async def test_community_csv_status_code_keeps_the_sw0406_set_on_rediscovery() -> None:
+    stock = "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    lines = load_find_lines(stock, after=True) + ["hmux0 HMUStatusCode = no data stored"]
+    graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+
+    definitions = RUNTIME_DEFINITIONS.build_runtime_defines(graph, datetime(2026, 11, 24, 12, 0))
+
+    assert any(",hmux0,RunDataFlowTemp," in definition for definition in definitions)
+    assert any(definition.startswith("u,hmux0,HMUStatusCode,") for definition in definitions)
+
+
+# Intent: the confirmed compressor counters decode the SW0407 capture and match the B511 heating + DHW sums.
+# Why: community CSV rows RunStatsCompressorHours/Starts; issue #161 shows 15 h and 28 starts against 459 + 483 min and
+#      12 + 16 cycles from `B511 1801/1802`, which proves the meaning on this firmware.
+async def test_community_csv_compressor_counters_match_the_b511_sums() -> None:
+    definitions = await _runtime_definitions_for(ISSUE161_RUN_FIXTURE)
+    responses = _fixture_responses(ISSUE161_RUN_FIXTURE)
+
+    hours = _decode_captured(definitions["u.hmux0.RunStatsCompressorHours"], responses, "f1")["value"]
+    starts = _decode_captured(definitions["u.hmux0.RunStatsCompressorStarts"], responses, "f1")["value"]
+    heating = bytes.fromhex(responses["f108b511021801"])[2:]
+    dhw = bytes.fromhex(responses["f108b511021802"])[2:]
+    runtime = int.from_bytes(heating[0:4], "little") + int.from_bytes(dhw[0:4], "little")
+    cycles = int.from_bytes(heating[4:8], "little") + int.from_bytes(dhw[4:8], "little")
+    assert (hours, starts) == (15, 28)
+    assert hours == runtime // 60 and starts == cycles
+
+
+# Intent: strong-assumption community rows create entities that start disabled; confirmed ones stay enabled.
+# Why: the community CSV rule ships a row with a single source disabled until a second source agrees.
+def test_community_csv_strong_assumptions_start_disabled() -> None:
+    lines = load_find_lines(ISSUE175_FIXTURE, after=True) + [
+        "hmux0 RunStatsDeiceHours = 129",
+        "hmux0 RunDataEvaporationTemp = 19.25",
+        "hmux0 RunDataHeatOutput = 0.0",
+        "hmux0 HMUStatusCode = standby",
+        "hmux0 RunStatsCompressorStarts = 28",
+    ]
+    graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+    entities = {entity.key: entity for entity in EntityFactoryService().generate(graph)}
+
+    disabled = ("hmux0.RunStatsDeiceHours.value", "hmux0.RunDataEvaporationTemp.value", "hmux0.RunDataHeatOutput.value")
+    for key in disabled:
+        assert entities[key].enabled_by_default is False, key
+    assert entities["hmux0.HMUStatusCode.value"].enabled_by_default is True
+    assert entities["hmux0.RunStatsCompressorStarts.value"].enabled_by_default is True
+
+
+# Intent: the gateway status code drives the Energy Manager State, with `deicing_active` as defrost.
+# Why: units without `B509 5402008813` (SW0302, SW0303, SW0502 without its own set) only carry `B503 0003`.
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        ("heat_compressor_active", OPERATING_STATE_HEATING),
+        ("deicing_active", OPERATING_STATE_DEFROST),
+        ("standby", "Standby"),
+        ("hwc_compressor_active", "DHW"),
+    ],
+)
+def test_community_csv_status_code_drives_the_operating_state(code: str, expected: str) -> None:
+    assert derive_operating_state({"hmux0.HMUStatusCode.value": code}, "hmux0") == expected
+
+
+ISSUE256_FIXTURE = "community/ctlv3_sw0808_issue256_2026-11-23_discovery.yaml"
+BASS3_FIXTURE = "community/geniaset_bass3_discovery.yaml"
+
+
+# Intent: the heat pump installer settings decode the owner's live answers, on the owner's HMU00 and the SW0407 profile.
+# Why: issue #218 / community CSV D-codes. The owner's HMU00 SW0522 answered -60/60 degmin, 7.0/5.0 K and 900 mbar on
+#      2026-11-24 (equal to R91g's display values); the trailing min/max/step bytes must not leak into the value.
+async def test_installer_settings_decode_the_owner_live_answers() -> None:
+    graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines("community/arotherm_ecotec_discovery.yaml"))
+    definitions = {
+        definition.split(",")[2]: definition for definition in RUNTIME_DEFINITIONS.heat_pump_setting_definitions(graph)
+    }
+    # Live answers after the length byte: 3 header bytes, the value, then min, max and step.
+    answers = {
+        "CompressorStartHeating": ("ff0225c4ff9cffe2ff05", -60),
+        "CompressorStartCooling": ("ff02253c001e00640005", 60),
+        "CompressorHysteresisHeat": ("ff022570000000f00010", 7.0),
+        "CompressorHysteresisCool": ("ff022550000000f00010", 5.0),
+        "MaxResidualHead": ("ff02258403c80084030a", 900),
+    }
+
+    assert set(definitions) == set(answers)
+    for name, (payload, expected) in answers.items():
+        fields = definitions[name].split(",", 8)
+        assert fields[1] == "hmu" and fields[6] == "B51A", name
+        assert _decode_definition_fields(fields[8], bytes.fromhex(payload))["value"] == expected, name
+
+
+# Intent: the installer settings stay defined after a rediscovery in which ebusd lists them (our own definitions).
+# Why: review of 1.16.0 - a gate on listed names dropped them after a reconnect, so their re-read stopped and the
+#      value froze (the plain-`r` bug class of #171/#193/#207/#213/#223/#227).
+def test_installer_settings_survive_rediscovery() -> None:
+    lines = load_find_lines(ISSUE175_FIXTURE, after=True)
+    first = DISCOVERY.DiscoveryService.build_device_graph(lines)
+    again = DISCOVERY.DiscoveryService.build_device_graph(
+        lines + ["hmux0 CompressorStartHeating = no data stored", "hmux0 MaxResidualHead = 900"]
+    )
+
+    assert RUNTIME_DEFINITIONS.heat_pump_setting_definitions(
+        again
+    ) == RUNTIME_DEFINITIONS.heat_pump_setting_definitions(first)
+
+
+# Intent: HMU00 SW0308 only gets D.230 (the one setting #218 read there); other heat pumps get none.
+# Why: firmware scope is where the value was read (community CSV rule); SW0308 answered 05ff341e with -119 degmin.
+@pytest.mark.parametrize(
+    ("fixture", "expected"),
+    [
+        ("community/flexotherm_issue102_2026-09-12_161841_discovery.yaml", {"CompressorStartHeating"}),
+        (ISSUE175_FIXTURE, set(name for name, *_ in RUNTIME_DEFINITIONS.HEAT_PUMP_SETTINGS)),
+        ("community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml", set()),
+        ("community/ecotec_vrt380_issue109_2026-09-11_230710.yaml", set()),
+    ],
+)
+def test_installer_settings_stay_on_evidenced_firmware(fixture: str, expected: set[str]) -> None:
+    graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+
+    names = {definition.split(",")[2] for definition in RUNTIME_DEFINITIONS.heat_pump_setting_definitions(graph)}
+
+    assert names == expected
+
+
+# Intent: the installer settings and the SW0406 refrigerant temperatures are re-read on the energy interval only.
+# Why: plain `r` messages are never polled by ebusd; settings change rarely, so every poll would only cost bus time.
+async def test_installer_settings_and_sw0406_temperatures_follow_the_energy_poll() -> None:
+    owner = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines("community/arotherm_ecotec_discovery.yaml"))
+    owner_defines = await _runtime_definitions_for("community/arotherm_ecotec_discovery.yaml")
+    stock = "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    sw0406 = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(stock, after=True))
+    sw0406_defines = await _runtime_definitions_for(stock)
+
+    assert ("hmu", "CompressorStartHeating") in plan_rereads(owner, owner_defines, include_energy=True)
+    assert ("hmu", "CompressorStartHeating") not in plan_rereads(owner, owner_defines, include_energy=False)
+    assert ("hmux0", "RunDataAirInletTemp") in plan_rereads(sw0406, sw0406_defines, include_energy=True)
+    assert ("hmux0", "RunDataAirInletTemp") not in plan_rereads(sw0406, sw0406_defines, include_energy=False)
+
+
+# Intent: the SW0406 refrigerant temperatures are defined as floats and their entities start disabled there only.
+# Why: issue #205 - strong assumption: the B509 type-08 ids are floats on SW0406 and on the owner's HMU00, but no SW0406
+#      frame of these ids exists yet. On the owner's HMU00 the same names come from ebusd's CSV and stay enabled.
+async def test_sw0406_refrigerant_temperatures_are_strong_assumptions() -> None:
+    stock = "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    definitions = await _runtime_definitions_for(stock)
+    lines = load_find_lines(stock, after=True) + ["hmux0 RunDataAirInletTemp = 1.45"]
+    entities = {e.key: e for e in EntityFactoryService().generate(DISCOVERY.DiscoveryService.build_device_graph(lines))}
+    owner_lines = load_find_lines("community/arotherm_ecotec_discovery.yaml") + ["hmu RunDataAirInletTemp = 1.45"]
+    owner_graph = DISCOVERY.DiscoveryService.build_device_graph(owner_lines)
+    owner_entities = {e.key: e for e in EntityFactoryService().generate(owner_graph)}
+
+    temperature = definitions["r.hmux0.RunDataAirInletTemp"].split(",", 8)
+    assert temperature[6:8] == ["B509", "540200de08"]
+    # The owner's HMU00 answered this id with `b0 a0 b9 3f` (1.45 degC) on 2026-11-24.
+    assert (
+        abs(_decode_definition_fields(temperature[8], bytes.fromhex("080201de08b0a0b93f")[1:])["value"] - 1.45) < 0.01
+    )
+    assert entities["hmux0.RunDataAirInletTemp.value"].enabled_by_default is False
+    assert owner_entities["hmu.RunDataAirInletTemp.value"].enabled_by_default is True
+
+
+# Intent: on a SW0406 bus whose ebusd loads its own hmux0 CSV, the CSV's refrigerant temperatures keep their default.
+# Why: the strong-assumption rule covers only registers the integration defines itself (issues #31/#171 captures).
+def test_sw0406_csv_temperatures_are_not_strong_assumptions() -> None:
+    lines = load_find_lines("community/basv3_issue31_2026-09-17_203723_discovery.yaml", after=True)
+    graph = DISCOVERY.DiscoveryService.build_device_graph(lines + ["hmux0 RunDataAirInletTemp = 4.5"])
+
+    assert RUNTIME_DEFINITIONS.strong_assumption_register_keys(graph) == frozenset()
+    entities = {e.key: e for e in EntityFactoryService().generate(graph)}
+    assert entities["hmux0.RunDataAirInletTemp.value"].enabled_by_default is True
+
+
+# Intent: the HMUX0 current error decodes an empty slot as -1, shown as `none`, and a real F-code as its number.
+# Why: ebusd prints the empty slot `ffff` as `-` (unavailable) and its value lists reject the replacement and negative
+#      values (owner live test 2026-11-24), so the integration labels -1 itself.
+async def test_hmux0_current_error_shows_none_for_an_empty_slot() -> None:
+    definitions = await _runtime_definitions_for(ISSUE161_RUN_FIXTURE)
+    responses = _fixture_responses(ISSUE161_RUN_FIXTURE)
+
+    definition = definitions["u.hmux0.Currenterror"]
+    assert _decode_captured(definition, responses, "f1")["error"] == -1
+    fields = definition.split(",", 8)
+    assert _decode_definition_fields(fields[8], bytes.fromhex("1600ffffffffffffffff"))["error"] == 22
+    assert MAPPING.REGISTER_MAP["hmu.Currenterror"].value_labels == {"-1": "none"}
+
+
+# Intent: a CTLV3 SW0808 gets slot 1 and 2 reads of the silent mode program in the layout the reporter verified.
+# Why: issue #256 - ebusd decodes slot 0 only; `B555 a5 00 04 <day> 01` read 21:00-24:00 for all days, as on the
+#      display.
+async def test_silent_timer_slots_are_defined_like_the_verified_read() -> None:
+    definitions = await _runtime_definitions_for(ISSUE256_FIXTURE)
+
+    slot = definitions["r.ctlv3.SilentTimer_Monday1"].split(",", 8)
+    assert slot[4:8] == ["31", "15", "B555", "a500040001"]
+    assert definitions["r.ctlv3.SilentTimer_Sunday2"].split(",", 8)[7] == "a500040602"
+    assert _decode_definition_fields(slot[8], bytes.fromhex("0015001800ffff")) == {"from": "21:00", "to": "24:00"}
+    # Slot 0 and the count come from ebusd's own configuration.
+    assert "r.ctlv3.SilentTimer_Monday0" not in definitions
+    assert ("ctlv3", "silenttimer") in RUNTIME_DEFINITIONS.read_only_timer_programs(
+        DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE256_FIXTURE, after=True))
+    )
+
+
+# Intent: a BASS3 SW0708 gets read-only B555 slot and count reads for its four programs, matching the verified reads.
+# Why: issue #235 - the BASS3 answers its B524 timer messages empty; jlrosende's B555 reads matched the remote, e.g.
+#      `b555a500010001 / 000a00141e0e01` = cooling Monday slot 1, 10:00-20:30.
+async def test_bass3_programs_are_read_over_b555() -> None:
+    definitions = await _runtime_definitions_for(BASS3_FIXTURE)
+
+    cooling = definitions["r.bass.Z1CoolingTimer_Monday1"].split(",", 8)
+    assert cooling[4:8] == ["31", "15", "B555", "a500010001"]
+    decoded = _decode_definition_fields(cooling[8], bytes.fromhex("000a00141e0e01"))
+    assert decoded == {"from": "10:00", "to": "20:30", "temp": 27.0}
+    heating = definitions["r.bass.Z1Timer_Monday0"].split(",", 8)
+    assert _decode_definition_fields(heating[8], bytes.fromhex("0006001600d200")) == {
+        "from": "06:00",
+        "to": "22:00",
+        "temp": 21.0,
+    }
+    counts = definitions["r.bass.HwcTimer_Timeslots"].split(",", 8)
+    assert counts[7] == "a40002"
+    assert list(_decode_definition_fields(counts[8], bytes.fromhex("000101010101010100")).values()) == [1] * 7
+    assert len([key for key in definitions if key.startswith("r.bass.") and "Timer_" in key]) == 4 * (21 + 1)
+    programs = RUNTIME_DEFINITIONS.read_only_timer_programs(
+        DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(BASS3_FIXTURE, after=True))
+    )
+    assert programs == {("bass", "z1timer"), ("bass", "z1coolingtimer"), ("bass", "hwctimer"), ("bass", "cctimer")}
+
+
+# Intent: the B555 timer sets stay off controllers without evidence (CTLV2, other CTLV3 firmware, BAI).
+# Why: firmware scope is where the reads were verified (issues #235, #256).
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "community/flexotherm_ctlv2_cooling_discovery.yaml",
+        "community/hmux0_sw0407_issue175_2026-10-09_115534_discovery.yaml",
+        "community/ecotec_vrt380_issue109_2026-09-11_230710.yaml",
+    ],
+)
+async def test_b555_timer_sets_stay_hardware_gated(fixture: str) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+
+    assert not [key for key in definitions if "SilentTimer_" in key or key.startswith("r.bass.")]
+    graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+    assert RUNTIME_DEFINITIONS.read_only_timer_programs(graph) == frozenset()
+
+
+# Intent: the BASS3 and silent mode sets (and their read-only guard) survive a rediscovery that lists our own slots.
+# Why: after the first define ebusd lists `Z1Timer_Monday0` / `SilentTimer_Monday1`; a gate on those names dropped the
+#      set on the next discovery, and with it the guard that refuses writes.
+@pytest.mark.parametrize(
+    ("fixture", "own_lines", "program"),
+    [
+        (BASS3_FIXTURE, ["bass Z1Timer_Monday0 = no data stored", "bass Z1Timer_Timeslots = 1;1;1;1;1;1;1"], "bass"),
+        (ISSUE256_FIXTURE, ["ctlv3 SilentTimer_Monday1 = 21:00;24:00"], "ctlv3"),
+    ],
+)
+def test_b555_timer_sets_survive_rediscovery(fixture: str, own_lines: list[str], program: str) -> None:
+    first = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+    again = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True) + own_lines)
+
+    assert RUNTIME_DEFINITIONS.read_only_timer_programs(again) == RUNTIME_DEFINITIONS.read_only_timer_programs(first)
+    assert any(circuit == program for circuit, _ in RUNTIME_DEFINITIONS.read_only_timer_programs(again))
+    assert RUNTIME_DEFINITIONS.calendar_slot_register_keys(again)
+
+
+# Intent: the central write path refuses a read-only program's messages for every caller (`write_parameter` too) and
+#         in any letter case, before the first bus write; other writes still go through.
+# Why: audit of 1.16.0 - the guard sat only in `write_day`, so `write_parameter` and a `silentTimer` program name could
+#      still send an untested write to a BASS3 or CTLV3 silent mode program.
+@pytest.mark.parametrize(
+    ("fixture", "circuit", "name"),
+    [
+        (BASS3_FIXTURE, "bass", "Z1Timer_Monday"),
+        (BASS3_FIXTURE, "bass", "hwctimer_Sunday0"),
+        (ISSUE256_FIXTURE, "ctlv3", "silentTimer_Monday"),
+    ],
+)
+async def test_central_write_refuses_read_only_programs(fixture: str, circuit: str, name: str) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.write_register = AsyncMock(return_value=WriteResult(True, verified_value="x"))
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
+        coordinator._ebusd_connected = True
+        coordinator.async_request_refresh = AsyncMock()
+
+        ok = await coordinator.async_write_register(circuit, name, "0;1;06:00;22:00", require_discovered=False)
+
+        assert ok is False
+        coordinator.ebus.write_register.assert_not_awaited()
+        assert await coordinator.async_write_register(circuit, "Z1DayTemp", "20", require_discovered=False) is True
+        coordinator.ebus.write_register.assert_awaited_once()
+
+
+# Intent: slot messages the integration defines get no sensor entity; ebusd's own slot-0 messages keep theirs.
+# Why: 88 BASS3 and 14 silent mode slots as sensors would be entities without meaning, but existing users of the
+#      CTLV3 `SilentTimer_Monday0` sensor must keep it.
+def test_calendar_slot_messages_are_hidden_but_ebusd_slots_stay() -> None:
+    base = load_find_lines(ISSUE256_FIXTURE, after=True)
+    plain = DISCOVERY.DiscoveryService.build_device_graph([line for line in base if "SilentTimer_Monday1" not in line])
+    own = DISCOVERY.DiscoveryService.build_device_graph(base + ["ctlv3 SilentTimer_Monday1 = 21:00;24:00"])
+    without = {e.key for e in EntityFactoryService().generate(plain)}
+    keys = {e.key for e in EntityFactoryService().generate(own)}
+
+    assert "ctlv3.SilentTimer_Monday1.value" not in keys
+    # Every entity ebusd's own messages produced before is still there.
+    assert without <= keys
+
+
+# Intent: the live coordinator reports the BASS3 programs read-only and keeps a CTLV2 program writable.
+# Why: `TimerProgramAccess.write_day` asks the coordinator before the first bus write (issues #235/#256).
+def test_coordinator_reports_read_only_timer_programs() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(BASS3_FIXTURE, after=True))
+        assert coordinator.timer_program_read_only("bass", "HwcTimer") is True
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/flexotherm_ctlv2_cooling_discovery.yaml", after=True)
+        )
+        assert coordinator.timer_program_read_only("ctlv2", "HwcTimer") is False
 
 
 # Intent: the passive power definition stays hardware-gated like the other SW0406 runtime registers.

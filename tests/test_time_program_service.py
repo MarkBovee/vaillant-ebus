@@ -90,7 +90,33 @@ def _coordinator(program: _FakeProgram, zones: dict[str, str] | None = None) -> 
     coordinator.async_read_register = program.read
     coordinator.async_write_register = program.write
     coordinator.async_request_refresh = AsyncMock()
+    # Mirrors the live coordinator: a program is writable unless the integration reads it over its own B555 set.
+    coordinator.timer_program_read_only = MagicMock(return_value=False)
     return coordinator
+
+
+# Intent: a program the integration reads over its own B555 set (BASS3, CTLV3 silent mode) refuses every write before
+#         the first bus write, also through the service, and nothing is written.
+# Why: issues #235/#256 - those write messages were never tested on that controller (write-safety rule in AGENTS.md:
+#      the guard lives in `write_day`, so no caller can skip it).
+async def test_write_refuses_a_read_only_b555_program_and_writes_nothing() -> None:
+    program = _FakeProgram(prefix="HwcTimer", circuit="bass")
+    program.days["Monday"] = [("05:30", "22:00", "48.0")]
+    coordinator = _coordinator(program)
+    coordinator.heating_circuit = "bass"
+    coordinator.timer_program_read_only = MagicMock(
+        side_effect=lambda circuit, prefix: (circuit, prefix) == ("bass", "HwcTimer")
+    )
+
+    with pytest.raises(HomeAssistantError, match="can only be read"):
+        await SERVICE.async_write_time_program(
+            coordinator, "HwcTimer", ["monday"], [{"start": "06:00", "end": "22:00", "temperature": 50}]
+        )
+
+    assert program.writes == []
+    # Reading the same program still works.
+    read = await SERVICE.async_read_time_program(coordinator, "HwcTimer")
+    assert read["days"]["monday"][0]["start"] == "05:30"
 
 
 # Intent: the read service returns every weekday with times, temperatures and the layout, from ebusd's cache.

@@ -1,5 +1,87 @@
 # Changelog
 
+## 1.16.0 - 2026-11-24
+
+A feature release: new calendars, the compressor settings of your heat pump, and many more readings for aroTHERM units
+with HMUX0 firmware.
+
+**New at a glance**
+
+- Calendars for the silent mode (sensoCOMFORT CTLV3) and for all time programs of the Saunier Duval MiPro Sense (BASS3).
+- The compressor start and hysteresis settings of the heat pump, as sensors.
+- For HMUX0 heat pumps: status code, current error, compressor and fan counters, and several new readings that you can
+  switch on.
+- The compressor modulation of HMUX0 units no longer shows double values.
+
+### New: calendars
+
+- **Silent Mode Program** (sensoCOMFORT VRC 720 with CTLV3 SW0808; issue #256, thanks @T3le). ebusd only reads the
+  first time slot of the silent mode; the integration now reads every slot and shows the program as a calendar. It is
+  read-only for now, because writing it has not been tested.
+- **All time programs on the MiPro Sense (BASS3 SW0708)** (issue #235, thanks @jlrosende): zone 1 heating, cooling,
+  hot water and circulation. The BASS3 only answers its time programs through a different message (`B555`) than the
+  one in ebusd's configuration, so these calendars and `read_time_program` used to find nothing. They are read-only
+  for now: the calendars offer no editing, and any write to these programs, also through `write_parameter`, is refused
+  before anything reaches the bus.
+
+### New: compressor settings of the heat pump
+
+Five installer settings appear as diagnostic sensors (issue #218, thanks @cmarqu):
+
+| Sensor | What it means |
+|---|---|
+| Compressor Start Heating (D.230) | Energy integral (°min) at which the compressor starts heating |
+| Compressor Start Cooling (D.233) | Energy integral (°min) at which the compressor starts cooling |
+| Compressor Hysteresis Heating (D.267) | Hysteresis in K for heating |
+| Compressor Hysteresis Cooling (D.363) | Hysteresis in K for cooling |
+| Maximum Residual Pump Head (D.231) | Highest pump pressure the unit allows, in mbar |
+
+They were read live on a flexoTHERM (HMU00 SW0522) and match the display values in the community configuration
+(-60 °min, 60 °min, 7.0 K, 5.0 K, 900 mbar). They also appear on HMUX0 SW0407 and SW0502; on HMU00 SW0308 only D.230
+is read, because that is the one value we have from that firmware. The integration reads them every 5 minutes and
+cannot change them.
+
+### New: readings for HMUX0 heat pumps (aroTHERM plus and similar)
+
+- **Heat Pump Status Code** (SW0302, SW0303, SW0406, SW0407, SW0502), for example `heat_compressor_active` or
+  `deicing_active`. The myVAILLANT gateway asks the heat pump for it, and the integration now decodes the answer. The
+  Energy Manager State uses it too, so a defrost shows up there. It needs a gateway on the bus and costs no bus traffic.
+  Where ebusd loads its own heat pump configuration (for example a copied `08.hmu.csv`), that configuration already
+  uses this message, so the integration leaves it alone.
+- **Error** (SW0407, SW0502): `none` when the outdoor unit has no error, otherwise the F-code, for example `22` for
+  F.22.
+- **Compressor and fan counters** (SW0407, SW0502): compressor runtime and starts, and runtime and starts of both fans.
+  In a community capture the compressor counters add up exactly to the heating and hot water counters (15 h, 28
+  starts), so they mean what their names say.
+- **Off by default, switch on if you want them** (SW0407, SW0502): defrost runtime and starts, cooling runtime and
+  starts, evaporation temperature, condenser liquid outlet temperature, and heat output. Their values look right in the
+  captures, but nobody has checked them against a display yet.
+- **Off by default on SW0406** (issue #205, thanks @Zapgla): air inlet, compressor inlet and outlet, and EEV outlet
+  temperature, on units whose ebusd has no hmux0 configuration of its own. Read every 5 minutes. These messages use
+  the same number format on other SW0406 readings and on the flexoTHERM above, but nobody has read these four on
+  SW0406 yet.
+
+### Fixed
+
+- **Compressor modulation showed double values** on HMUX0 (for example 106 % or 200 %). The heat pump counts in steps of
+  0.5 %, so "Status Compressor Modulation" and "Status Compressor Power" now show 53 % and 100 % for those cases. The
+  evidence comes from SW0405, SW0406, SW0407 and SW0502 units; SW0303 uses the same field and gets the same change.
+- **Pump state "venting"** now shows as `venting` instead of the number 8.
+
+### Where the new readings come from
+
+Most of the HMUX0 readings come from the ebusd configuration that @R91g wrote for these heat pumps
+([R91g/arotherm-genia-ebusd](https://github.com/R91g/arotherm-genia-ebusd), proposed upstream as
+john30/ebusd-configuration#707), with display checks by @lars077 and timer tests by @jlrosende. The integration takes
+a row only when it decodes a real frame in our community captures and someone besides the author confirms it. It never
+installs that configuration into ebusd.
+
+### Not changed
+
+- The "immersion heater" counters from that configuration (`B509 540200e50b/e60b`) are left out: one owner reports that
+  they don't match the heater's real runtime, and our captures show implausible values.
+- Writes from that configuration (for example the silent operation level) are not added; a write needs its own test.
+
 ## 1.15.2 - 2026-11-24
 
 aroTHERM units with HMUX0 firmware SW0502 now show their heat pump readings, and SW0406 units show the defrost state,

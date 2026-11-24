@@ -50,6 +50,10 @@ async def async_setup_entry(
             "Heating Program": ("CcTimer", coordinator.heating_circuit, coordinator.heating_circuit),
             "Domestic Hot Water Program": ("HwcTimer", coordinator.heating_circuit, "dhw"),
         }
+        # The silent mode program (issue #256) only where all its slots can be read: ebusd's own configuration
+        # decodes slot 0 only, so a calendar from slot 0 alone would hide the second slot.
+        if coordinator.has_controller_register("SilentTimer_Monday1"):
+            schedules["Silent Mode Program"] = ("SilentTimer", coordinator.heating_circuit, coordinator.heating_circuit)
         for zone in coordinator.zone_circuits():
             number = zone[1:]
             circuit = coordinator.zone_circuits()[zone]
@@ -109,7 +113,8 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         self._edit_lock = asyncio.Lock()
         # Reads and writes of single weekdays, shared with the time program services.
         self._access = TimerProgramAccess(coordinator, prefix, self._circuit or "")
-        if prefix in WRITABLE_PREFIXES:
+        # A program the integration reads over its own B555 set (BASS3) offers no editing: the write would be refused.
+        if prefix in WRITABLE_PREFIXES and not coordinator.timer_program_read_only(self._circuit or "", prefix):
             self._attr_supported_features = (
                 CalendarEntityFeature.CREATE_EVENT
                 | CalendarEntityFeature.UPDATE_EVENT

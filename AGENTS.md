@@ -196,6 +196,13 @@ runtime `define`, or mapping a community register. Hard rules that always apply:
 - Confirmed and strong-assumption mappings go through the existing data-driven paths and are hardware-gated,
   additive, and safe when the register is absent. Never add a one-off code path.
 - Never modify or upload ebusd CSV files and never set `--configpath`.
+- Community CSV files (for example `R91g/arotherm-genia-ebusd`, upstream PR `john30/ebusd-configuration#707`) are a
+  register source. A row confirmed by the community may go to production without a separate owner sign-off (owner
+  decision, 2026-11-24). It counts as confirmed when its id and layout decode a frame in a repository fixture (or a
+  reporter's `read -def`/`hex` output) to plausible values, and at least one source independent of the CSV author
+  agrees. Firmware scope is the set of firmwares where the frame was decoded. A contradiction from any source blocks the
+  row. Map rows through runtime definitions and the data-driven paths; never install or copy the CSV. Full rule:
+  "Community CSV files" in `docs/register-discovery.md`.
 
 ## ebusd Define And Polling Rules
 

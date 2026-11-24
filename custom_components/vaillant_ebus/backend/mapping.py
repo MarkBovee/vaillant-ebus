@@ -7,6 +7,7 @@ from datetime import datetime
 
 from .hardware_profiles import (
     HMUX0_PRECISE_TEMPERATURE,
+    HMUX0_STATUS_CODE,
     HMUX0_SW0303,
     HMUX0_SW0406,
     HMUX0_SW0407,
@@ -72,6 +73,21 @@ HMUX0_SW0407_PASSIVE_REGISTER_NAMES: frozenset[str] = frozenset(
         "PowerConsumptionHmu",
         "CompressorHc",
         "CompressorHwc",
+        "RunStatsCompressorHours",
+        "RunStatsCompressorStarts",
+        "RunStatsFan1Hours",
+        "RunStatsFan1Starts",
+        "RunStatsFan2Hours",
+        "RunStatsFan2Starts",
+        "RunStatsDeiceHours",
+        "RunStatsDeiceStarts",
+        "RunStatsCoolingHours",
+        "RunStatsCoolingStarts",
+        "RunDataEvaporationTemp",
+        "RunDataCondensateTemp",
+        "RunDataHeatOutput",
+        "HMUStatusCode",
+        "Currenterror",
     }
 )
 HMUX0_SW0407_FALLBACK_NAMES: frozenset[str] = frozenset(
@@ -196,6 +212,11 @@ def _hmux0_owner_for_profile(graph: DeviceGraph | None, profile: HardwareProfile
 # ebusd's own CSV lacks the SW0303 RunData definitions, so only this revision needs a runtime `define`.
 def hmux0_sw0303_owner(graph: DeviceGraph | None) -> str | None:
     return _hmux0_owner_for_profile(graph, HMUX0_SW0303)
+
+
+# Return the HMUX0 owner whose firmware has evidence for the `B503 0003` status code, from a complete, unique scan.
+def hmux0_status_code_owner(graph: DeviceGraph | None) -> str | None:
+    return _hmux0_owner_for_profile(graph, HMUX0_STATUS_CODE)
 
 
 # Allow SW0406/HW0504 runtime definitions only for a complete, unique, current HMUX0 scan.

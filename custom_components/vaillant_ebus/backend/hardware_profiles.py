@@ -79,6 +79,16 @@ HMUX0_PRECISE_TEMPERATURE = HardwareProfile(
     hw=frozenset({"0504"}),
     evidence="issue #171 (SW0303 live); issue #188 (SW0406 float layout); issue #99 for the excluded revisions",
 )
+# Outdoor unit status code `B503 0003` that the myVAILLANT gateway polls (community CSV R91g/arotherm-genia-ebusd,
+# upstream PR john30/ebusd-configuration#707). In every capture with both frames it equals `B509 5402008813`
+# (SW0302 issue #32, SW0303 issue #99, SW0407 issue #161/#175, SW0502 issue #252); issue #254 read it live on SW0406.
+HMUX0_STATUS_CODE = HardwareProfile(
+    name="hmux0_status_code",
+    scan_type="hmux0",
+    sw=frozenset({"0302", "0303", "0406", "0407", "0502"}),
+    hw=frozenset({"0504"}),
+    evidence="community CSV row HMUStatusCode; equals B509 8813 in issues #32/#99/#161/#175/#252; #254 live read",
+)
 # B509 monitoring block (compressor speed, building pump power, electrical power): evidence for 0302 and 0303.
 HMUX0_B509_MONITORING = HardwareProfile(
     name="hmux0_b509_monitoring",
@@ -115,6 +125,28 @@ CTLV2_SW0514 = HardwareProfile(
     hw=frozenset({"1104"}),
     evidence="issue #208 raw grab (slots 0-2, Tuesday); flexocompact_find.txt (same scan, Timeslots layout)",
 )
+# CTLV3 SW0808/HW8004 answers the silent mode slot read `B555 a5 00 04 <day> <slot>` for slots 1 and 2 (issue #256:
+# all seven days read 21:00-24:00 in slot 1, as on the display). Its ebusd configuration decodes slot 0 only. The
+# community CSV (R91g, upstream PR #707) uses the same program byte 04 for the silent mode.
+CTLV3_SW0808 = HardwareProfile(
+    name="ctlv3_sw0808",
+    scan_type="ctlv3",
+    device_type="HEATING_CONTROLLER",
+    sw=frozenset({"0808"}),
+    hw=frozenset({"8004"}),
+    evidence="issue #256 live slot-1 reads (7 days, display match); community CSV program 04",
+)
+# BASS3 SW0708/HW4304 answers its weekly programs only through `B555` (issue #235): the B524 timer messages of its
+# ebusd configuration return an empty answer. jlrosende's reads of programs 00 (zone 1), 01 (cooling), 02 (hot water)
+# and 03 (circulation) matched the remote; the community CSV (R91g, upstream PR #707) defines the same layout.
+BASS3_SW0708 = HardwareProfile(
+    name="bass3_sw0708",
+    scan_type="bass3",
+    device_type="HEATING_CONTROLLER",
+    sw=frozenset({"0708"}),
+    hw=frozenset({"4304"}),
+    evidence="issue #235 live reads matching the remote; community CSV R91g / upstream PR #707",
+)
 # HW5103 heat pumps answer b511/07 with the Status07 layout (upstream ebusd-configuration PR #614).
 HMU00_HW5103 = HardwareProfile(
     name="hmu00_hw5103", scan_type="hmu00", hw=frozenset({"5103"}), evidence="upstream PR #614"
@@ -130,6 +162,17 @@ HMU00_SW0308 = HardwareProfile(
     sw=frozenset({"0308"}),
     hw=frozenset({"0403"}),
     evidence="issue #233 timeline; flexotherm_issue102 and hmu00_issue102 captures",
+)
+
+# The owner's heat pump: HMU00 SW0522/HW5103. Its installer settings (`B51A 05ff34xx/35xx`) were read live on
+# 2026-11-24 and match the display values the community CSV records (R91g): -60/60 degmin, 7.0/5.0 K, 900 mbar.
+HMU00_SW0522 = HardwareProfile(
+    name="hmu00_sw0522",
+    scan_type="hmu00",
+    device_type="HEAT_PUMP",
+    sw=frozenset({"0522"}),
+    hw=frozenset({"5103"}),
+    evidence="owner live reads 2026-11-24 (read -def), equal to the community CSV display values",
 )
 
 # Registers a firmware reports with a layout that does not match their name. They get no entity and no active read on

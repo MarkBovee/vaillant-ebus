@@ -353,10 +353,25 @@ def _setmode_heating_request(values: Mapping[str, str | None], hp_circuit: str) 
         return False
 
 
+# Suffixes of the `B503 0003` status codes that describe what the unit is doing. Fault and blocked codes
+# (`frequency_converter_fault_overheating`, `heat_compressor_blocked`) also contain "heat" and must not read as heating.
+_OPERATING_STATUS_SUFFIXES = ("_active", "_prerun", "_overrun", "_shutdown")
+
+
+# Keep a `B503 0003` status code only when it names an operating state; faults, blocks and unknown codes give "".
+def _operating_status_code(code: str) -> str:
+    if code in ("standby", "frost_protect"):
+        return code
+    if code.endswith(_OPERATING_STATUS_SUFFIXES) and code != "compressor_oil_heating_active":
+        return code
+    return ""
+
+
 # Derive one Energy Manager State from the protocol data the integration
 # already polls. This is a direct mapping of the compressor status and heater
 # bits the controller reports, not an invented state machine:
-#   - RunDataStatuscode (translated label or raw string): standby, defrost,
+#   - RunDataStatuscode (translated label or raw string), else the gateway's B503
+#     HMUStatusCode (operating states only): standby, defrost / deicing_active,
 #     hwc_compressor_active, heat_compressor_active/*_prerun/*_overrun,
 #     cool_compressor_active/*_prerun.
 #   - HMUX0/HMU Status00 compressorstate/defrost: off, heating*, hot_water,
@@ -370,7 +385,10 @@ def _setmode_heating_request(values: Mapping[str, str | None], hp_circuit: str) 
 def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | None) -> str | None:
     if not hp_circuit:
         return None
-    status = _clean(_value_lookup(values, f"{hp_circuit}.RunDataStatuscode.value"))
+    # Two status code sources, `B509 5402008813` and the gateway's `B503 0003` (community CSV), carry the same code.
+    status = _clean(_value_lookup(values, f"{hp_circuit}.RunDataStatuscode.value")) or _operating_status_code(
+        _clean(_value_lookup(values, f"{hp_circuit}.HMUStatusCode.value"))
+    )
     compressor = _clean(_value_lookup(values, f"{hp_circuit}.Status00.compressorstate"))
     heating_state = _clean(_value_lookup(values, f"{hp_circuit}.Status00.heatingstate"))
     defrost_bit = _value_lookup(values, f"{hp_circuit}.Status00.defrost")
@@ -393,7 +411,9 @@ def derive_operating_state(values: Mapping[str, str | None], hp_circuit: str | N
     ):
         return None
 
-    if "defrost" in blob or _value_is_on(defrost_bit):
+    # The B503 status code names defrost `deicing_active`; the deicing fault codes (283, 284) end a defrost, not start
+    # one, so only the active state counts.
+    if "defrost" in blob or "deicing_active" in blob or _value_is_on(defrost_bit):
         return OPERATING_STATE_DEFROST
     # A shutdown/standby status string means the controller reports no active
     # demand; it always wins over any request flag.
@@ -572,6 +592,9 @@ class RegisterMeta:
     device_circuit: str | None = None
     divisor: float | None = None
     fallback_read: bool = True
+    # Raw values shown under another label, for a value ebusd cannot name itself (its value lists reject the
+    # replacement and negative values). Example: the error code `-1` (`ffff`, no error) shows as `none`.
+    value_labels: dict[str, str] | None = None
 
 
 @dataclass

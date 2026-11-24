@@ -110,6 +110,47 @@ CSV snippets, `define` strings, `find` output, and per-hardware field layouts th
   verified against a live device.
 - Never modify or upload ebusd CSV files and never set `--configpath`; that is addon-side.
 
+## Community CSV Files
+
+Some users maintain their own ebusd CSV files for hardware that the upstream configuration does not cover yet. The
+main example is `R91g/arotherm-genia-ebusd` (`ebusd-configuration/vaillant/08.hmux0.csv`, `76.vwzio.csv`,
+`15.bass3.csv`, ...), proposed upstream as `john30/ebusd-configuration#707`, with display checks by other owners
+(lars077 on an aroTHERM plus HMUX0 SW0405, jlrosende on a BASS3). These files are a register source like upstream
+issues. The owner decided on 2026-11-24 that a row the community has confirmed may go to production without a
+separate owner sign-off.
+
+### When a row counts as confirmed
+
+A community CSV row is `confirmed` when both of these hold:
+
+1. **It decodes a real frame.** Its message id (without the length byte) and field layout decode a frame in at least
+   one repository fixture, or in a reporter's `read -def`/`ebusctl hex` output, to plausible values. Check the frame
+   source (`10` controller, `f1` gateway, `31` ebusd) and the answer length, not only the id.
+2. **Someone independent of the CSV author agrees.** For example: a second unit with the same layout (another
+   reporter's fixture or live read), a display check by another owner, a mirror register on the same bus that carries
+   the same value (`b503 0003` equals `b509 5402008813` in every capture that has both), or an upstream thread.
+
+A row with only one of the two is a `strong assumption` (ship it disabled by default, as for other strong
+assumptions). A row with neither is `speculative`. A contradiction from any source blocks the row until it is
+explained: for example lars077's note in PR #707 that `RunStatsImmersionHeaterHours/Starts` (`b509 540200e50b/e60b`)
+and `RunStatsHcStarts`/`RunStatsHwcStarts` do not match his unit.
+
+### Scope and implementation
+
+- **Firmware scope** is the set of scan identities where the frame was decoded. Another firmware needs its own frame;
+  add it to the profile in `backend/hardware_profiles.py` with the capture as evidence.
+- **Never install or copy the CSV** into ebusd and never set `--configpath`. Map a confirmed row through
+  `backend/runtime_definitions.py` and the existing data-driven paths (`REGISTER_MAP`, `MULTI_FIELD_FIELDS`,
+  `REREAD_RULES`).
+- **Prefer passive definitions** (`u`, blank source when both controller and gateway poll) for frames that already pass
+  on the bus. Use an active read only for a register nobody polls, and re-read it through `REREAD_RULES`.
+- **Writes** from a community CSV still need the write rules in AGENTS.md: a tested `done`, a read-back, and a guard
+  test. A community row alone never authorises a write.
+- **Record the evidence** per row: CSV file and commit, the fixture(s) and decoded values, the independent source, and
+  the classification. Name the CSV author and the confirming users in the changelog.
+- Re-check the CSV when it changes: the files are moving fast (R91g changed the `StateCompressor` modulation divisor on
+  2026-11-20). A later change that contradicts a shipped mapping is a reason to revisit it.
+
 ## Community Data (user/upstream dumps)
 
 Data from users and upstream threads (discovery dumps, gists, `find` output, CSV or
