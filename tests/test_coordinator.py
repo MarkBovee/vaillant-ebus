@@ -7166,8 +7166,10 @@ async def test_issue193_manual_rediscovery_clears_the_bus_pause() -> None:
         assert c._bus_guard.allow() is True
 
 
-# Intent: the periodic check raises one stale-entities issue when orphans exist and clears it when none are left.
-# Why: the owner has 86 restored entities that stayed invisible; a repair with a confirmation is how they get removed.
+# Intent: the periodic check raises one stale-entities issue when orphans or empty devices exist and clears it when none
+#         are left.
+# Why: the owner has 86 restored entities that stayed invisible, and empty Zone 2/3 devices that no purge removed; a
+#      repair with a confirmation is how they get removed.
 async def test_stale_entities_issue_follows_the_registry() -> None:
     from homeassistant.helpers import entity_registry
 
@@ -7197,6 +7199,10 @@ async def test_stale_entities_issue_follows_the_registry() -> None:
         registry = MagicMock()
         registry.entities.get_entries_for_config_entry_id.side_effect = lambda _id: [row]
         entity_registry.async_get = MagicMock(return_value=registry)
+        from homeassistant.helpers import device_registry
+
+        # Other test modules leave devices in the shared stub; this config entry starts without any.
+        device_registry.async_entries_for_config_entry = MagicMock(return_value=[])
         repairs_stub = sys.modules["vaillant_ebus.repairs"]
         repairs_stub.async_create_stale_entities.reset_mock()
         repairs_stub.async_dismiss_stale_entities.reset_mock()
@@ -7207,13 +7213,27 @@ async def test_stale_entities_issue_follows_the_registry() -> None:
 
         repairs_stub.async_create_stale_entities.assert_awaited_once()
         args = repairs_stub.async_create_stale_entities.await_args.args
-        assert args[1:3] == ("entry-1", 1) and "sensor.gone" in args[3]
+        assert args[1] == "entry-1"
+        assert args[2]["count"] == "1" and "sensor.gone" in args[2]["entities"]
         repairs_stub.async_dismiss_stale_entities.assert_not_awaited()
 
         hass.states.get = MagicMock(return_value=types.SimpleNamespace(state="23.5", attributes={}))
         await c._async_refresh_stale_entities_issue()
 
         repairs_stub.async_dismiss_stale_entities.assert_awaited_once()
+
+        # A leftover Zone 2 device without any entity row raises the issue on its own (owner, 2026-11-25).
+        registry.entities.values.side_effect = lambda: [row]
+        zone2 = types.SimpleNamespace(id="dev-z2", identifiers={("vaillant_ebus", "z2")}, name="Zone 2", labels=set())
+        device_registry.async_entries_for_config_entry = MagicMock(return_value=[zone2])
+        repairs_stub.async_create_stale_entities.reset_mock()
+
+        await c._async_refresh_stale_entities_issue()
+
+        placeholders = repairs_stub.async_create_stale_entities.await_args.args[2]
+        assert (placeholders["count"], placeholders["device_count"]) == ("0", "1")
+        assert "Zone 2" in placeholders["devices"]
+        device_registry.async_entries_for_config_entry = MagicMock(return_value=[])
 
 
 # Intent: the periodic check also raises the issue when only enabled entities without data are left to switch off.
@@ -7261,8 +7281,8 @@ async def test_stale_entities_issue_is_raised_for_entities_without_data() -> Non
 
         repairs_stub.async_create_stale_entities.assert_awaited_once()
         args = repairs_stub.async_create_stale_entities.await_args.args
-        assert args[1:3] == ("entry-1", 0)
-        assert args[5] == 1 and "sensor.storage_top" in args[6]
+        assert args[1] == "entry-1" and args[2]["count"] == "0"
+        assert args[2]["dormant_count"] == "1" and "sensor.storage_top" in args[2]["dormant"]
         repairs_stub.async_dismiss_stale_entities.assert_not_awaited()
 
 

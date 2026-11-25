@@ -57,7 +57,7 @@
       },
       "purge_entities": {
         "title": "Purge Stale Entities",
-        "description": "This will remove {count} Vaillant eBUS entities that no entity provides any more (for example a zone or register the controller no longer reports), and Vaillant eBUS devices left without entities.\n\n{entities}\n\nIt will also switch off {dormant_count} enabled entities that have no data and that a new installation would not switch on (for example a sensor for hardware you do not have). They are not deleted. Each one switches on again by itself when its register returns a value.\n\n{dormant}\n\nEntities that you renamed, hid, labelled or assigned to an area are kept ({kept}).",
+        "description": "This will remove {count} Vaillant eBUS entities that no entity provides any more (for example a zone or register the controller no longer reports), and Vaillant eBUS devices left without entities.\n\n{entities}\n\nIt will also remove {device_count} Vaillant eBUS devices that have no entities any more (for example a zone you do not use).\n\n{devices}\n\nIt will also switch off {dormant_count} enabled entities that have no data and that a new installation would not switch on (for example a sensor for hardware you do not have). They are not deleted. Each one switches on again by itself when its register returns a value.\n\n{dormant}\n\nEntities that you renamed, hid, labelled or assigned to an area are kept ({kept}).",
         "data": {
           "confirm": "I understand that these entity registry entries will be removed"
         }
@@ -100,7 +100,7 @@
         "step": {
           "confirm": {
             "title": "Remove stale entities",
-            "description": "{count} Vaillant eBUS entities exist in Home Assistant that the integration no longer provides, for example from a zone or register the controller no longer reports. Submit removes them, and any Vaillant eBUS device left empty.\n\n{entities}\n\nAlso, {dormant_count} enabled entities have no data and a new installation would not switch them on, for example a sensor for hardware you do not have. Submit also switches them off. They are not deleted, and each one switches on again by itself when its register returns a value.\n\n{dormant}\n\nEntities that you renamed, hid, labelled or assigned to an area are kept ({kept}). Nothing changes before you select Submit."
+            "description": "{count} Vaillant eBUS entities exist in Home Assistant that the integration no longer provides, for example from a zone or register the controller no longer reports. Submit removes them, and any Vaillant eBUS device left empty.\n\n{entities}\n\nSubmit also removes {device_count} Vaillant eBUS devices that have no entities any more, for example a zone you do not use.\n\n{devices}\n\nAlso, {dormant_count} enabled entities have no data and a new installation would not switch them on, for example a sensor for hardware you do not have. Submit also switches them off. They are not deleted, and each one switches on again by itself when its register returns a value.\n\n{dormant}\n\nEntities that you renamed, hid, labelled or assigned to an area are kept ({kept}). Nothing changes before you select Submit."
           }
         },
         "abort": {

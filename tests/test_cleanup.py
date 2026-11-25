@@ -349,6 +349,28 @@ def test_stale_report_keeps_disabled_entities_that_discovery_generates() -> None
     assert [item.entity_id for item in report.orphans] == ["sensor.stale"]
 
 
+# Intent: the report lists a device of this integration without entity rows, and keeps a device that still has rows,
+#         one the user renamed, one of another integration and one whose circuit owns a generated entity.
+# Why: owner report 2026-11-25 - empty Zone 2 and Zone 3 devices were never offered for removal; a device whose rows
+#      are being written right now (its circuit is generated) or that carries user data must stay.
+def test_stale_report_lists_empty_devices_only() -> None:
+    rows = [_row("sensor.fine", "ebusd_hmu_generated0", device_id="dev-hmu")]
+    devices = [
+        SimpleNamespace(id="dev-hmu", identifiers={(DOMAIN, "hmu")}, name="Heat pump", labels=set()),
+        SimpleNamespace(id="dev-z2", identifiers={(DOMAIN, "z2")}, name="Zone 2", labels=set()),
+        SimpleNamespace(id="dev-z3", identifiers={(DOMAIN, "z3")}, name="Zone 3", name_by_user="Attic", labels=set()),
+        SimpleNamespace(id="dev-z1", identifiers={(DOMAIN, "z1")}, name="Zone 1", labels=set()),
+        SimpleNamespace(id="dev-other", identifiers={("other", "x")}, name="Other", labels=set()),
+    ]
+    coordinator = _coordinator()
+    coordinator.entities.append(SimpleNamespace(unique_id="ebusd_ctlv2_z1daytemp", device_circuit="z1"))
+
+    report = CLEANUP.stale_report(_registry(rows), _states({}), ENTRY_ID, DOMAIN, coordinator, devices)
+
+    assert [device.device_id for device in report.empty_devices] == ["dev-z2"]
+    assert report.has_work and report.has_removals and not report.orphans
+
+
 REPAIRS = _component_loader._exec_source("vaillant_ebus.repairs_real", _component_loader.COMPONENT_PATH / "repairs.py")
 
 
@@ -425,6 +447,23 @@ async def test_fix_flow_removes_the_device_that_is_left_empty() -> None:
 
     lookup.assert_called_once_with(devices, ENTRY_ID)
     devices.async_remove_device.assert_called_once_with("dev-zone2")
+
+
+# Intent: the repair offers and removes an empty Zone 2 device when no entity is stale, and removes no entity row.
+# Why: owner report 2026-11-25 - the repair is how most users clean up; it must not end at once with an empty device
+#      left in the list.
+async def test_fix_flow_removes_an_empty_device_without_stale_entities() -> None:
+    flow, registry, devices = _flow([_row("sensor.fine", "ebusd_hmu_generated0", device_id="dev-hmu")], states={})
+    lookup = sys.modules["homeassistant.helpers.device_registry"].async_entries_for_config_entry
+    lookup.return_value = [SimpleNamespace(id="dev-z2", identifiers={(DOMAIN, "z2")}, name="Zone 2", labels=set())]
+
+    shown = await flow.async_step_confirm()
+    done = await flow.async_step_confirm({})
+
+    assert shown == {"type": "form"} and done == {"type": "create_entry"}
+    assert flow.async_show_form.call_args.kwargs["description_placeholders"]["device_count"] == "1"
+    registry.async_remove.assert_not_called()
+    devices.async_remove_device.assert_called_once_with("dev-z2")
 
 
 # Intent: the flow aborts instead of removing anything when ebusd is not connected.
