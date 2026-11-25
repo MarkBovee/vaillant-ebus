@@ -116,15 +116,21 @@ def check_replies(replies: list[Reply]) -> list[str]:
     return problems
 
 
-# Post one reply, add its label and mark the item in the inbox state; returns the comment URL.
+# Post one reply, mark the item in the inbox state, then add its label; returns the comment URL.
+# The state is written right after the comment, so a failing label step can never lead to posting the comment twice.
 def post(reply: Reply, reply_to: str | None = None) -> str:
     if reply.kind == "issue":
         url = gh("issue", "comment", str(reply.number), "--body-file", str(reply.body_file))
-        if reply.label:
-            gh("issue", "edit", str(reply.number), "--add-label", reply.label)
     else:
         url = reply_discussion(reply.number, reply.body_file.read_text(encoding="utf-8"), reply_to)
     mark_replied(reply.kind, reply.number)
+    if reply.label:
+        try:
+            gh("issue", "edit", str(reply.number), "--add-label", reply.label)
+        except subprocess.CalledProcessError as error:
+            print(
+                f"posted {url}, but adding label {reply.label!r} failed: {error.stderr.strip()[:200]}", file=sys.stderr
+            )
     return url
 
 
@@ -140,6 +146,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--batch", type=Path, help="file with one reply per line")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
+    if args.batch and args.reply_to:
+        parser.error("--reply-to applies to one discussion reply, not to a batch")
     if args.batch:
         replies, problems = parse_batch(args.batch)
     elif args.kind and args.number is not None and args.body_file:

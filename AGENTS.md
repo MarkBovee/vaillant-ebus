@@ -202,7 +202,7 @@ rejected the integration for exactly this (`os.makedirs`, `os.replace`, `os.path
   from a bisect stayed active until the add-on restarted (2026-10-28).
 - **Never prune or disable while ebusd is still scanning.** After an ebusd restart, `find` misses registers until the
   scan settles, including the state `scan: finished, some messages pending`. Pruning in that window removed 161
-  registers (#221). The guard is `bus_scan_settled`; keep every prune and disable pass behind it.
+  registers (#221). The guard is `bus_scan_settled`; keep every automatic prune and disable pass behind it.
 
 ## Register Discovery And Community Data
 
@@ -415,15 +415,18 @@ deploy). Hard rules that always apply:
 - Every release candidate runs the discovery-dump smoke test on the owner's HA before it is called ready.
 - Push the `vX.Y.Z` tag only after all PR checks are green. The release job also enforces this
   (`tools/release_gate.py`).
-- Approvals do not carry over: deploy, restart, push, tag and GitHub posts are separate outward actions.
+- Approvals do not carry over: deploy, restart, push, tag and GitHub posts are separate outward actions, except for
+  the release sequence defined in the next bullet.
 - **What "release" means.** When the owner says to release (or "merge and tag"), that one approval covers: merge the
   PR once all checks are green, update `main`, push the annotated tag on the merge commit, wait for the release job,
   then post the replies whose text the owner approved. Do not stop halfway to ask again. Anything the owner did not
   name (a new reply text, a deploy, an ebusd restart) still needs its own yes.
 - Before merging, ask whether anything else belongs in this release, unless the owner just said so: in 1.14.3 a fix
   had to go in after the merge had started. Until the owner confirms the scope, a release branch is a candidate; do
-  not push or merge it.
-- Auto-merge is off in this repository. Merge with a merge commit (`gh pr merge --merge`), never `--auto`.
+  not merge or tag it.
+- Auto-merge is off in this repository. Merge release PRs with a merge commit (`gh pr merge --merge`), never `--auto`.
+  A community PR is the exception described under "Community Pull Requests" (squash-merge when its commits are not
+  linked to the author's account).
 
 ## Working With Agents (Claude Code and others)
 
