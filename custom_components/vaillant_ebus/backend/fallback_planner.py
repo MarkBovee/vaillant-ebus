@@ -6,6 +6,7 @@ the discovered device graph and passes the per-hardware polling restrictions.
 
 from __future__ import annotations
 
+import re
 from collections import deque
 from collections.abc import Callable, Collection, Mapping, Sequence
 
@@ -26,10 +27,38 @@ from .models import (
     DeviceGraph,
     DeviceType,
     RegisterMeta,
+    declared_unused_zones,
     is_controller_circuit,
     is_heat_pump_circuit,
 )
 from .reread_plan import hmux0_sw0407_active_reads, plan_rereads
+
+# A zone or heating-circuit register (`Z2DayTemp`, `Hc3FlowTemp`) and its number. The circuit type itself is never
+# filtered: it is the evidence `declared_unused_zones` reads, and a circuit switched on later must be seen again.
+_ZONE_NUMBERED_REGISTER = re.compile(r"^(?:hc|z)(\d+)(?!circuittype$)", re.IGNORECASE)
+# Installation settings of the heating controller that change only when someone edits them: heat curves, flow limits,
+# holiday dates, hydraulic scheme, hot water charging settings. Issue #260 - on CTLV3 the map-driven pass read them on
+# every 30 s poll; reading them on the energy interval (5 min) keeps them fresh without most of that bus time.
+STATIC_CONFIG_REGISTER = re.compile(
+    r"^(?:HydraulicScheme|AdaptHeatCurve|HwcLockTime|MaxCylinderChargeTime|MultiRelaySetting|CcTimer_Config"
+    r"|CcTimer_Timeframes|CylinderChargeOffset|CylinderChargeHyst|HwcParallelLoading|HwcMaxFlowTempDesired"
+    r"|FrostOverRideTime|ContinuousHeating|(?:Hwc|Z\d+)Holiday(?:Start|End)Period"
+    r"|Hc\d+(?:HeatCurve|MaxFlowTempDesired|MinFlowTempDesired|SummerTempLimit|RoomTempSwitchOn|AutoOffMode"
+    r"|ExcessTemp|MinCoolingTempDesired|CircuitType))$",
+    re.IGNORECASE,
+)
+
+
+# Return the zone or heating-circuit number a register name belongs to, or None for any other register (and for
+# `Hc<N>CircuitType`, which must keep being read).
+def zone_register_number(name: str) -> int | None:
+    match = _ZONE_NUMBERED_REGISTER.match(name)
+    return int(match.group(1)) if match else None
+
+
+# Report whether a register is a static installation setting that is read on the energy interval only (issue #260).
+def is_static_config_register(name: str) -> bool:
+    return STATIC_CONFIG_REGISTER.match(name) is not None
 
 
 # Select a unique discovered owner for a logical register map entry.
@@ -129,6 +158,10 @@ def plan_fallback_reads(
     vwz_station_76 = vwz_station_scan_76_circuit(graph)
     sw0407_active_reads = hmux0_sw0407_active_reads(graph, runtime_definitions)
     sw0407_active_keys = {(circuit.casefold(), name.casefold()) for circuit, name in sw0407_active_reads}
+    # Heating circuits the controller declares unused (`Hc<N>CircuitType = inactive`, zone 1 never, an unreadable type
+    # never, a zone with a live room temperature never): the entity factory creates nothing for them, so reading their
+    # registers only costs bus time (issue #260: 54 of 140 reads per poll on a one-zone CTLV3).
+    unused_zones = declared_unused_zones(graph)
 
     # Add each resolved fallback candidate once.
     # map, passive-definition, and placeholder paths can nominate the same register.
@@ -148,6 +181,9 @@ def plan_fallback_reads(
             return
         # B511 counters remain passive even if their map fallback metadata changes.
         if name_key == "runstatsimmersionheaterhwc":
+            return
+        zone_number = zone_register_number(name)
+        if zone_number is not None and (circuit_key, zone_number) in unused_zones:
             return
         if (
             name_key == "status01"
@@ -177,7 +213,9 @@ def plan_fallback_reads(
 
     # Plain-`r` registers ebusd never polls: every rule lives in `reread_plan.REREAD_RULES` (#171, #193, #207,
     # #213, #227). Each read still passes `_add`, so a rule cannot bypass a passive, withheld or hardware gate.
-    for circuit, name in plan_rereads(graph, runtime_definitions, include_energy=include_energy):
+    for circuit, name in plan_rereads(
+        graph, runtime_definitions, include_energy=include_energy, include_placeholders=include_placeholders
+    ):
         _add(circuit, name)
 
     # Map-driven reads: registers with metadata not yet in the graph.
@@ -210,8 +248,17 @@ def plan_fallback_reads(
             )
         ):
             continue
-        if resolved_circuit is not None:
-            _add(resolved_circuit, name)
+        if resolved_circuit is None:
+            continue
+        # A static setting already in `find` is re-read on the energy interval only; one that is missing still gets
+        # its first read at once.
+        if (
+            not include_energy
+            and is_static_config_register(name)
+            and f"{resolved_circuit}.{name}".casefold() in (graph_key_folds)
+        ):
+            continue
+        _add(resolved_circuit, name)
 
     # Placeholder reads: discovered no-data registers whose metadata
     # resolves via the circuit alias (15-minute interval).

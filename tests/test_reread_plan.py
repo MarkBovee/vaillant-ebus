@@ -42,16 +42,20 @@ def test_rules_name_their_issue_and_keep_planning_order() -> None:
         "#233",
         "#233 SW0308",
         "#242",
+        "#259",
         "#171",
         "#213",
         "#205 SW0406",
         "#207",
         "#233",
+        "#259",
         "#233 HWC",
+        "#256",
     ]
     cadences = [rule.cadence for rule in REREAD.REREAD_RULES]
-    assert cadences[:5] == [REREAD.Cadence.ENERGY_INTERVAL] * 5
-    assert set(cadences[5:]) == {REREAD.Cadence.EVERY_POLL}
+    assert cadences[:6] == [REREAD.Cadence.ENERGY_INTERVAL] * 6
+    assert set(cadences[6:-1]) == {REREAD.Cadence.EVERY_POLL}
+    assert cadences[-1] is REREAD.Cadence.PLACEHOLDER_INTERVAL
 
 
 # Intent: only the listed B511/B524/B555 definitions are re-read; other plain-`r` definitions of the same messages and

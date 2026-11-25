@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.16.1 - 2026-11-25
+
+Fewer bus reads on systems with one heating circuit, live heat pump values that keep updating, a complete silent mode
+calendar that you can now edit, and a cleanup that also removes empty zone devices.
+
+### Fixed
+
+- **Heat pump values that stopped updating** (issue #259, thanks @schurl85). On an aroTHERM or flexoTHERM without a
+  myVAILLANT gateway, "Compressor Power", "Thermal Output", "Supply Temperature (weighted)", "Building Circuit Flow" and
+  the energy integral showed one value and then never changed. ebusd only reads these when someone asks, and nobody did.
+  The integration now reads power and thermal output on every poll, and the other three every 5 minutes.
+- **Too many reads on the bus** (issue #260, thanks @Roan-V). With a sensoCOMFORT (CTLV3) the integration read about
+  140 controller values on every poll, 54 of them for heating circuits 2 and 3 that the controller reports as inactive.
+  Inactive circuits are no longer read (their circuit type still is, so a circuit you switch on later shows up), and
+  settings that only change when someone edits them (heat curves, flow limits, holiday dates, hydraulic scheme, hot
+  water charging) are read every 5 minutes instead of every poll. On the reporter's capture that is 68 reads per poll
+  instead of 140.
+- **Silent mode calendar showed only the first time slot** (issue #256, thanks @T3le). Slots that end at midnight
+  (`24:00`) were dropped, and the second and third slot were never read again after the first time. The calendar now
+  reads all slots every 15 minutes, and only shows the slots the controller counts for that day.
+- **Empty Zone 2 and Zone 3 devices stayed after a cleanup** (owner report). The "Stale Vaillant eBUS entities" repair
+  and the purge in the options only removed a device after removing one of its entities. A device that was already
+  empty was never offered. Both now list and remove empty devices too. A device you renamed or labelled stays.
+- **Flow Temperature Target looked editable** (issue #205, thanks @Zapgla). The flow setpoint the controller calculates
+  from the heat curve showed as a slider for heating circuits 1 to 3, but ebusd can only read it. It's now a sensor.
+  The old slider entity is listed in the stale-entities repair, where you can remove it.
+
+### New
+
+- **Edit the silent mode program** (sensoCOMFORT VRC 720 with CTLV3 SW0808, issue #256). @T3le tested the write on
+  their controller: the new times showed on the display and read back correctly. You can now add, change and delete
+  silent mode slots in the calendar, like the hot water program.
+- **More compressor settings on flexoTHERM HMU00 SW0308** (issue #218, thanks @cmarqu): the heating hysteresis (D.267)
+  and the maximum residual pump head (D.231). The cooling settings don't answer on that firmware and stay off.
+- "Continuous Heating" shows `off` instead of `-26` (issue #205), which is how the controller writes "off".
+
+### Not changed
+
+- The BASS3 time programs (issue #235) stay read-only. ebusd's own write message for them is one the BASS3 doesn't
+  answer, so writing needs a new message that hasn't been tested yet.
+- The fan speed on HMUX0 SW0406 (issue #205) needs a capture that contains it.
+
 ## 1.16.0 - 2026-11-24
 
 A feature release: new calendars, the compressor settings of your heat pump, and many more readings for aroTHERM units

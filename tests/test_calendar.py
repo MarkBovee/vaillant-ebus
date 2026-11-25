@@ -209,6 +209,73 @@ async def test_dhw_calendar_deletes_and_updates_slots() -> None:
     assert controller.writes[-1] == "HwcTimer_Tuesday=0;0;00:00;00:00"
 
 
+class _StaleSlotController(_FakeTimerController):
+    """A controller whose slot messages keep the times of a removed slot, like the B555 programs of issue #256."""
+
+    # Intent: remember every slot ever written per day next to the counted slots.
+    # Why: a B555 slot read past the count still answers the old times; only the count message says it is gone.
+    def __init__(self) -> None:
+        super().__init__(with_temperature=False, count_name="Timeslots")
+        self.memory: dict[str, dict[int, tuple[str, str, str]]] = {day: {} for day in CALENDAR.WEEKDAYS}
+
+    # Intent: answer the count from the counted slots and a slot from memory, also above the count.
+    # Why: this is the leftover the calendar and the read-back must ignore.
+    async def read(self, circuit: str, name: str, field: str = "", force: bool = False) -> str:
+        if name == "HwcTimer_Timeslots" or not name[-1].isdigit():
+            return await super().read(circuit, name, field, force)
+        day, index = name[len("HwcTimer_") : -1], int(name[-1])
+        start, end, _ = self.memory[day].get(index, ("00:00", "00:00", "-"))
+        return f"{start};{end}"
+
+    # Intent: apply the write like the base controller and keep the written slot in memory.
+    # Why: shrinking a day lowers the count but leaves the old slot message as it was.
+    async def write(self, circuit: str, name: str, value: str, **kwargs: object) -> bool:
+        await super().write(circuit, name, value, **kwargs)
+        parts = value.split(";")
+        if int(parts[1]) > 0:
+            self.memory[name[len("HwcTimer_") :]][int(parts[0])] = (parts[2], parts[3], "-")
+        return True
+
+
+# Intent: removing a slot succeeds although the controller still answers the removed slot's times above the count.
+# Why: issue #256 - without the count cut the read-back still showed the removed slot and the change failed after it
+#      had been written.
+async def test_calendar_removes_a_slot_whose_message_keeps_the_old_times() -> None:
+    controller = _StaleSlotController()
+    controller.days["Tuesday"] = [("03:00", "03:10", "-"), ("03:20", "03:30", "-")]
+    controller.memory["Tuesday"] = {0: ("03:00", "03:10", "-"), 1: ("03:20", "03:30", "-")}
+    calendar = _writable_calendar(controller)
+
+    await calendar.async_delete_event("Tuesday:1")
+
+    assert controller.days["Tuesday"] == [("03:00", "03:10", "-")]
+    assert controller.memory["Tuesday"][1] == ("03:20", "03:30", "-")
+    assert controller.writes == ["HwcTimer_Tuesday=0;1;03:00;03:10"]
+
+
+# Intent: the calendar shows only the slots the count message reports, and every slot when there is no count.
+# Why: issue #256 - a removed slot keeps its times in the slot message, so without the count it would stay visible.
+def test_calendar_hides_slots_above_the_count() -> None:
+    registers = {
+        "basv.SilentTimer_Thursday0": MagicMock(value={"value": "00:00;07:30"}),
+        "basv.SilentTimer_Thursday1": MagicMock(value={"value": "21:00;24:00"}),
+    }
+    start, end = datetime(2026, 8, 27, 0, 0), datetime(2026, 8, 28, 0, 0)
+    without_count = EbusdCalendar(_coordinator(registers=registers), _entry(), "Silent", "SilentTimer")
+    assert len(without_count._events_between(start, end)) == 2
+
+    registers["basv.SilentTimer_Timeslots"] = MagicMock(value={"value": "2;2;2;1;2;2;2"})
+    with_count = EbusdCalendar(_coordinator(registers=registers), _entry(), "Silent", "SilentTimer")
+    events = with_count._events_between(start, end)
+    assert [(event.start.hour, event.end.hour) for event in events] == [(0, 7)]
+    # A slot that ends at `24:00` ends at midnight (issue #256: it vanished from the calendar).
+    midnight = _parse_slot(date(2026, 8, 27), "21:00;24:00", "Silent")
+    assert midnight is not None and (midnight.start, midnight.end) == (
+        datetime(2026, 8, 27, 21, 0),
+        datetime(2026, 8, 28, 0, 0),
+    )
+
+
 # Intent: a day with more slots than the configuration can read is not rewritten.
 # Why: issue #208 - only slot 0 decodes on that config, so a rewrite would silently drop the hidden slot.
 async def test_dhw_calendar_refuses_a_day_with_hidden_slots() -> None:
