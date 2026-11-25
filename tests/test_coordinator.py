@@ -7848,6 +7848,21 @@ async def test_central_write_lets_the_tested_silent_mode_program_through() -> No
         assert coordinator.timer_program_read_only("ctlv3", "SilentTimer") is False
 
 
+# Intent: a silent mode program on a controller other than the tested CTLV3 SW0808 stays read-only, even when its
+#         configuration lists every slot.
+# Why: audit of 1.16.1 - the editable calendar is created wherever `SilentTimer_Monday1` is listed; the write was only
+#      tested on SW0808, so the central guard must refuse it elsewhere.
+def test_silent_mode_stays_read_only_on_untested_controllers() -> None:
+    lines = load_find_lines("community/flexotherm_ctlv2_cooling_discovery.yaml", after=True)
+    graph = DISCOVERY.DiscoveryService.build_device_graph(
+        lines + ["ctlv2 SilentTimer_Monday0 = 00:00;07:30", "ctlv2 SilentTimer_Monday1 = 21:00;24:00"]
+    )
+
+    assert ("ctlv2", "silenttimer") in RUNTIME_DEFINITIONS.read_only_timer_programs(graph)
+    tested = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE256_FIXTURE, after=True))
+    assert ("ctlv3", "silenttimer") not in RUNTIME_DEFINITIONS.read_only_timer_programs(tested)
+
+
 # Intent: slot messages the integration defines get no sensor entity; ebusd's own slot-0 messages keep theirs.
 # Why: 88 BASS3 and 14 silent mode slots as sensors would be entities without meaning, but existing users of the
 #      CTLV3 `SilentTimer_Monday0` sensor must keep it.
@@ -8078,13 +8093,15 @@ async def test_heat_pump_live_values_are_re_read_at_their_cadence() -> None:
     assert not names & {"CurrentConsumedPower", "CurrentYieldPower", "SupplyTempWeighted", "EnergyIntegral"}
 
 
-# Resolve the logical `ctlv2` map circuit to the discovered controller, as the coordinator does.
+# Intent: resolve the logical `ctlv2` map circuit to the discovered controller, as the coordinator does.
+# Why: the planner tests need the same circuit resolution without a coordinator.
 def _controller_resolver(graph):
     controller = graph.heating_controller_result().node
     return lambda circuit: controller.circuit if controller and circuit.startswith("ctlv") else None
 
 
-# Plan one poll (or an energy-interval poll) of the map-driven and re-read passes for a list of `find` lines.
+# Intent: plan one poll (or an energy-interval poll) of the map-driven and re-read passes for `find` lines.
+# Why: the #260 tests compare what one poll reads with and without the energy interval.
 def _planned_reads(lines: list[str], energy: bool = False) -> list[tuple[str, str]]:
     graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
     keys = {key.casefold() for key in (*graph.raw_registers, *graph.placeholder_registers)}
@@ -8151,6 +8168,7 @@ def test_static_settings_follow_the_energy_interval() -> None:
     assert FALLBACK_PLANNER.zone_register_number("Hc2CircuitType") is None
     assert FALLBACK_PLANNER.zone_register_number("Z12QuickVetoTemp") == 12
     assert FALLBACK_PLANNER.zone_register_number("HwcStatus") is None
+    assert FALLBACK_PLANNER.zone_register_number("Hc10CircuitType") is None
 
 
 # Intent: the silent mode calendar slots are re-read every 15 minutes, count first, only the slots the controller

@@ -35,7 +35,7 @@ from .reread_plan import hmux0_sw0407_active_reads, plan_rereads
 
 # A zone or heating-circuit register (`Z2DayTemp`, `Hc3FlowTemp`) and its number. The circuit type itself is never
 # filtered: it is the evidence `declared_unused_zones` reads, and a circuit switched on later must be seen again.
-_ZONE_NUMBERED_REGISTER = re.compile(r"^(?:hc|z)(\d+)(?!circuittype$)", re.IGNORECASE)
+_ZONE_NUMBERED_REGISTER = re.compile(r"^(?:hc|z)(\d+)(?!\d)(?!circuittype$)", re.IGNORECASE)
 # Installation settings of the heating controller that change only when someone edits them: heat curves, flow limits,
 # holiday dates, hydraulic scheme, hot water charging settings. Issue #260 - on CTLV3 the map-driven pass read them on
 # every 30 s poll; reading them on the energy interval (5 min) keeps them fresh without most of that bus time.
@@ -255,7 +255,7 @@ def plan_fallback_reads(
         if (
             not include_energy
             and is_static_config_register(name)
-            and f"{resolved_circuit}.{name}".casefold() in (graph_key_folds)
+            and f"{resolved_circuit}.{name}".casefold() in graph_key_folds
         ):
             continue
         _add(resolved_circuit, name)

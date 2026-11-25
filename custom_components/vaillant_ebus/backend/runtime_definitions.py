@@ -429,6 +429,13 @@ def read_only_timer_programs(graph: DeviceGraph | None) -> frozenset[tuple[str, 
     for definition in bass3_timer_definitions(graph):
         circuit, name = definition.split(",", 3)[1:3]
         programs.add((circuit.casefold(), name.split("_", 1)[0].casefold()))
+    # A silent mode program on any controller other than the tested CTLV3 SW0808 stays read-only, also when its
+    # configuration lists all slots (which would create an editable calendar).
+    if graph is not None and not silent_timer_slot_definitions(graph):
+        for key in (*graph.raw_registers, *graph.placeholder_registers):
+            circuit, _, name = key.partition(".")
+            if name.casefold().startswith("silenttimer_"):
+                programs.add((circuit.casefold(), "silenttimer"))
     return frozenset(programs)
 
 
