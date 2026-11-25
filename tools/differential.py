@@ -3,6 +3,7 @@
 
     PYTHONHASHSEED=0 python tools/differential.py dump <tree> <out.json>
     python tools/differential.py compare <a.json> <b.json> [--limit N]
+    python tools/differential.py against <ref> [--limit N]   # working tree against a git ref, in one step
 
 `dump` records, for every community discovery fixture (raw and post-define find lines), the runtime `define` strings the
 coordinator sends, the registers it withholds, the active reads it plans (all answered with no value) and the entity
@@ -10,6 +11,10 @@ descriptions the factory generates, plus the full REGISTER_MAP and MULTI_FIELD_F
 for those decisions when their JSON files are identical. Run it with `PYTHONHASHSEED=0`: placeholder registers are a
 set, and without a fixed seed only the order of the read lists differs between runs. The coordinator clock is frozen
 at 2026-01-15 12:00, because the day and month energy registers carry the date in their message id.
+
+`against` exports the ref with `git archive` into a temporary folder, dumps it and the working tree (uncommitted
+changes included) in two fresh processes with `PYTHONHASHSEED=0`, and compares them. It replaces the temporary git
+worktree that earlier sessions used, whose forced removal the git guard blocks.
 
 It covers the pure builders, not the coordinator lifecycle, repairs, cleanup, config flow or writes. Use it to prove
 that a refactor or a merge kept the decisions, as done for the 1.12.0 structure merge (58 fixtures, byte-identical).
@@ -21,14 +26,19 @@ import argparse
 import asyncio
 import dataclasses
 import datetime
+import io
 import json
 import os
+import subprocess
 import sys
+import tarfile
 import tempfile
 from collections import Counter
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 # Turn a dataclass, container or scalar into JSON-safe data with a stable order for sets.
@@ -213,8 +223,34 @@ def compare_files(first: Path, second: Path, limit: int) -> int:
     return 1 if lines else 0
 
 
-# Dispatch the two subcommands.
-# One tool for both halves keeps the harness and its comparison in step.
+# Write the files of a git ref into `dest` with `git archive`, without a worktree.
+def export_ref(ref: str, dest: Path, repo: Path = ROOT_DIR) -> None:
+    archive = subprocess.run(["git", "archive", "--format=tar", ref], capture_output=True, check=True, cwd=repo).stdout
+    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+        tar.extractall(dest, filter="data")
+
+
+# Dump the ref and the working tree in separate processes and compare them; the exit code says whether they match.
+# Separate processes keep the two trees' modules apart, and the fixed hash seed keeps set order stable.
+def compare_against(ref: str, limit: int) -> int:
+    with tempfile.TemporaryDirectory(prefix="differential-") as scratch:
+        base = Path(scratch) / "base"
+        base.mkdir()
+        export_ref(ref, base)
+        env = {**os.environ, "PYTHONHASHSEED": "0"}
+        outputs = []
+        for label, tree in (("base", base), ("head", ROOT_DIR)):
+            out = Path(scratch) / f"{label}.json"
+            subprocess.run(
+                [sys.executable, str(Path(__file__).resolve()), "dump", str(tree), str(out)], env=env, check=True
+            )
+            outputs.append(out)
+        print(f"{ref} against the working tree:")
+        return compare_files(outputs[0], outputs[1], limit)
+
+
+# Dispatch the three subcommands.
+# One tool for all parts keeps the harness and its comparison in step.
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -225,7 +261,12 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("first", type=Path)
     compare.add_argument("second", type=Path)
     compare.add_argument("--limit", type=int, default=25)
+    against = sub.add_parser("against")
+    against.add_argument("ref")
+    against.add_argument("--limit", type=int, default=25)
     args = parser.parse_args(argv)
+    if args.command == "against":
+        return compare_against(args.ref, args.limit)
     if args.command == "dump":
         if os.environ.get("PYTHONHASHSEED") != "0":
             print("warning: set PYTHONHASHSEED=0, otherwise only the order of the read lists will differ")

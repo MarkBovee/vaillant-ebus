@@ -18,9 +18,10 @@ does not cover this service.
    call; the protocol has no session ID to protect against those races.
    Run only one export per ebusd endpoint at a time, including across separate
    Home Assistant instances.
-3. Read both newly written files from the paths in the service log/notification.
-   Use an HA-MCP file-read tool when available; use the documented read-only SSH
-   path only if HA-MCP cannot expose the file.
+3. Run `python tools/smoke_test.py`. It reads the two newest dumps over the read-only SSH path (HA-MCP cannot read
+   files) and does steps 4 and 5 below; exit code 0 means they passed, and a `DEVIATION` line goes into the release
+   plan. Call the export service without `return_response`, and wait until `ha_get_integration` reports the entry as
+   loaded after a restart. The steps below describe what the tool checks.
 4. Parse both files as YAML and verify `metadata`, `raw_find_lines`,
    `before_registers`, and `registers`. For the zero-second dump, require
    `grab_status: not_requested` and `grab_captured_duration: 0`. On the owner's
@@ -45,7 +46,7 @@ does not cover this service.
 ## Release Versioning
 
 - The release version must stay identical across `pyproject.toml`, `custom_components/vaillant_ebus/manifest.json`, and the top `## <version>` heading in `CHANGELOG.md`.
-- `tools/version.py` is the single source of truth. Bump with `python tools/version.py bump X.Y.Z`, then add the matching `## X.Y.Z - YYYY-MM-DD` CHANGELOG section (release notes are human-written).
+- `tools/version.py` is the single source of truth. Bump with `python tools/version.py bump X.Y.Z`; it also puts an empty `## X.Y.Z - YYYY-MM-DD` heading on top of the CHANGELOG. Write the notes under it by hand.
 - `tests/test_version_consistency.py` runs `python tools/version.py check`, so CI fails on drift. Never hand-edit one version file without updating the other two.
 - Publishing a release means pushing the release branch and an annotated `v*` tag; the CI `release` job first runs the shared checks (`.github/workflows/checks.yml`), then the release gate (`tools/release_gate.py`: hassfest and HACS validation must be green on the tagged commit, it waits up to 15 minutes), then builds the zip and creates or updates the GitHub release from the top CHANGELOG section. Older releases are in `docs/changelog-archive.md`; only the top section of `CHANGELOG.md` is published. Do not merge the release branch until it has been tested on Home Assistant.
 
@@ -66,7 +67,8 @@ does not cover this service.
 
 ## Release Procedure (what 1.10.5 followed)
 
-1. Plan in `docs/plan-X.Y.Z.md` (git-ignored through `docs/plan-*.md`): inbox scan, evidence table, must/should/could/out.
+1. Plan in `docs/plan-X.Y.Z.md` (git-ignored through `docs/plan-*.md`): inbox scan (`python tools/gh_inbox.py`),
+   evidence table, must/should/could/out.
    Fetch dumps with `python tools/fetch_attachments.py <issue> --out <scratch>/issueN` (add `--discussion` for a
    discussion); it reports attachments that are already fixtures.
 2. Branch `release/X.Y.Z`; fixtures first with a failing test, then the fix; classify each register as `confirmed`,
@@ -78,6 +80,10 @@ does not cover this service.
    smoke test, and record deviations in the plan.
 5. Commit, push the branch and open the PR. **Wait for all PR checks (including hassfest and HACS validation) to be
    green before pushing the annotated `vX.Y.Z` tag**: the tag triggers the release job at once, and in 1.10.5 a tag
-   pushed early published a release whose hassfest check failed, so the tag had to be moved. The release gate now refuses that case, but still wait for green checks. Merge only after the
-   owner agrees. Then reply on the affected issues and discussions with `tools/gh_reply.py`, once the owner has
-   approved the texts.
+   pushed early published a release whose hassfest check failed, so the tag had to be moved. The release gate now
+   refuses that case, but still wait for green checks.
+6. Before the merge, ask whether anything else belongs in the release, and run `tools/gh_inbox.py` once more. When the
+   owner says to release (or "merge and tag"), that one approval covers the rest: `gh pr merge --merge` (auto-merge is
+   off), update `main`, push the annotated tag `vX.Y.Z` with message `Release X.Y.Z` on the merge commit, wait for the
+   release job, then post the replies whose text the owner approved (`tools/gh_reply.py --batch`, `--dry-run` first)
+   and delete the drafts in `.research-scratch/replies/`. Anything the owner did not name still needs its own yes.

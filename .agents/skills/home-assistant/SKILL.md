@@ -1,6 +1,6 @@
 ---
 name: home-assistant
-description: "Use when developing, testing, or deploying Home Assistant custom_components via SSH/SMB on a local HA instance. Covers SSH access, HA API, entity registry, supervisor ops, deploy workflow, and ebusd TCP interaction."
+description: "Use when developing, testing, or deploying Home Assistant custom_components via SSH on a local HA instance. Covers SSH access, HA API, entity registry, supervisor ops, deploy workflow, and ebusd TCP interaction."
 triggers:
   # HA-specific (no general programming terms)
   - home assistant
@@ -27,7 +27,6 @@ triggers:
   - push branch to HA
   - test on HA
   - install integration
-  - SMB upload
   - build zip
   - unzip HA
   # Registry
@@ -104,31 +103,30 @@ When reporting HA findings in GitHub issues or discussions, use clear English an
 Write complete sentences with correct punctuation, separate paragraphs with blank lines, and put
 lists or distinct points on separate lines. Never post compressed or run-on prose.
 
-SSH/SMB workflow for custom_components on a local HA instance. Includes ebusd TCP interaction for debugging the Vaillant heat pump.
+SSH workflow for custom_components on a local HA instance. Includes ebusd TCP interaction for debugging the Vaillant heat pump.
 
 ## Deploy workflow
 
-**ALWAYS use `tools/deploy_ha.sh` — never write ad-hoc SSH/SMB commands.**
+**ALWAYS use `tools/deploy_ha.sh`; never write ad-hoc SSH commands.**
 
 ```bash
-# Full deploy: validate + build + upload + unzip + restart HA
-./tools/deploy_ha.sh --restart
+# Dry run first: builds the zip and tests the SSH login
+bash tools/deploy_ha.sh --skip-validate --dry-run
 
-# Quick iteration (skip ruff/pytest/compileall):
-./tools/deploy_ha.sh --restart --skip-validate
+# Deploy (validate first unless tools/validate.py was green on this same commit)
+bash tools/deploy_ha.sh
+bash tools/deploy_ha.sh --skip-validate
 ```
 
-The script loads credentials from `.env`, builds a clean zip (excludes `__pycache__`), uploads via SMB, unzips on HA, and optionally restarts HA.
+The script is not executable, so call it through `bash`. It runs `tools/validate.py` unless `--skip-validate` is given,
+then `tools/deploy_ha.py`: credentials from `.env`, a clean zip without `__pycache__`, upload over an SSH exec channel
+(the add-on has no SFTP), a verified backup in `/config/.deploy_backups/`, and `sudo -n` for the writes. Details in
+docs/release-process.md "Deploying To The Owner's Home Assistant". Restart with HA-MCP `ha_restart`, not `--restart`.
 
-`tools/deploy_ha.sh` and `tools/deploy_ha.py` are checked in (without secrets). Windows setup (SSH add-on without SFTP, `/config` owned by root, `sudo -n`, backup in `/config/.deploy_backups/`): see docs/release-process.md "Deploying To The Owner's Home Assistant". Restart with HA-MCP `ha_restart`.
-
-**If `tools/deploy_ha.sh` doesn't exist**, create it at `<repo>/tools/deploy_ha.sh` with:
-1. Load HA_HOST/HA_USER/HA_PASSWORD/HA_SSH_PASSWORD from `.env`
-2. Validate: `ruff check . && pytest -q && compileall`
-3. Build zip from `custom_components/<domain>/` (no `__pycache__`, no dir prefix)
-4. SMB upload to HA
-5. SSH unzip (replace all files)
-6. Restart HA via supervisor API
+After the restart, wait until HA-MCP `ha_get_integration` reports the `vaillant_ebus` entry as loaded before reading
+values; HA-MCP answers `CONNECTION_FAILED` for a minute or two while Home Assistant starts. Foreground `sleep` is blocked:
+wait with a background sleep. For the release smoke test, call `vaillant_ebus.export_discovery_dump` without
+`return_response` (once with `grab_duration: 0`, once with 1), then run `python tools/smoke_test.py`.
 
 **CRITICAL: `__pycache__/`** — `rm -rf *` and `rm -f *.py` do not remove hidden dirs. Always use `rm -rf /config/custom_components/<domain>/` (the whole directory) instead of deleting selectively.
 
@@ -185,7 +183,6 @@ curl -s --max-time 10 http://supervisor/core/logs \
 |-----|---------|
 | `HA_HOST` | HA hostname/IP |
 | `HA_SSH_USER/PASSWORD` | SSH user + password |
-| `HA_USER/PASSWORD` | SMB share credentials |
 
 ## ebusd TCP Protocol
 
@@ -343,7 +340,7 @@ Addon: `b4d7ad18_ebusd`, `--accesslevel=*`, `--enabledefine`. No `--configpath` 
 
 ## Avoid
 
-- **Ad-hoc SSH/SMB deploy commands** — ALWAYS use `tools/deploy_ha.sh --restart`
+- **Ad-hoc SSH deploy commands**: always use `bash tools/deploy_ha.sh`
 - Reload as a replacement for restart after registry/external changes
 - `git archive` without committing — archive builds from the committed tree, not the working tree
 - Assuming that `state: None` in config_entries JSON means "not loaded" (HA 2026.7+ does not persist state)
