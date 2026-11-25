@@ -32,12 +32,32 @@ class OrphanEntity:
 
 
 @dataclass(frozen=True)
+class EmptyDevice:
+    """One device of this integration that no entity registry row points to any more."""
+
+    device_id: str
+    label: str
+
+
+@dataclass(frozen=True)
 class OrphanReport:
-    """Orphans that may be removed, rows that are kept because the user customised them, and dormant rows."""
+    """Orphans that may be removed, rows that are kept because the user customised them, dormant rows and empty
+    devices."""
 
     orphans: tuple[OrphanEntity, ...]
     kept_customized: tuple[OrphanEntity, ...]
     dormant: tuple[OrphanEntity, ...] = ()
+    empty_devices: tuple[EmptyDevice, ...] = ()
+
+    # Report whether the user has anything to confirm: rows to remove, rows to switch off or devices to remove.
+    @property
+    def has_work(self) -> bool:
+        return bool(self.orphans or self.dormant or self.empty_devices)
+
+    # Report whether the confirmation removes registry rows or devices (switching rows off needs no removal).
+    @property
+    def has_removals(self) -> bool:
+        return bool(self.orphans or self.empty_devices)
 
 
 @dataclass(frozen=True)
@@ -203,6 +223,50 @@ def find_dormant(
     return tuple(dormant), tuple(kept)
 
 
+# Report whether a device belongs to this integration, has no entity row left and carries no user data.
+# A device the user renamed or labelled stays, because that is user data like a renamed entity.
+def _device_may_go(device: Any, domain: str, devices_with_entities: Collection[str]) -> bool:
+    return (
+        any(identifier[0] == domain for identifier in device.identifiers)
+        and device.id not in devices_with_entities
+        and not getattr(device, "name_by_user", None)
+        and not getattr(device, "labels", None)
+    )
+
+
+# Return the ids of the devices that at least one entity registry row points to.
+def _devices_with_entities(registry: Any) -> set[str]:
+    return {entry.device_id for entry in registry.entities.values() if entry.device_id}
+
+
+# Return the circuit names a device is registered under (its identifiers of this domain), casefolded.
+def _device_circuits(device: Any, domain: str) -> set[str]:
+    return {str(identifier[1]).casefold() for identifier in device.identifiers if identifier[0] == domain}
+
+
+# List the devices of this config entry that hold no entity row any more.
+# Earlier releases created devices for unused zones (Zone 2, Zone 3 on a one-zone system); once their entities were
+# removed, by hand or by an older cleanup, the empty device stayed, and the removal of empty devices only ran as a
+# side effect of removing an entity, so a purge with no entity to remove left them for ever. A device whose circuit
+# still owns a generated entity is never listed, so a device whose rows are being written right now is safe.
+def find_empty_devices(
+    registry: Any,
+    devices: Iterable[Any],
+    domain: str,
+    live_circuits: Collection[str],
+) -> tuple[EmptyDevice, ...]:
+    with_entities = _devices_with_entities(registry)
+    empty: list[EmptyDevice] = []
+    for device in devices:
+        if not _device_may_go(device, domain, with_entities):
+            continue
+        if _device_circuits(device, domain) & set(live_circuits):
+            continue
+        label = getattr(device, "name", None) or device.id
+        empty.append(EmptyDevice(device_id=device.id, label=str(label)))
+    return tuple(empty)
+
+
 # Build the casefolded `circuit.name` key of an entity description, the key of its parent register.
 # The runtime-defined register set, the no-data disabling and the cleanup report must agree on one key format.
 def register_key_fold(description: Any) -> str:
@@ -232,13 +296,15 @@ def registry_platforms(registry: Any, entry_id: str) -> dict[str, str]:
 # `discovery_ready` also excludes the window where entities come from the cache and no live discovery has run yet, in
 # which a cached `unknown` state would look like a register without data. Registers the integration defined itself
 # (passive definitions) are never offered as dormant: they have no value until the gateway sends the frame, a user may
-# have switched them on on purpose, and the coordinator leaves them alone for the same reason.
+# have switched them on on purpose, and the coordinator leaves them alone for the same reason. `devices` are the device
+# entries of this config entry (Home Assistant's `async_entries_for_config_entry`); empty ones are listed for removal.
 def stale_report(
     registry: Any,
     states: Any,
     entry_id: str,
     domain: str,
     coordinator: Any,
+    devices: Iterable[Any] = (),
 ) -> OrphanReport | None:
     if coordinator is None or coordinator.ebus is None or not coordinator.ebus.is_connected:
         return None
@@ -253,7 +319,16 @@ def stale_report(
     }
     report = find_orphans(registry, states, entry_id, domain, generated, coordinator.unused_zone_numbers())
     dormant, kept = find_dormant(registry, states, entry_id, domain, switched_off)
-    return OrphanReport(orphans=report.orphans, kept_customized=(*report.kept_customized, *kept), dormant=dormant)
+    live_circuits = {
+        str(getattr(entity, "device_circuit", None) or "").casefold() for entity in coordinator.entities
+    } - {""}
+    empty_devices = find_empty_devices(registry, devices, domain, live_circuits)
+    return OrphanReport(
+        orphans=report.orphans,
+        kept_customized=(*report.kept_customized, *kept),
+        dormant=dormant,
+        empty_devices=empty_devices,
+    )
 
 
 # Switch the given entity registry rows off as disabled by the integration and return how many were changed.
@@ -275,7 +350,8 @@ def disable_dormant(registry: Any, entity_ids: Iterable[str], disabler: Any) -> 
 
 # Remove the given registry entities, then those devices of this config entry that have no entity left.
 # An empty zone or solar device would otherwise stay in the device list after its entities are gone. A device the
-# user renamed or labelled stays, because that is user data like a renamed entity. The caller passes the device entries
+# user renamed or labelled stays (`_device_may_go`). The entity list may be empty: then only the devices that are
+# already empty go, which is how a leftover Zone 2 or Zone 3 device is removed. The caller passes the device entries
 # of this config entry (Home Assistant's `async_entries_for_config_entry`), because iterating the registry yields ids on
 # older versions and reading `DeviceEntry.config_entries` is deprecated since 2026.10.
 def remove_orphans(
@@ -289,15 +365,10 @@ def remove_orphans(
     for entity_id in entity_ids:
         registry.async_remove(entity_id)
         removed += 1
-    devices_with_entities = {entry.device_id for entry in registry.entities.values() if entry.device_id}
+    devices_with_entities = _devices_with_entities(registry)
     removed_devices = 0
     for device in list(devices):
-        if (
-            any(identifier[0] == domain for identifier in device.identifiers)
-            and device.id not in devices_with_entities
-            and not getattr(device, "name_by_user", None)
-            and not getattr(device, "labels", None)
-        ):
+        if _device_may_go(device, domain, devices_with_entities):
             device_registry.async_remove_device(device.id)
             removed_devices += 1
     return RemovalResult(entities=removed, devices=removed_devices)
@@ -306,9 +377,28 @@ def remove_orphans(
 # Describe a few orphans in one text block for the confirmation step.
 # The user confirms a removal only when the names are visible; a long list is cut with a count of the rest.
 def preview_text(orphans: Collection[OrphanEntity], limit: int = PREVIEW_LIMIT) -> str:
-    if not orphans:
+    return _preview_lines([f"- {item.label} ({item.entity_id})" for item in orphans], limit)
+
+
+# Cut a list of preview lines to `limit` lines plus a count of the rest; an empty list reads "- none".
+def _preview_lines(lines: list[str], limit: int = PREVIEW_LIMIT) -> str:
+    if not lines:
         return "- none"
-    shown = [f"- {item.label} ({item.entity_id})" for item in list(orphans)[:limit]]
-    if len(orphans) > limit:
-        shown.append(f"- ... and {len(orphans) - limit} more")
+    shown = lines[:limit]
+    if len(lines) > limit:
+        shown.append(f"- ... and {len(lines) - limit} more")
     return "\n".join(shown)
+
+
+# Build the text placeholders the repair issue, the repair flow and the options purge show for one report.
+# All three screens describe the same report, so they share one builder instead of three copies.
+def report_placeholders(report: OrphanReport) -> dict[str, str]:
+    return {
+        "count": str(len(report.orphans)),
+        "entities": preview_text(report.orphans),
+        "dormant_count": str(len(report.dormant)),
+        "dormant": preview_text(report.dormant),
+        "device_count": str(len(report.empty_devices)),
+        "devices": _preview_lines([f"- {device.label}" for device in report.empty_devices]),
+        "kept": str(len(report.kept_customized)),
+    }

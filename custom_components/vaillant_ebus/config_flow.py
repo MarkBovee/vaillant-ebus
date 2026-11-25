@@ -203,9 +203,11 @@ class VaillantOptionsFlow(OptionsFlow):
         """Remove registry entities that no entity provides any more, after a preview and a confirmation."""
         entry_id = self._config_entry.entry_id
         registry = entity_registry.async_get(self.hass)
+        devices = device_registry.async_get(self.hass)
+        device_entries = device_registry.async_entries_for_config_entry(devices, entry_id)
         coordinator = self.hass.data.get(DOMAIN, {}).get(entry_id)
         # The list is rebuilt on submit: states may have changed while the form was open.
-        report = cleanup.stale_report(registry, self.hass.states, entry_id, DOMAIN, coordinator)
+        report = cleanup.stale_report(registry, self.hass.states, entry_id, DOMAIN, coordinator, device_entries)
         if report is None:
             _LOGGER.error("Refusing to purge Vaillant eBUS entities without active discovery")
             return self.async_abort(reason="purge_unavailable")
@@ -213,14 +215,9 @@ class VaillantOptionsFlow(OptionsFlow):
             if not user_input.get("confirm"):
                 return self.async_abort(reason="purge_not_confirmed")
             removed = cleanup.RemovalResult(entities=0, devices=0)
-            if report.orphans:
-                devices = device_registry.async_get(self.hass)
+            if report.has_removals:
                 removed = cleanup.remove_orphans(
-                    registry,
-                    devices,
-                    DOMAIN,
-                    [item.entity_id for item in report.orphans],
-                    device_registry.async_entries_for_config_entry(devices, entry_id),
+                    registry, devices, DOMAIN, [item.entity_id for item in report.orphans], device_entries
                 )
             switched_off = cleanup.disable_dormant(
                 registry, [item.entity_id for item in report.dormant], RegistryEntryDisabler.INTEGRATION
@@ -234,17 +231,11 @@ class VaillantOptionsFlow(OptionsFlow):
                 len(report.kept_customized),
             )
             return self.async_abort(reason="entities_purged")
-        if not report.orphans and not report.dormant:
+        if not report.has_work:
             return self.async_abort(reason="nothing_to_purge")
         return self.async_show_form(
             step_id="purge_entities",
-            description_placeholders={
-                "count": str(len(report.orphans)),
-                "entities": cleanup.preview_text(report.orphans),
-                "dormant_count": str(len(report.dormant)),
-                "dormant": cleanup.preview_text(report.dormant),
-                "kept": str(len(report.kept_customized)),
-            },
+            description_placeholders=cleanup.report_placeholders(report),
             data_schema=vol.Schema({vol.Required("confirm", default=False): cv.boolean}),
         )
 

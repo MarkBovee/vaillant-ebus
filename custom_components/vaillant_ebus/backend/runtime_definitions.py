@@ -151,15 +151,16 @@ HEAT_PUMP_SETTING_LIMITS = "limits,,IGN:5,,,"
 HEAT_PUMP_SETTINGS: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
     ("CompressorStartHeating", "05ff341e", "value,,SIN,,°min,", ("hmu00_sw0522", "hmux0_sw0407", "hmu00_sw0308")),
     ("CompressorStartCooling", "05ff3421", "value,,SIN,,°min,", ("hmu00_sw0522", "hmux0_sw0407")),
-    ("CompressorHysteresisHeat", "05ff3443", "value,,SIN,16,K,", ("hmu00_sw0522", "hmux0_sw0407")),
+    ("CompressorHysteresisHeat", "05ff3443", "value,,SIN,16,K,", ("hmu00_sw0522", "hmux0_sw0407", "hmu00_sw0308")),
     ("CompressorHysteresisCool", "05ff353f", "value,,SIN,16,K,", ("hmu00_sw0522", "hmux0_sw0407")),
-    ("MaxResidualHead", "05ff341f", "value,,UIN,,mbar,", ("hmu00_sw0522", "hmux0_sw0407")),
+    ("MaxResidualHead", "05ff341f", "value,,UIN,,mbar,", ("hmu00_sw0522", "hmux0_sw0407", "hmu00_sw0308")),
 )
 HEAT_PUMP_SETTING_NAMES = frozenset(name for name, *_ in HEAT_PUMP_SETTINGS)
 
 
 # Build the installer setting reads for the heat pump owners with evidence (owner HMU00, HMUX0 SW0407 profile, and
-# D.230 on HMU00 SW0308). Plain `r`: the energy poll re-reads them, nobody else asks for them.
+# on HMU00 SW0308 D.230, D.267 and D.231, the three ids issue #218 read there; 3421 and 353f answer too short).
+# Plain `r`: the energy poll re-reads them, nobody else asks for them.
 def heat_pump_setting_definitions(graph: DeviceGraph | None) -> list[str]:
     if graph is None:
         return []
@@ -272,6 +273,13 @@ BOILER_PLAIN_READ_ENERGY_REGISTERS = frozenset({"StatFuelSum", "StatFuelSumHc", 
 # #233 and the brine pressure of issue #251. Air/water units answer the B51A source reads with a 3-byte stub; the failed
 # read puts the register in the graph's error registers, so it is not read again.
 HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS = frozenset({"SourceTempInput", "SourceTempOutput", "SourcePressure"})
+# Heat pump live values that ebusd's HMU CSV defines as plain `r` (`B51A 05ff32xx`, checked with `find -f` on the
+# owner's HMU00): issue #259, they froze after the first read on an aroTHERM without a gateway. Power and yield
+# follow the compressor, so they are read every poll; flow, weighted supply temperature and the energy integral change
+# slowly and follow the energy interval. On a bus with a myVAILLANT gateway its reads keep them fresh as well. The
+# decoding is ebusd's own; each read still passes the planner's gate (error, unreliable and withheld registers).
+HEAT_PUMP_LIVE_EVERY_POLL_REGISTERS = frozenset({"CurrentConsumedPower", "CurrentYieldPower"})
+HEAT_PUMP_LIVE_ENERGY_REGISTERS = frozenset({"SupplyTempWeighted", "BuildingCircuitFlow", "EnergyIntegral"})
 # Controller hot water circulation pump state, a plain `r` message in ebusd's CTLV2 configuration (issue #233).
 HWC_CIRCULATION_PUMP_STATUS = "HwcCircPumpStatus"
 
@@ -411,13 +419,23 @@ def calendar_slot_register_keys(graph: DeviceGraph | None) -> frozenset[str]:
 
 
 # Weekly programs that the integration reads over its own `B555` definitions but must not write: their write
-# message was never tested on that controller (silent mode on CTLV3, every BASS3 program). `TimerProgramAccess`
-# refuses a write to these before the first bus write. Returns (casefolded circuit, casefolded prefix) pairs.
+# message was never tested on that controller (every BASS3 program: ebusd's `Z1Timer_<Day>` write is the B524 message
+# the BASS3 answers empty). The CTLV3 SW0808 silent mode program is writable since issue #256: the reporter wrote
+# ebusd's own `SilentTimer_<Day>` slot by slot in the integration's order, and read-back and display matched.
+# `TimerProgramAccess` refuses a write to these before the first bus write. Returns (casefolded circuit, casefolded
+# prefix) pairs.
 def read_only_timer_programs(graph: DeviceGraph | None) -> frozenset[tuple[str, str]]:
     programs: set[tuple[str, str]] = set()
-    for definition in (*silent_timer_slot_definitions(graph), *bass3_timer_definitions(graph)):
+    for definition in bass3_timer_definitions(graph):
         circuit, name = definition.split(",", 3)[1:3]
         programs.add((circuit.casefold(), name.split("_", 1)[0].casefold()))
+    # A silent mode program on any controller other than the tested CTLV3 SW0808 stays read-only, also when its
+    # configuration lists all slots (which would create an editable calendar).
+    if graph is not None and not silent_timer_slot_definitions(graph):
+        for key in (*graph.raw_registers, *graph.placeholder_registers):
+            circuit, _, name = key.partition(".")
+            if name.casefold().startswith("silenttimer_"):
+                programs.add((circuit.casefold(), "silenttimer"))
     return frozenset(programs)
 
 

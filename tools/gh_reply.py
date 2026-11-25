@@ -4,16 +4,22 @@
     python tools/gh_reply.py issue 171 reply.md
     python tools/gh_reply.py discussion 31 reply.md          # replies to the newest top-level comment
     python tools/gh_reply.py discussion 31 reply.md --reply-to <comment node id>
+    python tools/gh_reply.py issue 205 reply.md --label "status: waiting for user verification"
+    python tools/gh_reply.py --batch replies.txt [--dry-run]   # one "issue|discussion <n> <file> [label]" per line
 
 Posting is an outward-facing action: run it only after the owner has approved the text. ``--dry-run`` prints the plan.
+A batch checks every line and every file before it posts anything, posts in order, and stops at the first failure so
+the output says exactly which replies went out. A label applies to issues only (discussions have no labels here).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +32,16 @@ ADD_COMMENT_MUTATION = (
     "mutation($d:ID!,$r:ID,$b:String!){addDiscussionComment(input:{discussionId:$d,replyToId:$r,body:$b})"
     "{comment{url}}}"
 )
+
+
+@dataclass(frozen=True)
+class Reply:
+    """One approved reply: where it goes, the file with its text and an optional issue label."""
+
+    kind: str
+    number: int
+    body_file: Path
+    label: str | None = None
 
 
 # Run a gh command in the repository and return its stdout.
@@ -69,26 +85,92 @@ def reply_discussion(number: int, body: str, reply_to: str | None) -> str:
     return json.loads(gh(*arguments))["data"]["addDiscussionComment"]["comment"]["url"]
 
 
-# Parse arguments and post the reply.
-# Keeps reply posting repeatable and auditable.
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("kind", choices=("issue", "discussion"))
-    parser.add_argument("number", type=int)
-    parser.add_argument("body_file", type=Path)
-    parser.add_argument("--reply-to", help="discussion comment node id (thread root)")
-    parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
-    body = args.body_file.read_text(encoding="utf-8")
-    if args.dry_run:
-        print(f"Would post {len(body)} characters to {args.kind} #{args.number}")
-        return 0
-    if args.kind == "issue":
-        url = gh("issue", "comment", str(args.number), "--body-file", str(args.body_file))
+# Read a batch file: one reply per line as `issue|discussion <number> <file> [label]`; blank lines and # comments skip.
+# Relative files resolve against the batch file's folder. Every problem is collected, so nothing posts on a bad batch.
+def parse_batch(path: Path) -> tuple[list[Reply], list[str]]:
+    replies: list[Reply] = []
+    problems: list[str] = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        parts = shlex.split(line)
+        if len(parts) not in (3, 4) or parts[0] not in ("issue", "discussion") or not parts[1].isdigit():
+            problems.append(f"line {line_number}: expected 'issue|discussion <number> <file> [label]'")
+            continue
+        body_file = Path(parts[2]) if Path(parts[2]).is_absolute() else path.parent / parts[2]
+        replies.append(Reply(parts[0], int(parts[1]), body_file, parts[3] if len(parts) == 4 else None))
+    return replies, problems
+
+
+# List what is wrong with a set of replies before anything posts: missing or empty files, labels on discussions.
+def check_replies(replies: list[Reply]) -> list[str]:
+    problems = []
+    for reply in replies:
+        target = f"{reply.kind} #{reply.number}"
+        if not reply.body_file.is_file():
+            problems.append(f"{target}: file {reply.body_file} not found")
+        elif not reply.body_file.read_text(encoding="utf-8").strip():
+            problems.append(f"{target}: file {reply.body_file} is empty")
+        if reply.label and reply.kind != "issue":
+            problems.append(f"{target}: labels apply to issues only")
+    return problems
+
+
+# Post one reply, mark the item in the inbox state, then add its label; returns the comment URL.
+# The state is written right after the comment, so a failing label step can never lead to posting the comment twice.
+def post(reply: Reply, reply_to: str | None = None) -> str:
+    if reply.kind == "issue":
+        url = gh("issue", "comment", str(reply.number), "--body-file", str(reply.body_file))
     else:
-        url = reply_discussion(args.number, body, args.reply_to)
-    mark_replied(args.kind, args.number)
-    print(url)
+        url = reply_discussion(reply.number, reply.body_file.read_text(encoding="utf-8"), reply_to)
+    mark_replied(reply.kind, reply.number)
+    if reply.label:
+        try:
+            gh("issue", "edit", str(reply.number), "--add-label", reply.label)
+        except subprocess.CalledProcessError as error:
+            print(
+                f"posted {url}, but adding label {reply.label!r} failed: {error.stderr.strip()[:200]}", file=sys.stderr
+            )
+    return url
+
+
+# Parse arguments and post one reply or a batch.
+# Keeps reply posting repeatable and auditable.
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("kind", nargs="?", choices=("issue", "discussion"))
+    parser.add_argument("number", nargs="?", type=int)
+    parser.add_argument("body_file", nargs="?", type=Path)
+    parser.add_argument("--reply-to", help="discussion comment node id (thread root)")
+    parser.add_argument("--label", help="label to add to the issue after posting")
+    parser.add_argument("--batch", type=Path, help="file with one reply per line")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(argv)
+    if args.batch and args.reply_to:
+        parser.error("--reply-to applies to one discussion reply, not to a batch")
+    if args.batch:
+        replies, problems = parse_batch(args.batch)
+    elif args.kind and args.number is not None and args.body_file:
+        replies, problems = [Reply(args.kind, args.number, args.body_file, args.label)], []
+    else:
+        parser.error("give either kind, number and file, or --batch")
+    problems += check_replies(replies)
+    if problems:
+        for problem in problems:
+            print(f"refused: {problem}", file=sys.stderr)
+        return 2
+    for reply in replies:
+        if args.dry_run:
+            size = len(reply.body_file.read_text(encoding="utf-8"))
+            label = f" and add label {reply.label!r}" if reply.label else ""
+            print(f"Would post {size} characters to {reply.kind} #{reply.number}{label}")
+            continue
+        try:
+            print(post(reply, args.reply_to))
+        except subprocess.CalledProcessError as error:
+            print(f"failed at {reply.kind} #{reply.number}: {error.stderr.strip()[:300]}", file=sys.stderr)
+            print("the replies listed above this line were posted; fix the problem and post the rest", file=sys.stderr)
+            return 1
     return 0
 
 

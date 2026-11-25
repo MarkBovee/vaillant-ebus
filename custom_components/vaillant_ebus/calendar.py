@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .backend.timer_program import TimeSlot
+from .backend.timer_program import SLOT_COUNT_SUFFIXES, TimeSlot, parse_slot_counts
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator, get_register_value
 from .timer_access import TimerProgramAccess
@@ -27,8 +27,9 @@ SCHEDULES = {
     "Cooling Program": "Z1CoolingTimer",
     "Cooling Program 2": "Z2CoolingTimer",
 }
-# Programs whose slots may be written. Only the hot water program is proven on two CTLV2 configurations (issue #208).
-WRITABLE_PREFIXES = frozenset({"HwcTimer"})
+# Programs whose slots may be written: the hot water program (proven on two CTLV2 configurations, issue #208) and the
+# silent mode program, whose calendar exists only on the CTLV3 SW0808 where its write was tested (issue #256).
+WRITABLE_PREFIXES = frozenset({"HwcTimer", "SilentTimer"})
 _BYDAY = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
 
@@ -145,10 +146,12 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         end_date: datetime,
     ) -> list[CalendarEvent]:
         events: list[CalendarEvent] = []
+        counts = self._slot_counts()
         day = start_date.date()
         while day <= end_date.date():
             weekday = WEEKDAYS[day.weekday()]
-            for slot in range(3):
+            # A slot at or above the controller's count for the day is a leftover of a removed slot (issue #256).
+            for slot in range(3 if counts is None else min(3, counts[day.weekday()])):
                 value = self._value(f"{self._prefix}_{weekday}{slot}")
                 event = _parse_slot(day, value, self._attr_name, uid=f"{weekday}:{slot}")
                 if event and event.end > start_date and event.start < end_date:
@@ -223,6 +226,14 @@ class EbusdCalendar(CoordinatorEntity[VaillantCoordinator], CalendarEntity):
         except ValueError:
             return None
 
+    # The controller's slot count per weekday from the program's count message, or None when it has none.
+    def _slot_counts(self) -> list[int] | None:
+        for suffix in SLOT_COUNT_SUFFIXES:
+            counts = parse_slot_counts(self._value(f"{self._prefix}_{suffix}"))
+            if counts is not None:
+                return counts
+        return None
+
     # Get timer register value from coordinator data or register cache
     def _value(self, name: str) -> str | None:
         c = self._circuit
@@ -247,9 +258,12 @@ def _parse_slot(day: date, value: str | None, name: str, uid: str | None = None)
     parts = value.split(";")
     if len(parts) < 2 or parts[0] == "00:00" and parts[1] == "00:00":
         return None
+    # The controller ends a slot at midnight with `24:00`, which `strptime` rejects; it is 00:00 of the next day.
+    # Issue #256 - the silent mode slot 21:00-24:00 vanished from the calendar because of it.
+    ends_at_midnight = parts[1].strip() == "24:00"
     try:
         start_time = datetime.strptime(parts[0], "%H:%M").time()
-        end_time = datetime.strptime(parts[1], "%H:%M").time()
+        end_time = datetime.strptime("00:00" if ends_at_midnight else parts[1], "%H:%M").time()
     except ValueError:
         return None
     start = dt_util.as_local(datetime.combine(day, start_time))

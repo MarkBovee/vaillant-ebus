@@ -28,6 +28,8 @@ from .models import DeviceGraph, zone_circuit_declared_inactive
 from .runtime_definitions import (
     BOILER_PLAIN_READ_ENERGY_REGISTERS,
     DISCOVERED_PLAIN_READ_POLLED_REGISTERS,
+    HEAT_PUMP_LIVE_ENERGY_REGISTERS,
+    HEAT_PUMP_LIVE_EVERY_POLL_REGISTERS,
     HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS,
     HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS,
     HEAT_PUMP_SETTING_NAMES,
@@ -37,6 +39,7 @@ from .runtime_definitions import (
     HWC_CIRCULATION_PUMP_STATUS,
     HWC_TIMER_SLOT_FIELDS,
     INTEGRATION_POLLED_CONTROLLER_REGISTERS,
+    TIMER_WEEKDAYS,
 )
 
 # Register names of the HMUX0 precise (1/16 degC) temperatures that need an explicit active read.
@@ -53,6 +56,8 @@ class Cadence(Enum):
 
     EVERY_POLL = "every_poll"
     ENERGY_INTERVAL = "energy_interval"
+    # The 15-minute placeholder interval (`PLACEHOLDER_POLL_INTERVAL`), for values that change only when edited.
+    PLACEHOLDER_INTERVAL = "placeholder_interval"
 
 
 @dataclass(frozen=True)
@@ -76,8 +81,8 @@ def _is_energy_polled_definition(access: str, name: str, message: str, definitio
         or (message == "B524" and name in INTEGRATION_POLLED_CONTROLLER_REGISTERS)
         or (message == "B51A" and name in HEAT_PUMP_SETTING_NAMES)
         or (message == "B509" and name in HMUX0_SW0406_ENERGY_READ_REGISTERS)
-        # Only the hot water slots of issue #208: the silent mode and BASS3 slot reads serve the calendar, which reads
-        # them itself, and re-reading 88 BASS3 slots each interval would only cost bus time.
+        # Only the hot water slots of issue #208 here; the silent mode and BASS3 calendar slots follow the 15-minute
+        # `_calendar_slot_reads` rule (issue #256), limited to the slots the controller counts.
         or (message == "B555" and name.startswith("HwcTimer_") and definition.endswith(HWC_TIMER_SLOT_FIELDS))
     )
 
@@ -156,6 +161,17 @@ def _heat_pump_every_poll_reads(graph: DeviceGraph, _definitions: Mapping[str, s
     return _heat_pump_reads(graph, HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS)
 
 
+# Nominate the heat pump power and yield of issue #259 for every poll.
+def _heat_pump_live_power_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
+    return _heat_pump_reads(graph, HEAT_PUMP_LIVE_EVERY_POLL_REGISTERS)
+
+
+# Nominate the slow heat pump live values of issue #259 (flow, weighted supply temperature, energy integral) for the
+# energy interval.
+def _heat_pump_live_energy_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
+    return _heat_pump_reads(graph, HEAT_PUMP_LIVE_ENERGY_REGISTERS)
+
+
 # Nominate the HMUX0 precise temperatures on the evidenced firmware owner only (#171), when the graph lists them.
 def _hmux0_precise_temperatures(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
     owner = hmux0_precise_temperature_owner(graph)
@@ -221,6 +237,64 @@ def _zone_state_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> li
     return reads
 
 
+# A slot or count message of a weekly program: `<prefix>_<Day><slot>` or `<prefix>_Timeslots`.
+_PROGRAM_MESSAGE = re.compile(
+    r"^(?P<prefix>[A-Za-z0-9]+Timer)_(?:(?P<count>Timeslots)|(?P<day>Monday|Tuesday|Wednesday|Thursday|Friday|Saturday"
+    r"|Sunday)(?P<slot>\d))$"
+)
+_WEEKDAY_INDEX = {day: index for index, day in enumerate(TIMER_WEEKDAYS)}
+
+
+# Return the slot count per weekday of a program from the graph, or None while it is unknown or not seven numbers.
+def _graph_slot_counts(graph: DeviceGraph, circuit: str, prefix: str) -> list[int] | None:
+    expected = f"{circuit}.{prefix}_Timeslots".casefold()
+    raw = next((value for key, value in graph.raw_registers.items() if key.casefold() == expected), None)
+    try:
+        counts = [int(part.strip()) for part in (raw or "").split(";")]
+    except ValueError:
+        return None
+    return counts if len(counts) == len(TIMER_WEEKDAYS) else None
+
+
+# Nominate the calendar programs the integration reads over its own `B555` slot set (CTLV3 silent mode, BASS3), plus
+# ebusd's own slot-0 messages of the same programs, for the 15-minute interval (issue #256: slots 1 and 2 were never
+# re-read, so the calendar showed slot 0 only). The count message comes first; a slot at or above the day's last
+# known count is skipped, which keeps the 88 BASS3 slots down to the ones in use. While the count is unknown every slot
+# is read.
+def _calendar_slot_reads(graph: DeviceGraph, runtime_definitions: Mapping[str, str]) -> list[Read]:
+    names_by_program: dict[tuple[str, str], set[str]] = {}
+    for definition in runtime_definitions.values():
+        access, circuit, name, _, _, _, message = definition.split(",", 7)[:7]
+        match = _PROGRAM_MESSAGE.match(name)
+        if (
+            access != "r"
+            or message != "B555"
+            or match is None
+            or _is_energy_polled_definition(access, name, message, definition)
+        ):
+            continue
+        names_by_program.setdefault((circuit, match["prefix"]), set()).add(name)
+    reads: list[Read] = []
+    for (circuit, prefix), names in names_by_program.items():
+        for key in (*graph.raw_registers, *graph.placeholder_registers):
+            key_circuit, _, name = key.partition(".")
+            match = _PROGRAM_MESSAGE.match(name)
+            if key_circuit.casefold() == circuit.casefold() and match is not None and match["prefix"] == prefix:
+                names.add(name)
+        counts = _graph_slot_counts(graph, circuit, prefix)
+        count_names = sorted(name for name in names if name.endswith("_Timeslots"))
+        slot_names = sorted(name for name in names if not name.endswith("_Timeslots"))
+        reads.extend((circuit, name) for name in count_names)
+        for name in slot_names:
+            match = _PROGRAM_MESSAGE.match(name)
+            if match is None or match["day"] is None:
+                continue
+            if counts is not None and int(match["slot"]) >= counts[_WEEKDAY_INDEX[match["day"]]]:
+                continue
+            reads.append((circuit, name))
+    return reads
+
+
 # Every re-read rule, in planning order. The order is part of the behaviour: the planner keeps the first nomination
 # of a register and keeps the order of reads per circuit.
 REREAD_RULES: tuple[RereadRule, ...] = (
@@ -229,22 +303,26 @@ REREAD_RULES: tuple[RereadRule, ...] = (
     RereadRule("#233", Cadence.ENERGY_INTERVAL, _heat_pump_energy_reads),
     RereadRule("#233 SW0308", Cadence.ENERGY_INTERVAL, _firmware_energy_reads),
     RereadRule("#242", Cadence.ENERGY_INTERVAL, _boiler_fuel_energy_reads),
+    RereadRule("#259", Cadence.ENERGY_INTERVAL, _heat_pump_live_energy_reads),
     RereadRule("#171", Cadence.EVERY_POLL, _hmux0_precise_temperatures),
     RereadRule("#213", Cadence.EVERY_POLL, hmux0_sw0407_active_reads),
     RereadRule("#205 SW0406", Cadence.EVERY_POLL, _hmux0_sw0406_active_reads),
     RereadRule("#207", Cadence.EVERY_POLL, _zone_state_reads),
     RereadRule("#233", Cadence.EVERY_POLL, _heat_pump_every_poll_reads),
+    RereadRule("#259", Cadence.EVERY_POLL, _heat_pump_live_power_reads),
     RereadRule("#233 HWC", Cadence.EVERY_POLL, _hwc_circulation_pump_reads),
+    RereadRule("#256", Cadence.PLACEHOLDER_INTERVAL, _calendar_slot_reads),
 )
 
 
-# Expand the rules due this cycle into reads, in table order. Energy-interval rules run only when `include_energy`.
-# An empty graph nominates nothing.
+# Expand the rules due this cycle into reads, in table order. Energy-interval rules run only when `include_energy`,
+# placeholder-interval rules only when `include_placeholders`. An empty graph nominates nothing.
 def plan_rereads(
     graph: DeviceGraph,
     runtime_definitions: Mapping[str, str],
     *,
     include_energy: bool,
+    include_placeholders: bool = False,
     rules: tuple[RereadRule, ...] = REREAD_RULES,
 ) -> list[Read]:
     if not graph:
@@ -252,6 +330,8 @@ def plan_rereads(
     reads: list[Read] = []
     for rule in rules:
         if rule.cadence is Cadence.ENERGY_INTERVAL and not include_energy:
+            continue
+        if rule.cadence is Cadence.PLACEHOLDER_INTERVAL and not include_placeholders:
             continue
         reads.extend(rule.nominate(graph, runtime_definitions))
     return reads

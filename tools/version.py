@@ -16,12 +16,15 @@ for ``pyproject.toml`` and keeps the display form (hyphen) elsewhere::
 
 ``check`` exits non-zero when the three do not agree. It is enforced by
 ``tests/test_version_consistency.py`` so CI fails on drift. ``bump`` updates
-``pyproject.toml`` and ``manifest.json``; add the matching CHANGELOG heading
-yourself because release notes are human-written.
+``pyproject.toml`` and ``manifest.json`` and puts an empty ``## X.Y.Z - <today>``
+heading on top of ``CHANGELOG.md`` when there is none yet; the release notes
+under it stay human-written. Three releases failed their first check because
+the heading was forgotten.
 """
 
 from __future__ import annotations
 
+import datetime
 import json
 import re
 import sys
@@ -84,7 +87,20 @@ def check() -> int:
     return 0
 
 
-# Write a new version into pyproject.toml and manifest.json, then run the check; the CHANGELOG heading is added by hand.
+# Put an empty `## <version> - <date>` heading above the first version heading of CHANGELOG.md, unless one exists.
+# Returns True when the heading was added. The notes under it are written by hand.
+def ensure_changelog_heading(new: str, today: datetime.date | None = None) -> bool:
+    if any(canonical(heading) == canonical(new) for heading in read_changelog_headings()):
+        return False
+    text = CHANGELOG.read_text()
+    heading = f"## {new} - {(today or datetime.date.today()).isoformat()}\n\n"
+    match = re.search(r"^##\s", text, re.MULTILINE)
+    position = match.start() if match else len(text)
+    CHANGELOG.write_text(text[:position] + heading + text[position:])
+    return True
+
+
+# Write a new version into pyproject.toml and manifest.json, add the CHANGELOG heading when missing, then run the check.
 def bump(new: str) -> int:
     pyproject_text = PYPROJECT.read_text()
     pyproject_new = re.sub(
@@ -110,11 +126,11 @@ def bump(new: str) -> int:
         print("version not found in manifest.json", file=sys.stderr)
         return 1
     MANIFEST.write_text(manifest_new)
-    message = (
-        f"bumped to {new} (pyproject uses {pyproject_version(new)}); "
-        f"add the matching '## {new}' heading to CHANGELOG.md"
+    added = ensure_changelog_heading(new)
+    note = (
+        f"added an empty '## {new}' heading to CHANGELOG.md; write the notes" if added else "CHANGELOG heading exists"
     )
-    print(message)
+    print(f"bumped to {new} (pyproject uses {pyproject_version(new)}); {note}")
     return check()
 
 

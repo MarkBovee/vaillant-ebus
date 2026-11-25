@@ -1127,20 +1127,17 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
     async def _async_refresh_stale_entities_issue(self) -> None:
         if self._stopped or self._unload_requested:
             return
+        devices = device_registry.async_entries_for_config_entry(
+            device_registry.async_get(self.hass), self._entry.entry_id
+        )
         report = cleanup.stale_report(
-            entity_registry.async_get(self.hass), self.hass.states, self._entry.entry_id, DOMAIN, self
+            entity_registry.async_get(self.hass), self.hass.states, self._entry.entry_id, DOMAIN, self, devices
         )
         if report is None:
             return
-        if report.orphans or report.dormant:
+        if report.has_work:
             await repairs.async_create_stale_entities(
-                self.hass,
-                self._entry.entry_id,
-                len(report.orphans),
-                cleanup.preview_text(report.orphans),
-                len(report.kept_customized),
-                len(report.dormant),
-                cleanup.preview_text(report.dormant),
+                self.hass, self._entry.entry_id, cleanup.report_placeholders(report)
             )
         else:
             await repairs.async_dismiss_stale_entities(self.hass)

@@ -193,3 +193,104 @@ def test_fetch_attachments_decodes_gh_output_as_utf8(discussion: bool, monkeypat
     tool.collect_text(1, discussion)
 
     assert calls and all(call.get("encoding") == "utf-8" for call in calls)
+
+
+# Intent: the smoke-test check passes a zero-second and a continued dump, records skipped_active as a deviation, and
+#         fails on a missing section or a missing zero-second dump.
+# Why: every release since 1.11 checked the two dumps by hand with a scratch script; the tool must judge them the way
+#      docs/release-process.md does.
+def test_smoke_test_judges_the_two_dumps() -> None:
+    smoke = load_tool("smoke_test")
+    sections = {"raw_find_lines": [], "before_registers": {}, "registers": {}}
+    zero = {**sections, "metadata": {"grab_duration": 0, "grab_status": "not_requested", "grab_captured_duration": 0}}
+    positive = {**sections, "metadata": {"grab_duration": 1, "grab_status": "continued", "grab_captured_duration": 1.2}}
+    skipped = {**sections, "metadata": {"grab_duration": 1, "grab_status": "skipped_active", "grab_error": "limit"}}
+
+    assert smoke.check_dumps({"a": zero, "b": positive}) == ([], [])
+    failures, deviations = smoke.check_dumps({"a": zero, "b": skipped})
+    assert failures == [] and len(deviations) == 1
+    failures, _ = smoke.check_dumps({"b": {k: v for k, v in positive.items() if k != "registers"}})
+    assert any("missing section registers" in line for line in failures)
+    assert any("no zero-second dump" in line for line in failures)
+    assert smoke.check_grab("12 False") == [] and smoke.check_grab("3 True") != []
+
+
+# Intent: the inbox marks unknown threads new, changed threads updated, and the owner's own last word quiet; a reply
+#         inside a discussion thread counts as its last activity.
+# Why: each inbox pass used to rewrite this comparison as a scratch script, and a wrong verdict hides a user's question.
+def test_gh_inbox_classifies_against_the_state() -> None:
+    inbox = load_tool("gh_inbox")
+    owner = "MarkBovee"
+    user_comment = {"author": {"login": "reporter"}, "createdAt": "2026-11-25T08:00:00Z"}
+    issue = inbox.item_from_issue(
+        {"number": 7, "title": "t", "updatedAt": "2026-11-25T08:00:00Z", "state": "OPEN", "comments": [user_comment]},
+        "issue",
+    )
+    seen = {"last_activity_at": "2026-11-24T08:00:00Z", "last_comment_count": 0}
+
+    assert inbox.classify(issue, {}, owner) == "new"
+    assert inbox.classify(issue, {"issue-7": seen}, owner) == "updated"
+    assert (
+        inbox.classify(
+            issue, {"issue-7": {**seen, "last_activity_at": "2026-11-25T09:00:00Z", "last_comment_count": 1}}, owner
+        )
+        == "quiet"
+    )
+    owner_reply = {"author": {"login": owner}, "createdAt": "2026-11-25T09:00:00Z"}
+    discussion = inbox.item_from_discussion(
+        {
+            "number": 3,
+            "title": "d",
+            "updatedAt": "x",
+            "comments": {"totalCount": 1, "nodes": [{**user_comment, "replies": {"nodes": [owner_reply]}}]},
+        }
+    )
+    assert discussion.last_activity_by == owner and inbox.classify(discussion, {}, owner) == "quiet"
+
+
+# Intent: a reply batch is refused as a whole when one line is malformed, a file is missing or a discussion gets a
+#         label.
+# Why: a half-posted batch is hard to repair; every reply must be checked before the first one goes out.
+def test_gh_reply_batch_is_checked_before_posting(tmp_path: Path) -> None:
+    reply = load_tool("gh_reply")
+    (tmp_path / "a.md").write_text("Thanks.\n", encoding="utf-8")
+    batch = tmp_path / "replies.txt"
+    batch.write_text(
+        '# approved\nissue 205 a.md "status: waiting for user verification"\ndiscussion 31 a.md\n', "utf-8"
+    )
+
+    replies, problems = reply.parse_batch(batch)
+    assert problems == [] and reply.check_replies(replies) == []
+    assert replies[0].label == "status: waiting for user verification" and replies[1].body_file == tmp_path / "a.md"
+
+    batch.write_text("issue 1 missing.md\ndiscussion 2 a.md label\nissue x a.md\n", encoding="utf-8")
+    replies, problems = reply.parse_batch(batch)
+    problems += reply.check_replies(replies)
+    assert len(problems) == 3
+    assert reply.main(["--batch", str(batch)]) == 2
+
+
+# Intent: a bump adds an empty dated heading on top of the changelog once, and leaves an existing heading alone.
+# Why: three releases failed their first version check because the heading was forgotten after the bump.
+def test_version_bump_adds_the_changelog_heading_once(tmp_path: Path, monkeypatch) -> None:
+    version = load_tool("version")
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n\n## 1.0.0 - 2026-01-01\n\nOld notes.\n", encoding="utf-8")
+    monkeypatch.setattr(version, "CHANGELOG", changelog)
+    import datetime
+
+    assert version.ensure_changelog_heading("1.1.0", datetime.date(2026, 11, 25)) is True
+    assert version.ensure_changelog_heading("1.1.0", datetime.date(2026, 11, 26)) is False
+    assert changelog.read_text(encoding="utf-8") == (
+        "# Changelog\n\n## 1.1.0 - 2026-11-25\n\n## 1.0.0 - 2026-01-01\n\nOld notes.\n"
+    )
+
+
+# Intent: the differential export writes a git ref into a plain folder, without a worktree.
+# Why: the forced removal of a temporary worktree is blocked by the git guard, which stalled several sessions.
+def test_differential_exports_a_ref_without_a_worktree(tmp_path: Path) -> None:
+    differential = load_tool("differential")
+    differential.export_ref("HEAD", tmp_path)
+
+    assert (tmp_path / "tools" / "differential.py").is_file()
+    assert not (tmp_path / ".git").exists()

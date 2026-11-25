@@ -91,7 +91,13 @@ def test_energy_counter_rereads_require_active_b516_definition_on_known_circuit(
 
     # The discovered heat pump counters of issue #233 (and the SW0308 start counter of this capture) also run on the
     # energy interval; they are not definitions.
-    discovered = {("hmu", name) for name in RUNTIME.HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS | {"StatCompressorStarts"}}
+    # The slow heat pump live values of issue #259 follow the energy interval too.
+    discovered = {
+        ("hmu", name)
+        for name in RUNTIME.HEAT_PUMP_PLAIN_READ_ENERGY_REGISTERS
+        | RUNTIME.HEAT_PUMP_LIVE_ENERGY_REGISTERS
+        | {"StatCompressorStarts"}
+    }
     assert set(with_flag) - set(without_flag) - discovered == {("hmu", "ZzEnergy")}
     assert set(without_flag) <= set(with_flag)
 

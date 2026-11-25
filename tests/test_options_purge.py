@@ -146,3 +146,25 @@ async def test_purge_step_with_only_dormant_entities_removes_no_row() -> None:
     assert shown == {"type": "form"} and done == {"type": "abort", "reason": "entities_purged"}
     registry.async_remove.assert_not_called()
     registry.async_update_entity.assert_called_once_with("sensor.storage_top", disabled_by="integration")
+
+
+# Intent: a purge with no stale entity still offers and removes a leftover empty Zone 2 device, and nothing else.
+# Why: owner report 2026-11-25 - empty Zone 2 and Zone 3 devices stayed, because empty devices were only removed as a
+#      side effect of removing an entity and the step said "nothing to purge".
+async def test_purge_step_removes_an_empty_zone_device_without_stale_entities() -> None:
+    rows = [_row("sensor.fine", "ebusd_hmu_generated0", device_id="dev-hmu")]
+    flow, registry = _options_flow(rows, {"sensor.fine": ("5", {})})
+    devices = sys.modules["homeassistant.helpers.device_registry"].async_get.return_value
+    sys.modules["homeassistant.helpers.device_registry"].async_entries_for_config_entry.return_value = [
+        SimpleNamespace(id="dev-hmu", identifiers={(DOMAIN, "hmu")}, name="Heat pump", labels=set()),
+        SimpleNamespace(id="dev-z2", identifiers={(DOMAIN, "z2")}, name="Zone 2", labels=set()),
+    ]
+
+    shown = await flow.async_step_purge_entities()
+    placeholders = flow.async_show_form.call_args.kwargs["description_placeholders"]
+    done = await flow.async_step_purge_entities({"confirm": True})
+
+    assert shown == {"type": "form"} and done == {"type": "abort", "reason": "entities_purged"}
+    assert (placeholders["count"], placeholders["device_count"]) == ("0", "1") and "Zone 2" in placeholders["devices"]
+    registry.async_remove.assert_not_called()
+    devices.async_remove_device.assert_called_once_with("dev-z2")

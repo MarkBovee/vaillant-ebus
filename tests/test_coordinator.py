@@ -7166,8 +7166,10 @@ async def test_issue193_manual_rediscovery_clears_the_bus_pause() -> None:
         assert c._bus_guard.allow() is True
 
 
-# Intent: the periodic check raises one stale-entities issue when orphans exist and clears it when none are left.
-# Why: the owner has 86 restored entities that stayed invisible; a repair with a confirmation is how they get removed.
+# Intent: the periodic check raises one stale-entities issue when orphans or empty devices exist and clears it when none
+#         are left.
+# Why: the owner has 86 restored entities that stayed invisible, and empty Zone 2/3 devices that no purge removed; a
+#      repair with a confirmation is how they get removed.
 async def test_stale_entities_issue_follows_the_registry() -> None:
     from homeassistant.helpers import entity_registry
 
@@ -7197,6 +7199,10 @@ async def test_stale_entities_issue_follows_the_registry() -> None:
         registry = MagicMock()
         registry.entities.get_entries_for_config_entry_id.side_effect = lambda _id: [row]
         entity_registry.async_get = MagicMock(return_value=registry)
+        from homeassistant.helpers import device_registry
+
+        # Other test modules leave devices in the shared stub; this config entry starts without any.
+        device_registry.async_entries_for_config_entry = MagicMock(return_value=[])
         repairs_stub = sys.modules["vaillant_ebus.repairs"]
         repairs_stub.async_create_stale_entities.reset_mock()
         repairs_stub.async_dismiss_stale_entities.reset_mock()
@@ -7207,13 +7213,27 @@ async def test_stale_entities_issue_follows_the_registry() -> None:
 
         repairs_stub.async_create_stale_entities.assert_awaited_once()
         args = repairs_stub.async_create_stale_entities.await_args.args
-        assert args[1:3] == ("entry-1", 1) and "sensor.gone" in args[3]
+        assert args[1] == "entry-1"
+        assert args[2]["count"] == "1" and "sensor.gone" in args[2]["entities"]
         repairs_stub.async_dismiss_stale_entities.assert_not_awaited()
 
         hass.states.get = MagicMock(return_value=types.SimpleNamespace(state="23.5", attributes={}))
         await c._async_refresh_stale_entities_issue()
 
         repairs_stub.async_dismiss_stale_entities.assert_awaited_once()
+
+        # A leftover Zone 2 device without any entity row raises the issue on its own (owner, 2026-11-25).
+        registry.entities.values.side_effect = lambda: [row]
+        zone2 = types.SimpleNamespace(id="dev-z2", identifiers={("vaillant_ebus", "z2")}, name="Zone 2", labels=set())
+        device_registry.async_entries_for_config_entry = MagicMock(return_value=[zone2])
+        repairs_stub.async_create_stale_entities.reset_mock()
+
+        await c._async_refresh_stale_entities_issue()
+
+        placeholders = repairs_stub.async_create_stale_entities.await_args.args[2]
+        assert (placeholders["count"], placeholders["device_count"]) == ("0", "1")
+        assert "Zone 2" in placeholders["devices"]
+        device_registry.async_entries_for_config_entry = MagicMock(return_value=[])
 
 
 # Intent: the periodic check also raises the issue when only enabled entities without data are left to switch off.
@@ -7261,8 +7281,8 @@ async def test_stale_entities_issue_is_raised_for_entities_without_data() -> Non
 
         repairs_stub.async_create_stale_entities.assert_awaited_once()
         args = repairs_stub.async_create_stale_entities.await_args.args
-        assert args[1:3] == ("entry-1", 0)
-        assert args[5] == 1 and "sensor.storage_top" in args[6]
+        assert args[1] == "entry-1" and args[2]["count"] == "0"
+        assert args[2]["dormant_count"] == "1" and "sensor.storage_top" in args[2]["dormant"]
         repairs_stub.async_dismiss_stale_entities.assert_not_awaited()
 
 
@@ -7589,12 +7609,16 @@ def test_installer_settings_survive_rediscovery() -> None:
     ) == RUNTIME_DEFINITIONS.heat_pump_setting_definitions(first)
 
 
-# Intent: HMU00 SW0308 only gets D.230 (the one setting #218 read there); other heat pumps get none.
-# Why: firmware scope is where the value was read (community CSV rule); SW0308 answered 05ff341e with -119 degmin.
+# Intent: HMU00 SW0308 gets D.230, D.267 and D.231 (the settings #218 read there); other heat pumps get none.
+# Why: firmware scope is where the value was read (community CSV rule); SW0308 answered 05ff341e with -119 degmin,
+#      3443 with 9.00 K and 341f with 700 mbar, while 3421 and 353f answered too short to decode.
 @pytest.mark.parametrize(
     ("fixture", "expected"),
     [
-        ("community/flexotherm_issue102_2026-09-12_161841_discovery.yaml", {"CompressorStartHeating"}),
+        (
+            "community/flexotherm_issue102_2026-09-12_161841_discovery.yaml",
+            {"CompressorStartHeating", "CompressorHysteresisHeat", "MaxResidualHead"},
+        ),
         (ISSUE175_FIXTURE, set(name for name, *_ in RUNTIME_DEFINITIONS.HEAT_PUMP_SETTINGS)),
         ("community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml", set()),
         ("community/ecotec_vrt380_issue109_2026-09-11_230710.yaml", set()),
@@ -7670,6 +7694,23 @@ async def test_hmux0_current_error_shows_none_for_an_empty_slot() -> None:
     assert MAPPING.REGISTER_MAP["hmu.Currenterror"].value_labels == {"-1": "none"}
 
 
+# Intent: the calculated flow setpoint of every heating circuit is a read-only sensor, and continuous heating shows its
+#         `-26` as off.
+# Why: issue #205 - the setpoint showed as a number slider although ebusd defines it read-only, and `-26` is the
+#      controller's "off" (upstream comment `-26=off`), not a temperature.
+def test_flow_setpoint_is_a_sensor_and_continuous_heating_off_is_labelled() -> None:
+    lines = load_find_lines("community/hmux0_sw0406_issue205_2026-11-17_155315_discovery.yaml", after=True)
+    graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+
+    entities = {e.name: e for e in EntityFactoryService().generate(graph) if e.circuit == "ctlv3"}
+
+    assert entities["Hc1ActualFlowTempDesired"].entity_type == "sensor"
+    for number in ("1", "2", "3"):
+        meta = MAPPING.REGISTER_MAP[f"ctlv2.Hc{number}ActualFlowTempDesired"]
+        assert not meta.writable and meta.entity_type in ("", "sensor")
+    assert MAPPING.REGISTER_MAP["ctlv2.ContinuousHeating"].value_labels == {"-26": "off", "-26.0": "off"}
+
+
 # Intent: a CTLV3 SW0808 gets slot 1 and 2 reads of the silent mode program in the layout the reporter verified.
 # Why: issue #256 - ebusd decodes slot 0 only; `B555 a5 00 04 <day> 01` read 21:00-24:00 for all days, as on the
 #      display.
@@ -7680,9 +7721,10 @@ async def test_silent_timer_slots_are_defined_like_the_verified_read() -> None:
     assert slot[4:8] == ["31", "15", "B555", "a500040001"]
     assert definitions["r.ctlv3.SilentTimer_Sunday2"].split(",", 8)[7] == "a500040602"
     assert _decode_definition_fields(slot[8], bytes.fromhex("0015001800ffff")) == {"from": "21:00", "to": "24:00"}
-    # Slot 0 and the count come from ebusd's own configuration.
+    # Slot 0 comes from ebusd's own configuration.
     assert "r.ctlv3.SilentTimer_Monday0" not in definitions
-    assert ("ctlv3", "silenttimer") in RUNTIME_DEFINITIONS.read_only_timer_programs(
+    # Writable since the reporter's write test (issue #256): the program is not in the read-only set.
+    assert ("ctlv3", "silenttimer") not in RUNTIME_DEFINITIONS.read_only_timer_programs(
         DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE256_FIXTURE, after=True))
     )
 
@@ -7731,35 +7773,37 @@ async def test_b555_timer_sets_stay_hardware_gated(fixture: str) -> None:
     assert RUNTIME_DEFINITIONS.read_only_timer_programs(graph) == frozenset()
 
 
-# Intent: the BASS3 and silent mode sets (and their read-only guard) survive a rediscovery that lists our own slots.
+# Intent: the BASS3 and silent mode sets (and the BASS3 read-only guard) survive a rediscovery that lists our own slots.
 # Why: after the first define ebusd lists `Z1Timer_Monday0` / `SilentTimer_Monday1`; a gate on those names dropped the
 #      set on the next discovery, and with it the guard that refuses writes.
 @pytest.mark.parametrize(
-    ("fixture", "own_lines", "program"),
+    ("fixture", "own_lines", "read_only"),
     [
-        (BASS3_FIXTURE, ["bass Z1Timer_Monday0 = no data stored", "bass Z1Timer_Timeslots = 1;1;1;1;1;1;1"], "bass"),
-        (ISSUE256_FIXTURE, ["ctlv3 SilentTimer_Monday1 = 21:00;24:00"], "ctlv3"),
+        (BASS3_FIXTURE, ["bass Z1Timer_Monday0 = no data stored", "bass Z1Timer_Timeslots = 1;1;1;1;1;1;1"], True),
+        (ISSUE256_FIXTURE, ["ctlv3 SilentTimer_Monday1 = 21:00;24:00"], False),
     ],
 )
-def test_b555_timer_sets_survive_rediscovery(fixture: str, own_lines: list[str], program: str) -> None:
+def test_b555_timer_sets_survive_rediscovery(fixture: str, own_lines: list[str], read_only: bool) -> None:
     first = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
     again = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True) + own_lines)
 
     assert RUNTIME_DEFINITIONS.read_only_timer_programs(again) == RUNTIME_DEFINITIONS.read_only_timer_programs(first)
-    assert any(circuit == program for circuit, _ in RUNTIME_DEFINITIONS.read_only_timer_programs(again))
+    assert bool(RUNTIME_DEFINITIONS.read_only_timer_programs(again)) is read_only
+    assert RUNTIME_DEFINITIONS.calendar_slot_register_keys(again) == RUNTIME_DEFINITIONS.calendar_slot_register_keys(
+        first
+    )
     assert RUNTIME_DEFINITIONS.calendar_slot_register_keys(again)
 
 
 # Intent: the central write path refuses a read-only program's messages for every caller (`write_parameter` too) and
 #         in any letter case, before the first bus write; other writes still go through.
-# Why: audit of 1.16.0 - the guard sat only in `write_day`, so `write_parameter` and a `silentTimer` program name could
-#      still send an untested write to a BASS3 or CTLV3 silent mode program.
+# Why: audit of 1.16.0 - the guard sat only in `write_day`, so `write_parameter` and a `hwctimer` program name could
+#      still send an untested write to a BASS3 program.
 @pytest.mark.parametrize(
     ("fixture", "circuit", "name"),
     [
         (BASS3_FIXTURE, "bass", "Z1Timer_Monday"),
         (BASS3_FIXTURE, "bass", "hwctimer_Sunday0"),
-        (ISSUE256_FIXTURE, "ctlv3", "silentTimer_Monday"),
     ],
 )
 async def test_central_write_refuses_read_only_programs(fixture: str, circuit: str, name: str) -> None:
@@ -7778,6 +7822,45 @@ async def test_central_write_refuses_read_only_programs(fixture: str, circuit: s
         coordinator.ebus.write_register.assert_not_awaited()
         assert await coordinator.async_write_register(circuit, "Z1DayTemp", "20", require_discovered=False) is True
         coordinator.ebus.write_register.assert_awaited_once()
+
+
+# Intent: the CTLV3 SW0808 silent mode program is written through the central path, while BASS3 stays refused.
+# Why: issue #256 - the reporter wrote `SilentTimer_Sunday` slot by slot (`0;2;00:00;07:30`, `1;2;21:00;23:00`) and the
+#      read-back and the display matched; BASS3 has no tested write message.
+async def test_central_write_lets_the_tested_silent_mode_program_through() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.write_register = AsyncMock(return_value=WriteResult(True, verified_value="x"))
+        coordinator._graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines(ISSUE256_FIXTURE, after=True)
+        )
+        coordinator._ebusd_connected = True
+        coordinator.async_request_refresh = AsyncMock()
+
+        ok = await coordinator.async_write_register(
+            "ctlv3", "SilentTimer_Sunday", "1;2;21:00;23:00", require_discovered=False
+        )
+
+        assert ok is True
+        coordinator.ebus.write_register.assert_awaited_once()
+        assert coordinator.timer_program_read_only("ctlv3", "SilentTimer") is False
+
+
+# Intent: a silent mode program on a controller other than the tested CTLV3 SW0808 stays read-only, even when its
+#         configuration lists every slot.
+# Why: audit of 1.16.1 - the editable calendar is created wherever `SilentTimer_Monday1` is listed; the write was only
+#      tested on SW0808, so the central guard must refuse it elsewhere.
+def test_silent_mode_stays_read_only_on_untested_controllers() -> None:
+    lines = load_find_lines("community/flexotherm_ctlv2_cooling_discovery.yaml", after=True)
+    graph = DISCOVERY.DiscoveryService.build_device_graph(
+        lines + ["ctlv2 SilentTimer_Monday0 = 00:00;07:30", "ctlv2 SilentTimer_Monday1 = 21:00;24:00"]
+    )
+
+    assert ("ctlv2", "silenttimer") in RUNTIME_DEFINITIONS.read_only_timer_programs(graph)
+    tested = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE256_FIXTURE, after=True))
+    assert ("ctlv3", "silenttimer") not in RUNTIME_DEFINITIONS.read_only_timer_programs(tested)
 
 
 # Intent: slot messages the integration defines get no sensor entity; ebusd's own slot-0 messages keep theirs.
@@ -7984,3 +8067,130 @@ async def test_issue152_one_byte_invalid_position_is_retried(
         await coordinator._async_update_data()
 
         assert [call.args[:2] for call in coordinator.ebus.read_register.await_args_list] == expected_reads
+
+
+# Intent: the aroTHERM/flexoTHERM live values are re-read on the heat pump: power and yield every poll, flow, weighted
+#         supply temperature and energy integral on the energy interval; a bus without a heat pump gets none.
+# Why: issue #259 - ebusd's HMU CSV defines them as plain `r` (`B51A 05ff32xx`), so they froze after the first read on
+#      a bus without a myVAILLANT gateway.
+async def test_heat_pump_live_values_are_re_read_at_their_cadence() -> None:
+    fixture = "community/arotherm_plus_prenergy_discovery.yaml"
+    graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture))
+    heat_pump = graph.heat_pump_result().node.circuit
+    listed = {key.split(".", 1)[1] for key in graph.raw_registers if key.startswith(f"{heat_pump}.")}
+
+    every_poll = set(plan_rereads(graph, {}, include_energy=False))
+    energy = set(plan_rereads(graph, {}, include_energy=True))
+
+    for name in ("CurrentConsumedPower", "CurrentYieldPower"):
+        assert name not in listed or (heat_pump, name) in every_poll
+    for name in ("SupplyTempWeighted", "BuildingCircuitFlow"):
+        assert name in listed and (heat_pump, name) in energy and (heat_pump, name) not in every_poll
+    boiler = DISCOVERY.DiscoveryService.build_device_graph(
+        load_find_lines("community/ecotec_vrt380_issue109_2026-09-11_230710.yaml")
+    )
+    names = {name for _, name in plan_rereads(boiler, {}, include_energy=True)}
+    assert not names & {"CurrentConsumedPower", "CurrentYieldPower", "SupplyTempWeighted", "EnergyIntegral"}
+
+
+# Intent: resolve the logical `ctlv2` map circuit to the discovered controller, as the coordinator does.
+# Why: the planner tests need the same circuit resolution without a coordinator.
+def _controller_resolver(graph):
+    controller = graph.heating_controller_result().node
+    return lambda circuit: controller.circuit if controller and circuit.startswith("ctlv") else None
+
+
+# Intent: plan one poll (or an energy-interval poll) of the map-driven and re-read passes for `find` lines.
+# Why: the #260 tests compare what one poll reads with and without the energy interval.
+def _planned_reads(lines: list[str], energy: bool = False) -> list[tuple[str, str]]:
+    graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+    keys = {key.casefold() for key in (*graph.raw_registers, *graph.placeholder_registers)}
+    return FALLBACK_PLANNER.plan_fallback_reads(
+        graph, keys, {}, _controller_resolver(graph), MAPPING.REGISTER_MAP, include_energy=energy
+    )
+
+
+FALLBACK_PLANNER = sys.modules["vaillant_ebus.backend.fallback_planner"]
+_SECONDARY_ZONE = re.compile(r"^(?:hc|z)[23]", re.IGNORECASE)
+
+
+# Intent: no register of a heating circuit the controller declares inactive is read, except its circuit type; zone and
+#         circuit 1 keep their reads.
+# Why: issue #260 - a one-zone CTLV3 got 54 of 140 reads per poll for Hc2/Hc3/Z2/Z3, and the circuit type must stay
+#      readable so a circuit switched on later is seen.
+def test_inactive_heating_circuits_are_not_read() -> None:
+    lines = load_find_lines(ISSUE256_FIXTURE)
+
+    poll = _planned_reads(lines)
+    energy = _planned_reads(lines, energy=True)
+
+    assert [name for _, name in poll if _SECONDARY_ZONE.match(name)] == []
+    assert sorted(name for _, name in energy if _SECONDARY_ZONE.match(name)) == ["Hc2CircuitType", "Hc3CircuitType"]
+    assert any(name.startswith("Hc1") for _, name in poll) and any(name.startswith("Z1") for _, name in poll)
+    assert len(poll) <= 70
+
+
+# Intent: a circuit whose type is active, unreadable or missing keeps every read, and so does a zone that reports a
+#         live room temperature.
+# Why: an unreadable type must never hide a circuit (AGENTS.md), and contradictory evidence fails safe.
+@pytest.mark.parametrize(
+    "replacement",
+    ["ctlv3 Hc2CircuitType = heat", "ctlv3 Hc2CircuitType = ERR: read timeout", None, "ctlv3 Z2RoomTemp = 20.5"],
+)
+def test_circuits_without_evidence_of_disuse_keep_their_reads(replacement: str | None) -> None:
+    lines = [line for line in load_find_lines(ISSUE256_FIXTURE) if not line.startswith("ctlv3 Hc2CircuitType =")]
+    if replacement is not None and "RoomTemp" in replacement:
+        lines = [line for line in lines if not line.startswith("ctlv3 Z2RoomTemp")] + [
+            "ctlv3 Hc2CircuitType = inactive",
+            replacement,
+        ]
+    elif replacement is not None:
+        lines.append(replacement)
+
+    names = {name for _, name in _planned_reads(lines)}
+
+    assert "Hc2FlowTemp" in names or "Z2DayTemp" in names
+    assert not any(name.startswith(("Hc3", "Z3")) for name in names)
+
+
+# Intent: static installation settings already in `find` are read on the energy interval only; live values stay on
+#         every poll.
+# Why: issue #260 - heat curves, flow limits and holiday dates were read every 30 s; a 5-minute cadence keeps them
+#      fresh.
+def test_static_settings_follow_the_energy_interval() -> None:
+    lines = load_find_lines(ISSUE256_FIXTURE)
+
+    poll = {name for _, name in _planned_reads(lines)}
+    energy = {name for _, name in _planned_reads(lines, energy=True)}
+
+    assert {"Hc1HeatCurve", "HydraulicScheme", "HwcLockTime", "Z1HolidayStartPeriod"} <= energy - poll
+    assert "Z1DayTemp" in poll and "Hc1FlowTemp" in poll
+    assert FALLBACK_PLANNER.zone_register_number("Hc2CircuitType") is None
+    assert FALLBACK_PLANNER.zone_register_number("Z12QuickVetoTemp") == 12
+    assert FALLBACK_PLANNER.zone_register_number("HwcStatus") is None
+    assert FALLBACK_PLANNER.zone_register_number("Hc10CircuitType") is None
+
+
+# Intent: the silent mode calendar slots are re-read every 15 minutes, count first, only the slots the controller
+#         counts, and every slot while the count is unknown; never on a plain poll.
+# Why: issue #256 - slots 1 and 2 were never re-read, so the calendar showed slot 0 only.
+async def test_calendar_slots_are_re_read_up_to_the_count() -> None:
+    definitions = await _runtime_definitions_for(ISSUE256_FIXTURE)
+    graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE256_FIXTURE, after=True))
+
+    reads = [name for _, name in plan_rereads(graph, definitions, include_energy=True, include_placeholders=True)]
+    silent = [name for name in reads if name.startswith("SilentTimer_")]
+
+    assert silent[0] == "SilentTimer_Timeslots"
+    assert "SilentTimer_Monday0" in silent and "SilentTimer_Sunday1" in silent and "SilentTimer_Monday2" not in silent
+    assert len(silent) == 1 + 7 * 2
+    assert not [n for n in plan_rereads(graph, definitions, include_energy=True) if n[1].startswith("SilentTimer_")]
+    unknown = DISCOVERY.DiscoveryService.build_device_graph(
+        [line for line in load_find_lines(ISSUE256_FIXTURE, after=True) if "SilentTimer_Timeslots" not in line]
+    )
+    all_slots = [
+        name
+        for _, name in plan_rereads(unknown, definitions, include_energy=False, include_placeholders=True)
+        if name.startswith("SilentTimer_")
+    ]
+    assert "SilentTimer_Monday2" in all_slots

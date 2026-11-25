@@ -8,17 +8,26 @@
 
 ## Agent Workflow & Skills
 
-- Load the matching skill with the `skill` tool before working; do not rely on AGENTS.md alone.
-  - `ebusd-expert` for register reverse-engineering, `define` strings, and ebusd TCP-level debugging.
-  - `home-assistant` for deploy, entity/device registry, HA API, and live HA verification.
-  - `intake`, `develop`, `agent-workflows`, `verification`, `code-review`, `debugging`, `improve`, `session-review` for the risk-based lifecycle.
-  - `text-writing` is mandatory before writing user-facing text, including GitHub replies,
+- Load the matching skill before working; do not rely on AGENTS.md alone. Two kinds exist:
+  - Repository skills in `.agents/skills/`: `ebusd-expert` for register reverse-engineering, `define` strings and
+    ebusd TCP-level debugging; `home-assistant` for deploy, entity/device registry, HA API and live HA verification;
+    `community-dump-analysis` and `dump-diff` for community captures.
+  - The global Agent Skills Kit skills (`ask-*`, chosen through the router): `ask-intake`, `ask-develop`,
+    `ask-agent-workflows`, `ask-verification`, `ask-code-review`, `ask-debugging`, `ask-improve`,
+    `ask-session-review` for the risk-based lifecycle, and `ask-gh-inbox` for the GitHub inbox (use
+    `tools/gh_inbox.py` for the fetch).
+  - `ask-text-writing` is mandatory before writing user-facing text, including GitHub replies,
     issue bodies, release notes, documentation, and final responses. Use simple, human
     language that non-experts can understand. Keep code, identifiers, commands, and
     technical protocol values exact; do not simplify those.
 - This repository is release-sensitive. Follow the lifecycle in the global AGENTS.md "Skills & Workflow": `intake → plan → plan-check → execute → validate → review & audit → release-gate`, delegate independent research to subagents, and never self-declare release readiness.
+- **The owner's scope preference:** a feature release takes every item that has evidence. Classify items as
+  must/should/could for the plan, but do not offer the owner menus of items to defer; propose deferring only an item
+  without evidence or with a real risk, and say why.
 - For protocol research, prefer the upstream search and dump mining sections below over guessing from register names.
-- **Use the repository tools instead of ad-hoc commands** (details in "Developer Helper Tools"): `tools/validate.py` for every validation run, `tools/fetch_attachments.py` for issue and discussion dumps, `tools/check_translations.py` after touching `translations/`/`strings.json`, `tools/gh_reply.py` for approved GitHub replies, `tools/deploy_ha.sh` for deploys, `tools/search_upstream.sh` for upstream searches. Write a new helper into `tools/` (with tests) when a manual step is repeated a third time.
+- **Use the repository tools instead of ad-hoc commands** (details in "Developer Helper Tools"): `tools/validate.py` for every validation run, `tools/fetch_attachments.py` for issue and discussion dumps, `tools/check_translations.py` after touching `translations/`/`strings.json`, `tools/gh_reply.py` for approved GitHub replies, `tools/deploy_ha.sh` for deploys, `tools/smoke_test.py` for the release smoke test, `tools/gh_inbox.py` for the
+  inbox fetch, `tools/differential.py against <ref>` for behaviour equality, `tools/search_upstream.sh` for upstream
+  searches. Write a new helper into `tools/` (with tests) when a manual step is repeated a third time.
 
 ## Home Assistant Inspection
 
@@ -144,6 +153,9 @@ Climate behavior must follow the corresponding `mypyllant` implementation.
   author's 22 tests missed the hidden-slot case.
 - Merge accepted PRs into the release branch, fix findings there as a separate commit, and credit the author in the
   changelog.
+- Check that the PR's commits are linked to the author's GitHub account (the avatar shows on the commit). When the
+  commit email is not linked, retarget the PR to the release branch and squash-merge it on GitHub, so the credit
+  lands on the author's account and not on an unknown identity (1.14.3, PR #244).
 
 ## Home Assistant Event Loop (No Blocking I/O)
 
@@ -183,6 +195,14 @@ rejected the integration for exactly this (`os.makedirs`, `os.replace`, `os.path
 - Never set the ebusd addon `--configpath`.
 - Before changing integration code for a register write, test the register directly against ebusd over TCP or HTTP, verify a `done` response, and read the value back.
 - Treat registers that return `ERR: element not found` or `no data stored` as unsupported or temporarily unavailable; do not fabricate values or entities.
+- The owner's ebusd runs without `--enablehex`: `hex` answers `ERR: command not enabled` (256 failed reads on
+  2026-11-05). Probe with a temporary `define` under a `probe` circuit instead, and remove it afterwards.
+- A probe `define`, a bisect or an ebusd restart changes the owner's running ebusd. Ask before restarting ebusd, and
+  after a probe check `info` (the scan must be finished) and tell the owner what was left behind. A truncated define
+  from a bisect stayed active until the add-on restarted (2026-10-28).
+- **Never prune or disable while ebusd is still scanning.** After an ebusd restart, `find` misses registers until the
+  scan settles, including the state `scan: finished, some messages pending`. Pruning in that window removed 161
+  registers (#221). The guard is `bus_scan_settled`; keep every automatic prune and disable pass behind it.
 
 ## Register Discovery And Community Data
 
@@ -231,6 +251,10 @@ Hard-won facts from the 1.10.x line. Read these before touching `_define_custom_
 - **Runtime definitions vs the pruning pass.** After `define`, ebusd can list the register as `no data stored` until
   the next read or telegram. `_apply_discovery_graph` must not prune or disable entities of registers the integration
   defined itself (`runtime_defined_key_folds`); it still clears their raw value so a sentinel is never shown as data.
+- **A gate must never depend on register names the integration defined itself.** After the first `define`, ebusd's
+  `find` lists our own definitions as if ebusd had them, so a gate such as "ebusd has no CSV for this" turns false on
+  the next rediscovery and drops the whole set. This bit three times in 1.16.0. Decide from the scan identity and
+  ebusd's own messages (exclude `runtime_defined_key_folds`), and test the second discovery, not only the first.
 - **Cache seeding generates entities from cached values** (`_async_seed_entities_from_cache`). A rule that hides
   entities must therefore live in `EntityFactoryService.generate`, not only in the live path.
 - **Wrong-circuit labels.** A cache-only `z<N>`/`hc<N>` register whose live twin sits under another circuit is a stale
@@ -250,8 +274,12 @@ Hard-won facts from the 1.10.x line. Read these before touching `_define_custom_
 
 ## Known Hardware Notes
 
-- HMUX0 firmware seen: SW0302, SW0303, SW0406, SW0407 (all HW0504). SW0303 needs the runtime `define` for
-  `RunDataFlowTemp`/`RunDataReturnTemp`; SW0406 gets them from ebusd's own CSV; SW0407 uses passive definitions.
+- HMUX0 firmware seen: SW0302, SW0303, SW0406, SW0407, SW0502 (all HW0504). SW0303 needs the runtime `define` for
+  `RunDataFlowTemp`/`RunDataReturnTemp`. SW0406 loads no `08.hmux0.csv` on a stock ebusd configuration, so it gets
+  runtime definitions (`HMUX0_SW0406`, #185/#188); where ebusd does load a CSV, the integration's definitions step
+  aside. SW0407 and SW0502 share the passive set of `HMUX0_SW0407` (SW0502 from #252).
+- Controllers seen beyond CTLV2: CTLV3 SW0808 (sensoCOMFORT VRC 720, silent mode program, #256) and BASS3 SW0708
+  (Saunier Duval, B555 time programs, #235). Both programs are read-only until a write is tested.
 - VWZIO SW0500/HW0504: passive `B516/14` power, `B511/1802` heater runtime/starts, `B516 1000ffff49040000` heater DHW
   heat total (strong assumption, source `0x49` is not named upstream).
 - HMUX0 SW0407 compressor counters: `B511` data `1801` heating and `1802` DHW; `1803` is zero in all captures
@@ -260,8 +288,9 @@ Hard-won facts from the 1.10.x line. Read these before touching `_define_custom_
   capture contradicts the quiet=01 theory. Revisit only with one timestamped grab that shows both states.
 - An E7000 system manager (`scan.15`, for example Bulex MiPro) has no ebusd configuration in the `next` tree (upstream
   `john30/ebusd-configuration` PR #623), so no zone or climate entities can exist. This is not an integration bug.
-- The owner's own system is HMU00/flexoTHERM + CTLV2 + VWZ00. It cannot exercise HMUX0 or VWZIO code paths; those rest
-  on community fixtures.
+- The owner's own system is HMU00/flexoTHERM (SW0522/HW5103) + CTLV2 + VWZ00. It cannot exercise HMUX0, VWZIO, CTLV3
+  or BASS3 code paths; those rest on community fixtures. Check the reporter's firmware before writing that the owner
+  has the same hardware: a reply on #218 claimed SW0308 and had to be corrected.
 
 ## Developer Helper Tools
 
@@ -270,16 +299,25 @@ Hard-won facts from the 1.10.x line. Read these before touching `_define_custom_
 | `tools/validate.py` | CI parity in one command, with the Windows known-failure baseline. |
 | `tools/check_translations.py` | hassfest translation rules (a fixable repair has `fix_flow`, never a `description`). |
 | `tools/fetch_attachments.py` | Download issue/discussion attachments to a scratch directory, refuse `tests/fixtures`, flag duplicates of existing fixtures. |
-| `tools/gh_reply.py` | Post a reply from a Markdown file to an issue or discussion thread and update `.gh-inbox-state.json`. Only after the owner approved the text. |
+| `tools/gh_reply.py` | Post a reply from a Markdown file to an issue or discussion thread and update `.gh-inbox-state.json`; `--label` adds an issue label, `--batch FILE` posts several replies after checking all of them. Only after the owner approved the text. |
+| `tools/gh_inbox.py` | Inbox fetch: issues, PRs and discussions with activity the owner has not answered, against `.gh-inbox-state.json`; `--record` marks threads as seen without a reply. |
+| `tools/smoke_test.py` | Release smoke test steps 3 to 5: reads the two newest discovery dumps over SSH, checks sections and grab fields, runs `grab result all`. |
 | `tools/deploy_ha.sh` | Validate and deploy to the owner's Home Assistant (see below). |
-| `tools/search_upstream.sh`, `tools/compare_dumps.py`, `tools/dump_projection.py`, `tools/version.py` | Upstream search, dump diff, dump projection, version consistency. |
+| `tools/search_upstream.sh`, `tools/compare_dumps.py`, `tools/dump_projection.py` | Upstream search, dump diff, dump projection. |
+| `tools/version.py` | Version consistency; `bump X.Y.Z` also puts an empty dated heading on top of `CHANGELOG.md`. |
 | `tools/hardware_matrix.py` | Which hardware variants the community fixtures cover (also in the CI step summary). |
 | `tools/mutation_check.py` | Mutation check of one source file against chosen tests; survivors show missing or weak tests (use on small pure modules). |
 | `tools/release_gate.py` | Release-job gate: hassfest and HACS must be green on the tagged commit. |
 | `tools/check_comments.py` | Functions a diff adds or changes without the required comment: `# Intent:` and `# Why:` in tests, any comment above the function in code (`validate.py` does not check this; run it before a review). |
 | `tools/ast_compare.py` | Proof that a change is comment-only: compares the syntax trees of the working tree with a git ref. |
-| `tools/differential.py` | Behaviour-equality harness: dumps the runtime defines, withheld set, planned reads, entities and `REGISTER_MAP` for every community fixture. Two trees decide the same when the dumps are identical (use `PYTHONHASHSEED=0`). |
+| `tools/differential.py` | Behaviour-equality harness: dumps the runtime defines, withheld set, planned reads, entities and `REGISTER_MAP` for every community fixture. Two trees decide the same when the dumps are identical (use `PYTHONHASHSEED=0`). `against <ref>` compares the working tree with a ref in one step, without a git worktree. |
 | `tools/ha_snapshot.py` | Read-only snapshots of the owner's HA host: registry rows, newest discovery dump, and the deployed files against a git ref. Use it to copy the live registry shape into test fakes. |
+
+Shell notes for agents on Linux (the owner's main machine): the login shell is fish, so run loops and `$(...)` under
+`bash -c` or in a script file. `tools/deploy_ha.sh` is not executable: run `bash tools/deploy_ha.sh`. The venv has
+`paramiko` for the HA tools but no `homeassistant`, so importing `custom_components` outside pytest fails; check
+integration code through a test. Keep files that must survive the session (reply drafts, evidence) in the git-ignored
+`.research-scratch/`, not in the session scratchpad, which was cleaned mid-session four times.
 
 Shell notes for agents: on Windows with Git Bash, never pass multi-line Python with backslashes, quotes or `$` through an
 inline heredoc. Write a script file (a scratch directory is fine) and run it. Check `git status` before and after bulk
@@ -287,6 +325,20 @@ downloads. Foreground `sleep` is blocked; wait for CI with the PR status tool, n
 `python -I` ignores `PYTHONUTF8`; read GitHub JSON with `python -I -X utf8`, or Windows decodes it as cp1252 and fails.
 Run `git fetch --tags origin` and check `git status -sb` before an inbox pass or a release: issues quote releases that a
 stale local `main` does not have.
+
+## Git Commands The Guard Blocks
+
+The git guard hook refuses destructive commands, about ten times in the 1.11 to 1.16 sessions. Do not retry them
+through another tool. Use the safe form, or hand the command to the owner.
+
+- `git checkout .` / `git reset --hard`: use `git stash` (keep the stash until the owner agrees).
+- `git branch -D`: use `git branch -d`. A squash-merged branch needs `-D`; hand that to the owner.
+- `git worktree remove --force`: avoid worktrees for comparisons; `tools/differential.py against <ref>` exports the
+  ref with `git archive`. Remove a clean worktree without `--force`.
+- `git push --force`, `git push --delete`: owner only. Run `git fetch --prune` first, so the list holds only branches
+  that still exist; one dead branch made the owner's whole batch fail.
+- Give owner-only commands in one block at the end of the turn, and never chain them with another write: a blocked
+  command also drops the rest of its line (a handover note got lost that way).
 
 ## Known Limitations
 
@@ -325,6 +377,10 @@ rules, YAML, compileall, `git diff --check`, pytest) and, on Windows, compares f
 `tools/known_env_failures.txt` so only new failures fail the run. Use `--quick` to skip pytest and `-k expr` to
 narrow it. The individual commands below remain the reference.
 
+Judge a run by its exit status, never by a piped `tail`: `validate.py ... | tail` returns the exit code of `tail`, and a
+commit with failing tests went out that way (2026-10-29). Run `ruff check` before committing; long comment lines
+(E501) failed four commits in a row.
+
 Use the repository virtualenv: `.venv/bin/<tool>` on Linux/macOS, `.venv/Scripts/<tool>` on Windows. Create it with
 `python -m venv .venv && .venv/Scripts/python -m pip install pytest pytest-asyncio pyyaml voluptuous ruff==0.16.4 mypy==1.15.0 types-cryptography paramiko`
 (`paramiko` is only for `tools/deploy_ha.py`).
@@ -359,7 +415,18 @@ deploy). Hard rules that always apply:
 - Every release candidate runs the discovery-dump smoke test on the owner's HA before it is called ready.
 - Push the `vX.Y.Z` tag only after all PR checks are green. The release job also enforces this
   (`tools/release_gate.py`).
-- Approvals do not carry over: deploy, restart, push, tag and GitHub posts are separate outward actions.
+- Approvals do not carry over: deploy, restart, push, tag and GitHub posts are separate outward actions, except for
+  the release sequence defined in the next bullet.
+- **What "release" means.** When the owner says to release (or "merge and tag"), that one approval covers: merge the
+  PR once all checks are green, update `main`, push the annotated tag on the merge commit, wait for the release job,
+  then post the replies whose text the owner approved. Do not stop halfway to ask again. Anything the owner did not
+  name (a new reply text, a deploy, an ebusd restart) still needs its own yes.
+- Before merging, ask whether anything else belongs in this release, unless the owner just said so: in 1.14.3 a fix
+  had to go in after the merge had started. Until the owner confirms the scope, a release branch is a candidate; do
+  not merge or tag it.
+- Auto-merge is off in this repository. Merge release PRs with a merge commit (`gh pr merge --merge`), never `--auto`.
+  A community PR is the exception described under "Community Pull Requests" (squash-merge when its commits are not
+  linked to the author's account).
 
 ## Working With Agents (Claude Code and others)
 
@@ -383,6 +450,7 @@ deploy). Hard rules that always apply:
 - Write GitHub issue, discussion, and pull request replies in clear English.
 - Use clean Markdown with complete sentences, correct punctuation, and blank lines between paragraphs.
 - Put lists and distinct points on separate lines. Never post compressed, run-on, or caveman-style prose.
-- Draft each reply as a Markdown file and post it with `python tools/gh_reply.py issue|discussion <n> <file>`
-  (`--dry-run` first). The tool replies under the thread root for discussions and marks the item in
+- Draft each reply as a Markdown file in `.research-scratch/replies/` (git-ignored, survives the session) and post it
+  with `python tools/gh_reply.py issue|discussion <n> <file>` or `--batch` (`--dry-run` first). Delete the drafts after
+  posting. The tool replies under the thread root for discussions and marks the item in
   `.gh-inbox-state.json`. Post only after the owner approved the text, and after the release it announces exists.

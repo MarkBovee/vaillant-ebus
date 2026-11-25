@@ -6,13 +6,13 @@ from .models import RegisterMeta
 
 CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
     # ctlv2 (Heating Control)
+    # The flow setpoint the controller calculates from the heat curve; ebusd defines it read-only (`r` only), so it
+    # is a sensor, never a number slider (issue #205: a slider suggested it could be changed).
     "ctlv2.Hc1ActualFlowTempDesired": RegisterMeta(
         friendly_name="Flow Temperature Target (HC1)",
         device_class="temperature",
         unit="°C",
-        writable=False,
-        entity_type="number",
-        entity_category="config",
+        entity_category="diagnostic",
     ),
     "ctlv2.Hc1PumpStatus": RegisterMeta(
         friendly_name="Pump Status (HC1)",
@@ -371,12 +371,7 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
         friendly_name="Flow Temperature Target (HC2)",
         device_class="temperature",
         unit="°C",
-        writable=True,
-        min_value=5,
-        max_value=75,
-        step=0.5,
-        entity_type="number",
-        entity_category="config",
+        entity_category="diagnostic",
     ),
     "ctlv2.Hc2FlowTemp": RegisterMeta(
         friendly_name="Flow Temperature (HC2)",
@@ -483,12 +478,7 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
         friendly_name="Flow Temperature Target (HC3)",
         device_class="temperature",
         unit="°C",
-        writable=True,
-        min_value=5,
-        max_value=75,
-        step=0.5,
-        entity_type="number",
-        entity_category="config",
+        entity_category="diagnostic",
     ),
     "ctlv2.Hc3FlowTemp": RegisterMeta(
         friendly_name="Flow Temperature (HC3)",
@@ -788,10 +778,12 @@ CONTROLLER_REGISTERS: dict[str, RegisterMeta] = {
         entity_type="select",
         entity_category="config",
     ),
+    # The outside temperature below which the controller heats continuously; upstream defines `-26=off` (issue #205).
     "ctlv2.ContinuousHeating": RegisterMeta(
         friendly_name="Continuous Heating",
         icon="mdi:radiator",
         entity_category="diagnostic",
+        value_labels={"-26": "off", "-26.0": "off"},
     ),
     "ctlv2.HcStorageTempBottom": RegisterMeta(
         friendly_name="Heating Storage Temp (Bottom)",

@@ -61,21 +61,18 @@ class StaleEntitiesRepairFlow(RepairsFlow):
     async def async_step_confirm(self, user_input: dict[str, str] | None = None) -> FlowResult:
         coordinator = self.hass.data.get(DOMAIN, {}).get(self._entry_id)
         registry = entity_registry.async_get(self.hass)
-        report = cleanup.stale_report(registry, self.hass.states, self._entry_id, DOMAIN, coordinator)
+        devices = device_registry.async_get(self.hass)
+        device_entries = device_registry.async_entries_for_config_entry(devices, self._entry_id)
+        report = cleanup.stale_report(registry, self.hass.states, self._entry_id, DOMAIN, coordinator, device_entries)
         if report is None:
             return self.async_abort(reason="cleanup_unavailable")
-        if not report.orphans and not report.dormant:
+        if not report.has_work:
             return self.async_create_entry(data={})
         if user_input is not None:
             removed = cleanup.RemovalResult(entities=0, devices=0)
-            if report.orphans:
-                devices = device_registry.async_get(self.hass)
+            if report.has_removals:
                 removed = cleanup.remove_orphans(
-                    registry,
-                    devices,
-                    DOMAIN,
-                    [item.entity_id for item in report.orphans],
-                    device_registry.async_entries_for_config_entry(devices, self._entry_id),
+                    registry, devices, DOMAIN, [item.entity_id for item in report.orphans], device_entries
                 )
             switched_off = cleanup.disable_dormant(
                 registry, [item.entity_id for item in report.dormant], RegistryEntryDisabler.INTEGRATION
@@ -92,13 +89,7 @@ class StaleEntitiesRepairFlow(RepairsFlow):
         return self.async_show_form(
             step_id="confirm",
             data_schema=vol.Schema({}),
-            description_placeholders={
-                "count": str(len(report.orphans)),
-                "entities": cleanup.preview_text(report.orphans),
-                "dormant_count": str(len(report.dormant)),
-                "dormant": cleanup.preview_text(report.dormant),
-                "kept": str(len(report.kept_customized)),
-            },
+            description_placeholders=cleanup.report_placeholders(report),
         )
 
 
@@ -130,17 +121,9 @@ async def async_dismiss_detection_incomplete(hass: HomeAssistant) -> None:
     ir.async_delete_issue(hass, DOMAIN, ISSUE_DETECTION_INCOMPLETE)
 
 
-# Create or update the repair issue that lists the stale entities and the entities without data.
-# The issue carries the entry id for the fix flow and the counts and names for the text.
-async def async_create_stale_entities(
-    hass: HomeAssistant,
-    entry_id: str,
-    count: int,
-    preview: str,
-    kept: int,
-    dormant_count: int = 0,
-    dormant_preview: str = "",
-) -> None:
+# Create or update the repair issue that lists the stale entities, the entities without data and empty devices.
+# The issue carries the entry id for the fix flow and the counts and names (`cleanup.report_placeholders`) for the text.
+async def async_create_stale_entities(hass: HomeAssistant, entry_id: str, placeholders: dict[str, str]) -> None:
     """Create or update the repair issue that lists stale entities for removal and dormant ones to switch off."""
     ir.async_create_issue(
         hass,
@@ -149,13 +132,7 @@ async def async_create_stale_entities(
         is_fixable=True,
         severity=ir.IssueSeverity.WARNING,
         translation_key=ISSUE_STALE_ENTITIES,
-        translation_placeholders={
-            "count": str(count),
-            "entities": preview,
-            "dormant_count": str(dormant_count),
-            "dormant": dormant_preview,
-            "kept": str(kept),
-        },
+        translation_placeholders=placeholders,
         data={"entry_id": entry_id},
     )
 

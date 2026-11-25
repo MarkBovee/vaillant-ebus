@@ -66,13 +66,17 @@ class TimerProgramAccess:
     # `force` reads past ebusd's cache; a read for display may use the cache.
     async def inspect_day(self, day: str, force: bool = True) -> DayRead:
         raw = [await self._read(f"{self.prefix}_{day}{index}", force) for index in range(MAX_SLOTS_PER_DAY)]
-        slots = [slot for slot in (parse_slot(value) for value in raw) if slot is not None]
+        counted = await self._slot_count(day, force)
+        # Slots at or above the controller's count keep the times of a removed slot (issue #256): they are not part
+        # of the day. Without the cut, the read-back after removing a slot would still show it and fail the write.
+        in_use = raw if counted is None else raw[:counted]
+        slots = [slot for slot in (parse_slot(value) for value in in_use) if slot is not None]
         readable = sum(value is not None for value in raw)
         self.readable_slots[day] = readable
         read = DayRead(
             slots=slots,
             with_temperature=any(has_temperature_column(value) for value in raw if value),
-            counted=await self._slot_count(day, force),
+            counted=counted,
             readable=readable,
         )
         self._last_reads[day] = read

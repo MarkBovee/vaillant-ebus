@@ -24,8 +24,11 @@ from .models import (
     DeviceType,
     EbusdRegister,
     RegisterMeta,
+    declared_unused_zones,
     is_no_data_value,
+    unused_zone_numbers,
     valid_zone_owners,
+    zone_reports_room_temperature,
 )
 from .runtime_definitions import calendar_slot_register_keys, strong_assumption_register_keys
 
@@ -250,42 +253,8 @@ def _heating_circuit_inactive(graph: DeviceGraph, circuit: str, number: str) -> 
     return value is not None and value.strip().casefold() == "inactive"
 
 
-_CIRCUIT_TYPE_KEY = re.compile(r"^([^.]+)\.Hc(\d+)CircuitType$", re.IGNORECASE)
-
 # The ebusd circuit of the solar controller configuration (ec.sol.sc.csv).
 SOLAR_CIRCUIT = "sc"
-
-
-# List the (circuit, number) pairs of secondary heating circuits that the controller itself declares unused.
-# ebusd and the controller answer static defaults for zones that are not installed (day temperature 21.0, holiday
-# dates 2015), so their registers look live and created about 40 entities for two zones that do not exist (the owner's
-# HA, issue #152). Only `HcNCircuitType = inactive` is evidence. Zone 1 is never declared unused, an unreadable
-# type never is, and a zone that reports a room temperature is kept because contradictory evidence must fail safe.
-def declared_unused_zones(graph: DeviceGraph) -> frozenset[tuple[str, int]]:
-    unused: set[tuple[str, int]] = set()
-    for key, raw in graph.raw_registers.items():
-        match = _CIRCUIT_TYPE_KEY.match(key)
-        if match is None or int(match.group(2)) < 2:
-            continue
-        circuit, number = match.group(1), int(match.group(2))
-        if raw is None or raw.strip().casefold() != "inactive":
-            continue
-        if _zone_reports_room_temperature(graph, circuit, number):
-            continue
-        unused.add((circuit.casefold(), number))
-    return frozenset(unused)
-
-
-# List the zone numbers that every reporting controller declares unused.
-# Zone devices are shared by number across controllers, so a number is unused only when none of them uses it.
-def unused_zone_numbers(graph: DeviceGraph) -> frozenset[int]:
-    declared = declared_unused_zones(graph)
-    in_use = {
-        int(match.group(2))
-        for key in graph.raw_registers
-        if (match := _CIRCUIT_TYPE_KEY.match(key)) and (match.group(1).casefold(), int(match.group(2))) not in declared
-    }
-    return frozenset({number for _, number in declared} - in_use)
 
 
 _ZONE_DATE_REGISTER = re.compile(r"^(z\d+)holiday(?:start|end)period$")
@@ -351,15 +320,6 @@ def _zone_node_number(circuit: str) -> int | None:
 # Circuit names are compared case-insensitively everywhere in the graph.
 def _circuit_of(register_key: str) -> str:
     return register_key.partition(".")[0].casefold()
-
-
-# Report whether zone N currently reports a real room temperature.
-# The controller keeps static defaults for a zone that is not installed (issue #186, Z3); only a live room
-# temperature proves the zone exists, so writable settings must not appear for a placeholder zone.
-def _zone_reports_room_temperature(graph: DeviceGraph, circuit: str, zone_number: int) -> bool:
-    expected = f"{circuit}.Z{zone_number}RoomTemp".casefold()
-    value = next((raw for key, raw in graph.raw_registers.items() if key.casefold() == expected), None)
-    return value is not None and not is_no_data_value(value)
 
 
 # Give a placeholder zone's setting the empty metadata it had before zone templating.
@@ -542,7 +502,7 @@ class EntityFactoryService:
                 if (
                     zone_setting_number is not None
                     and base_meta.writable
-                    and not _zone_reports_room_temperature(graph, circuit, zone_setting_number)
+                    and not zone_reports_room_temperature(graph, circuit, zone_setting_number)
                     and hints.get(description_unique_id(circuit, name).casefold()) != base_meta.entity_type
                 ):
                     base_meta = _placeholder_zone_meta()

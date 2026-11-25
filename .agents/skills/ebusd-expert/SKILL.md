@@ -76,7 +76,10 @@ define -r "r5,ctlv2,z1RoomHumidity,z1RoomHumidity,31,15,B524,020003002800,value,
 
 **Fallback: `REGISTER_MAP`** in `mapping.py`. Registers with metadata here are always created as entities, even if `find` missed them. `_fallback_read()` in `coordinator.py` reads them directly.
 
-**Hex scanning** (only when hardware register is completely undocumented):
+**Hex scanning** (only when a register is completely undocumented, and only on an ebusd started with
+`--enablehex`). The owner's ebusd runs without it: `hex` answers `ERR: command not enabled` (256 failed reads on
+2026-11-05). On the owner's system, probe with a temporary `define` under a `probe` circuit and a plain `read -def`
+instead, check `info` afterwards, and tell the owner what is left until the next ebusd restart.
 
 ```python
 cmd = f"hex {master:02x} {cmd_hi:02x} {cmd_lo:02x} {subcmd_hi:02x} {subcmd_lo:02x} {reg:02x}"
