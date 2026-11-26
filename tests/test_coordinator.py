@@ -8370,3 +8370,14 @@ def test_cc_timer_calendar_is_the_circulation_program() -> None:
     calendar = sys.modules["vaillant_ebus.calendar"]
     assert calendar.SCHEDULES["Circulation Program"] == "CcTimer"
     assert "Heating Program" not in calendar.SCHEDULES
+
+
+# Intent: a zone 2 with a room-zone mapping value but an inactive circuit and no room temperature is not a zone.
+# Why: audit of 1.16.2 - this is the one case where the inactive circuit type now overrules the mapping, which used to
+#      make the zone valid on its own.
+def test_inactive_circuit_overrules_a_room_zone_mapping_without_room_temperature() -> None:
+    lines = [line for line in load_find_lines(ISSUE152_V1161_FIXTURE) if "Z3RoomZoneMapping" not in line]
+    controller = next(line.split()[0] for line in lines if " Hc3CircuitType " in line)
+    graph = DISCOVERY.DiscoveryService.build_device_graph(lines + [f"{controller} Z3RoomZoneMapping = 1"])
+
+    assert not MODELS.zone_is_valid(graph, controller, "z3")

@@ -233,6 +233,9 @@ async def test_read_register_max_age_adds_m_flag() -> None:
     val = await s.read_register("hmu", "CurrentConsumedPower", max_age=15)
     assert val == "0.8"
     assert b"read -m 15 -c hmu CurrentConsumedPower" in s._writer.write.call_args.args[0]
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"0.9\n"])
+    await s.read_register("hmu", "CurrentConsumedPower", max_age=0)
+    assert b"read -m 0 -c hmu CurrentConsumedPower" in s._writer.write.call_args.args[0]
 
 
 # write_register: read-back that does not match the written value fails.

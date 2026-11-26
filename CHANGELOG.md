@@ -33,11 +33,13 @@ unused.
   exact power the heat pump draws, updated on every poll; "Compressor Power" is a rounded value in kW. Checked on three
   units, including a live read on a flexoTHERM SW0522 (752 W next to 0.7 kW).
 - **Readable compressor states** (issue #259): `heat_overrun` shows as "Overrun (Heating)", `deicing_active` as "Deicing
-  active", and so on for every status code.
+  active", and so on for every status code. If an automation compares "Compressor Status" or "Heat Pump Status Code" with a raw code such as
+  `heat_overrun`, change it to the new text.
 - **Fan speed on aroTHERM HMUX0 SW0406** (issue #205, thanks @Zapgla): "Fan 1 Speed" and, on units with two fans, "Fan 2
   Speed".
 - The calendar "Heating Program" is now called **"Circulation Program"** (issue #235, thanks @jlrosende): it's the hot
-  water circulation schedule. The heating schedule is "Zone Program".
+  water circulation schedule. The heating schedule is "Zone Program". Its entity id stays the same; the event title
+  changes with the name.
 
 ### Not changed
 
