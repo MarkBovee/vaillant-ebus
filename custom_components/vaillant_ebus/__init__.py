@@ -330,4 +330,9 @@ async def async_remove_config_entry_device(
     if coordinator is None:
         return False
     circuits = {identifier[1] for identifier in device_entry.identifiers if identifier[0] == DOMAIN}
-    return bool(circuits) and not any(coordinator.has_discovered_circuit(circuit) for circuit in circuits)
+    # A zone device whose heating circuit the controller declares unused may go too, although ebusd still lists its
+    # placeholder registers (issue #152: removing the ghost Zone 3 was "rejected by integration").
+    unused = {f"z{number}" for number in coordinator.unused_zone_numbers()}
+    return bool(circuits) and not any(
+        coordinator.has_discovered_circuit(circuit) and str(circuit).casefold() not in unused for circuit in circuits
+    )

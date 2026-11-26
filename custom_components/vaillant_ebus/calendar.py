@@ -21,7 +21,8 @@ from .timer_access import TimerProgramAccess
 
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 SCHEDULES = {
-    "Heating Program": "CcTimer",
+    # `CcTimer` is the hot water circulation program (issue #235), not the heating program (that is `Z1Timer`).
+    "Circulation Program": "CcTimer",
     "Zone Program": "Z1Timer",
     "Domestic Hot Water Program": "HwcTimer",
     "Cooling Program": "Z1CoolingTimer",
@@ -48,7 +49,7 @@ async def async_setup_entry(
         if not coordinator.discovery_ready or coordinator.heating_circuit is None:
             return
         schedules = {
-            "Heating Program": ("CcTimer", coordinator.heating_circuit, coordinator.heating_circuit),
+            "Circulation Program": ("CcTimer", coordinator.heating_circuit, coordinator.heating_circuit),
             "Domestic Hot Water Program": ("HwcTimer", coordinator.heating_circuit, "dhw"),
         }
         # The silent mode program (issue #256) only where all its slots can be read: ebusd's own configuration

@@ -8194,3 +8194,179 @@ async def test_calendar_slots_are_re_read_up_to_the_count() -> None:
         if name.startswith("SilentTimer_")
     ]
     assert "SilentTimer_Monday2" in all_slots
+
+
+# Intent: the every-poll reads ask ebusd for a value younger than half the poll interval; energy-interval and map reads
+#         may use ebusd's cache.
+# Why: issues #255/#259/#260 - without `-m` ebusd answered every poll from its 300 s cache, so live power changed only
+#      every 5 minutes, while settings and counters must not hit the bus on every poll.
+async def test_every_poll_reads_ask_ebusd_for_a_fresh_value() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines("community/arotherm_plus_prenergy_discovery.yaml")
+        )
+        coordinator = VaillantCoordinator(_hass(tmpdir), _entry())
+        coordinator.ebus = MagicMock(spec=EbusService)
+        coordinator.ebus.is_connected = True
+        coordinator.ebus.read_register = AsyncMock(return_value=None)
+        coordinator._graph = graph
+        coordinator._last_find_keys = set(graph.raw_registers) | set(graph.placeholder_registers)
+
+        await coordinator._fallback_read(include_energy=True)
+
+        calls = {call.args[:2]: call.kwargs for call in coordinator.ebus.read_register.await_args_list}
+        heat_pump = graph.heat_pump_result().node.circuit
+        expected_age = max(5, int(coordinator.update_interval.total_seconds()) // 2)
+        assert calls[(heat_pump, "CurrentConsumedPower")].get("max_age") == expected_age
+        assert "max_age" not in calls[(heat_pump, "SupplyTempWeighted")]
+
+
+ISSUE259_FIXTURE = "community/hmu00_sw0517_issue259_2026-11-26_091330_discovery.yaml"
+HARDWARE_PROFILES = sys.modules["vaillant_ebus.backend.hardware_profiles"]
+NOW = datetime(2026, 11, 26, 12, 0)
+ISSUE152_V1161_FIXTURE = "community/saunier_duval_f34_issue152_2026-11-25_v1161_discovery.yaml"
+
+
+# Intent: on the HMU00 SW0517 capture the yields, COPs, block time and total energy are re-read on the energy interval
+#         and the compressor utilisation on every poll.
+# Why: issue #259 - the gateway never reads them and the capture's `changes` show them frozen while power changed.
+def test_issue259_frozen_heat_pump_values_are_re_read() -> None:
+    graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE259_FIXTURE))
+    heat_pump = graph.heat_pump_result().node.circuit
+
+    every_poll = set(plan_rereads(graph, {}, include_energy=False))
+    energy = set(plan_rereads(graph, {}, include_energy=True))
+
+    assert (heat_pump, "CurrentCompressorUtil") in every_poll
+    for name in ("YieldHcDay", "YieldHwcDay", "YieldHcMonth", "CopHc", "CompressorBlocktime", "TotalEnergyUsage"):
+        assert (heat_pump, name) in energy - every_poll, name
+
+
+# Intent: the HMU00 HW5103 firmwares with a decoded `B509 5402005b0d` get the electrical power in watts, re-read on
+#         every poll, also after a rediscovery that lists the integration's own definition; other firmwares do not.
+# Why: issue #259 - SW0517 (reporter), SW0522 (owner live: 752.4 W next to 0.7 kW) and SW0901 (capture) decode it,
+#      ebusd's HW5103 configuration lacks it, and a gate on our own name would drop it on the second discovery.
+@pytest.mark.parametrize(
+    ("fixture", "expected"),
+    [
+        (ISSUE259_FIXTURE, True),
+        ("community/arotherm_basv_boost_off_discovery.yaml", True),
+        ("community/arotherm_plus_2zone_discovery.yaml", False),
+        ("community/ecotec_vrt380_issue109_2026-09-11_230710.yaml", False),
+    ],
+)
+async def test_hmu00_electrical_power_is_defined_on_evidenced_firmware(fixture: str, expected: bool) -> None:
+    definitions = await _runtime_definitions_for(fixture)
+    defined = [key for key in definitions if key.endswith(".RunDataElPowerConsumption") and key.startswith("r.")]
+
+    assert bool(defined) is expected
+    if expected:
+        circuit = defined[0].split(".")[1]
+        again = DISCOVERY.DiscoveryService.build_device_graph(
+            load_find_lines(fixture, after=True) + [f"{circuit} RunDataElPowerConsumption = 752.4"]
+        )
+        assert (circuit, "RunDataElPowerConsumption") in plan_rereads(again, definitions, include_energy=False)
+        assert any("RunDataElPowerConsumption" in d for d in RUNTIME_DEFINITIONS.build_runtime_defines(again, NOW))
+
+
+# Intent: `PowerConsumptionHmu` gets no read and no entity on HMU00 SW0517, and stays on firmware that decodes it.
+# Why: issue #259 and the owner's SW0522 - `B516 14` answers empty there (`ERR: invalid position`).
+def test_power_consumption_hmu_is_unreliable_on_sw0517() -> None:
+    sw0517 = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE259_FIXTURE))
+    sw0901 = DISCOVERY.DiscoveryService.build_device_graph(
+        load_find_lines("community/arotherm_basv_boost_off_discovery.yaml")
+    )
+
+    assert "hmu.powerconsumptionhmu" in HARDWARE_PROFILES.unreliable_register_keys(sw0517)
+    assert "hmu.powerconsumptionhmu" not in HARDWARE_PROFILES.unreliable_register_keys(sw0901)
+    names = {entity.name for entity in EntityFactoryService().generate(sw0517)}
+    assert "PowerConsumptionHmu" not in names
+
+
+# Intent: the BAI flame state is re-read on every poll where `find` lists it, and nowhere else.
+# Why: issue #152 - `bai Flame` is plain `r`; nobody re-read it, so it flipped between a stale value and unknown.
+def test_issue152_flame_is_re_read_every_poll() -> None:
+    f34 = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE152_V1161_FIXTURE))
+    heat_pump = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE259_FIXTURE))
+
+    assert ("bai", "Flame") in plan_rereads(f34, {}, include_energy=False)
+    assert not [read for read in plan_rereads(heat_pump, {}, include_energy=False) if read[1] == "Flame"]
+
+
+# Intent: the F34's zone 3, whose circuit the controller declares inactive and which reports no room temperature, is no
+#         zone, while zone 1 stays; a zone with a live room temperature stays valid despite the inactive type.
+# Why: issue #152 - `Z3ActualRoomTempDesired = 0.0` created a ghost zone 3 climate, flow climate and holiday dates.
+def test_issue152_declared_inactive_zone_without_room_temperature_is_not_a_zone() -> None:
+    lines = load_find_lines(ISSUE152_V1161_FIXTURE)
+    graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+    controller = next(key.split(".")[0] for key in graph.raw_registers if key.endswith(".Hc3CircuitType"))
+
+    owners = MODELS.valid_zone_owners(graph)
+    assert "z3" not in owners and "z1" in owners
+    assert 3 in FACTORY.unused_zone_numbers(graph)
+    live = DISCOVERY.DiscoveryService.build_device_graph(
+        [line for line in lines if not line.startswith(f"{controller} Z3RoomTemp")]
+        + [f"{controller} Z3RoomTemp = 20.5"]
+    )
+    assert MODELS.zone_is_valid(live, controller, "z3")
+
+
+# Intent: status codes show a readable label while the data keeps the raw code.
+# Why: issue #259 - `heat_overrun` and `deicing_active` showed raw; climate and operating-state logic compare raw codes.
+def test_status_codes_have_readable_labels() -> None:
+    labels = MAPPING.REGISTER_MAP["hmu.RunDataStatuscode"].value_labels
+
+    assert labels["heat_overrun"] == "Overrun (Heating)"
+    assert labels["deicing_active"] == "Deicing active"
+    assert labels["hwc_compressor_active"] == "Active (DHW)"
+    assert MAPPING.REGISTER_MAP["hmu.HMUStatusCode"].value_labels == labels
+
+
+# Intent: a stock SW0406 bus gets the fan speed reads, re-read on every poll; the owner's flexoTHERM does not.
+# Why: issue #205 - `B509 540200470a` is 503.0 rpm on SW0406 (Zapgla's hex), and ebusd has no hmux0 CSV there.
+async def test_sw0406_fan_speeds_are_defined_and_re_read() -> None:
+    stock = "community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml"
+    definitions = await _runtime_definitions_for(stock)
+    graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(stock, after=True))
+
+    fan = definitions["r.hmux0.RunDataFan1Speed"].split(",", 8)
+    assert fan[6:8] == ["B509", "540200470a"]
+    assert ("hmux0", "RunDataFan1Speed") in plan_rereads(graph, definitions, include_energy=False)
+    assert "r.hmux0.RunDataFan1Speed" not in await _runtime_definitions_for(ISSUE259_FIXTURE)
+
+
+# Intent: load the integration's `__init__.py` once, for its Home Assistant hooks.
+# Why: the device-removal hook lives there and the shared loader only stubs that module.
+def _load_init() -> types.ModuleType:
+    from tests import _component_loader
+
+    return _component_loader._exec_source("vaillant_ebus.init_real", COMPONENT_PATH / "__init__.py")
+
+
+INIT = _load_init()
+
+
+# Intent: the user may delete the device of a zone the controller declares unused, but not a zone in use, even though
+#         ebusd still lists both zones' registers.
+# Why: issue #152 - deleting the ghost Zone 3 was "rejected by integration" because only the graph node was checked.
+async def test_unused_zone_device_may_be_removed_but_a_used_one_not() -> None:
+    graph = DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(ISSUE152_V1161_FIXTURE))
+    coordinator = MagicMock()
+    coordinator.has_discovered_circuit = lambda circuit: circuit in graph.nodes
+    coordinator.unused_zone_numbers = lambda: FACTORY.unused_zone_numbers(graph)
+    hass = SimpleNamespace(data={"vaillant_ebus": {"entry-1": coordinator}})
+    entry = SimpleNamespace(entry_id="entry-1")
+
+    zone3 = SimpleNamespace(identifiers={("vaillant_ebus", "z3")})
+    zone1 = SimpleNamespace(identifiers={("vaillant_ebus", "z1")})
+
+    assert await INIT.async_remove_config_entry_device(hass, entry, zone3) is True
+    assert await INIT.async_remove_config_entry_device(hass, entry, zone1) is False
+
+
+# Intent: the `CcTimer` calendar is called "Circulation Program".
+# Why: issue #235 - `CcTimer` is the hot water circulation program; "Heating Program" sent users to the wrong schedule.
+def test_cc_timer_calendar_is_the_circulation_program() -> None:
+    calendar = sys.modules["vaillant_ebus.calendar"]
+    assert calendar.SCHEDULES["Circulation Program"] == "CcTimer"
+    assert "Heating Program" not in calendar.SCHEDULES

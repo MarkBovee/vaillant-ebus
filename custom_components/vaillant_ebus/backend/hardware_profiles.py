@@ -175,10 +175,37 @@ HMU00_SW0522 = HardwareProfile(
     evidence="owner live reads 2026-11-24 (read -def), equal to the community CSV display values",
 )
 
+# aroTHERM HMU00 SW0517/HW5103 of issue #259 (2026-11-26 capture): `B516 14` (`PowerConsumptionHmu`) answers empty.
+HMU00_SW0517 = HardwareProfile(
+    name="hmu00_sw0517",
+    scan_type="hmu00",
+    device_type="HEAT_PUMP",
+    sw=frozenset({"0517"}),
+    hw=frozenset({"5103"}),
+    evidence="issue #259 capture hmu00_sw0517_issue259_2026-11-26_091330 (B516 14: ERR invalid position)",
+)
+
+# HMU00 HW5103 firmwares where `B509 5402005b0d` (electrical power in W) was decoded: SW0901 in the
+# arotherm_basv_boost_off capture (1584 W next to `PowerConsumptionHmu` 1.584 kW), SW0522 live on the owner's unit
+# (752.4 W next to `CurrentConsumedPower` 0.7 kW, 2026-11-26) and SW0517 by the issue #259 reporter (892 W next to
+# 0.8 kW). ebusd's HW5103 configuration does not define it.
+HMU00_B509_POWER = HardwareProfile(
+    name="hmu00_b509_power",
+    scan_type="hmu00",
+    device_type="HEAT_PUMP",
+    sw=frozenset({"0517", "0522", "0901"}),
+    hw=frozenset({"5103"}),
+    evidence="arotherm_basv_boost_off capture (SW0901); owner live read (SW0522); issue #259 reporter read (SW0517)",
+)
+
 # Registers a firmware reports with a layout that does not match their name. They get no entity and no active read on
 # the profile's owner; a YAML `enabled: true` override still creates the entity.
 UNRELIABLE_REGISTERS: tuple[tuple[HardwareProfile, frozenset[str]], ...] = (
     (HMU00_SW0308, frozenset({"RunStatsCompressorStarts"})),
+    # `B516 14` answers empty on these firmwares (owner live read on SW0522, issue #259 capture on SW0517); SW0901,
+    # SW0902 and SW0905 decode it (issue #227 captures).
+    (HMU00_SW0517, frozenset({"PowerConsumptionHmu"})),
+    (HMU00_SW0522, frozenset({"PowerConsumptionHmu"})),
 )
 # Plain-`r` registers a firmware's owner re-reads on the energy interval instead of an unreliable one: on SW0308 the
 # B51A `StatCompressorStarts` is the start counter (2982, equal to `CompressorStarts`, issue #233).

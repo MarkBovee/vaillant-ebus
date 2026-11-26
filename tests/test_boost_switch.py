@@ -531,11 +531,12 @@ async def test_issue186_away_switch_turn_off_resets_every_live_zone(tmp_path) ->
     ]
 
 
-# Intent: the placeholder third zone of the capture never receives a holiday write.
-# Why: Z3 reports no room temperature (circuit type inactive); writing to it would target hardware that is not there.
+# Intent: the placeholder third zone of the capture is no zone at all and never receives a holiday write.
+# Why: Z3 reports no room temperature and its circuit type is inactive; writing to it would target hardware that is
+#      not there, and since issue #152 a declared-inactive zone without a room temperature is not a zone.
 async def test_issue186_away_switch_skips_placeholder_zone(tmp_path) -> None:
     coordinator = _discovered_coordinator(ISSUE186_FIXTURE, tmp_path)
-    assert "z3" in coordinator.zone_circuits()
+    assert "z3" not in coordinator.zone_circuits() and "z2" in coordinator.zone_circuits()
 
     await AwayModeSwitch(coordinator, _entry(), "z1").async_turn_on()
 

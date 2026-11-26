@@ -599,8 +599,9 @@ class EbusService:
     # Read a register value and optionally surface transport errors to pollers.
     # Unsupported values are unavailable data, while TCP failures need a reconnect.
     # Read a single register value from ebusd, strip status suffix. By default
-    # ebusd may answer from its cache; force=True adds "-f" so an active-read
-    # register is queried from the device instead (used to verify writes).
+    # ebusd may answer from its cache, for up to 300 s (`read -m` default); force=True adds "-f" so an active-read
+    # register is queried from the device instead (used to verify writes). `max_age` sets that cache age in seconds
+    # (`-m`): a live value re-read on every poll needs it, or it follows the device only every 5 minutes (#260).
     async def read_register(
         self,
         circuit: str,
@@ -608,12 +609,18 @@ class EbusService:
         field: str = "",
         force: bool = False,
         raise_transport_errors: bool = False,
+        max_age: int | None = None,
     ) -> str | None:
         _validate_identifier("circuit", circuit)
         _validate_identifier("register name", name)
         if field:
             _validate_identifier("field", field)
-        cmd = f"read -f -c {circuit} {name}" if force else f"read -c {circuit} {name}"
+        if force:
+            cmd = f"read -f -c {circuit} {name}"
+        elif max_age is not None:
+            cmd = f"read -m {max(0, int(max_age))} -c {circuit} {name}"
+        else:
+            cmd = f"read -c {circuit} {name}"
         if field:
             cmd += f" {field}"
         result = await self.send_command(cmd)
