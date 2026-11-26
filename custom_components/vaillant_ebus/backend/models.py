@@ -204,6 +204,47 @@ _COMPRESSOR_IDLE_STATUS_STRINGS: set[str] = {
     "standby",
 }
 
+# Outdoor unit status code (community CSV row HMUStatusCode, R91g; upstream PR #707). The 10-byte answer is the status
+# as UIN and eight more bytes. Every capture with both frames shows the same value as `B509 5402008813`.
+HMUX0_STATUS_CODE_VALUES = (
+    "34=frost_protect;100=standby;101=heat_compressor_shutdown;102=heat_compressor_blocked;103=heat_prerun;"
+    "104=heat_compressor_active;107=heat_overrun;111=cool_compressor_shutdown;112=cool_compressor_blocked;"
+    "113=cool_prerun;114=cool_compressor_active;117=cool_overrun;125=heat_immersion_heater_active;"
+    "132=hwc_compressor_blocked;133=hwc_prerun;134=hwc_compressor_active;135=hwc_immersion_heater_active;"
+    "137=hwc_overrun;141=heat_immersion_heater_shutdown;142=heat_immersion_heater_blocked;"
+    "151=hwc_immersion_heater_shutdown;152=hwc_immersion_heater_blocked;202=air_purging_program_active;"
+    "240=compressor_oil_heating_active;252=fan1_blocked;255=fan1_airinlet_too_high;256=fan1_airinlet_too_low;"
+    "260=fan2_blocked;275=building_circuit_flow_too_low;277=building_circuit_pump_fault;"
+    "280=frequency_converter_fault_compressor;281=frequency_converter_fault_mains_voltage;"
+    "282=frequency_converter_fault_overheating;283=deicing_time_too_long;284=deicing_flow_temp_too_low;"
+    "285=compressor_outlet_temp_too_high;286=hot_gas_temp_switch_open;287=fan1_wind;288=fan2_wind;"
+    "289=current_limit_active;302=high_pressure_switch_open;303=compressor_outlet_temp_too_high_1;"
+    "304=evaporation_temp_too_low;305=condensation_temp_too_low;306=evaporation_temp_too_high;"
+    "308=condensation_temp_too_high;312=building_circuit_return_temp_too_low;"
+    "314=building_circuit_return_temp_too_high;351=immersion_heater_flow_temp_too_high;516=deicing_active;"
+    "575=frequency_converter_fault;581=connection_fault_frequency_converter;590=four_port_valve_position_fault"
+)
+
+
+# Readable form of an ebusd status code without its own label: the words of the code, with the heating, hot water or
+# cooling prefix as a suffix in brackets (`heat_overrun` becomes "Overrun (Heating)", `deicing_active` "Deicing
+# active"). Issue #259 - most codes showed raw. Display only: the data keeps the raw code the logic compares.
+def humanize_status_code(code: str) -> str:
+    words = code.split("_")
+    modes = {"heat": "Heating", "hwc": "DHW", "cool": "Cooling", "cooling": "Cooling"}
+    mode = modes.get(words[0]) if len(words) > 1 else None
+    text = " ".join(words[1:] if mode else words)
+    text = text[:1].upper() + text[1:]
+    return f"{text} ({mode})" if mode else text
+
+
+# Display labels for every status code name of the heat pump (`Values_hmucode`, the same list `HMUStatusCode`
+# decodes): an explicit label where the integration has one, otherwise the readable form.
+def status_code_display_labels() -> dict[str, str]:
+    names = [item.split("=", 1)[1] for item in HMUX0_STATUS_CODE_VALUES.split(";") if "=" in item]
+    return {name: COMPRESSOR_STATUS_LABELS.get(name, humanize_status_code(name)) for name in names}
+
+
 # Map ebusd compressor status strings to human-readable labels.
 COMPRESSOR_STATUS_LABELS: dict[str, str] = {
     "standby": "Standby",
@@ -937,8 +978,19 @@ def zone_value_has_data(raw: str | None) -> bool:
 # live register is not evidence of absence: on the issue #191 capture `Z2RoomTemp` answered `ERR: invalid position`
 # for one discovery, the Zone 2 climate was not created and the repair later deleted its row. Such a zone stays valid
 # unless the controller itself declares its heating circuit inactive; `no data stored` still means a ghost.
+# A declared-inactive circuit (zone 2 and up) is a ghost unless the zone reports a live room temperature, the same rule
+# `declared_unused_zones` applies: issue #152 - the F34's `Z3ActualRoomTempDesired = 0.0` placeholder created a zone 3
+# climate, flow climate and holiday dates on a controller that reports `Hc3CircuitType = inactive`.
 def zone_is_valid(graph: DeviceGraph, circuit: str, zone: str) -> bool:
     zone_upper = zone.upper()
+    number = zone_upper[1:]
+    if (
+        number.isdigit()
+        and int(number) >= 2
+        and zone_circuit_declared_inactive(graph, circuit, number)
+        and not zone_reports_room_temperature(graph, circuit, int(number))
+    ):
+        return False
     expected_mapping = f"{circuit}.{zone_upper}RoomZoneMapping".casefold()
     mapping = next((value for key, value in graph.raw_registers.items() if key.casefold() == expected_mapping), None)
     if zone_value_has_data(mapping):

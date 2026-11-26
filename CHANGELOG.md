@@ -1,5 +1,53 @@
 # Changelog
 
+## 1.16.2 - 2026-11-26
+
+Live values that really follow the heat pump, frozen yield and COP readings fixed, the exact electrical power on more
+flexoTHERM and aroTHERM units, readable compressor states, and no more ghost zone on systems that report the zone as
+unused.
+
+### Fixed
+
+- **"Every poll" values changed only every 5 minutes** (issue #260, thanks @Roan-V; issue #255). When the integration
+  asked ebusd for a value, ebusd answered from its own memory if the value was less than 5 minutes old. So electrical
+  power, flow and return temperatures, compressor power and the heating circuit state followed the heat pump only every
+  5 minutes, whatever the poll interval. These live values are now read fresh on every poll. Settings and counters
+  still use ebusd's memory, so they don't add bus traffic.
+- **Yield, COP and compressor readings that never changed** (issue #259, thanks @schurl85). On aroTHERM and flexoTHERM
+  units the yields (today, month, total, heating, hot water, cooling), the COP values, "Compressor Block Time" and the
+  total energy were read once and then never again; the myVAILLANT gateway doesn't ask for them either. They're now read
+  every 5 minutes, and "Compressor Utilisation" on every poll.
+- **Flame sensor switching between off and unknown** (issue #152, thanks @TheMagnificent7). ebusd only reads the boiler's
+  flame state when someone asks, and nobody did. It's now read on every poll.
+- **Ghost Zone 3** (issue #152). A zone whose heating circuit the controller reports as inactive could still get a
+  climate, a flow climate and holiday dates when the controller answered a placeholder value. Such a zone is now only
+  created when it reports a room temperature. You can now also delete the device of an unused zone in Home Assistant;
+  before, that was "rejected by integration".
+- **"Power Consumption (HMU)" was always unavailable on flexoTHERM HMU00 SW0522 and aroTHERM SW0517** (issue #259,
+  thanks @numbernine-git). These firmwares don't answer that message. The entity is no longer created there; use the
+  new "Electrical Power Consumption" below.
+
+### New
+
+- **Electrical Power Consumption in watts on HMU00 HW5103** with firmware SW0517, SW0522 and SW0901 (issue #259). It's the
+  exact power the heat pump draws, updated on every poll; "Compressor Power" is a rounded value in kW. Checked on three
+  units, including a live read on a flexoTHERM SW0522 (752 W next to 0.7 kW).
+- **Readable compressor states** (issue #259): `heat_overrun` shows as "Overrun (Heating)", `deicing_active` as "Deicing
+  active", and so on for every status code. If an automation compares "Compressor Status" or "Heat Pump Status Code" with a raw code such as
+  `heat_overrun`, change it to the new text.
+- **Fan speed on aroTHERM HMUX0 SW0406** (issue #205, thanks @Zapgla): "Fan 1 Speed" and, on units with two fans, "Fan 2
+  Speed".
+- The calendar "Heating Program" is now called **"Circulation Program"** (issue #235, thanks @jlrosende): it's the hot
+  water circulation schedule. The heating schedule is "Zone Program". Its entity id stays the same; the event title
+  changes with the name.
+
+### Not changed
+
+- Writing the BASS3 time programs (issue #235) needs one more check: how ebusd answers the new write message. The
+  calendars stay read-only until then.
+- The water-side heat output (`B509 5402005e0d`, issue #259) has only one reading so far.
+- The values that switch between unknown and a value in issue #262 need more information.
+
 ## 1.16.1 - 2026-11-25
 
 Fewer bus reads on systems with one heating circuit, live heat pump values that keep updating, a complete silent mode

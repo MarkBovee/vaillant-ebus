@@ -13,6 +13,7 @@ from .hardware_profiles import (
     BASS3_SW0708,
     CTLV2_SW0514,
     CTLV3_SW0808,
+    HMU00_B509_POWER,
     HMU00_HW5103,
     HMU00_SW0308,
     HMU00_SW0522,
@@ -36,6 +37,7 @@ from .mapping import (
     vwzio_sw0500_circuit,
 )
 from .models import (
+    HMUX0_STATUS_CODE_VALUES,
     DeviceGraph,
     DeviceType,
     ResolutionStatus,
@@ -182,28 +184,6 @@ def heat_pump_setting_definitions(graph: DeviceGraph | None) -> list[str]:
     return list(dict.fromkeys(definitions))
 
 
-# Outdoor unit status code (community CSV row HMUStatusCode, R91g; upstream PR #707). The 10-byte answer is the status
-# as UIN and eight more bytes. Every capture with both frames shows the same value as `B509 5402008813`.
-HMUX0_STATUS_CODE_VALUES = (
-    "34=frost_protect;100=standby;101=heat_compressor_shutdown;102=heat_compressor_blocked;103=heat_prerun;"
-    "104=heat_compressor_active;107=heat_overrun;111=cool_compressor_shutdown;112=cool_compressor_blocked;"
-    "113=cool_prerun;114=cool_compressor_active;117=cool_overrun;125=heat_immersion_heater_active;"
-    "132=hwc_compressor_blocked;133=hwc_prerun;134=hwc_compressor_active;135=hwc_immersion_heater_active;"
-    "137=hwc_overrun;141=heat_immersion_heater_shutdown;142=heat_immersion_heater_blocked;"
-    "151=hwc_immersion_heater_shutdown;152=hwc_immersion_heater_blocked;202=air_purging_program_active;"
-    "240=compressor_oil_heating_active;252=fan1_blocked;255=fan1_airinlet_too_high;256=fan1_airinlet_too_low;"
-    "260=fan2_blocked;275=building_circuit_flow_too_low;277=building_circuit_pump_fault;"
-    "280=frequency_converter_fault_compressor;281=frequency_converter_fault_mains_voltage;"
-    "282=frequency_converter_fault_overheating;283=deicing_time_too_long;284=deicing_flow_temp_too_low;"
-    "285=compressor_outlet_temp_too_high;286=hot_gas_temp_switch_open;287=fan1_wind;288=fan2_wind;"
-    "289=current_limit_active;302=high_pressure_switch_open;303=compressor_outlet_temp_too_high_1;"
-    "304=evaporation_temp_too_low;305=condensation_temp_too_low;306=evaporation_temp_too_high;"
-    "308=condensation_temp_too_high;312=building_circuit_return_temp_too_low;"
-    "314=building_circuit_return_temp_too_high;351=immersion_heater_flow_temp_too_high;516=deicing_active;"
-    "575=frequency_converter_fault;581=connection_fault_frequency_converter;590=four_port_valve_position_fault"
-)
-
-
 # Passive definition of the outdoor unit status code on the HMUX0 owner. Blank source: whichever master asks.
 def hmux0_status_code_definition(circuit: str) -> str:
     return (
@@ -263,6 +243,8 @@ HMUX0_SW0406_ACTIVE_READ_REGISTERS = frozenset(
         "RunDataCondensorOutletTemp",
         "EnergyIntegral",
         "RunDataElPowerConsumption",
+        "RunDataFan1Speed",
+        "RunDataFan2Speed",
     }
 )
 # Boiler fuel counters (B516 `StatFuelSum*`, upstream `b516_inc.tsp`) that ebusd defines as plain `r` (discussion
@@ -278,8 +260,38 @@ HEAT_PUMP_PLAIN_READ_EVERY_POLL_REGISTERS = frozenset({"SourceTempInput", "Sourc
 # follow the compressor, so they are read every poll; flow, weighted supply temperature and the energy integral change
 # slowly and follow the energy interval. On a bus with a myVAILLANT gateway its reads keep them fresh as well. The
 # decoding is ebusd's own; each read still passes the planner's gate (error, unreliable and withheld registers).
-HEAT_PUMP_LIVE_EVERY_POLL_REGISTERS = frozenset({"CurrentConsumedPower", "CurrentYieldPower"})
-HEAT_PUMP_LIVE_ENERGY_REGISTERS = frozenset({"SupplyTempWeighted", "BuildingCircuitFlow", "EnergyIntegral"})
+# Issue #259 (HMU00 SW0517 capture): the yields, COPs, compressor utilisation and block time and the total energy are
+# the same plain `r` family (`B51A 05ff32xx`, upstream `08.hmu.HW5103.tsp`); the gateway never reads them, and the
+# capture's `changes` show them frozen while power changed. Utilisation follows the compressor (every poll), the
+# counters and averages follow the energy interval.
+HEAT_PUMP_LIVE_EVERY_POLL_REGISTERS = frozenset({"CurrentConsumedPower", "CurrentYieldPower", "CurrentCompressorUtil"})
+HEAT_PUMP_LIVE_ENERGY_REGISTERS = frozenset(
+    {
+        "SupplyTempWeighted",
+        "BuildingCircuitFlow",
+        "EnergyIntegral",
+        "YieldHc",
+        "YieldHcDay",
+        "YieldHcMonth",
+        "YieldHwc",
+        "YieldHwcDay",
+        "YieldHwcMonth",
+        "YieldCooling",
+        "YieldCoolingMonth",
+        "YieldCoolDay",
+        "CopHc",
+        "CopHcMonth",
+        "CopHwc",
+        "CopHwcMonth",
+        "CopCooling",
+        "CopCoolingMonth",
+        "TotalEnergyUsage",
+        "CompressorBlocktime",
+    }
+)
+# The boiler's flame state, a plain `r` message in ebusd's BAI configuration (issue #152): nobody re-read it, so it
+# flipped between a stale value and unknown. Only boiler configurations define these names.
+BOILER_FLAME_REGISTERS = frozenset({"Flame", "FlameSensingASIC"})
 # Controller hot water circulation pump state, a plain `r` message in ebusd's CTLV2 configuration (issue #233).
 HWC_CIRCULATION_PUMP_STATUS = "HwcCircPumpStatus"
 
@@ -516,6 +528,13 @@ def _hmux0_sw0406_active_definitions(circuit: str) -> list[str]:
         ",value,,IGN:4,,,,value,,EXP,,°C,HMUX0 condenser outlet temperature",
         f"r,{circuit},EnergyIntegral,EnergyIntegral,31,08,B51A,05ff3221"
         ",value,,IGN:3,,,,value,,SIN,,°min,HMUX0 energy integral",
+        # Fan speeds (issue #205): ebusd's hmu configuration defines them as `B509 540200470a`/`490a`, a float in rpm;
+        # Zapgla's SW0406 `hex` answer `0080fb43` is 503.0 (D.372 showed 50.3 %), the owner's HMU00 read 621.6. A
+        # single-fan unit answers the second one with an error, which stops its reads.
+        f"r,{circuit},RunDataFan1Speed,RunDataFan1Speed,31,08,B509,540200470a"
+        ",value,,IGN:4,,,,value,,EXP,,rpm,HMUX0 fan 1 speed",
+        f"r,{circuit},RunDataFan2Speed,RunDataFan2Speed,31,08,B509,540200490a"
+        ",value,,IGN:4,,,,value,,EXP,,rpm,HMUX0 fan 2 speed",
     ]
 
 
@@ -915,6 +934,12 @@ def build_runtime_defines(graph: DeviceGraph, now: datetime, withheld: set[tuple
                 and parts[1].casefold() != sw0406_owner
             )
         ]
+    # Electrical power in watts on the HMU00 HW5103 firmwares where `B509 5402005b0d` was decoded (issue #259); ebusd's
+    # HW5103 configuration lacks it. Added after the HMUX0 layout filters above, which only concern HMUX0 owners. The
+    # gate is the scan identity, never whether `find` lists the name (it does after the first define).
+    b509_power_owner = profile_owner(graph, HMU00_B509_POWER)
+    if b509_power_owner is not None:
+        defines.append(_hmux0_power_definition(b509_power_owner))
     if heat_pump and node_matches(HMU00_HW5103, heat_pump):
         # Upstream ebusd-configuration PR #614, confirmed for HW5103.
         # Status07 is active-read because this HW5103 variant polls b511/07;

@@ -58,6 +58,7 @@ from .backend.models import (
     valid_zone_owners,
     zero_idle_registers,
 )
+from .backend.reread_plan import plan_live_reads
 from .backend.runtime_definitions import build_runtime_defines, read_only_timer_programs
 from .const import (
     CONF_EBUSD_HOST,
@@ -1737,6 +1738,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         )
         if not candidates:
             return
+        # Every-poll values ask ebusd for a value younger than half the poll interval; all other reads may use its
+        # cache (300 s by default), which keeps settings and counters off the bus (issue #260).
+        live_reads = plan_live_reads(self._graph, self._runtime_definitions)
+        live_max_age = max(5, int(self.update_interval.total_seconds()) // 2) if self.update_interval else 5
         _LOGGER.info("Fallback reading %d known register(s)", len(candidates))
         added = 0
         read_with_data = 0
@@ -1751,6 +1756,8 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                 # A probe after a pause must reach the bus: a cached answer would close the guard on a stuck adapter.
                 if self._bus_guard.probing:
                     read = self.ebus.read_register(circuit, name, force=True, raise_transport_errors=True)
+                elif (circuit.casefold(), name.casefold()) in live_reads:
+                    read = self.ebus.read_register(circuit, name, raise_transport_errors=True, max_age=live_max_age)
                 else:
                     read = self.ebus.read_register(circuit, name, raise_transport_errors=True)
                 try:

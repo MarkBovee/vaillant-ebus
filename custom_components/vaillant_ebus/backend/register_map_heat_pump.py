@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .models import RegisterMeta
+from .models import RegisterMeta, status_code_display_labels
 
 HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
     # hmu (Heat Pump)
@@ -202,9 +202,11 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         icon="mdi:fan",
         unit="rpm",
     ),
+    # Status codes show readable labels (issue #259: `heat_overrun`, `deicing_active` showed raw).
     "hmu.RunDataStatuscode": RegisterMeta(
         friendly_name="Compressor Status",
         icon="mdi:information",
+        value_labels=status_code_display_labels(),
     ),
     "hmu.RunDataAirInletTemp": RegisterMeta(
         friendly_name="Air Inlet Temperature",
@@ -893,6 +895,7 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         icon="mdi:information",
         entity_category="diagnostic",
         fallback_read=False,
+        value_labels=status_code_display_labels(),
     ),
     "hmu.RunStatsFan1Hours": RegisterMeta(
         friendly_name="Fan 1 Runtime",

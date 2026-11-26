@@ -225,6 +225,19 @@ async def test_read_register_force_adds_f_flag() -> None:
     assert b"read -f -c ctlv3 HwcHolidayStartPeriod" in s._writer.write.call_args.args[0]
 
 
+# Intent: a read with a maximum age sends `-m`, so ebusd answers from its cache only when the value is that fresh.
+# Why: issue #260 - a plain `read` returns ebusd's cache for up to 300 s, so every-poll values changed every 5 minutes.
+async def test_read_register_max_age_adds_m_flag() -> None:
+    s = _service()
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"0.8\n"])
+    val = await s.read_register("hmu", "CurrentConsumedPower", max_age=15)
+    assert val == "0.8"
+    assert b"read -m 15 -c hmu CurrentConsumedPower" in s._writer.write.call_args.args[0]
+    s._reader.readline = AsyncMock(side_effect=[TimeoutError(), b"0.9\n"])
+    await s.read_register("hmu", "CurrentConsumedPower", max_age=0)
+    assert b"read -m 0 -c hmu CurrentConsumedPower" in s._writer.write.call_args.args[0]
+
+
 # write_register: read-back that does not match the written value fails.
 # Covers the DHW boost case where ebusd answers "done" but the controller
 # keeps HwcSFMode on "load" while a boost cycle is still running.

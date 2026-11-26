@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 
-from .hardware_profiles import FIRMWARE_ENERGY_REREADS, profile_owner
+from .hardware_profiles import FIRMWARE_ENERGY_REREADS, HMU00_B509_POWER, profile_owner
 from .mapping import (
     HMUX0_SW0407_ACTIVE_READ_REGISTERS,
     REGISTER_MAP,
@@ -26,6 +26,7 @@ from .mapping import (
 )
 from .models import DeviceGraph, zone_circuit_declared_inactive
 from .runtime_definitions import (
+    BOILER_FLAME_REGISTERS,
     BOILER_PLAIN_READ_ENERGY_REGISTERS,
     DISCOVERED_PLAIN_READ_POLLED_REGISTERS,
     HEAT_PUMP_LIVE_ENERGY_REGISTERS,
@@ -135,6 +136,17 @@ def _boiler_fuel_energy_reads(graph: DeviceGraph, _definitions: Mapping[str, str
         for circuit, name in _discovered_reads(graph, BOILER_PLAIN_READ_ENERGY_REGISTERS)
         if f"{circuit}.{name}" in REGISTER_MAP
     ]
+
+
+# Nominate the HMU00 electrical power in watts of issue #259 on its profile owner, for every poll.
+def _hmu00_b509_power_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
+    owner = profile_owner(graph, HMU00_B509_POWER)
+    return [] if owner is None else [(owner, "RunDataElPowerConsumption")]
+
+
+# Nominate the boiler flame state of issue #152 on the circuit where `find` lists it, for every poll.
+def _boiler_flame_reads(graph: DeviceGraph, _definitions: Mapping[str, str]) -> list[Read]:
+    return _discovered_reads(graph, BOILER_FLAME_REGISTERS)
 
 
 # Nominate the firmware-specific counters of `FIRMWARE_ENERGY_REREADS` on their profile's owner (issue #233).
@@ -311,8 +323,24 @@ REREAD_RULES: tuple[RereadRule, ...] = (
     RereadRule("#233", Cadence.EVERY_POLL, _heat_pump_every_poll_reads),
     RereadRule("#259", Cadence.EVERY_POLL, _heat_pump_live_power_reads),
     RereadRule("#233 HWC", Cadence.EVERY_POLL, _hwc_circulation_pump_reads),
+    RereadRule("#152 Flame", Cadence.EVERY_POLL, _boiler_flame_reads),
+    RereadRule("#259 HMU00 power", Cadence.EVERY_POLL, _hmu00_b509_power_reads),
     RereadRule("#256", Cadence.PLACEHOLDER_INTERVAL, _calendar_slot_reads),
 )
+
+
+# The reads of the every-poll rules: live values that must follow the device on each poll. The coordinator asks
+# ebusd for a fresh value for these (`read -m`); without it ebusd answers from its cache for up to 300 s, so the
+# "every poll" values changed only every 5 minutes (issues #255, #259, #260).
+def plan_live_reads(graph: DeviceGraph, runtime_definitions: Mapping[str, str]) -> set[Read]:
+    if not graph:
+        return set()
+    return {
+        (circuit.casefold(), name.casefold())
+        for rule in REREAD_RULES
+        if rule.cadence is Cadence.EVERY_POLL
+        for circuit, name in rule.nominate(graph, runtime_definitions)
+    }
 
 
 # Expand the rules due this cycle into reads, in table order. Energy-interval rules run only when `include_energy`,

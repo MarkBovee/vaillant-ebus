@@ -50,6 +50,8 @@ def test_rules_name_their_issue_and_keep_planning_order() -> None:
         "#233",
         "#259",
         "#233 HWC",
+        "#152 Flame",
+        "#259 HMU00 power",
         "#256",
     ]
     cadences = [rule.cadence for rule in REREAD.REREAD_RULES]
