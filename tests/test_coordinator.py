@@ -7617,9 +7617,12 @@ def test_installer_settings_survive_rediscovery() -> None:
     [
         (
             "community/flexotherm_issue102_2026-09-12_161841_discovery.yaml",
-            {"CompressorStartHeating", "CompressorHysteresisHeat", "MaxResidualHead"},
+            {"CompressorStartHeating", "CompressorHysteresisHeat", "MaxResidualHead", "BrineFrostProtection"},
         ),
-        (ISSUE175_FIXTURE, set(name for name, *_ in RUNTIME_DEFINITIONS.HEAT_PUMP_SETTINGS)),
+        (
+            ISSUE175_FIXTURE,
+            set(name for name, *_ in RUNTIME_DEFINITIONS.HEAT_PUMP_SETTINGS) - {"BrineFrostProtection"},
+        ),
         ("community/hmux0_sw0406_discussion185_2026-10-08_184332_discovery.yaml", set()),
         ("community/ecotec_vrt380_issue109_2026-09-11_230710.yaml", set()),
     ],
@@ -7630,6 +7633,37 @@ def test_installer_settings_stay_on_evidenced_firmware(fixture: str, expected: s
     names = {definition.split(",")[2] for definition in RUNTIME_DEFINITIONS.heat_pump_setting_definitions(graph)}
 
     assert names == expected
+
+
+# Intent: the SW0308 brine frost protection decodes the three replies of issue #265 to the display values.
+# Why: cmarqu changed the setting on the unit's display between reads (-5, -6, -5 degC); the trailing min (-14), max
+#      (+5) and step (1 K) bytes must not leak into the value.
+@pytest.mark.parametrize(
+    ("reply", "expected"),
+    [("0aff0205b0ff20ff500010", -5.0), ("0aff0205a0ff20ff500010", -6.0)],
+)
+def test_brine_frost_protection_decodes_issue265_replies(reply: str, expected: float) -> None:
+    graph = DISCOVERY.DiscoveryService.build_device_graph(
+        load_find_lines("community/flexotherm_issue102_2026-09-12_161841_discovery.yaml", after=True)
+    )
+    definition = next(
+        d for d in RUNTIME_DEFINITIONS.heat_pump_setting_definitions(graph) if d.split(",")[2] == "BrineFrostProtection"
+    )
+    fields = definition.split(",", 8)
+
+    assert fields[6] == "B51A" and fields[7] == "05ff3429"
+    # The reply starts with the length byte; the definition decodes the bytes after it.
+    assert _decode_definition_fields(fields[8], bytes.fromhex(reply)[1:])["value"] == expected
+
+
+# Intent: the electrical power sensors keep long-term statistics.
+# Why: issue #259 - without a state class Home Assistant records no statistics for the watt and kW power values.
+@pytest.mark.parametrize(
+    "key",
+    ["hmu.RunDataElPowerConsumption", "hmu.RunDataElectricPowerConsumption", "hmu.LiveMonitorCurrentConsumedPower"],
+)
+def test_power_sensors_have_measurement_state_class(key: str) -> None:
+    assert MAPPING.REGISTER_MAP[key].state_class == "measurement"
 
 
 # Intent: the installer settings and the SW0406 refrigerant temperatures are re-read on the energy interval only.
@@ -8381,3 +8415,74 @@ def test_inactive_circuit_overrules_a_room_zone_mapping_without_room_temperature
     graph = DISCOVERY.DiscoveryService.build_device_graph(lines + [f"{controller} Z3RoomZoneMapping = 1"])
 
     assert not MODELS.zone_is_valid(graph, controller, "z3")
+
+
+ROAN_SW0406_FIXTURE = "community/hmux0_sw0406_discussion31_2026-11-17_153929_discovery.yaml"
+
+
+# Intent: on a SW0406 heat pump the live values are read fresh on every poll, also when ebusd lists them itself.
+# Why: issue #260 - on 1.16.2 Roan's log showed RunDataElPowerConsumption, BuildingCircuitFlow and EnergyIntegral read
+#      only every 5 minutes: the SW0406 rule nominated only names the integration defined, and our definition steps
+#      aside where ebusd has its own message.
+async def test_sw0406_live_values_are_read_every_poll_when_ebusd_lists_them() -> None:
+    from vaillant_ebus.backend.reread_plan import plan_live_reads
+
+    definitions = await _runtime_definitions_for(ROAN_SW0406_FIXTURE)
+    lines = load_find_lines(ROAN_SW0406_FIXTURE, after=True)
+    for again in (False, True):
+        extra = ["hmux0 RunDataElPowerConsumption = 752", "hmux0 BuildingCircuitFlow = 581"] if again else []
+        graph = DISCOVERY.DiscoveryService.build_device_graph(lines + extra)
+        planned = plan_rereads(graph, definitions, include_energy=False)
+        live = plan_live_reads(graph, definitions)
+        for name in ("BuildingCircuitFlow", "EnergyIntegral", "RunDataElPowerConsumption"):
+            assert ("hmux0", name) in planned, (again, name)
+            assert ("hmux0", name.casefold()) in live, (again, name)
+
+
+# Intent: a SW0406 live register that ebusd does not list and the integration does not define is never read.
+# Why: issue #260 fix nominates discovered registers; an absent register must not turn into a blind bus read.
+async def test_sw0406_absent_live_register_is_not_read() -> None:
+    definitions = await _runtime_definitions_for(ROAN_SW0406_FIXTURE)
+    lines = [line for line in load_find_lines(ROAN_SW0406_FIXTURE, after=True) if "RunDataFan2Speed" not in line]
+    graph = DISCOVERY.DiscoveryService.build_device_graph(lines)
+    definitions = {k: v for k, v in definitions.items() if "RunDataFan2Speed" not in v}
+
+    assert ("hmux0", "RunDataFan2Speed") not in plan_rereads(graph, definitions, include_energy=False)
+
+
+# Intent: an entity whose register had data earlier in the session stays enabled when it reads "no data stored";
+#         an entity that never had data is still switched off.
+# Why: issue #262 - "Status Compressor State" (a passive Status00 field) was disabled while the compressor was idle,
+#      showed "no longer provided", and each disabled_by flip reloaded the whole entry (brief "unavailable" on
+#      unrelated entities); the #152 unset timer slots flipped the same way.
+@pytest.mark.parametrize(("seen_with_data", "expected"), [(True, []), (False, ["sensor.status00_compressorstate"])])
+async def test_issue262_no_data_pass_keeps_entities_that_had_data(seen_with_data: bool, expected: list[str]) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+
+        class _Description:
+            unique_id = "ebusd_hmux0_status00_compressorstate"
+            circuit = "hmux0"
+            name = "Status00"
+            enabled_by_default = True
+            raw_value = ""
+
+        entry_row = MagicMock(
+            unique_id="ebusd_hmux0_status00_compressorstate", config_entry_id="entry-1", disabled_by=None
+        )
+        updated: list[str] = []
+        registry = MagicMock()
+        registry.entities = {"sensor.status00_compressorstate": entry_row}
+        registry.async_update_entity = MagicMock(side_effect=lambda entity_id, **kwargs: updated.append(entity_id))
+        from homeassistant.helpers import entity_registry
+
+        entity_registry.async_get = MagicMock(return_value=registry)
+        entry = _entry()
+        entry.entry_id = "entry-1"
+        c = VaillantCoordinator(_hass(tmpdir), entry)
+        if seen_with_data:
+            graph = DISCOVERY.DiscoveryService.build_device_graph(["hmux0 Status00 = 27.00;1.1;23.0;heating;heating"])
+            c._registers_seen_with_data.update(key.casefold() for key in graph.raw_registers)
+
+        c._disable_no_data_registry_entities([_Description()])
+
+        assert updated == expected

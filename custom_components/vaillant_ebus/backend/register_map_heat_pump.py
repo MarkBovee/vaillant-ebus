@@ -28,7 +28,7 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
     "hmu.Status00.defrost": RegisterMeta(friendly_name="Defrost Active", entity_type="binary_sensor"),
     "hmu.Status00.compressorpower": RegisterMeta(friendly_name="Status Compressor Power", unit="%"),
     "hmu.RunDataElPowerConsumption": RegisterMeta(
-        friendly_name="Electrical Power Consumption", device_class="power", unit="W"
+        friendly_name="Electrical Power Consumption", device_class="power", unit="W", state_class="measurement"
     ),
     # Named apart from the dedicated `hmu.FlowTemp` so the two flow temperatures do not share a name (`_2` suffix).
     "hmu.Status01.temp": RegisterMeta(
@@ -669,11 +669,13 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         friendly_name="Electric Power Consumption",
         device_class="power",
         unit="W",
+        state_class="measurement",
     ),
     "hmu.LiveMonitorCurrentConsumedPower": RegisterMeta(
         friendly_name="Live Power Consumption",
         device_class="power",
         unit="kW",
+        state_class="measurement",
     ),
     "hmu.StatSolarEnergySum": RegisterMeta(
         friendly_name="Solar Energy Sum",
@@ -886,6 +888,14 @@ HEAT_PUMP_AND_BOILER_REGISTERS: dict[str, RegisterMeta] = {
         friendly_name="Maximum Residual Pump Head (D.231)",
         icon="mdi:pump",
         unit="mbar",
+        entity_category="diagnostic",
+        fallback_read=False,
+    ),
+    # Brine frost protection (minimum brine outlet temperature) on flexoTHERM HMU00 SW0308, issue #265.
+    "hmu.BrineFrostProtection": RegisterMeta(
+        friendly_name="Brine Frost Protection",
+        device_class="temperature",
+        unit="°C",
         entity_category="diagnostic",
         fallback_read=False,
     ),

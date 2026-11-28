@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.16.3 - 2026-11-28
+
+Entities that no longer drop out while a value is idle, the hot water entity back on the community CSV, "DHW
+Heating" for gas boilers, a Trouble Codes sensor that ignores read errors, and the brine frost protection setting on
+older flexoTHERM units.
+
+### Fixed
+
+- **Entities that went "unavailable" and landed in the repair** (issue #262, thanks @rmalbrecht and @jrosink; issue
+  #152, thanks @TheMagnificent7). When a value read "no data stored" for a while, for example "Status Compressor
+  State" while the compressor was off or a timer slot you never set, the integration switched the entity off. Home
+  Assistant then called it "no longer provided", the "Stale Vaillant eBUS entities" repair offered to delete it, and
+  each switch-off reloaded the integration, so other entities showed "unavailable" for a second. An entity whose value
+  arrived once now stays on while the value is idle. An entity that never had a value is still switched off.
+- **Hot water entity missing on the R91g community CSV** (discussion #31, thanks @jrosink). That configuration has
+  system-wide holiday dates instead of the hot water ones, and the water heater was only created with all of them.
+  It's now created without them; away mode is then not offered, and an away request is refused.
+- **"Trouble Codes" on without a fault** (issue #264, thanks @speedoxx007). An ebusd read error or "no data stored"
+  counted as an error code. They no longer do, and when neither the heat pump nor the controller answers, the sensor
+  shows unknown instead of a state.
+
+### New
+
+- **"DHW Heating" for gas boilers** (issue #191, thanks @TheMagnificent7 and @computer1up). On a system without a heat
+  pump, the sensor is on while the boiler heats the cylinder (`hwc` in `Status01`) and off while it heats the house or
+  is idle. The `overrun` state stays unknown: the upstream configuration calls it pump overrun, but an ecoTEC classic
+  showed it during a hot water draw.
+- **"Brine Frost Protection" on flexoTHERM HMU00 SW0308** (issue #265, thanks @cmarqu): the minimum brine outlet
+  temperature, read from `B51A 05ff3429`. Checked against three readings taken while the setting was changed on the
+  display.
+- **Statistics for the power sensors** (issue #259, thanks @schurl85 and @numbernine-git): "Electrical Power
+  Consumption", "Electric Power Consumption" and "Live Power Consumption" now have the state class `measurement`, so
+  Home Assistant keeps long-term statistics from this version on.
+
+### Not changed yet
+
+- "Electrical Power Consumption" on aroTHERM SW0406 without a gateway still follows ebusd's 5-minute memory on one
+  reporter's system (issue #260); the cause isn't in the older capture, a fresh one is requested.
+- Writing the BASS3 time programs (issue #235) waits for ebusd's answer to a write with a status field.
+- Electrical power on HMUX0 SW0407 without a gateway (issue #259) needs one test read.
+
 ## 1.16.2 - 2026-11-26
 
 Live values that really follow the heat pump, frozen yield and COP readings fixed, the exact electrical power on more

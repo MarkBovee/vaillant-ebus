@@ -564,6 +564,35 @@ def derive_dhw_heating(values: Mapping[str, str | None], heat_pump_circuit: str 
     return state == OPERATING_STATE_DHW
 
 
+# Boiler `Status01` last-field states (upstream `bai` CSV: off, on, overrun, hwc) mapped to the DHW heating state.
+# Issue #191: `hwc` while the cylinder is heated and `on` while the flame runs for heating (F34 timeline). `overrun`
+# stays unknown: upstream calls it pump overrun, but an ecoTEC classic showed it during a hot water draw.
+BOILER_DHW_HEATING_STATES: Mapping[str, bool] = {"hwc": True, "on": False, "off": False}
+
+
+# Return the boiler circuit for the DHW heating state: the one circuit that owns both `Flame` and `Status01` in the
+# discovery graph. The owner comes from the registers' source circuit, never from a circuit name such as `bai`.
+def boiler_status_circuit(graph: DeviceGraph | None) -> str | None:
+    if graph is None:
+        return None
+    names_by_circuit: dict[str, set[str]] = {}
+    # `Flame` often reads "no data stored" until someone asks (issue #152), so placeholders count as listed too.
+    for key in (*graph.raw_registers, *graph.placeholder_registers):
+        circuit, _, name = key.partition(".")
+        names_by_circuit.setdefault(circuit, set()).add(name.casefold())
+    owners = [circuit for circuit, names in names_by_circuit.items() if {"flame", "status01"} <= names]
+    return owners[0] if len(owners) == 1 else None
+
+
+# Derive whether a gas boiler heats the cylinder from the last field of its `Status01` (issue #191). None for a
+# missing value or a state the evidence does not settle (`overrun`).
+def derive_boiler_dhw_heating(values: Mapping[str, str | None], boiler_circuit: str | None) -> bool | None:
+    if boiler_circuit is None:
+        return None
+    state = _clean(_value_lookup(values, f"{boiler_circuit}.Status01.pumpstate"))
+    return BOILER_DHW_HEATING_STATES.get(state)
+
+
 # VWZ hydraulic-module scan TYPEs split the heat-pump product lines. The
 # flexoTHERM (hybrid) and aroTHERM/Pro (split) families both share the bare
 # ``hmu`` circuit, so the scan identity of the VWZ module and/or the heat-pump

@@ -49,6 +49,7 @@ from .backend.models import (
     DeviceType,
     EbusdRegister,
     ResolutionStatus,
+    boiler_status_circuit,
     heat_pump_product,
     is_ebusd_error_value,
     is_heat_pump_circuit,
@@ -307,6 +308,12 @@ def _cache_register_is_supported(register_key: str, live_keys: set[str], graph: 
     return True
 
 
+# Casefolded parent register key of a description (`circuit.Register`, without a `.field` suffix).
+def _parent_register_fold(description: Any) -> str:
+    name = str(getattr(description, "name", "") or "").partition(".")[0]
+    return f"{getattr(description, 'circuit', '')}.{name}".casefold()
+
+
 # Disable registry entries whose cached source circuit disappeared from
 # the current discovery graph.
 # Cache-seeded platform entities may already be registered before the first
@@ -380,6 +387,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
         # missing data (issue #221). True at start so a cache-seeded setup behaves as before; discovery re-checks it.
         self._bus_scan_settled = True
         self._live_since_analysis: set[str] = set()
+        # Register keys (casefolded, parent register) that carried data at least once in this session. A register that
+        # later reads "no data stored" for a while (an idle compressor, a passive gateway frame, an unset timer slot)
+        # keeps its entity enabled; only an entity that never had data is switched off (issues #262, #152).
+        self._registers_seen_with_data: set[str] = set()
         self._cancel_analysis: Callable[[], None] | None = None
         self._analysis_scheduled = False
         self._last_placeholder_poll = datetime.min
@@ -446,6 +457,14 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             return None
         result = self._graph.heat_pump_result()
         return result.circuit if result.status == ResolutionStatus.UNIQUE else None
+
+    # Circuit of the gas boiler that reports the DHW heating state in `Status01` (issue #191), or None. Only on a
+    # system without a heat pump: on a hybrid the boiler's `hwc` would hide the heat pump's own hot water state.
+    @property
+    def boiler_status_circuit(self) -> str | None:
+        if self._graph is None or self._graph.heat_pump_result().status != ResolutionStatus.MISSING:
+            return None
+        return boiler_status_circuit(self._graph)
 
     # Map a logical register circuit from the map to the circuit discovered on this bus; None when the graph cannot
     # resolve it uniquely.
@@ -909,6 +928,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             )
         # The generated list is merged into self.entities only below, so pass it: the enable rules need this generation.
         await self._enable_registry_entities(list(graph.raw_registers), generated_entities)
+        self._registers_seen_with_data.update(key.casefold() for key in graph.raw_registers)
         existing_entity_keys = {(entity.entity_type, entity.unique_id.casefold()) for entity in self.entities}
         additions = [
             entity
@@ -1268,6 +1288,10 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
             # Passive definitions legitimately have no value until the next telegram, and every disabled_by
             # change makes Home Assistant reload the whole entry (issues #171, #175).
             if cleanup.register_key_fold(description) in runtime_defined:
+                continue
+            # A register that had data earlier in this session is only idle now: switching its entity off made it
+            # "no longer provided" and every disabled_by change reloads the whole entry (issues #262, #152).
+            if _parent_register_fold(description) in self._registers_seen_with_data:
                 continue
             # Only the integration may manage (re-disable) entries it already
             # disabled; a user-disabled entry is never touched.
@@ -2048,6 +2072,7 @@ class VaillantCoordinator(DataUpdateCoordinator[CoordinatorState]):
                     transient_error_values.discard(source_key)
                     transient_error_values.discard(key)
                     self._live_since_analysis.add(key)
+                    self._registers_seen_with_data.add(key.casefold())
                     batch_with_data.add(key)
                     if key not in self.registers:
                         self.registers[key] = EbusdRegister(

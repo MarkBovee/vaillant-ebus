@@ -9,6 +9,7 @@ from homeassistant.components.water_heater import WaterHeaterEntity, WaterHeater
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -35,6 +36,9 @@ OPERATION_MODES = ["off", "auto", "manual", "boost"]
 DATE_FMT = "%d.%m.%Y"
 HOLIDAY_RESET = "01.01.2015"
 HOLIDAY_RESET_VALUES = frozenset(("01.01.2015", "01.01.2019"))
+# Registers the water heater needs for temperature, operation and on/off. The holiday pair only adds away mode.
+CORE_REGISTERS = ("HwcOpMode", "HwcStorageTemp", "HwcTempDesired", "HwcSFMode")
+HOLIDAY_REGISTERS = ("HwcHolidayStartPeriod", "HwcHolidayEndPeriod")
 
 
 # Look up a string value from coordinator ebusd data by register name
@@ -62,23 +66,13 @@ async def async_setup_entry(
     coordinator: VaillantCoordinator = hass.data[DOMAIN][entry.entry_id]
     added = False
 
-    # Add the water heater only after every register used by its features exists.
-    # operation, boost, target, and away writes must not be partially supported.
+    # Add the water heater once the registers of its core features exist. Away mode is optional: some controller
+    # configurations (the R91g community CSV, discussion #31) have system-wide holiday dates and no `HwcHoliday*`.
     def _ensure_entity() -> None:
         nonlocal added
         if added or not coordinator.discovery_ready:
             return
-        if not all(
-            coordinator.has_controller_register(register)
-            for register in (
-                "HwcOpMode",
-                "HwcStorageTemp",
-                "HwcTempDesired",
-                "HwcSFMode",
-                "HwcHolidayStartPeriod",
-                "HwcHolidayEndPeriod",
-            )
-        ):
+        if not all(coordinator.has_controller_register(register) for register in CORE_REGISTERS):
             return
         async_add_entities([EbusdWaterHeater(coordinator, entry)])
         added = True
@@ -102,21 +96,34 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], _WaterHeaterTempe
         self._attr_unique_id = f"{entry.entry_id}_water_heater_dhw"
         self._attr_device_info = coordinator.get_device_info(ZONE)
 
-    # Supported features: target temp, operation mode, away mode, on/off
+    # Supported features: target temp, operation mode, on/off, and away mode only with both holiday registers
     @property
     def supported_features(self) -> WaterHeaterEntityFeature:
-        return (
+        features = (
             WaterHeaterEntityFeature.TARGET_TEMPERATURE
             | WaterHeaterEntityFeature.OPERATION_MODE
-            | WaterHeaterEntityFeature.AWAY_MODE
             | WaterHeaterEntityFeature.ON_OFF
         )
+        if self._has_away_registers():
+            features |= WaterHeaterEntityFeature.AWAY_MODE
+        return features
+
+    # True when the controller has both DHW holiday registers that away mode reads and writes.
+    def _has_away_registers(self) -> bool:
+        return all(self.coordinator.has_controller_register(register) for register in HOLIDAY_REGISTERS)
+
+    # Refuse an away-mode change, before any write, on a controller without the DHW holiday registers.
+    def _require_away_registers(self) -> None:
+        if not self._has_away_registers():
+            raise HomeAssistantError("Away mode is not available: the controller has no DHW holiday registers")
 
     # True when HwcHolidayStartPeriod/EndPeriod bracket today. A reset sentinel
     # is an explicit "not away" value, matching the DHW away switch; only
     # genuinely missing data is unknown.
     @property
     def is_away_mode_on(self) -> bool | None:
+        if not self._has_away_registers():
+            return None
         h_start = _value(self.coordinator, "HwcHolidayStartPeriod")
         h_end = _value(self.coordinator, "HwcHolidayEndPeriod")
         if not h_start or not h_end:
@@ -212,6 +219,7 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], _WaterHeaterTempe
 
     # Enable away mode by setting holiday period from today to end date
     async def async_turn_away_mode_on(self) -> None:
+        self._require_away_registers()
         circuit = self.coordinator.heating_circuit
         if circuit is None:
             return
@@ -227,6 +235,7 @@ class EbusdWaterHeater(CoordinatorEntity[VaillantCoordinator], _WaterHeaterTempe
 
     # Disable away mode by resetting holiday dates to unset
     async def async_turn_away_mode_off(self) -> None:
+        self._require_away_registers()
         circuit = self.coordinator.heating_circuit
         if circuit is None:
             return
