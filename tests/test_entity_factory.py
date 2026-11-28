@@ -1559,3 +1559,17 @@ def test_issue233_sw0308_runstats_compressor_starts_has_no_entity() -> None:
     assert "hmu.RunStatsCompressorStarts.value" not in keys
     assert "hmu.RunStatsCompressorStarts.value" in forced
     assert "hmu.RunStatsCompressorStarts.value" in {e.key for e in EntityFactoryService().generate(other)}
+
+
+# Intent: on the R91g community CSV no zone or DHW holiday entity is created from registers that CSV lacks.
+# Why: discussion #31 - that CSV has system-wide HolidayStartDate/EndDate; holiday entities are per register, so they
+#      must simply be absent there (no placeholder entity for a missing `Z1HolidayStartPeriod`).
+def test_r91g_csv_creates_no_holiday_period_entities() -> None:
+    lines = load_find_lines(
+        "community/hmux0_sw0502_ctlv3_r91g_discussion31_2026-11-26_201727_discovery.yaml", after=True
+    )
+    graph = DiscoveryService.build_device_graph(lines)
+
+    keys = {entity.key for entity in EntityFactoryService().generate(graph)}
+
+    assert not [key for key in keys if "HolidayStartPeriod" in key or "HolidayEndPeriod" in key]

@@ -156,6 +156,7 @@ HEAT_PUMP_SETTINGS: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
     ("CompressorHysteresisHeat", "05ff3443", "value,,SIN,16,K,", ("hmu00_sw0522", "hmux0_sw0407", "hmu00_sw0308")),
     ("CompressorHysteresisCool", "05ff353f", "value,,SIN,16,K,", ("hmu00_sw0522", "hmux0_sw0407")),
     ("MaxResidualHead", "05ff341f", "value,,UIN,,mbar,", ("hmu00_sw0522", "hmux0_sw0407", "hmu00_sw0308")),
+    ("BrineFrostProtection", "05ff3429", "value,,SIN,16,°C,", ("hmu00_sw0308",)),
 )
 HEAT_PUMP_SETTING_NAMES = frozenset(name for name, *_ in HEAT_PUMP_SETTINGS)
 

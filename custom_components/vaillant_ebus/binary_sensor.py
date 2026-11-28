@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .backend.entity_factory import EntityDescription
-from .backend.models import derive_dhw_heating, derive_tank_presence, is_no_data_value
+from .backend.models import derive_boiler_dhw_heating, derive_dhw_heating, derive_tank_presence, is_no_data_value
 from .const import DOMAIN
 from .coordinator import VaillantCoordinator, get_register_value
 
@@ -57,13 +57,13 @@ async def async_setup_entry(
     coordinator.register_post_discovery_callback(_ensure_tank_entity)
     dhw_heating_added = False
 
-    # Add the DHW heating sensor only where the heat pump status register is discovered.
-    # Gas boilers have no such register, and a derived entity without a backing register is a ghost.
+    # Add the DHW heating sensor where a backing register exists: the heat pump status code, or else the `Status01` of
+    # a gas boiler (issue #191). A derived entity without a backing register is a ghost.
     def _ensure_dhw_heating_entity() -> None:
         nonlocal dhw_heating_added
         if dhw_heating_added or not coordinator.discovery_ready:
             return
-        if not coordinator.has_heat_pump_register("RunDataStatuscode"):
+        if not coordinator.has_heat_pump_register("RunDataStatuscode") and coordinator.boiler_status_circuit is None:
             return
         async_add_entities([EbusdDhwHeatingSensor(coordinator, entry)])
         dhw_heating_added = True
@@ -158,6 +158,16 @@ class EbusdConnectionSensor(CoordinatorEntity[VaillantCoordinator], BinarySensor
         return True
 
 
+# Return whether a `Currenterror` value is a real answer from the device: error slots (`-` for an empty slot) and not
+# an ebusd error, a decode error or `no data stored`.
+def _is_error_answer(value: str | None) -> bool:
+    if value is None:
+        return False
+    if all(part.strip() in {"", "-"} for part in value.split(";")):
+        return True
+    return not is_no_data_value(value)
+
+
 class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntity):
     """Aggregate current HMU and controller eBUS fault registers."""
 
@@ -171,18 +181,26 @@ class EbusdFaultSensor(CoordinatorEntity[VaillantCoordinator], BinarySensorEntit
         self._attr_unique_id = f"{entry.entry_id}_fault_active"
         self._attr_device_info = coordinator.get_device_info(coordinator.heat_pump_circuit)
 
-    # True when either HMU or CTLV2 has active error codes
+    # True when the heat pump or the controller reports an active error code. A `-;-;-;-;-` answer is a real "no
+    # error"; an ebusd error text, `no data stored` or a missing value is no answer at all and never a fault (issue
+    # #264). Unknown (None) when neither register gave an answer.
     @property
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         c = self.coordinator.heating_circuit
         hp = self.coordinator.heat_pump_circuit
         if c is None or hp is None:
             return False
-        values = (
-            get_register_value(self.coordinator, hp, "Currenterror"),
-            get_register_value(self.coordinator, c, "Currenterror"),
-        )
-        return any(value and any(part.strip() not in {"", "-"} for part in str(value).split(";")) for value in values)
+        answers = [
+            value
+            for value in (
+                get_register_value(self.coordinator, hp, "Currenterror"),
+                get_register_value(self.coordinator, c, "Currenterror"),
+            )
+            if _is_error_answer(value)
+        ]
+        if not answers:
+            return None
+        return any(any(part.strip() not in {"", "-"} for part in value.split(";")) for value in answers)
 
     # Available while the coordinator's last update succeeded.
     @property
@@ -251,7 +269,10 @@ class EbusdDhwHeatingSensor(CoordinatorEntity[VaillantCoordinator], BinarySensor
     @property
     def is_on(self) -> bool | None:
         data = (self.coordinator.data or {}).get("ebusd", {})
-        return derive_dhw_heating(data, self.coordinator.heat_pump_circuit)
+        # A heat pump decides when it has a status code (hybrids too); a pure gas boiler falls back to its Status01.
+        if self.coordinator.has_heat_pump_register("RunDataStatuscode"):
+            return derive_dhw_heating(data, self.coordinator.heat_pump_circuit)
+        return derive_boiler_dhw_heating(data, self.coordinator.boiler_status_circuit)
 
     # Follow the coordinator update state.
     # A missing status must surface as unknown, not as unavailable.

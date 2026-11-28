@@ -85,6 +85,11 @@ class _GraphCoordinator:
     def get_device_info(self, *_args):
         return {"identifiers": {("vaillant_ebus", "dhw")}}
 
+    # Mirror the coordinator's capability check: the controller lists the register in the raw or placeholder graph.
+    def has_controller_register(self, name: str) -> bool:
+        key = f"{self.heating_circuit}.{name}".casefold()
+        return any(k.casefold() == key for k in (*self._graph.raw_registers, *self._graph.placeholder_registers))
+
 
 def _graph_coordinator(fixture: str) -> _GraphCoordinator:
     graph = tc.DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(fixture, after=True))
@@ -603,3 +608,49 @@ def test_issue186_away_switch_keeps_unreadable_second_zone_unknown(tmp_path) -> 
     # A zone that is provably not away still decides, even next to an unreadable one.
     data["ctlv2.Z2HolidayStartPeriod.value"] = "01.01.2015"
     assert switch.is_on is False
+
+
+R91G_FIXTURE = "community/hmux0_sw0502_ctlv3_r91g_discussion31_2026-11-26_201727_discovery.yaml"
+
+
+# Intent: on the R91g community CSV the water heater exists, works, and offers no away mode.
+# Why: discussion #31 - that CSV has system-wide holiday dates instead of HwcHolidayStart/EndPeriod, and 1.16.2 then
+#      created no water heater at all, although operation, temperature and target were all there.
+def test_water_heater_without_holiday_registers_has_no_away_mode() -> None:
+    from vaillant_ebus.water_heater import WaterHeaterEntityFeature
+
+    coordinator = _graph_coordinator(R91G_FIXTURE)
+    assert coordinator.heating_circuit == "ctlv3"
+    assert all(coordinator.has_controller_register(n) for n in ("HwcOpMode", "HwcStorageTemp", "HwcTempDesired"))
+    assert not coordinator.has_controller_register("HwcHolidayStartPeriod")
+
+    water_heater = EbusdWaterHeater(coordinator, _entry())
+
+    assert water_heater.current_operation == "auto"
+    assert not water_heater.supported_features & WaterHeaterEntityFeature.AWAY_MODE
+    assert water_heater.is_away_mode_on is None
+
+
+# Intent: an away-mode request on a controller without DHW holiday registers is refused and writes nothing.
+# Why: write safety guard - the guard sits in the entity method itself, so no caller can write the missing registers.
+@pytest.mark.parametrize("method", ["async_turn_away_mode_on", "async_turn_away_mode_off"])
+async def test_water_heater_away_mode_refused_without_holiday_registers(method: str) -> None:
+    coordinator = _graph_coordinator(R91G_FIXTURE)
+    water_heater = EbusdWaterHeater(coordinator, _entry())
+
+    with pytest.raises(Exception, match="Away mode is not available"):
+        await getattr(water_heater, method)()
+
+    coordinator.async_write_registers.assert_not_awaited()
+    coordinator.async_write_register.assert_not_awaited()
+
+
+# Intent: a controller with the DHW holiday registers keeps away mode on the water heater.
+# Why: the discussion #31 change must not drop away mode where the issue #99 CTLV3 captures provide it.
+def test_water_heater_with_holiday_registers_keeps_away_mode() -> None:
+    from vaillant_ebus.water_heater import WaterHeaterEntityFeature
+
+    coordinator = _graph_coordinator("community/hmux0_issue99_2026-09-10_170850.yaml")
+    water_heater = EbusdWaterHeater(coordinator, _entry())
+
+    assert water_heater.supported_features & WaterHeaterEntityFeature.AWAY_MODE

@@ -187,3 +187,32 @@ def test_issue233_pump_status_running_words_are_on() -> None:
 
     assert {"heat", "cool", "exthwc", "on"} <= true_values
     assert "off" not in true_values
+
+
+F34_FIXTURE = "community/saunier_duval_f34_issue191_2026-10-20_094755_discovery.yaml"
+
+
+# Intent: a gas boiler's Status01 last field drives "DHW Heating": hwc on, on/off off, overrun unknown.
+# Why: issue #191 - TheMagnificent7's F34 timeline shows `hwc` while the cylinder heats and `on` while the flame runs
+#      for heating; `overrun` contradicts between upstream (pump overrun) and an ecoTEC classic, so it stays unknown.
+@pytest.mark.parametrize(("state", "expected"), [("hwc", True), ("on", False), ("off", False), ("overrun", None)])
+def test_boiler_status_drives_dhw_heating(state: str, expected: bool | None) -> None:
+    from vaillant_ebus.backend.models import boiler_status_circuit, derive_boiler_dhw_heating
+
+    graph = tc.DISCOVERY.DiscoveryService.build_device_graph(load_find_lines(F34_FIXTURE, after=True))
+    circuit = boiler_status_circuit(graph)
+
+    assert circuit == "bai"
+    assert graph.heat_pump_result().node is None
+    assert derive_boiler_dhw_heating({f"{circuit}.Status01.pumpstate": state}, circuit) is expected
+
+
+# Intent: no boiler status circuit without a circuit that owns both Flame and Status01; no value means unknown.
+# Why: the sensor needs a backing register; a missing Status01 must stay unknown, not "not heating".
+def test_boiler_dhw_heating_absent_and_missing_value() -> None:
+    from vaillant_ebus.backend.models import boiler_status_circuit, derive_boiler_dhw_heating
+
+    graph = tc.DISCOVERY.DiscoveryService.build_device_graph(["bai Flame = on"])
+
+    assert boiler_status_circuit(graph) is None
+    assert derive_boiler_dhw_heating({}, "bai") is None

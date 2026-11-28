@@ -89,6 +89,13 @@ RELEASE_1120_CAPTURE_PROVENANCE = {
         "9501cc20eaadd60fd2b6c5f390b2cc87a10e14109b339aca79c9ee28c4c53ee5",
         "MF=Vaillant;ID=HMUX0;SW=0406;HW=0504",
     ),
+    # Release 1.16.3: discussion #31, HMUX0 SW0502 + CTLV3 SW0813 on the R91g community CSV (system-wide holiday
+    # dates, no HwcHoliday*), a byte-for-byte copy of the reporter's attachment. Backs the water heater without away.
+    "community/hmux0_sw0502_ctlv3_r91g_discussion31_2026-11-26_201727_discovery.yaml": (
+        "https://github.com/user-attachments/files/35480897/discovery_dump.txt",
+        "a72cdd2255daf7c572717676132166b3e9b58773609bf5a61fae9fa59fc887eb",
+        "MF=Vaillant;ID=HMUX0;SW=0502;HW=0504",
+    ),
 }
 # Byte-exact copies of community captures taken from a zip attachment: fixture -> (zip URL, member, sha256).
 ZIP_CAPTURE_PROVENANCE = {
